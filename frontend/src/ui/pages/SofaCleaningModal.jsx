@@ -26,7 +26,7 @@ const SOFA_SUB_TABS = [
   {
     id: "addons",
     name: "Quick Extra Services",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=150&q=80&fit=crop",
+    image: "/mockups/quick_extra_services_hero.png",
   }
 ];
 
@@ -143,7 +143,7 @@ const SOFA_ADDONS_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table and chairs surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
+    image: "/mockups/quick_extra_services_hero.png",
     includes: [
       "Surface cleaning, sanitation, and wood/glass polishing"
     ]
@@ -380,21 +380,21 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   return (
-    <div className="w-full text-slate-700 bg-white">
+    <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
       {/* Sticky Header + Tabs */}
-      <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
-        <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
+      <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md shadow-xs border-b border-[var(--sevo-border)]">
+        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <ChevronLeft size={14} /> Back to Services
             </button>
-            <h2 className="text-xl font-black text-slate-900">Sofa Cleaning</h2>
+            <h2 className="text-xl font-black text-[var(--sevo-text-primary)]">Sofa Cleaning</h2>
           </div>
         </div>
-        <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
+        <div className="flex gap-5 pb-3 pt-2 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto">
           {SOFA_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
@@ -406,11 +406,13 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <img
                   src={tab.image}
                   alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
-                    }`}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
+                  }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                  }`}>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
+                }`}>
                   {tab.name}
                 </span>
               </button>
@@ -420,15 +422,15 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-4">
+      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-6 px-4 sm:px-6 max-w-7xl mx-auto pb-20">
 
         {/* Left Column */}
-        <div className="flex-1 space-y-5 lg:pr-6">
+        <div className="flex-1 space-y-5 lg:pr-6 w-full">
 
           {/* Section title */}
           <div className="pt-1">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+            <h3 className="text-sm font-bold text-[var(--sevo-text-primary)] flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-[var(--sevo-primary)] rounded-full" />
               {activeTab === "sofa" ? "Sofa Cleaning" : activeTab === "mattress" ? "Mattress Cleaning" : "Carpet Cleaning"}
             </h3>
           </div>
@@ -438,10 +440,10 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               const count = getCount(service.id);
               const isFirst = idx === 0 && !searchQuery;
               return (
-                <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
+                <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 shadow-xs hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                    <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-4 border border-[var(--sevo-border)]">
                       <img
                         src={(() => {
                           const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
@@ -457,28 +459,28 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                       {service.description && (
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                        <span className="text-base font-black text-slate-900">
+                        <span className="text-base font-black text-[var(--sevo-text-primary)]">
                           {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
                         </span>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-slate-500 font-semibold">{service.duration}</span>
+                        <span className="text-[var(--sevo-border)]">•</span>
+                        <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                       </div>
 
                       {service.includes && service.includes.length > 0 && (
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                        <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                           {service.includes
                             .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
                             .map(inc => typeof inc === "string" ? inc : inc.text)
                             .map((item, i) => (
                               <li key={i} className="flex items-start gap-2">
-                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -486,7 +488,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                       )}
                       <button 
                         onClick={() => setSelectedServiceDetails(service)}
-                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline bg-transparent border-0 cursor-pointer"
+                        className="text-xs font-semibold text-[var(--sevo-primary)] mt-2 hover:underline bg-transparent border-0 cursor-pointer"
                       >
                         View details
                       </button>
@@ -494,15 +496,15 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
                     {/* Image + add button */}
                     <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
-                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] flex items-center justify-center">
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
                         {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                          <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
+                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer">-</button>
                             <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
+                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer">+</button>
                           </div>
                         ) : (
                           <button
@@ -513,14 +515,14 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                                 addItemToCart(service.id, service.name, service.price, service.duration);
                               }
                             }}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                            className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-[11px] py-1.5 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                           >
                             <ShoppingCart size={12} /> Add
                           </button>
                         )}
                       </div>
                       {service.options && (
-                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
+                        <p className="absolute bottom-0 text-[10px] text-[var(--sevo-text-muted)] text-center font-bold tracking-tight w-full">{service.options}</p>
                       )}
                     </div>
                   </div>
@@ -530,13 +532,13 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
           </div>
         </div>
 
-        {/* Right Column: Order Summary (Sticky/Frozen on scroll below header tabs) */}
-        <div className="w-full lg:w-[350px] shrink-0 sticky top-[210px] self-start bg-slate-50 border border-slate-100 p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
+        {/* Right Column: Order Summary */}
+        <div className="w-full lg:w-[350px] shrink-0 sticky top-[100px] self-start bg-[var(--sevo-surface)] border border-[var(--sevo-border)] p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
           <div className="space-y-4">
-            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
-                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+            <div className="bg-[var(--sevo-surface)] border border-[var(--sevo-border)] rounded-2xl p-4 shadow-xs space-y-3">
+              <div className="border-b border-[var(--sevo-border-subtle)] pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-[var(--sevo-text-primary)] uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-[var(--sevo-text-muted)]">{cart.length} items</span>
               </div>
 
               {cart.length > 0 ? (
@@ -544,22 +546,22 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   {cart.map(item => (
                     <div key={item.id} className="flex justify-between items-start text-xs gap-2">
                       <div className="flex-1">
-                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                        <span className="font-bold text-[var(--sevo-text-primary)] block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-[var(--sevo-text-muted)] block mt-0.5">{item.duration}</span>
                       </div>
                       <div className="text-right flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
-                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                        <span className="font-extrabold text-[var(--sevo-text-primary)]">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">-</button>
                           <span>{item.quantity}</span>
-                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">+</button>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6 text-slate-400 text-xs">
+                <div className="text-center py-6 text-[var(--sevo-text-muted)] text-xs">
                   No services added. Select from the left.
                 </div>
               )}
@@ -570,28 +572,28 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
                 const grandTotal = itemTotal + totalGst + platformFee;
                 return (
-                  <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="border-t border-[var(--sevo-border-subtle)] pt-2.5 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                       <span>Item Total</span>
-                      <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--sevo-text-primary)] font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                       <span>Taxes & GST (18%)</span>
-                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--sevo-secondary)] font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                       <span>Platform Fee</span>
-                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--sevo-primary)] font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-slate-200 pt-2">
+                    <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm border-t border-[var(--sevo-border-subtle)] pt-2">
                       <span>Total Amount</span>
-                      <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--sevo-primary)]">₹{grandTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 );
               })() : (
-                <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
-                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+                <div className="border-t border-[var(--sevo-border-subtle)] pt-2.5 space-y-1.5 text-xs">
+                  <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-1">
                     <span>Total Amount</span>
                     <span>₹0</span>
                   </div>
@@ -600,11 +602,11 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             </div>
           </div>
 
-          <div className="pt-4 mt-4 border-t border-slate-200/60">
+          <div className="pt-4 mt-4 border-t border-[var(--sevo-border-subtle)]">
             <button
               disabled={cart.length === 0}
               onClick={onCheckout}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+              className="w-full py-3.5 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] disabled:bg-[var(--sevo-surface-raised)] disabled:text-[var(--sevo-text-muted)] disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
             >
               Proceed to Schedule
             </button>

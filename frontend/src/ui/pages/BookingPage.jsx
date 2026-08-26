@@ -6832,23 +6832,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 400, opacity: 0 }}
         transition={{ type: 'spring', damping: 35, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 960, background: 'white', height: '100%', display: 'flex', boxShadow: '-20px 0 50px rgba(0,0,0,0.15)' }}
+        style={{ width: '100%', maxWidth: 960, background: 'var(--sevo-surface, white)', height: '100%', display: 'flex', boxShadow: '-20px 0 50px rgba(0,0,0,0.15)' }}
       >
         {/* Sidebar */}
-        <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: 280, background: 'var(--sevo-surface-raised, #f8fafc)', borderRight: '1px solid var(--sevo-border, #e2e8f0)', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--sevo-surface, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--sevo-border, #e2e8f0)', flexShrink: 0, overflow: 'hidden' }}>
               {avatarPreview || user?.avatar_url || user?.avatar ? (
                 <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <User size={22} color="#94a3b8" />
+                <User size={22} color="var(--sevo-text-muted, #94a3b8)" />
               )}
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
-              <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
+              <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--sevo-text-secondary, #64748b)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
               {(profileCustomerId || user?.customer_id || user?.customerId) && (
-                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--sevo-primary-light, #eff6ff)', color: 'var(--sevo-primary, #1d4ed8)', border: '1px solid var(--sevo-border, #bfdbfe)', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'monospace' }}>
                   ID: {profileCustomerId || user?.customer_id || user?.customerId}
                 </div>
               )}
@@ -6861,32 +6861,34 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 key={t.id}
                 onClick={() => onChangeTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
-                  background: activeTab === t.id ? 'white' : 'transparent',
-                  borderLeft: `4px solid ${activeTab === t.id ? '#059669' : 'transparent'}`,
-                  color: activeTab === t.id ? '#059669' : '#475569',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', cursor: 'pointer',
+                  borderRadius: 12,
+                  background: activeTab === t.id ? 'var(--sevo-surface, white)' : 'transparent',
+                  borderLeft: `4px solid ${activeTab === t.id ? 'var(--sevo-primary, #0B8F7A)' : 'transparent'}`,
+                  color: activeTab === t.id ? 'var(--sevo-primary, #0B8F7A)' : 'var(--sevo-text-secondary, #475569)',
                   fontWeight: activeTab === t.id ? 800 : 600,
                   fontSize: '0.9rem',
+                  boxShadow: activeTab === t.id ? 'var(--sevo-shadow-xs)' : 'none',
                   transition: 'all 0.18s'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <t.icon size={20} color={activeTab === t.id ? '#059669' : '#94a3b8'} /> {t.id}
+                  <t.icon size={20} color={activeTab === t.id ? 'var(--sevo-primary, #0B8F7A)' : 'var(--sevo-text-muted, #94a3b8)'} /> {t.id}
                 </div>
                 {t.badge > 0 && (
-                  <span style={{ background: '#059669', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ background: 'var(--sevo-primary, #0B8F7A)', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
                     {t.badge}
                   </span>
                 )}
               </div>
             ))}
           </div>
-          <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid var(--sevo-border, #e2e8f0)' }}>
             <button
               onClick={handleLogout}
               style={{
-                width: '100%', padding: '0.75rem 1rem', background: '#fef2f2',
-                color: '#ef4444', border: '1px solid #fee2e2', borderRadius: 12,
+                width: '100%', padding: '0.75rem 1rem', background: 'var(--sevo-error-bg, #fef2f2)',
+                color: 'var(--sevo-error, #ef4444)', border: '1px solid var(--sevo-error-border, #fee2e2)', borderRadius: 12,
                 fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
                 transition: 'all 0.2s'
@@ -6899,9 +6901,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         </div>
 
         {/* Content Area */}
-        <div style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'white' }}>
+        <div style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'var(--sevo-surface, white)', color: 'var(--sevo-text-primary, #0B172A)' }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
-            <div onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
+            <div onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--sevo-surface-raised, #f1f5f9)', border: '1px solid var(--sevo-border, #e2e8f0)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--sevo-text-primary, #475569)', transition: 'all 0.2s' }}>
               <X size={18} />
             </div>
           </div>
@@ -14286,22 +14288,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Service & Repair", image: "/assets/icon_3d_appliance.jpg" },
+      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
       { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/gas_stove_clean.png" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "/assets/icon_3d_electrical.jpg" }
     ],
     microwave: [
-      { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
       { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Microwave & Purifier", image: "/mockups/otg_clean.png" }
     ],
     appliance_repair: [
-      { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
       { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Microwave & Purifier", image: "/mockups/otg_clean.png" }
     ],
     tv_display: [
       { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
@@ -14309,32 +14311,32 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "TV Screen & Display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
       { name: "TV Sound & Speaker", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
       { name: "TV Software & Smart Features", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" }
+      { name: "TV Parts & Electrical Repair", image: "/assets/icon_3d_electrical.jpg" }
     ],
     hvac: [
-      { name: "AC Service & Cleaning", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-      { name: "AC Repair", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-      { name: "AC Installation & Uninstallation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "AC Parts & Accessories", image: "/mockups/service_hvac.png" }
+      { name: "AC Service & Cleaning", image: "/assets/icon_3d_ac.jpg" },
+      { name: "AC Repair", image: "/mockups/AC Repair - Split Window.png" },
+      { name: "AC Gas & Refrigerant", image: "/mockups/Gas Leak Fix & Refill.png" },
+      { name: "AC Installation & Uninstallation", image: "/mockups/Split AC Installation.png" },
+      { name: "AC PCB & Electrical", image: "/mockups/Inverter PCB Repair.png" },
+      { name: "AC Parts & Accessories", image: "/mockups/Heavy-Duty Outdoor AC Wall Stand Fit.png" }
     ],
     washing_machine: [
-      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" },
-      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "Washing Machine Jet Service", image: "/assets/icon_3d_appliance.jpg" },
+      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
+      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Repair", image: "/assets/icon_3d_appliance.jpg" }
     ],
     electrical: [
-      { name: "Switches & Sockets", image: "/mockups/service_electrical.png" },
+      { name: "Switches & Sockets", image: "/assets/icon_3d_electrical.jpg" },
       { name: "Fan & Lighting", image: "/mockups/ceiling_fan.png" },
-      { name: "MCB & Wiring", image: "/mockups/service_electrical.png" },
-      { name: "Inverter & Heavy Appliance", image: "/mockups/service_electrical.png" }
+      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
     ],
     plumbing: [
-      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Tap & Mixer", image: "/assets/icon_3d_plumbing.jpg" },
       { name: "Toilet", image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=300&q=80&fit=crop" },
-      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=300&q=80&fit=crop" },
+      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=300&q=80&fit=crop" },
       { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" },
       { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
@@ -14346,7 +14348,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=300&q=80&fit=crop" },
       { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80&fit=crop" },
       { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=300&q=80&fit=crop" },
-      { name: "Hangers & Drying Solutions", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Hangers & Drying Solutions", image: "/mockups/balcony_cleaning.png" },
       { name: "Furniture Services", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" },
       { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
       { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
@@ -14360,25 +14362,25 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Texture Decor", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
     ],
     mason: [
-      { name: "Brick & Block Work", image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
-      { name: "Plastering & Wall Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Wall & Partition Construction", image: "/mockups/brick_wall_construction_red.jpg" },
-      { name: "Wall Breaking & Demolition", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
+      { name: "Brick & Block Work", image: "/mockups/brick_wall_construction_red.jpg" },
+      { name: "Plastering & Wall Repair", image: "/mockups/wall_plastering_masonry.jpg" },
+      { name: "Wall & Partition Construction", image: "/mockups/aac_block_wall_construction.jpg" },
+      { name: "Wall Breaking & Demolition", image: "/mockups/wall_crack_repair.jpg" }
     ],
     pest_control: [
-      { name: "Cockroach & Termite Control", image: "/mockups/category_for_you.png" },
-      { name: "Ants & Bed Bugs Control", image: "/mockups/category_for_you.png" }
+      { name: "Cockroach & Termite Control", image: "/mockups/termite_control.png" },
+      { name: "Ants & Bed Bugs Control", image: "/mockups/ant_bedbug_control.png" }
     ],
     goods_transport: [
-      { name: "House Shifting", image: "/mockups/category_home_transport.png" },
-      { name: "Single Item Transport", image: "/mockups/category_home_transport.png" }
+      { name: "House Shifting", image: "/assets/cat_goods_transport.jpg" },
+      { name: "Single Item Transport", image: "/assets/photo_goods_transport_truck.jpg" }
     ],
     cleaning: [
-      { name: "Occupied Apartment", image: "/mockups/category_for_you.png" },
-      { name: "Unoccupied Apartment", image: "/mockups/category_for_you.png" },
-      { name: "Occupied Bungalow/duplex", image: "/mockups/category_for_you.png" },
-      { name: "Unoccupied Bungalow/duplex", image: "/mockups/category_for_you.png" },
-      { name: "quick extra service", image: "/mockups/category_for_you.png" }
+      { name: "Occupied Apartment", image: "/mockups/bathroom_cleaning.png" },
+      { name: "Unoccupied Apartment", image: "/mockups/unoccupied_apartment_cleaning.png" },
+      { name: "Occupied Bungalow/duplex", image: "/mockups/bedroom_cleaning.png" },
+      { name: "Unoccupied Bungalow/duplex", image: "/mockups/unoccupied_apartment_cleaning.png" },
+      { name: "quick extra service", image: "/assets/icon_3d_cleaning.jpg" }
     ]
   };
 
@@ -15092,28 +15094,28 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     plumbing: {
       "Tap & Mixer": [
-        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "/assets/icon_3d_plumbing.jpg" },
+        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "/assets/icon_3d_plumbing.jpg" },
+        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
         { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
         { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
         { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=500&q=80&fit=crop" }
       ],
       "Toilet": [
-        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=500&q=80&fit=crop" },
+        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=500&q=80&fit=crop" },
+        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=500&q=80&fit=crop" },
+        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=500&q=80&fit=crop" },
+        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=500&q=80&fit=crop" },
         { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" }
       ],
       "Basin & Sink": [
         { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
         { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
-        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
+        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" }
       ],
       "Bath Fittings": [
         { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
@@ -15122,8 +15124,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" }
       ],
       "Water Tank & Motor": [
-        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
         { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
         { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ],
@@ -15144,10 +15146,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Plumber On-Demand": [
-        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
-        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
-        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
-        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
+        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "/mockups/service_plumbing.png" },
+        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "/mockups/service_plumbing.png" },
+        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "/mockups/service_plumbing.png" },
+        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "/mockups/service_plumbing.png" }
       ]
     },
     carpentry: {
@@ -15618,18 +15620,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const wrapperClass = isFullPage
-    ? "w-full text-slate-700 bg-white min-h-screen flex flex-col justify-between"
-    : `fixed inset-0 z-[9999] bg-white text-slate-700 w-full min-h-screen flex flex-col ${selectedMasonDetail ? "overflow-hidden" : "overflow-y-auto"}`;
+    ? "w-full text-slate-700 bg-[#FAF7F0] min-h-screen flex flex-col justify-between"
+    : `fixed inset-0 z-[9999] bg-[#FAF7F0] text-slate-700 w-full min-h-screen flex flex-col ${selectedMasonDetail ? "overflow-hidden" : "overflow-y-auto"}`;
 
   const containerClass = isFullPage
-    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto py-4"
-    : "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
+    ? "bg-[#FAF7F0] relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto py-4"
+    : "bg-[#FAF7F0] relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
 
   const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-9 mt-4";
 
   const leftColumnClass = "flex-1 space-y-5";
 
-  const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
+  const rightColumnClass = "w-full lg:w-[380px] bg-[#FEFCF8] border border-[#E8E3DB] rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
   if (activeSubTab === "Kitchen Cleaning") {
     return <KitchenCleaningModal category={{ id: "kitchen_cleaning", name: "Kitchen Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
@@ -15660,8 +15662,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       transition={{ duration: 0.25 }}
       onClick={e => e.stopPropagation()}
     >
-      <div className="bg-white pb-1.5 border-b border-slate-100">
-        <div className="py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white">
+      <div className="bg-[#FEFCF8] pb-1.5 border-b border-[#E8E3DB]">
+        <div className="py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#FEFCF8]">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -15763,7 +15765,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
                     >
                       <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-2">
@@ -15803,7 +15805,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </div>
 
                         {/* Includes checklist */}
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                        <ul className="text-xs text-slate-600 space-y-1 bg-[#F5F0E6]/60 p-3.5 rounded-xl border border-[#E2DDD5]">
                           {p.includes.map((inc, i) => (
                             <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -15851,7 +15853,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
                     >
                       <div className="flex-1 space-y-3">
                         <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
@@ -15863,7 +15865,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                           <span className="text-slate-500 font-semibold">{p.duration}</span>
                         </div>
 
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                        <ul className="text-xs text-slate-600 space-y-1 bg-[#F5F0E6]/60 p-3 rounded-xl border border-[#E2DDD5]">
                           {p.includes.map((inc, i) => (
                             <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -15910,7 +15912,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
                     >
                       <div className="flex-1 space-y-3">
                         <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
@@ -15922,7 +15924,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                           <span className="text-slate-500 font-semibold">{p.duration}</span>
                         </div>
 
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                        <ul className="text-xs text-slate-600 space-y-1 bg-[#F5F0E6]/60 p-3 rounded-xl border border-[#E2DDD5]">
                           {p.includes.map((inc, i) => (
                             <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -15970,10 +15972,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
+                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
-                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60 shadow-xs">
+                        <div className="w-full aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
                             src={normalizedKey === "hvac" ? acServiceImg : p.image}
                             alt={p.name}
@@ -16068,7 +16070,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                                 })()}
                               </div>
                             ) : (
-                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                              <ul className="text-xs text-slate-600 space-y-1 bg-[#F5F0E6]/60 p-3.5 rounded-xl border border-[#E2DDD5]">
                                 {p.includes.map((inc, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -16162,7 +16164,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           <div className="space-y-4">
             {/* Why Choose Us Box (Only for Mason category) */}
             {normalizedKey === "mason" && (
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-sm text-left">
+              <div className="bg-[#F5F0E6]/60 border border-[#E8E3DB] rounded-2xl p-4 shadow-sm text-left">
                 <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-3">
                   Why choose us?
                 </h4>
@@ -16240,8 +16242,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             )}
 
             {/* Order Summary box */}
-            <div className="bg-white border border-slate-200/60 rounded-2xl p-3 shadow-sm space-y-2">
-              <div className="border-b border-slate-100 pb-1.5 flex justify-between items-center">
+            <div className="bg-white border border-[#E8E3DB] rounded-2xl p-3 shadow-sm space-y-2">
+              <div className="border-b border-[#E8E3DB] pb-1.5 flex justify-between items-center">
                 <h5 className="font-extrabold text-[10px] text-slate-800 uppercase tracking-wide">Order Summary</h5>
                 <span className="text-[9px] font-bold text-slate-400">{cart.length} items</span>
               </div>
@@ -16284,7 +16286,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                     </div>
                     {/* Taxes & Fee Dropdown (Desktop) */}
-                    <div className="border border-slate-200/60 bg-slate-50/60 rounded-lg overflow-hidden transition-all my-1">
+                    <div className="border border-[#E8E3DB] bg-[#F5F0E6]/40 rounded-lg overflow-hidden transition-all my-1">
                       <button
                         type="button"
                         onClick={() => setShowModalTaxesDropdown(prev => !prev)}
@@ -16303,7 +16305,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       </button>
 
                       {showModalTaxesDropdown && (
-                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-slate-200/50 bg-white text-[10px] animate-in fade-in duration-150">
+                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-[#E8E3DB] bg-white text-[10px] animate-in fade-in duration-150">
                           <div className="flex justify-between text-slate-500">
                             <span>Taxes & GST (18%)</span>
                             <span className="font-semibold text-slate-700">+₹{totalGst.toLocaleString("en-IN")}</span>
@@ -16335,7 +16337,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     )}
                   </>
                 )}
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2.5">
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-[#E8E3DB] pt-2.5">
                   <span>Total Amount</span>
                   <span className="text-emerald-700">₹{totalAmount.toLocaleString("en-IN")}</span>
                 </div>
@@ -16475,7 +16477,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              backgroundColor: "#ffffff",
+              backgroundColor: "#FAF7F0",
               borderRadius: "24px",
               width: "100%",
               maxWidth: "512px",
@@ -16497,7 +16499,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             </button>
 
             {/* Header: simple full-width hero image (removed split promo/offer card) */}
-            <div className="w-full h-36 border-b border-slate-100 shrink-0 bg-slate-100">
+            <div className="w-full h-36 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
               <img
                 src={selectedMasonDetail.image}
                 alt={selectedMasonDetail.name}
@@ -16508,7 +16510,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and add wrap */}
-              <div className="border-b border-slate-100 pb-5">
+              <div className="border-b border-[#E8E3DB] pb-5">
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedMasonDetail.name}</h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
@@ -16517,7 +16519,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   <span className="text-slate-400 font-normal underline">(1.2K reviews)</span>
                 </div>
 
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                <div className="flex items-center justify-between bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4">
                   <div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Consultation Fee</div>
                     <div className="text-base font-black text-slate-900 mt-0.5">
@@ -16588,7 +16590,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                           const style = benefitStyles[i % benefitStyles.length];
 
                           return (
-                            <div key={i} className="flex flex-col items-center p-2 bg-slate-50 border border-slate-200/50 rounded-xl text-center gap-1.5 shadow-2xs">
+                            <div key={i} className="flex flex-col items-center p-2 bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-xl text-center gap-1.5 shadow-2xs">
                               <div className={`w-8 h-8 rounded-full ${style.bgClass} border flex items-center justify-center shadow-3xs shrink-0`}>
                                 {style.icon}
                               </div>
@@ -16600,7 +16602,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     )}
 
                     {/* WHAT'S INCLUDED */}
-                    <div className="text-left pt-2 border-t border-slate-100">
+                    <div className="text-left pt-2 border-t border-[#E8E3DB]">
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Included</h4>
                       <ul className="list-disc pl-4 text-xs text-slate-600 space-y-1.5">
                         {selectedMasonDetail.includes.map((inc, i) => (
@@ -16611,7 +16613,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                     {/* WHAT'S NOT INCLUDED */}
                     {extra.excludes && extra.excludes.length > 0 && (
-                      <div className="text-left pt-2 border-t border-slate-100">
+                      <div className="text-left pt-2 border-t border-[#E8E3DB]">
                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Not Included</h4>
                         <ul className="list-disc pl-4 text-xs text-slate-500 space-y-1.5">
                           {extra.excludes.map((exc, i) => (
@@ -16623,7 +16625,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                     {/* HOW IT WORKS */}
                     {extra.steps && extra.steps.length > 0 && (
-                      <div className="text-left pt-2 border-t border-slate-100">
+                      <div className="text-left pt-2 border-t border-[#E8E3DB]">
                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">How it works</h4>
                         <div className="flex flex-col relative pl-1">
                           {extra.steps.map((stepTitle, i, arr) => {
@@ -16655,9 +16657,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     )}
 
                     {/* RATINGS & REVIEWS STATS BOX */}
-                    <div className="text-left pt-2 border-t border-slate-100">
+                    <div className="text-left pt-2 border-t border-[#E8E3DB]">
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
-                      <div className="flex items-center gap-5 p-4 border border-slate-200/60 rounded-2xl bg-white shadow-3xs">
+                      <div className="flex items-center gap-5 p-4 border border-[#E8E3DB] rounded-2xl bg-white shadow-3xs">
                         <div className="flex flex-col items-center min-w-[70px]">
                           <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(2)}</span>
                           <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
@@ -16688,12 +16690,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               })()}
 
               {/* Customer Reviews List */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                 {(() => {
                   const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
                   return extra.reviews.map((rev, idx) => (
-                    <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                    <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-black text-slate-800">{rev.name}</span>
                         <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
@@ -16710,7 +16712,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </div>
 
               {/* Frequently Asked Questions */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
                 <div className="space-y-2">
                   {(() => {
@@ -16718,16 +16720,16 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     return extra.faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (
-                        <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                        <div key={idx} className="border border-[#E8E3DB] rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
                           <button
                             onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
-                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-[#F5F0E6]/40"
                           >
                             <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
                             <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
                           </button>
                           {isFaqOpen && (
-                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-[#E8E3DB]/40 bg-[#F5F0E6]/20">
                               {faq.a}
                             </div>
                           )}
@@ -16740,7 +16742,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             </div>
 
             {/* Sticky Footer */}
-            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="border-t border-[#E8E3DB] p-4 bg-[#F5F0E6] flex items-center justify-between shrink-0">
               <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate max-w-[200px]">{selectedMasonDetail.name}</div>
               <button
                 onClick={() => {
@@ -16773,18 +16775,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans text-slate-800"
+            className="bg-[#FAF7F0] rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans text-slate-800"
           >
             {/* Close button */}
             <button
               onClick={() => setSelectedPackageDetail(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-[#FEFCF8]/90 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
             >
               <X size={16} />
             </button>
 
             {/* Header image */}
-            <div className="w-full h-44 border-b border-slate-100 shrink-0 bg-slate-100">
+            <div className="w-full h-44 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
               <img
                 src={selectedPackageDetail.image}
                 alt={selectedPackageDetail.name}
@@ -16799,7 +16801,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and price/add */}
-              <div className="border-b border-slate-100 pb-5">
+              <div className="border-b border-[#E8E3DB] pb-5">
                 <h3 className="text-lg font-extrabold text-slate-900 mb-1">{selectedPackageDetail.name}</h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
@@ -16808,7 +16810,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
                 </div>
 
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                <div className="flex items-center justify-between bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4">
                   <div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PRICE</div>
                     <div className="text-lg font-black text-slate-900 mt-0.5">
@@ -16837,7 +16839,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       ) : (
                         <button
                           onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)}
-                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                          className="w-full bg-white border border-[#E8E3DB] text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-[#F5F0E6]/40 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
                         >
                           <ShoppingCart size={13} /> Add
                         </button>
@@ -16848,7 +16850,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </div>
 
               {/* TOOLS & PRODUCTS WE USE */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
                   {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
@@ -16872,7 +16874,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </div>
 
               {/* WHAT YOU NEED TO KEEP READY */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                 <div className="space-y-2">
                   {((Array.isArray(selectedPackageDetail.ready) && selectedPackageDetail.ready.length > 0)
@@ -16898,10 +16900,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 return (
                   <>
                     {/* CUSTOMER REVIEWS */}
-                    <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                    <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                       {extra.reviews.map((rev, idx) => (
-                        <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 space-y-1">
+                        <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-3.5 space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                             <span>{rev.name}</span>
                             <span className="text-emerald-600 font-extrabold flex items-center gap-0.5">★ {rev.rating}.0</span>
@@ -16913,7 +16915,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                     {/* FREQUENTLY ASKED QUESTIONS */}
                     {extra.faqs.length > 0 && (
-                      <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                      <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
                         <div className="space-y-2">
                           {extra.faqs.map((faq, idx) => {
@@ -16952,7 +16954,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div className="p-4 border-t border-[#E8E3DB] bg-[#F5F0E6] flex items-center justify-between">
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
                 {category?.name || "Service Details"}
               </span>
@@ -16991,23 +16993,23 @@ export function BkStyles() {
       @keyframes bk-spin { to { transform:rotate(360deg); } }
       .spin-icon { animation: bk-spin 0.8s linear infinite; display:inline-block; }
 
-      /* •”••”• Root •”••”• */
+      /* ── Root ── */
       .uc-root {
         min-height: 100vh;
-        background: #ffffff;
+        background: var(--sevo-bg, #FFFDF8);
         font-family: 'Plus Jakarta Sans', sans-serif;
-        color: #1e293b;
+        color: var(--sevo-text-primary, #0B172A);
         display: flex;
         flex-direction: column;
         overflow-x: hidden;
       }
 
-      /* •”••”• Nav •”••”• */
+      /* ── Nav ── */
       .uc-nav {
         position: sticky; top:0; z-index:100;
-        background: rgba(255,255,255,0.97);
+        background: var(--sevo-surface-glass, rgba(255,255,255,0.97));
         backdrop-filter: blur(16px);
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--sevo-border, #E5E7EB);
         padding: 0.65rem 1.5rem;
         display: flex;
         align-items: center;
@@ -17017,9 +17019,9 @@ export function BkStyles() {
       .uc-nav-left { display:flex; align-items:center; gap:2rem; }
       .uc-nav-links { display:none; }
       @media (min-width: 900px) {
-        .uc-nav-links { display:flex; gap:1.5rem; font-size:0.85rem; font-weight:700; color:#475569; }
+        .uc-nav-links { display:flex; gap:1.5rem; font-size:0.85rem; font-weight:700; color:var(--sevo-text-secondary, #475569); }
         .uc-nav-links span { cursor:pointer; }
-        .uc-nav-links span:hover { color:#1e293b; }
+        .uc-nav-links span:hover { color:var(--sevo-primary, #0B8F7A); }
       }
       .uc-nav-center {
         display:flex; flex:1; gap:1rem; justify-content:flex-end; margin-right: 1.5rem;
@@ -17028,12 +17030,12 @@ export function BkStyles() {
       @media (min-width: 600px) {
         .uc-location-selector {
           display:flex; align-items:center; gap:0.4rem;
-          background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px;
+          background:var(--sevo-surface-raised, #F8F5EE); border:1px solid var(--sevo-border, #E5E7EB); border-radius:10px;
           padding:0.4rem 0.75rem; cursor:pointer;
           max-width:200px; position:relative;
         }
       }
-      .uc-loc-text { font-size:0.75rem; font-weight:600; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .uc-loc-text { font-size:0.75rem; font-weight:600; color:var(--sevo-text-secondary, #475569); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       .uc-feature-carousel {
         position: relative;
         width: 100%;
@@ -17071,47 +17073,48 @@ export function BkStyles() {
         opacity: 0.9;
       }
 
-      /* •”••”• Nav Search Bar •”••”• */
+      /* ── Nav Search Bar ── */
       .uc-nav-search {
         display: flex; align-items: center; gap: 0.5rem;
-        background: #f8fafc; border: 1.5px solid #e2e8f0;
+        background: var(--sevo-surface-raised, #F8F5EE); border: 1.5px solid var(--sevo-border, #E5E7EB);
         border-radius: 10px; padding: 0.42rem 0.85rem;
         width: 260px; transition: border-color 0.2s, box-shadow 0.2s;
         flex-shrink: 0;
       }
       .uc-nav-search:focus-within {
-        border-color: #7C3AED40; box-shadow: 0 0 0 3px #7C3AED12;
+        border-color: var(--sevo-primary, #0B8F7A); box-shadow: 0 0 0 3px var(--sevo-focus-ring, rgba(11,143,122,0.2));
       }
       .uc-nav-search input {
         border: none; background: transparent; outline: none;
-        font-size: 0.8rem; width: 100%; color: #1e293b;
+        font-size: 0.8rem; width: 100%; color: var(--sevo-text-primary, #0B172A);
         font-family: 'Plus Jakarta Sans', sans-serif;
       }
-      .uc-nav-search input::placeholder { color: #94a3b8; }
+      .uc-nav-search input::placeholder { color: var(--sevo-text-muted, #94a3b8); }
       .uc-nav-right-icons { display:flex; align-items:center; gap:1.25rem; height:100%; }
       .uc-cart-icon, .uc-profile-icon {
         position:relative; cursor:pointer;
         display:flex; align-items:center; justify-content:center;
         width:36px; height:36px;
-        border-radius: 8px;
+        border-radius: 10px;
         transition: background 0.15s;
+        color: var(--sevo-text-primary, #0B172A);
       }
-      .uc-cart-icon:hover, .uc-profile-icon:hover { background: #f1f5f9; }
+      .uc-cart-icon:hover, .uc-profile-icon:hover { background: var(--sevo-surface-raised, #F8F5EE); }
       .uc-cart-badge {
         position:absolute; top:-4px; right:-6px;
-        background:#ef4444; color:white; font-size:0.6rem; font-weight:800;
+        background:var(--sevo-error, #C83E3E); color:white; font-size:0.6rem; font-weight:800;
         width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center;
         line-height:1;
       }
       .uc-nav-summary {
-        background: rgba(255,255,255,0.95); border-bottom: 1px solid #e2e8f0;
+        background: var(--sevo-surface-glass, rgba(255,255,255,0.95)); border-bottom: 1px solid var(--sevo-border, #E5E7EB);
         padding: 0.5rem 1.5rem; position: sticky; top: 60px; z-index: 99;
       }
 
-      /* •”••”• Progress •”••”• */
+      /* ── Progress Bar ── */
       .uc-progress-wrap {
-        background: white;
-        border-bottom: 1px solid #f1f5f9;
+        background: var(--sevo-surface, #ffffff);
+        border-bottom: 1px solid var(--sevo-border-subtle, #f1f5f9);
         padding: 0.5rem 1.5rem 0.6rem;
       }
       .uc-stepbar-scroll {
@@ -17139,31 +17142,31 @@ export function BkStyles() {
       .uc-sb-dot {
         width: 22px; height:22px;
         border-radius: 50%;
-        background: #e2e8f0;
-        color: #64748b;
+        background: var(--sevo-surface-raised, #e2e8f0);
+        color: var(--sevo-text-secondary, #64748b);
         font-size: 0.65rem;
         font-weight: 800;
         display: flex; align-items:center; justify-content:center;
         transition: all 0.3s;
       }
-      .uc-sb-done .uc-sb-dot { background:#7C3AED; color:white; }
-      .uc-sb-active .uc-sb-dot { background:#7C3AED; color:white; box-shadow:0 0 0 3px #7C3AED30; }
+      .uc-sb-done .uc-sb-dot { background:var(--sevo-primary, #0B8F7A); color:white; }
+      .uc-sb-active .uc-sb-dot { background:var(--sevo-primary, #0B8F7A); color:white; box-shadow:0 0 0 3px var(--sevo-focus-ring, rgba(11,143,122,0.3)); }
       .uc-sb-label {
         font-size: 0.65rem;
         font-weight: 700;
-        color: #64748b;
+        color: var(--sevo-text-secondary, #64748b);
         white-space: nowrap;
       }
-      .uc-sb-active .uc-sb-label { color:#7C3AED; }
-      .uc-sb-done .uc-sb-label  { color:#7C3AED; }
+      .uc-sb-active .uc-sb-label { color:var(--sevo-primary, #0B8F7A); }
+      .uc-sb-done .uc-sb-label  { color:var(--sevo-primary, #0B8F7A); }
       .uc-sb-line {
         flex: 1; height:2px;
-        background: #e2e8f0;
+        background: var(--sevo-border, #e2e8f0);
         margin: 0 0.4rem;
         min-width: 20px;
         transition: background 0.4s;
       }
-      .uc-sb-line-done { background: #7C3AED; }
+      .uc-sb-line-done { background: var(--sevo-primary, #0B8F7A); }
 
       /* •”••”• Main •”••”• */
       .uc-main {
@@ -17502,7 +17505,7 @@ export function BkStyles() {
       }
       .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
 
-      /* •”••”• Package Cards •”••”• */
+      /* ── Package Cards ── */
       .uc-pkg-grid {
         display:grid;
         grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
@@ -17510,54 +17513,55 @@ export function BkStyles() {
         margin-bottom:1.5rem;
       }
       .uc-pkg-card {
-        background:white;
-        border:2px solid #e2e8f0;
-        border-radius:18px;
-        padding:1.25rem;
-        cursor:pointer;
-        position:relative;
-        transition:all 0.2s ease;
-        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+        background: var(--sevo-surface, #ffffff);
+        border: 2px solid var(--sevo-border, #e2e8f0);
+        border-radius: 18px;
+        padding: 1.25rem;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.2s ease;
+        box-shadow: var(--sevo-shadow-xs, 0 2px 8px rgba(0,0,0,0.04));
       }
-      .uc-pkg-card:hover { border-color:#7C3AED; box-shadow:0 8px 24px rgba(124,58,237,0.12); }
+      .uc-pkg-card:hover { border-color: var(--sevo-primary, #0B8F7A); box-shadow: var(--sevo-shadow-md); }
       .uc-pkg-card--sel {
-        border-color:#7C3AED;
-        background:#faf5ff;
-        box-shadow:0 8px 28px rgba(124,58,237,0.18);
+        border-color: var(--sevo-primary, #0B8F7A);
+        background: var(--sevo-primary-light, #E6F4F1);
+        box-shadow: 0 8px 28px var(--sevo-shadow-md);
       }
-      .uc-pkg-card--pop { border-color:#7C3AED; }
+      .uc-pkg-card--pop { border-color: var(--sevo-primary, #0B8F7A); }
       .uc-pkg-tag {
         position:absolute; top:-1px; left:50%; transform:translateX(-50%);
         color:white; font-size:0.65rem; font-weight:800;
         padding:3px 12px; border-radius:0 0 10px 10px;
         white-space:nowrap; letter-spacing:0.03em;
+        background: var(--sevo-primary, #0B8F7A);
       }
       .uc-pkg-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem; margin-top:0.25rem; }
-      .uc-pkg-name { font-size:0.95rem; font-weight:800; color:#1e293b; margin-bottom:0.25rem; }
-      .uc-pkg-dur  { display:flex; align-items:center; gap:0.3rem; font-size:0.68rem; color:#94a3b8; font-weight:600; }
+      .uc-pkg-name { font-size:0.95rem; font-weight:800; color:var(--sevo-text-primary, #0B172A); margin-bottom:0.25rem; }
+      .uc-pkg-dur  { display:flex; align-items:center; gap:0.3rem; font-size:0.68rem; color:var(--sevo-text-muted, #94a3b8); font-weight:600; }
       .uc-pkg-price-col { text-align:right; }
-      .uc-pkg-price { font-family:'Outfit',sans-serif; font-size:1.4rem; font-weight:900; color:#7C3AED; line-height:1; }
-      .uc-pkg-price-note { font-size:0.62rem; color:#94a3b8; font-weight:600; }
-      .uc-pkg-divider { height:1px; background:#f1f5f9; margin:0.75rem 0; }
+      .uc-pkg-price { font-family:'Outfit',sans-serif; font-size:1.4rem; font-weight:900; color:var(--sevo-primary, #0B8F7A); line-height:1; }
+      .uc-pkg-price-note { font-size:0.62rem; color:var(--sevo-text-muted, #94a3b8); font-weight:600; }
+      .uc-pkg-divider { height:1px; background:var(--sevo-border-subtle, #f1f5f9); margin:0.75rem 0; }
       .uc-pkg-list { display:flex; flex-direction:column; gap:0.4rem; }
-      .uc-pkg-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.75rem; font-weight:600; }
-      .uc-pkg-yes { color:#059669; }
-      .uc-pkg-no  { color:#94a3b8; text-decoration:line-through; }
+      .uc-pkg-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.75rem; font-weight:600; color:var(--sevo-text-secondary, #475569); }
+      .uc-pkg-yes { color:var(--sevo-success, #059669); }
+      .uc-pkg-no  { color:var(--sevo-text-muted, #94a3b8); text-decoration:line-through; }
       .uc-pkg-radio {
         width:20px; height:20px; border-radius:50%;
-        border:2px solid #e2e8f0;
+        border:2px solid var(--sevo-border, #e2e8f0);
         display:flex; align-items:center; justify-content:center;
         margin-top:0.75rem; margin-left:auto;
         transition:border-color 0.2s;
       }
-      .uc-pkg-radio--sel { border-color:#7C3AED; background:#7C3AED; }
+      .uc-pkg-radio--sel { border-color:var(--sevo-primary, #0B8F7A); background:var(--sevo-primary, #0B8F7A); }
       .uc-pkg-radio-dot { width:8px; height:8px; border-radius:50%; background:white; }
 
-      /* •”••”• Schedule •”••”• */
+      /* ── Schedule ── */
       .uc-date-section, .uc-time-section { margin-bottom:1.5rem; }
       .uc-subsection-label {
         display:flex; align-items:center; gap:0.4rem;
-        font-size:0.78rem; font-weight:800; color:#475569;
+        font-size:0.78rem; font-weight:800; color:var(--sevo-text-secondary, #475569);
         text-transform:uppercase; letter-spacing:0.04em;
         margin-bottom:0.75rem;
       }
@@ -17569,83 +17573,84 @@ export function BkStyles() {
       .uc-date-pill {
         display:flex; flex-direction:column; align-items:center;
         min-width:62px; padding:0.6rem 0.5rem;
-        border:2px solid #e2e8f0; border-radius:14px;
-        background:white; cursor:pointer;
+        border:2px solid var(--sevo-border, #e2e8f0); border-radius:14px;
+        background:var(--sevo-surface, #ffffff); cursor:pointer;
         font-family:inherit; position:relative;
         transition:all 0.15s ease;
         gap:0.15rem;
       }
-      .uc-date-pill:hover { border-color:#7C3AED; }
-      .uc-date-pill--sel { border-color:#7C3AED; background:#7C3AED; }
+      .uc-date-pill:hover { border-color:var(--sevo-primary, #0B8F7A); }
+      .uc-date-pill--sel { border-color:var(--sevo-primary, #0B8F7A); background:var(--sevo-primary, #0B8F7A); }
       .uc-date-today-tag {
         position:absolute; top:-9px; left:50%; transform:translateX(-50%);
-        background:#10B981; color:white; font-size:0.55rem;
+        background:var(--sevo-success, #10B981); color:white; font-size:0.55rem;
         font-weight:800; padding:1px 6px; border-radius:99px; white-space:nowrap;
       }
-      .uc-date-day { font-size:0.65rem; font-weight:700; color:#94a3b8; }
-      .uc-date-pill--sel .uc-date-day { color:rgba(255,255,255,0.8); }
-      .uc-date-num { font-family:'Outfit',sans-serif; font-size:1.2rem; font-weight:900; color:#1e293b; line-height:1; }
+      .uc-date-day { font-size:0.65rem; font-weight:700; color:var(--sevo-text-muted, #94a3b8); }
+      .uc-date-pill--sel .uc-date-day { color:rgba(255,255,255,0.85); }
+      .uc-date-num { font-family:'Outfit',sans-serif; font-size:1.2rem; font-weight:900; color:var(--sevo-text-primary, #0B172A); line-height:1; }
       .uc-date-pill--sel .uc-date-num { color:white; }
-      .uc-date-mon { font-size:0.6rem; font-weight:700; color:#94a3b8; text-transform:uppercase; }
-      .uc-date-pill--sel .uc-date-mon { color:rgba(255,255,255,0.7); }
+      .uc-date-mon { font-size:0.6rem; font-weight:700; color:var(--sevo-text-muted, #94a3b8); text-transform:uppercase; }
+      .uc-date-pill--sel .uc-date-mon { color:rgba(255,255,255,0.75); }
       .uc-time-group { margin-bottom:1rem; }
-      .uc-time-period-label { font-size:0.72rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem; }
+      .uc-time-period-label { font-size:0.72rem; font-weight:700; color:var(--sevo-text-muted, #94a3b8); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem; }
       .uc-time-slots { display:flex; flex-wrap:wrap; gap:0.4rem; }
       .uc-time-slot {
         padding:0.45rem 0.85rem;
-        border:1.5px solid #e2e8f0;
+        border:1.5px solid var(--sevo-border, #e2e8f0);
         border-radius:10px;
-        background:white;
+        background:var(--sevo-surface, #ffffff);
         font-size:0.78rem;
         font-weight:600;
-        color:#475569;
+        color:var(--sevo-text-secondary, #475569);
         cursor:pointer;
         font-family:inherit;
         transition:all 0.15s;
       }
-      .uc-time-slot:hover { border-color:#7C3AED; color:#7C3AED; }
-      .uc-time-slot--sel { background:#7C3AED; border-color:#7C3AED; color:white; font-weight:700; }
+      .uc-time-slot:hover { border-color:var(--sevo-primary, #0B8F7A); color:var(--sevo-primary, #0B8F7A); }
+      .uc-time-slot--sel { background:var(--sevo-primary, #0B8F7A); border-color:var(--sevo-primary, #0B8F7A); color:white; font-weight:700; }
 
-      /* •”••”• Login •”••”• */
+      /* ── Login ── */
       .uc-login-page { padding-top:0.5rem; }
       .uc-login-center { text-align:center; margin-bottom:1.5rem; }
       .uc-login-shield {
         width:72px; height:72px; border-radius:20px;
-        background:#7C3AED15;
+        background:var(--sevo-primary-light, rgba(11,143,122,0.1));
         display:flex; align-items:center; justify-content:center;
         margin:0 auto 1rem;
+        color: var(--sevo-primary, #0B8F7A);
       }
       .uc-login-trust-row {
         display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
         gap:0.4rem 0.85rem; margin-bottom:1.5rem;
-        font-size:0.68rem; font-weight:700; color:#64748b;
+        font-size:0.68rem; font-weight:700; color:var(--sevo-text-secondary, #64748b);
       }
       .uc-login-trust-row span {
         display:flex; align-items:center; gap:0.25rem;
-        background:#f8fafc; border:1px solid #e2e8f0;
+        background:var(--sevo-surface-raised, #f8fafc); border:1px solid var(--sevo-border, #e2e8f0);
         border-radius:99px; padding:3px 8px;
       }
       .uc-otp-row { display:flex; gap:0.75rem; justify-content:center; margin:1.5rem 0; }
       .uc-otp-box {
         width: 72px; height: 80px;
-        border: 2px solid #e2e8f0;
+        border: 2px solid var(--sevo-border, #e2e8f0);
         border-radius: 16px;
         font-family: 'Outfit', sans-serif;
         font-size: 2.2rem; font-weight: 900;
-        text-align: center; color: #1e293b;
+        text-align: center; color: var(--sevo-text-primary, #0B172A);
         outline: none;
-        background: #f8fafc;
+        background: var(--sevo-surface-raised, #f8fafc);
         transition: all 0.2s;
-        caret-color: #7C3AED;
+        caret-color: var(--sevo-primary, #0B8F7A);
       }
-      .uc-otp-box:focus { border-color: #7C3AED; background: white; box-shadow: 0 0 0 4px #7C3AED15; }
-      .uc-otp-filled { border-color: #7C3AED; background: #faf5ff; color: #7C3AED; }
+      .uc-otp-box:focus { border-color: var(--sevo-primary, #0B8F7A); background: var(--sevo-surface, white); box-shadow: 0 0 0 4px var(--sevo-focus-ring, rgba(11,143,122,0.15)); }
+      .uc-otp-filled { border-color: var(--sevo-primary, #0B8F7A); background: var(--sevo-primary-light, #E6F4F1); color: var(--sevo-primary, #0B8F7A); }
       .uc-resend { text-align:center; margin-top:1rem; }
       .uc-dev-banner {
         display:flex; align-items:center; justify-content:center; gap:0.4rem;
-        background:#fffbeb; border:1px solid #fde68a;
+        background:var(--sevo-warning-bg, #fffbeb); border:1px solid var(--sevo-warning-border, #fde68a);
         border-radius:10px; padding:0.5rem 0.85rem;
-        font-size:0.78rem; font-weight:600; color:#92400e;
+        font-size:0.78rem; font-weight:600; color:var(--sevo-warning, #92400e);
         margin-bottom:0.75rem;
       }
       .uc-login-success {
@@ -17654,77 +17659,77 @@ export function BkStyles() {
       }
       .uc-success-check {
         width:90px; height:90px; border-radius:50%;
-        background:linear-gradient(135deg,#10B981,#059669);
+        background:linear-gradient(135deg,var(--sevo-success, #10B981),#059669);
         display:flex; align-items:center; justify-content:center;
         margin-bottom:0.5rem;
       }
-      .uc-success-title { font-family:'Outfit',sans-serif; font-size:1.6rem; font-weight:900; color:#1e293b; }
-      .uc-success-sub   { font-size:0.88rem; color:#64748b; font-weight:600; }
+      .uc-success-title { font-family:'Outfit',sans-serif; font-size:1.6rem; font-weight:900; color:var(--sevo-text-primary, #0B172A); }
+      .uc-success-sub   { font-size:0.88rem; color:var(--sevo-text-secondary, #64748b); font-weight:600; }
 
-      /* •”••”• Form •”••”• */
+      /* ── Form Inputs ── */
       .uc-form { display:flex; flex-direction:column; gap:1rem; margin-bottom:1.5rem; }
       .uc-field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
       @media(max-width:560px) { .uc-field-row { grid-template-columns:1fr; } }
       .uc-field { display:flex; flex-direction:column; gap:0.35rem; }
-      .uc-label { font-size:0.75rem; font-weight:700; color:#475569; }
+      .uc-label { font-size:0.75rem; font-weight:700; color:var(--sevo-text-secondary, #475569); }
       .uc-input-wrap { position:relative; }
       .uc-field-icon {
         position:absolute; left:0.9rem; top:50%;
         transform:translateY(-50%);
-        color:#94a3b8; pointer-events:none;
+        color:var(--sevo-text-muted, #94a3b8); pointer-events:none;
       }
       .uc-input {
         width:100%; box-sizing:border-box;
-        background:#f1f5f9;
-        border:1.5px solid transparent;
+        background:var(--sevo-surface-raised, #f1f5f9);
+        border:1.5px solid var(--sevo-border, transparent);
         border-radius:12px;
         padding:0.85rem 1rem 0.85rem 2.75rem;
         font-size:0.9rem;
         font-weight:600;
         font-family:'Plus Jakarta Sans',sans-serif;
-        color:#1e293b;
+        color:var(--sevo-text-primary, #0B172A);
         outline:none;
         transition:all 0.2s;
       }
-      .uc-input:focus { border-color:#7C3AED; background:white; box-shadow:0 0 0 4px #7C3AED15; }
+      .uc-input:focus { border-color:var(--sevo-primary, #0B8F7A); background:var(--sevo-surface, white); box-shadow:0 0 0 4px var(--sevo-focus-ring, rgba(11,143,122,0.15)); }
       .uc-textarea {
         width:100%; box-sizing:border-box;
-        background:#f1f5f9;
-        border:1.5px solid transparent;
+        background:var(--sevo-surface-raised, #f1f5f9);
+        border:1.5px solid var(--sevo-border, transparent);
         border-radius:12px;
         padding:0.85rem 1rem;
         font-size:0.9rem;
         font-weight:600;
         font-family:'Plus Jakarta Sans',sans-serif;
-        color:#1e293b;
+        color:var(--sevo-text-primary, #0B172A);
         outline:none;
         resize:vertical;
         transition:all 0.2s;
       }
-      .uc-textarea:focus { border-color:#7C3AED; background:white; box-shadow:0 0 0 4px #7C3AED15; }
+      .uc-textarea:focus { border-color:var(--sevo-primary, #0B8F7A); background:var(--sevo-surface, white); box-shadow:0 0 0 4px var(--sevo-focus-ring, rgba(11,143,122,0.15)); }
 
       .uc-photo-zone {
-        border:2px dashed #e2e8f0;
+        border:2px dashed var(--sevo-border, #e2e8f0);
         border-radius:14px;
         padding:1.5rem;
         cursor:pointer;
         text-align:center;
         display:flex; flex-direction:column; align-items:center; gap:0.5rem;
         transition:border-color 0.2s;
-        background:#fafbfc;
+        background:var(--sevo-surface-raised, #fafbfc);
       }
-      .uc-photo-zone:hover { border-color:#7C3AED; }
-      .uc-photo-text { font-size:0.82rem; font-weight:600; color:#475569; }
-      .uc-photo-hint { font-size:0.7rem; color:#94a3b8; }
+      .uc-photo-zone:hover { border-color:var(--sevo-primary, #0B8F7A); }
+      .uc-photo-text { font-size:0.82rem; font-weight:600; color:var(--sevo-text-secondary, #475569); }
+      .uc-photo-hint { font-size:0.7rem; color:var(--sevo-text-muted, #94a3b8); }
       .uc-photo-preview { position:relative; width:100%; }
       .uc-photo-preview img { width:100%; height:160px; object-fit:cover; border-radius:10px; }
       .uc-photo-change {
         display:flex; align-items:center; gap:0.35rem;
-        margin-top:0.5rem; font-size:0.75rem; font-weight:700; color:#7C3AED; cursor:pointer;
+        margin-top:0.5rem; font-size:0.75rem; font-weight:700; color:var(--sevo-primary, #0B8F7A); cursor:pointer;
         justify-content:center;
       }
 
-      /* •”••”• Confirm •”••”• */
+      /* ── Confirmation Summary ── */
       .uc-confirm-layout {
         display:grid;
         grid-template-columns:1fr 1fr;
@@ -17732,7 +17737,7 @@ export function BkStyles() {
         align-items:start;
       }
       @media(max-width:640px) { .uc-confirm-layout { grid-template-columns:1fr; } }
-      .uc-summary-card { background:white; border:1px solid #e2e8f0; border-radius:18px; overflow:hidden; }
+      .uc-summary-card { background:var(--sevo-surface, white); border:1px solid var(--sevo-border, #e2e8f0); border-radius:18px; overflow:hidden; }
       .uc-summary-hero {
         display:flex; align-items:center; gap:1rem;
         padding:1.1rem;
@@ -17740,38 +17745,37 @@ export function BkStyles() {
       .uc-summary-body { padding:1rem; display:flex; flex-direction:column; gap:0.5rem; }
       .uc-summary-row {
         display:flex; align-items:flex-start; gap:0.5rem;
-        font-size:0.78rem; font-weight:600; color:#475569;
+        font-size:0.78rem; font-weight:600; color:var(--sevo-text-secondary, #475569);
       }
-      .uc-price-box { border-top:1px solid #f1f5f9; padding:1rem; }
-      .uc-price-row { display:flex; justify-content:space-between; font-size:0.78rem; font-weight:600; color:#64748b; margin-bottom:0.4rem; }
-      .uc-price-free {}
+      .uc-price-box { border-top:1px solid var(--sevo-border-subtle, #f1f5f9); padding:1rem; }
+      .uc-price-row { display:flex; justify-content:space-between; font-size:0.78rem; font-weight:600; color:var(--sevo-text-secondary, #64748b); margin-bottom:0.4rem; }
       .uc-price-total {
         display:flex; justify-content:space-between;
-        font-size:1rem; font-weight:900; color:#1e293b;
-        border-top:1px solid #e2e8f0; padding-top:0.5rem; margin-top:0.25rem;
+        font-size:1rem; font-weight:900; color:var(--sevo-text-primary, #0B172A);
+        border-top:1px solid var(--sevo-border, #e2e8f0); padding-top:0.5rem; margin-top:0.25rem;
       }
       .uc-confirm-includes { display:flex; flex-direction:column; gap:0.6rem; }
-      .uc-includes-title { font-size:0.78rem; font-weight:800; color:#475569; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
-      .uc-includes-row { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.8rem; color:#475569; font-weight:600; }
+      .uc-includes-title { font-size:0.78rem; font-weight:800; color:var(--sevo-text-secondary, #475569); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
+      .uc-includes-row { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.8rem; color:var(--sevo-text-secondary, #475569); font-weight:600; }
       .uc-guarantee-box {
         display:flex; align-items:flex-start; gap:0.75rem;
-        background:#faf5ff; border:1px solid #DDD6FE;
+        background:var(--sevo-primary-light, #faf5ff); border:1px solid var(--sevo-border, #DDD6FE);
         border-radius:12px; padding:0.85rem;
         margin:0.5rem 0;
       }
       .uc-agree {
         display:flex; align-items:flex-start; gap:0.5rem;
-        font-size:0.75rem; color:#64748b; cursor:pointer; line-height:1.5;
+        font-size:0.75rem; color:var(--sevo-text-secondary, #64748b); cursor:pointer; line-height:1.5;
       }
       .uc-error {
         display:flex; align-items:center; gap:0.4rem;
-        background:#fef2f2; border:1px solid #fecaca;
+        background:var(--sevo-error-bg, #fef2f2); border:1px solid var(--sevo-error-border, #fecaca);
         border-radius:10px; padding:0.6rem 0.85rem;
-        font-size:0.78rem; color:#dc2626; font-weight:600;
+        font-size:0.78rem; color:var(--sevo-error, #dc2626); font-weight:600;
         margin:0.5rem 0;
       }
 
-      /* •”••”• Success Page •”••”• */
+      /* ── Success Page ── */
       .uc-success-page {
         max-width:520px;
         margin:3rem auto;
@@ -17781,52 +17785,52 @@ export function BkStyles() {
       }
       .uc-success-circle {
         width:100px; height:100px; border-radius:50%;
-        background:linear-gradient(135deg,#10B981,#059669);
+        background:linear-gradient(135deg,var(--sevo-success, #10B981),#059669);
         display:flex; align-items:center; justify-content:center;
         box-shadow:0 16px 40px rgba(16,185,129,0.35);
       }
       .uc-success-h2 {
         font-family:'Outfit',sans-serif;
-        font-size:1.75rem; font-weight:900; color:#1e293b; margin:0;
+        font-size:1.75rem; font-weight:900; color:var(--sevo-text-primary, #0B172A); margin:0;
       }
-      .uc-success-desc { font-size:0.88rem; color:#64748b; max-width:340px; }
+      .uc-success-desc { font-size:0.88rem; color:var(--sevo-text-secondary, #64748b); max-width:340px; }
       .uc-success-ref {
-        background:white; border:1px solid #e2e8f0;
+        background:var(--sevo-surface, white); border:1px solid var(--sevo-border, #e2e8f0);
         border-radius:16px; padding:1.25rem 2rem;
-        box-shadow:0 4px 16px rgba(0,0,0,0.06);
+        box-shadow:var(--sevo-shadow-xs);
       }
       .uc-success-timeline {
         display:flex; flex-direction:column; gap:0; width:100%;
-        background:white; border:1px solid #e2e8f0;
+        background:var(--sevo-surface, white); border:1px solid var(--sevo-border, #e2e8f0);
         border-radius:16px; overflow:hidden;
-        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+        box-shadow:var(--sevo-shadow-xs);
       }
       .uc-tl-item {
         display:flex; align-items:center; gap:0.75rem;
         padding:0.75rem 1.25rem;
-        border-bottom:1px solid #f8fafc;
-        font-size:0.82rem; font-weight:600; color:#94a3b8;
+        border-bottom:1px solid var(--sevo-border-subtle, #f8fafc);
+        font-size:0.82rem; font-weight:600; color:var(--sevo-text-muted, #94a3b8);
       }
       .uc-tl-item:last-child { border-bottom:none; }
-      .uc-tl-done { color:#1e293b; }
+      .uc-tl-done { color:var(--sevo-text-primary, #0B172A); }
       .uc-tl-icon { font-size:1rem; width:24px; text-align:center; }
       .uc-tl-label { flex:1; }
 
-      /* •”••”• Buttons •”••”• */
+      /* ── Buttons ── */
       .uc-btn-primary {
         display:inline-flex; align-items:center; justify-content:center; gap:0.45rem;
-        background:linear-gradient(135deg,#7C3AED,#6d28d9);
+        background:var(--sevo-primary-gradient, linear-gradient(135deg,#0B8F7A,#097A68));
         color:white; border:none; border-radius:14px;
         padding:0.85rem 1.75rem;
         font-size:0.9rem; font-weight:800;
         font-family:'Plus Jakarta Sans',sans-serif;
         cursor:pointer; transition:all 0.2s ease;
-        box-shadow:0 4px 16px rgba(124,58,237,0.3);
+        box-shadow:var(--sevo-shadow-sm, 0 4px 16px rgba(11,143,122,0.3));
         letter-spacing:-0.01em;
       }
       .uc-btn-primary:hover:not(:disabled) {
         transform:translateY(-2px);
-        box-shadow:0 8px 28px rgba(124,58,237,0.4);
+        box-shadow:var(--sevo-shadow-md);
         filter:brightness(1.08);
       }
       .uc-btn-primary:active { transform:translateY(0); }
@@ -17835,43 +17839,36 @@ export function BkStyles() {
 
       .uc-btn-outline {
         display:inline-flex; align-items:center; gap:0.4rem;
-        background:white; color:#7C3AED;
-        border:2px solid #7C3AED;
+        background:var(--sevo-surface, white); color:var(--sevo-primary, #0B8F7A);
+        border:2px solid var(--sevo-primary, #0B8F7A);
         border-radius:14px; padding:0.75rem 1.5rem;
         font-size:0.88rem; font-weight:700;
         font-family:inherit; cursor:pointer;
         transition:all 0.2s ease;
       }
-      .uc-btn-outline:hover { background:#faf5ff; }
+      .uc-btn-outline:hover { background:var(--sevo-primary-light, #E6F4F1); }
 
       .uc-link {
         background:none; border:none;
-        color:#7C3AED; font-weight:700; font-size:inherit;
+        color:var(--sevo-primary, #0B8F7A); font-weight:700; font-size:inherit;
         font-family:inherit; cursor:pointer; text-decoration:underline;
         padding:0;
       }
 
       .uc-step-footer { padding-top:0.5rem; }
 
-      /* •”••”• Footer •”••”• */
-      .uc-footer {
-        background:white; border-top:1px solid #e2e8f0;
-        padding:0.75rem 1.5rem;
-        display:flex; align-items:center; justify-content:center;
-        gap:0.4rem; flex-wrap:wrap;
-        font-size:0.72rem; font-weight:600; color:#94a3b8;
-      }
-      /* •”••”• Package Modal •”••”• */
+      /* ── Package Modals ── */
       .uc-modal-overlay {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(15, 23, 42, 0.4);
-        backdrop-filter: blur(4px);
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(6px);
         z-index: 9999;
         display: flex; align-items: center; justify-content: center;
         padding: 1.5rem;
       }
       .uc-pkg-modal {
-        background: white;
+        background: var(--sevo-surface, white);
+        border: 1px solid var(--sevo-border, #E5E7EB);
         border-radius: 24px;
         width: 100%; max-width: 980px;
         height: 88vh;
@@ -17880,14 +17877,14 @@ export function BkStyles() {
         display: flex;
         flex-direction: column;
         position: relative;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+        box-shadow: var(--sevo-shadow-xl, 0 20px 60px rgba(0,0,0,0.2));
       }
       .uc-pkg-modal-close {
         position: absolute; top: 1rem; right: 1rem;
-        background: rgba(255,255,255,0.9); border: none;
+        background: var(--sevo-surface-raised, rgba(255,255,255,0.9)); border: 1px solid var(--sevo-border, #E5E7EB);
         width: 36px; height: 36px; border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
-        cursor: pointer; z-index: 10; color: #1e293b;
+        cursor: pointer; z-index: 10; color: var(--sevo-text-primary, #0B172A);
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       }
       .uc-pkg-modal-hero {
@@ -17899,7 +17896,7 @@ export function BkStyles() {
       }
       .uc-pkg-modal-hero-overlay {
         position: absolute; inset: 0;
-        background: linear-gradient(to top, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.2) 100%);
+        background: linear-gradient(to top, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.2) 100%);
         display: flex; flex-direction: column; justify-content: flex-end;
         padding: 1.5rem 2rem; color: white;
       }
@@ -17911,16 +17908,16 @@ export function BkStyles() {
         min-height: 0;
         overflow: hidden;
         flex-direction: row;
-        background: #f8fafc;
+        background: var(--sevo-bg, #f8fafc);
       }
       .uc-pkg-sidebar {
         width: 300px;
-        background: white;
-        border-right: 1px solid #e2e8f0;
+        background: var(--sevo-surface, white);
+        border-right: 1px solid var(--sevo-border, #e2e8f0);
         padding: 2rem;
       }
       .uc-pkg-sidebar-title {
-        font-size: 1.15rem; font-weight: 800; color: #1e293b; margin: 0 0 1.2rem;
+        font-size: 1.15rem; font-weight: 800; color: var(--sevo-text-primary, #0B172A); margin: 0 0 1.2rem;
       }
       .uc-pkg-related-list {
         list-style: none; padding: 0; margin: 0;
@@ -17928,7 +17925,7 @@ export function BkStyles() {
       }
       .uc-pkg-sidebar-card {
         display: flex; align-items: center; gap: 12px;
-        font-size: 0.85rem; font-weight: 700; color: #475569;
+        font-size: 0.85rem; font-weight: 700; color: var(--sevo-text-secondary, #475569);
         cursor: pointer; padding: 0.5rem; border-radius: 12px;
         transition: all 0.2s ease;
         border: 1px solid transparent;
@@ -17937,43 +17934,44 @@ export function BkStyles() {
         width: 40px; height: 40px; border-radius: 8px; object-fit: cover;
       }
       .uc-pkg-sidebar-card:hover {
-        background: white; border-color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        background: var(--sevo-surface-raised, white); border-color: var(--sevo-border, #e2e8f0);
       }
       .uc-pkg-sidebar-card.uc-pkg-sidebar-active {
-        background: #ede9fe; color: #7C3AED; border-color: #ddd6fe; box-shadow: 0 4px 12px rgba(124,58,237,0.1);
+        background: var(--sevo-primary-light, #E6F4F1); color: var(--sevo-primary, #0B8F7A); border-color: var(--sevo-primary, #0B8F7A);
       }
       
       .uc-pkg-filter-row {
         display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 4px;
       }
       .uc-pkg-filter-pill {
-        background: white; border: 1px solid #e2e8f0; color: #475569;
+        background: var(--sevo-surface, white); border: 1px solid var(--sevo-border, #e2e8f0); color: var(--sevo-text-secondary, #475569);
         padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700;
         cursor: pointer; transition: all 0.2s; white-space: nowrap;
       }
-      .uc-pkg-filter-pill:hover { background: #f8fafc; border-color: #cbd5e1; }
-      .uc-pkg-filter-pill.active { background: #1e293b; color: white; border-color: #1e293b; }
+      .uc-pkg-filter-pill:hover { background: var(--sevo-surface-raised, #f8fafc); border-color: var(--sevo-border-strong, #cbd5e1); }
+      .uc-pkg-filter-pill.active { background: var(--sevo-primary, #0B8F7A); color: white; border-color: var(--sevo-primary, #0B8F7A); }
 
       .uc-pkg-content {
         flex: 1;
         padding: 2rem;
+        background: var(--sevo-bg, #f8fafc);
       }
       .uc-pkg-content-title {
-        font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0 0 1.5rem;
+        font-size: 1.25rem; font-weight: 800; color: var(--sevo-text-primary, #0B172A); margin: 0 0 1.5rem;
       }
       .uc-pkg-modal-list {
         display: flex; flex-direction: column; gap: 1rem;
       }
       .uc-pkg-modal-card-h {
-        background: white; border-radius: 16px;
+        background: var(--sevo-surface, white); border-radius: 16px;
         padding: 1.5rem; position: relative;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--sevo-border, #e2e8f0);
         cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
         display: flex; flex-direction: row; align-items: center; justify-content: space-between;
         gap: 1.5rem;
       }
       .uc-pkg-modal-card-h:hover {
-        transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.06); border-color: #7C3AED;
+        transform: translateY(-2px); box-shadow: var(--sevo-shadow-md); border-color: var(--sevo-primary, #0B8F7A);
       }
       .uc-pkg-modal-card-left { flex: 1; }
       .uc-pkg-modal-tags { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
@@ -17981,24 +17979,24 @@ export function BkStyles() {
         font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px;
         color: white; text-transform: uppercase; letter-spacing: 0.05em;
       }
-      .popular-badge { background: linear-gradient(135deg, #f59e0b, #d97706); }
-      .value-badge { background: linear-gradient(135deg, #10b981, #059669); }
+      .popular-badge { background: var(--sevo-warning, #f59e0b); }
+      .value-badge { background: var(--sevo-success, #10b981); }
       
-      .uc-pkg-modal-card-left h4 { margin: 0 0 0.4rem; font-size: 1.25rem; font-weight: 800; color: #1e293b; }
+      .uc-pkg-modal-card-left h4 { margin: 0 0 0.4rem; font-size: 1.25rem; font-weight: 800; color: var(--sevo-text-primary, #0B172A); }
       .uc-pkg-modal-price-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
-      .uc-pkg-modal-price { font-size: 1.4rem; font-weight: 900; color: #7C3AED; }
-      .uc-pkg-modal-dur { font-size: 0.85rem; font-weight: 600; color: #64748b; display: flex; align-items: center; gap: 4px; }
+      .uc-pkg-modal-price { font-size: 1.4rem; font-weight: 900; color: var(--sevo-primary, #0B8F7A); }
+      .uc-pkg-modal-dur { font-size: 0.85rem; font-weight: 600; color: var(--sevo-text-muted, #64748b); display: flex; align-items: center; gap: 4px; }
       
       .uc-pkg-modal-inc-list { display: flex; flex-direction: column; gap: 0.4rem; }
-      .uc-pkg-inc { font-size: 0.85rem; color: #475569; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; }
-      .uc-pkg-inc svg { color: #10B981; flex-shrink: 0; margin-top: 2px; }
+      .uc-pkg-inc { font-size: 0.85rem; color: var(--sevo-text-secondary, #475569); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; }
+      .uc-pkg-inc svg { color: var(--sevo-success, #10B981); flex-shrink: 0; margin-top: 2px; }
       
       .uc-pkg-modal-card-right { flex-shrink: 0; }
       .uc-btn-add { padding: 0.6rem 1.5rem; border-radius: 99px; }
 
       @media (max-width: 768px) {
         .uc-pkg-modal-split { flex-direction: column; }
-        .uc-pkg-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
+        .uc-pkg-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--sevo-border, #e2e8f0); }
         .uc-pkg-modal-card-h { flex-direction: column; align-items: flex-start; }
         .uc-pkg-modal-card-right { width: 100%; }
         .uc-btn-add { width: 100%; }
@@ -18006,23 +18004,23 @@ export function BkStyles() {
       
       .uc-pkg-modal-card-uc {
         display: flex; justify-content: space-between; align-items: flex-start;
-        padding: 1.5rem 0; border-bottom: 1px dashed #e2e8f0; gap: 1rem;
+        padding: 1.5rem 0; border-bottom: 1px dashed var(--sevo-border, #e2e8f0); gap: 1rem;
       }
       .uc-pkg-modal-card-uc:last-child { border-bottom: none; }
       
       .uc-uc-section-title {
-        font-size: 1.5rem; font-weight: 900; color: #1e293b;
+        font-size: 1.5rem; font-weight: 900; color: var(--sevo-text-primary, #0B172A);
         margin-bottom: 1rem;
       }
 
       .uc-pkg-modal-card-uc-info { flex: 1; padding-right: 1rem; }
-      .uc-pkg-uc-title { font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-bottom: 0.2rem; }
+      .uc-pkg-uc-title { font-size: 1.15rem; font-weight: 800; color: var(--sevo-text-primary, #0B172A); margin-bottom: 0.2rem; }
       .uc-pkg-uc-rating { display: flex; align-items: center; font-size: 0.75rem; margin-bottom: 0.5rem; }
-      .uc-pkg-uc-price { font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 1rem; }
-      .uc-pkg-uc-dot { margin: 0 4px; color: #94a3b8; }
-      .uc-pkg-uc-includes { margin: 0; padding-left: 1.2rem; margin-bottom: 1rem; color: #475569; font-size: 0.85rem; line-height: 1.5; }
+      .uc-pkg-uc-price { font-size: 0.85rem; font-weight: 700; color: var(--sevo-text-primary, #0B172A); margin-bottom: 1rem; }
+      .uc-pkg-uc-dot { margin: 0 4px; color: var(--sevo-text-muted, #94a3b8); }
+      .uc-pkg-uc-includes { margin: 0; padding-left: 1.2rem; margin-bottom: 1rem; color: var(--sevo-text-secondary, #475569); font-size: 0.85rem; line-height: 1.5; }
       .uc-pkg-uc-includes li { margin-bottom: 0.25rem; }
-      .uc-pkg-uc-view-details { color: #7C3AED; font-weight: 800; font-size: 0.85rem; cursor: pointer; }
+      .uc-pkg-uc-view-details { color: var(--sevo-primary, #0B8F7A); font-weight: 800; font-size: 0.85rem; cursor: pointer; }
       
       .uc-pkg-modal-card-uc-imgbox {
         position: relative; width: 120px; display: flex; flex-direction: column; align-items: center;
@@ -18031,46 +18029,46 @@ export function BkStyles() {
       .uc-pkg-uc-add-wrap {
         position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 8px;
-        background: white;
+        background: var(--sevo-surface, white);
       }
       
       .uc-btn-add-swiggy {
-        background: white; border: 1px solid #e2e8f0; color: #7C3AED;
+        background: var(--sevo-surface, white); border: 1px solid var(--sevo-border, #e2e8f0); color: var(--sevo-primary, #0B8F7A);
         font-weight: 800; padding: 0.4rem 1.8rem; border-radius: 8px;
         cursor: pointer; transition: all 0.2s; 
         text-transform: uppercase; font-size: 0.85rem;
       }
-      .uc-btn-add-swiggy:hover { background: #f8fafc; border-color: #cbd5e1; }
+      .uc-btn-add-swiggy:hover { background: var(--sevo-surface-raised, #f8fafc); border-color: var(--sevo-primary, #0B8F7A); }
       
       .uc-swiggy-qty {
         display: flex; align-items: center; justify-content: space-between;
-        background: white; border: 1px solid #7C3AED; color: #7C3AED;
+        background: var(--sevo-surface, white); border: 1px solid var(--sevo-primary, #0B8F7A); color: var(--sevo-primary, #0B8F7A);
         font-weight: 800; border-radius: 8px; overflow: hidden; width: 90px;
       }
       .uc-swiggy-qty button {
-        background: transparent; border: none; color: #7C3AED; padding: 0.4rem 0.8rem;
+        background: transparent; border: none; color: var(--sevo-primary, #0B8F7A); padding: 0.4rem 0.8rem;
         cursor: pointer; font-weight: 800; transition: background 0.2s;
       }
-      .uc-swiggy-qty button:hover { background: #f3e8ff; }
+      .uc-swiggy-qty button:hover { background: var(--sevo-primary-light, #E6F4F1); }
       
       .uc-pkg-modal-cart-bar {
         position: sticky; bottom: 0; left: 0; right: 0;
-        background: white; border-top: 1px solid #e2e8f0;
+        background: var(--sevo-surface, white); border-top: 1px solid var(--sevo-border, #e2e8f0);
         padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
         box-shadow: 0 -10px 30px rgba(0,0,0,0.05); z-index: 10;
         border-radius: 0 0 24px 24px;
       }
       .uc-cart-bar-left { display: flex; flex-direction: column; }
-      .uc-cart-bar-items { font-size: 0.8rem; font-weight: 700; color: #64748b; }
-      .uc-cart-bar-price { font-size: 1.25rem; font-weight: 900; color: #1e293b; }
+      .uc-cart-bar-items { font-size: 0.8rem; font-weight: 700; color: var(--sevo-text-secondary, #64748b); }
+      .uc-cart-bar-price { font-size: 1.25rem; font-weight: 900; color: var(--sevo-text-primary, #0B172A); }
       
       .uc-cart-bar-btn {
-        background: #7C3AED; color: white; border: none;
+        background: var(--sevo-primary, #0B8F7A); color: white; border: none;
         padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 800;
         cursor: pointer; display: flex; align-items: center; gap: 8px;
         transition: background 0.2s;
       }
-      .uc-cart-bar-btn:hover { background: #6D28D9; }
+      .uc-cart-bar-btn:hover { background: var(--sevo-primary-hover, #097A68); }
 
       /* ── Premium Modal Styles for Painting & Masonry ── */
       .uc-paint-overlay {
@@ -18079,7 +18077,7 @@ export function BkStyles() {
         left: 0;
         width: 100vw;
         height: 100vh;
-        background: #ffffff;
+        background: var(--sevo-bg, #ffffff);
         display: flex;
         justify-content: center;
         align-items: stretch;
@@ -18089,13 +18087,14 @@ export function BkStyles() {
         position: relative;
         width: 100%;
         height: 100%;
-        background: #ffffff;
+        background: var(--sevo-bg, #ffffff);
         border-radius: 0;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         font-family: 'Plus Jakarta Sans', sans-serif;
         box-shadow: none;
+        color: var(--sevo-text-primary, #0B172A);
       }
       .uc-paint-container {
         max-width: 1200px;

@@ -29,7 +29,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Curated services & recommendations",
       badge: "For You",
       badgeColor: "emerald",
-      image: "/mockups/category_for_you_3d.jpg",
+      image: "/assets/sevo_photo_for_you.jpg",
       link: "/booking?category=for_you",
       enabled: true
     },
@@ -39,7 +39,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Groceries & farm-fresh vegetables",
       badge: "Groceries & Veggies",
       badgeColor: "amber",
-      image: "/mockups/category_food_health_3d.jpg",
+      image: "/assets/sevo_photo_food_health.jpg",
       link: "/booking?category=groceries",
       enabled: true
     },
@@ -49,7 +49,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Cleaning, repairs, painting & masonry",
       badge: "5 Services",
       badgeColor: "blue",
-      image: "/mockups/category_home_repair_3d.jpg",
+      image: "/assets/sevo_photo_home_repair.jpg",
       link: "/booking?category=home_repairs",
       enabled: true
     },
@@ -59,7 +59,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Mini trucks, 2-wheelers & logistics",
       badge: "Transport",
       badgeColor: "teal",
-      image: "/mockups/category_goods_transport_3d.jpg",
+      image: "/assets/sevo_photo_goods_transport.jpg",
       link: "/logistics",
       enabled: true
     }

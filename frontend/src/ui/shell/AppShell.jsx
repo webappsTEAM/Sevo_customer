@@ -463,32 +463,30 @@ export function AppShell() {
   const email = user.email
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-bg text-fg font-body">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-body">
       <TrialExpiredModal />
       <CommandPalette open={cmdOpen} setOpen={setCmdOpen} />
 
       {/* ── Topbar ───────────────────────────── */}
-      <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-surface/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-stroke dark:border-slate-800 z-50 shrink-0 shadow-sm">
+      <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-[var(--sevo-surface)]/90 backdrop-blur-xl border-b border-[var(--sevo-border)] z-50 shrink-0 shadow-xs">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3.5">
             <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div className="h-6 w-px bg-[var(--sevo-border)] hidden sm:block" />
             <div className="flex flex-col">
-              <span className="font-bold text-slate-800 dark:text-slate-200 text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
+              <span className="font-bold text-[var(--sevo-text-primary)] text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
                 {orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider leading-none">Admin Portal</span>
+                <span className="text-[9px] font-bold text-[var(--sevo-primary)] uppercase tracking-wider leading-none">Admin Portal</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-
-
-          <div className="hidden sm:flex flex-col items-center justify-center px-4 py-1.5 bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-2xl select-none shadow-sm dark:shadow-md dark:shadow-black/20 min-w-[125px] hover:border-blue-500/30 transition-colors duration-300">
-            <span className="text-xs font-extrabold font-mono tracking-tight text-slate-800 dark:text-slate-200 tabular-nums leading-none">
+          <div className="hidden sm:flex flex-col items-center justify-center px-4 py-1.5 bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded-2xl select-none shadow-xs min-w-[125px] hover:border-[var(--sevo-primary)]/30 transition-colors duration-300">
+            <span className="text-xs font-extrabold font-mono tracking-tight text-[var(--sevo-text-primary)] tabular-nums leading-none">
               {localTime.toLocaleTimeString("en-US", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -496,7 +494,7 @@ export function AppShell() {
                 hour12: true,
               })}
             </span>
-            <span className="text-[8px] font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase leading-none mt-1.5 opacity-85">
+            <span className="text-[8px] font-black tracking-widest text-[var(--sevo-text-muted)] uppercase leading-none mt-1.5 opacity-85">
               Local Time
             </span>
           </div>
@@ -506,15 +504,15 @@ export function AppShell() {
             <ThemeSwitch />
           </div>
 
-          <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+          <div className="h-8 w-px bg-[var(--sevo-border)]"></div>
 
           <div className="relative profileMenuWrap" ref={profileMenuRef}>
             <button
-              className="flex items-center gap-3 p-1 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 group"
+              className="flex items-center gap-3 p-1 rounded-2xl hover:bg-[var(--sevo-surface-raised)] transition-all duration-300 group"
               type="button"
               onClick={() => setProfileOpen(v => !v)}
             >
-              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+              <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--sevo-primary)] text-white font-bold text-sm shadow-md group-hover:scale-105 transition-transform">
                 {user.avatar_url ? (
                   <img
                     src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
@@ -525,7 +523,7 @@ export function AppShell() {
                 ) : (
                   initials(user.username)
                 )}
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-white dark:border-slate-950 rounded-full shadow-sm"></div>
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-[var(--sevo-surface)] rounded-full shadow-xs"></div>
               </div>
               {!sidebarCollapsed && (
                 <div className="hidden lg:flex flex-col text-left mr-2">
@@ -559,10 +557,10 @@ export function AppShell() {
             {profileOpen && (
               <>
                 <div className="fixed inset-0 z-[99998]" onClick={() => setProfileOpen(false)} />
-                <div className="absolute top-full right-0 mt-3 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[99999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="p-6 bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-700/60">
+                <div className="absolute top-full right-0 mt-3 w-80 bg-[var(--sevo-surface)] rounded-2xl shadow-2xl border border-[var(--sevo-border)] z-[99999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="p-6 bg-[var(--sevo-surface-raised)]/80 backdrop-blur-xl border-b border-[var(--sevo-border)]">
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 dark:bg-blue-500 text-white text-xl font-bold shadow-xl shadow-blue-500/20">
+                      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--sevo-primary)] text-white text-xl font-bold shadow-md">
                         {user.avatar_url ? (
                           <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
                         ) : (
@@ -570,8 +568,8 @@ export function AppShell() {
                         )}
                       </div>
                       <div>
-                        <div className="font-bold text-slate-900 dark:text-white text-lg">{displayName(user.username)}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[180px] font-medium">{email}</div>
+                        <div className="font-bold text-[var(--sevo-text-primary)] text-lg">{displayName(user.username)}</div>
+                        <div className="text-xs text-[var(--sevo-text-secondary)] truncate max-w-[180px] font-medium">{email}</div>
                         <span
                           className="inline-block mt-1.5 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
                           style={
@@ -601,7 +599,7 @@ export function AppShell() {
                   <div className="p-3">
                     <button
                       type="button"
-                      className="flex items-center w-full px-4 py-3 text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all duration-300 group"
+                      className="flex items-center w-full px-4 py-3 text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all duration-300 group cursor-pointer"
                       onClick={async () => {
                         setProfileOpen(false);
                         await logout();
@@ -622,12 +620,12 @@ export function AppShell() {
       <div className="flex flex-1 overflow-hidden">
         {/* ── Main Primary Sidebar ─────────────────────────────── */}
         <aside
-          className="flex flex-col bg-white dark:bg-slate-950 border-r border-stroke dark:border-slate-900 z-50 w-[100px] shrink-0"
+          className="flex flex-col bg-[var(--sevo-surface)] border-r border-[var(--sevo-border)] z-50 w-[100px] shrink-0"
         >
           <nav className="flex-1 overflow-y-auto py-6 flex flex-col items-center gap-4 scrollbar-hide">
             {items.map((item) => {
               const active = (item.to === "/" && location.pathname === "/") || (item.to !== "/" && location.pathname.startsWith(item.to));
-              const color = item.color || "#3b82f6";
+              const color = item.color || "#0B8F7A";
               const hasChildren = !!item.children;
 
               return (
@@ -637,30 +635,31 @@ export function AppShell() {
                       if (hasChildren) setDrillDownParent(item);
                       navigate(item.to);
                     }}
-                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all duration-500 relative gap-1.5 ${active ? 'shadow-lg shadow-sm' : 'text-slate-400 hover:bg-slate-50'}`}
+                    className={`flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all duration-300 relative gap-1.5 cursor-pointer ${active ? 'shadow-xs bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)]' : 'text-[var(--sevo-text-secondary)] hover:bg-[var(--sevo-surface-raised)]/60'}`}
                     style={{
-                      backgroundColor: active ? `${color}15` : 'transparent',
                       color: active ? color : undefined
                     }}
                   >
                     <motion.span
-                      animate={active ? { scale: [1, 1.1, 1] } : {}}
+                      animate={active ? { scale: [1, 1.08, 1] } : {}}
                       transition={{ repeat: Infinity, duration: 4 }}
                       className={`transition-all duration-300 ${active ? '' : 'group-hover:scale-110'}`}
                     >
                       {item.icon}
                     </motion.span>
                     <span
-                      className={`text-[9px] font-black text-center px-1 leading-tight uppercase tracking-tighter transition-all ${active ? 'text-black dark:text-white opacity-100' : 'text-black/60 dark:text-white/60 group-hover:text-black dark:group-hover:text-white group-hover:opacity-100'}`}
+                      className={`text-[9px] font-black text-center px-1 leading-tight uppercase tracking-tighter transition-all ${active ? 'text-[var(--sevo-text-primary)] opacity-100 font-extrabold' : 'text-[var(--sevo-text-secondary)] group-hover:text-[var(--sevo-text-primary)] group-hover:opacity-100'}`}
                     >
                       {item.label}
                     </span>
 
-                    {/* Hover Glow */}
-                    <div
-                      className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                      style={{ background: `radial-gradient(circle at center, ${color}10 0%, transparent 70%)` }}
-                    />
+                    {/* Active accent bar */}
+                    {active && (
+                      <div
+                        className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                    )}
                   </button>
                 </div>
               );
@@ -676,11 +675,11 @@ export function AppShell() {
               animate={{ x: 0, opacity: 1, width: 260 }}
               exit={{ x: -260, opacity: 0, width: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="flex flex-col bg-slate-50/50 dark:bg-slate-900/20 backdrop-blur-xl border-r border-stroke dark:border-slate-800 z-40 overflow-hidden shrink-0"
+              className="flex flex-col bg-[var(--sevo-surface-raised)]/95 backdrop-blur-xl border-r border-[var(--sevo-border)] z-40 overflow-hidden shrink-0"
             >
               <div className="p-4 flex flex-col gap-1 h-full">
                 <div className="mb-4 px-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-black dark:text-white mb-1">
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--sevo-text-primary)] mb-1">
                     {drillDownParent.label === "Employees" ? "Employee Management" : drillDownParent.label}
                   </h4>
                 </div>
@@ -690,30 +689,28 @@ export function AppShell() {
                     .filter(child => (!child.adminOnly || isAdmin) && hasModuleAccess(user, child))
                     .map((child) => {
                       const childSiblings = drillDownParent.children.map(c => c.to)
-                      // A child is "active" only when the current path matches it exactly,
-                      // OR starts with it — but only if no sibling route is a more specific match.
                       const isSiblingMoreSpecific = childSiblings.some(
                         sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
                       )
                       const active = location.pathname === child.to ||
                         (!isSiblingMoreSpecific && child.to !== '/settings' && location.pathname.startsWith(child.to));
-                      const color = child.color || drillDownParent.color || "#3b82f6";
+                      const color = child.color || drillDownParent.color || "#0B8F7A";
                       return (
                         <NavLink
                           key={child.label}
                           to={child.to}
-                          className={`flex flex-row items-center justify-start w-full px-5 py-4 rounded-xl transition-all duration-300 relative group gap-4 ${active ? 'bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700' : 'text-slate-400 hover:bg-white/50'}`}
+                          className={`flex flex-row items-center justify-start w-full px-4 py-3 rounded-xl transition-all duration-200 relative group gap-3.5 cursor-pointer ${active ? 'bg-[var(--sevo-surface)] shadow-xs border border-[var(--sevo-border)]' : 'text-[var(--sevo-text-secondary)] hover:bg-[var(--sevo-surface)]/60'}`}
                         >
-                          <span className={`shrink-0 transition-all duration-300 ${active ? 'scale-110' : 'opacity-40 group-hover:opacity-100 group-hover:scale-105'}`} style={{ color }}>
+                          <span className={`shrink-0 transition-all duration-200 ${active ? 'scale-110' : 'opacity-60 group-hover:opacity-100 group-hover:scale-105'}`} style={{ color }}>
                             {child.icon}
                           </span>
-                          <span className={`text-[10px] font-black text-left uppercase tracking-tighter transition-colors ${active ? 'text-black dark:text-white' : 'text-slate-500 group-hover:text-black dark:group-hover:text-white'}`}>
+                          <span className={`text-xs font-bold text-left tracking-tight transition-colors ${active ? 'text-[var(--sevo-text-primary)]' : 'text-[var(--sevo-text-secondary)] group-hover:text-[var(--sevo-text-primary)]'}`}>
                             {child.label}
                           </span>
                           {active && (
                             <motion.div
                               layoutId="active-indicator-sub"
-                              className="absolute right-2 w-1 h-4 rounded-full"
+                              className="absolute right-2 w-1.5 h-4 rounded-full"
                               style={{ backgroundColor: color }}
                             />
                           )}
@@ -724,7 +721,7 @@ export function AppShell() {
 
                 <button
                   onClick={() => setDrillDownParent(null)}
-                  className="mt-auto w-full py-3 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+                  className="mt-auto w-full py-3 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
                 >
                   <ChevronLeft size={14} /> Close
                 </button>
@@ -734,8 +731,7 @@ export function AppShell() {
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/60 dark:bg-slate-950 relative scroll-smooth">
-          <div className="absolute inset-0 bg-grid-slate-900/[0.02] dark:bg-grid-white/[0.02] pointer-events-none"></div>
+        <main className="flex-1 overflow-y-auto bg-[var(--sevo-bg)] relative scroll-smooth">
           <div className="relative z-10 w-full min-h-full">
             <Outlet />
           </div>
