@@ -984,13 +984,25 @@ const TESTIMONIALS = [
   { name: "Priya M.", initials: "PM", text: "Great experience with the painting service. Highly recommend Sevo!" },
 ]
 
-function Logo() {
+function Logo({ onClick }) {
+  const navigate = useNavigate()
   return (
-    <div className="flex items-center gap-2 select-none">
-      <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
-        <Home className="w-5 h-5" strokeWidth={2.5} />
-      </div>
-      <span className="text-lg font-extrabold tracking-tight text-slate-900">Sevo</span>
+    <div
+      className="flex items-center gap-2 select-none cursor-pointer shrink-0 group"
+      onClick={onClick || (() => navigate(routes.landing))}
+    >
+      <img
+        src="/assets/sevo_emblem_transparent.png"
+        alt="SEVO Emblem"
+        className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+        style={{ height: '36px', width: 'auto' }}
+      />
+      <img
+        src="/assets/sevo_text_logo.png"
+        alt="SEVO"
+        className="shrink-0 object-contain"
+        style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+      />
     </div>
   )
 }
@@ -1827,7 +1839,7 @@ export function LandingPage() {
     try {
       const saved = localStorage.getItem("calservice_veg_food_cart")
       if (saved) return JSON.parse(saved)
-    } catch {}
+    } catch { }
     return {}
   })
   const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
@@ -1836,7 +1848,7 @@ export function LandingPage() {
   useEffect(() => {
     try {
       localStorage.setItem("calservice_veg_food_cart", JSON.stringify(foodCart || {}))
-    } catch {}
+    } catch { }
   }, [foodCart])
 
   useEffect(() => {
@@ -1869,6 +1881,38 @@ export function LandingPage() {
     } catch { return null }
   })
   const [serviceAlertMessage, setServiceAlertMessage] = useState("")
+  const [activeNav, setActiveNav] = useState("home")
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sectionIds = ["about-us", "professionals", "why-choose-us", "categories", "home"]
+      const scrollPosition = window.scrollY + 180
+      for (const id of sectionIds) {
+        const el = document.getElementById(id)
+        if (el) {
+          const top = el.offsetTop
+          if (scrollPosition >= top) {
+            setActiveNav(id)
+            return
+          }
+        }
+      }
+      setActiveNav("home")
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  const handleNavClick = (e, sectionId) => {
+    e.preventDefault()
+    setActiveNav(sectionId)
+    const el = document.getElementById(sectionId)
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }
 
   // Verify service zone for customer coordinates
   const verifyServiceZone = async (lat, lng, label) => {
@@ -2666,22 +2710,30 @@ export function LandingPage() {
             </div>
 
             {/* Center: Horizontal Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold text-slate-600">
-              <a href="#home" className="text-[#0057D9] font-bold relative py-1 after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[#0057D9] after:rounded-full">
-                Home
-              </a>
-              <a href="#categories" className="hover:text-slate-900 transition-colors py-1">
-                Services
-              </a>
-              <a href="#why-choose-us" className="hover:text-slate-900 transition-colors py-1">
-                How It Works
-              </a>
-              <a href="#professionals" className="hover:text-slate-900 transition-colors py-1">
-                Professionals
-              </a>
-              <a href="#about-us" className="hover:text-slate-900 transition-colors py-1">
-                About Us
-              </a>
+            <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold">
+              {[
+                { id: "home", label: "Home" },
+                { id: "categories", label: "Services" },
+                { id: "why-choose-us", label: "How It Works" },
+                { id: "professionals", label: "Professionals" },
+                { id: "about-us", label: "About Us" },
+              ].map((item) => {
+                const isActive = activeNav === item.id
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={(e) => handleNavClick(e, item.id)}
+                    className={`py-1 transition-all cursor-pointer ${
+                      isActive
+                        ? "text-[#0057D9] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[#0057D9] after:rounded-full"
+                        : "text-slate-600 hover:text-slate-900 font-semibold"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                )
+              })}
             </nav>
 
             {/* Right: Location Pill, Notifications & User Profile */}
@@ -2798,7 +2850,7 @@ export function LandingPage() {
         )}
 
         {/* ── Hero ───────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-6 pt-10 sm:pt-14 pb-12 sm:pb-16 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+        <section id="home" className="max-w-7xl mx-auto px-6 pt-10 sm:pt-14 pb-12 sm:pb-16 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center scroll-mt-24">
           {/* Left Column: Headline, Search & Trust Badges */}
           <div className="lg:col-span-6 xl:col-span-6 space-y-6">
             {/* Small Trust Badge */}
@@ -2823,9 +2875,8 @@ export function LandingPage() {
             <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
               <form
                 onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] ${
-                  isSearchOpen ? "border-[#0057D9] ring-4 ring-blue-500/10" : "border-slate-200 hover:border-slate-300"
-                }`}
+                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] ${isSearchOpen ? "border-[#0057D9] ring-4 ring-blue-500/10" : "border-slate-200 hover:border-slate-300"
+                  }`}
               >
                 <div className="pl-3 pr-1 text-slate-400">
                   <Search className="w-5 h-5" />
@@ -2984,13 +3035,13 @@ export function LandingPage() {
             <HeroServiceVisualization
               onSelectService={(serviceId, action) => {
                 if (action === "ac_modal") {
-                  setIsAcModalOpen(true)
+                  navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")
                 } else if (action === "plumbing_flow") {
-                  navigate("?category=electrical&subtab=Plumbing")
+                  navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")
                 } else if (action === "electrical_flow") {
-                  navigate("?category=electrical&subtab=Electrical")
+                  navigate("?category=electrical&subtab=Switches%20%26%20Sockets")
                 } else if (action === "cleaning_flow") {
-                  navigate("?category=cleaning")
+                  setIsHomePestModalOpen(true)
                 } else if (action === "scroll") {
                   const el = document.getElementById("why-choose-us")
                   if (el) el.scrollIntoView({ behavior: "smooth" })
@@ -3001,7 +3052,7 @@ export function LandingPage() {
         </section>
 
         {/* ── Browse by Category ─────────────────────────────── */}
-        <section id="categories" className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+        <section id="categories" className="max-w-7xl mx-auto px-6 py-10 space-y-8 scroll-mt-24">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Browse by Category</h2>
             <button
@@ -3086,19 +3137,19 @@ export function LandingPage() {
                 name: "AC Service",
                 desc: "Installation,\nRepair &\nMaintenance",
                 image: "/mockups/icon_3d_ac.jpg",
-                onClick: () => setIsAcModalOpen(true)
+                onClick: () => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")
               },
               {
                 name: "Plumbing",
                 desc: "Leakage, Repair\n& Installation",
                 image: "/mockups/icon_3d_tap.jpg",
-                onClick: () => navigate("?category=electrical&subtab=Plumbing")
+                onClick: () => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")
               },
               {
                 name: "Electrical",
                 desc: "Wiring, Repair\n& Installation",
                 image: "/mockups/icon_3d_lightning.jpg",
-                onClick: () => navigate("?category=electrical&subtab=Electrical")
+                onClick: () => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")
               },
               {
                 name: "Cleaning",
@@ -3110,7 +3161,7 @@ export function LandingPage() {
                 name: "Appliances",
                 desc: "Washing Machine,\nFridge & More",
                 image: "/mockups/icon_3d_washing_machine.jpg",
-                onClick: () => navigate("?category=hvac&subtab=Appliance%20Repair")
+                onClick: () => setIsAcModalOpen(true)
               },
               {
                 name: "More Services",
@@ -3148,7 +3199,7 @@ export function LandingPage() {
         {/* ── Personalized for You ─────────────────────────────── */}
 
         {/* ── Why Choose Sevo? ───────────────────────────────── */}
-        <section id="why-choose-us" className="max-w-7xl mx-auto px-6 py-8 space-y-4">
+        <section id="why-choose-us" className="max-w-7xl mx-auto px-6 py-8 space-y-4 scroll-mt-24">
           <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Why Choose Sevo?</h2>
 
           <div className="bg-white rounded-3xl border border-slate-100/90 shadow-[0_4px_25px_rgba(0,0,0,0.03)] p-6 sm:p-8">
@@ -3205,7 +3256,7 @@ export function LandingPage() {
         </section>
 
         {/* ── Book Services on the Go! & Trust Statistics ──────── */}
-        <section className="max-w-7xl mx-auto px-6 py-6">
+        <section id="professionals" className="max-w-7xl mx-auto px-6 py-6 scroll-mt-24">
           <div className="bg-[#F3F7FD] rounded-3xl p-6 sm:p-10 border border-blue-100/70 shadow-xs grid lg:grid-cols-12 gap-8 items-center">
             {/* Left Column: App Promo */}
             <div className="lg:col-span-5 space-y-4">
@@ -3363,7 +3414,7 @@ export function LandingPage() {
         </section>
 
         {/* ── Footer (White Background + Deep Blue Bottom Bar) ──── */}
-        <footer className="bg-white text-slate-600 pt-12 border-t border-slate-200/80 mt-10">
+        <footer id="about-us" className="bg-white text-slate-600 pt-12 border-t border-slate-200/80 mt-10 scroll-mt-24">
           <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10">
             {/* Col 1: Brand Info & Socials */}
             <div className="space-y-4">
@@ -3416,11 +3467,11 @@ export function LandingPage() {
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-slate-900">Services</h4>
               <ul className="space-y-2 text-xs text-slate-500">
-                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">AC Service</button></li>
-                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Plumbing")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Plumbing</button></li>
-                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Electrical")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Electrical</button></li>
-                <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Cleaning</button></li>
-                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=Appliance%20Repair")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
+                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">AC Service</button></li>
+                <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Plumbing</button></li>
+                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Electrical</button></li>
+                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Cleaning</button></li>
+                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
                 <li><button type="button" onClick={() => setIsHomeServicesCombinedModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">More Services</button></li>
               </ul>
             </div>
@@ -4609,11 +4660,10 @@ export function LandingPage() {
                         type="button"
                         disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                         onClick={() => setShowVegCartDrawer(true)}
-                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${
-                          Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
                             ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
                             : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                        }`}
+                          }`}
                       >
                         <ShoppingCart className="w-4 h-4" />
                         <span>Add to Cart</span>
@@ -4694,11 +4744,10 @@ export function LandingPage() {
                             }
                           })
                         }}
-                        className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                          Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                        className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
                             : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                        }`}
+                          }`}
                       >
                         <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
                         <ArrowRight className="w-4 h-4" />
@@ -5587,9 +5636,8 @@ export function LandingPage() {
             }}
           >
             <div
-              className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-100 relative flex flex-col max-h-[90vh] overflow-hidden transition-all ${
-                selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
-              }`}
+              className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-100 relative flex flex-col max-h-[90vh] overflow-hidden transition-all ${selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
+                }`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
@@ -5679,11 +5727,10 @@ export function LandingPage() {
                               key={cat}
                               type="button"
                               onClick={() => setVegCategoryFilter(cat)}
-                              className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                                vegCategoryFilter === cat
+                              className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${vegCategoryFilter === cat
                                   ? "bg-emerald-600 text-white shadow-xs"
                                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                              }`}
+                                }`}
                             >
                               {cat}
                             </button>
@@ -5724,14 +5771,14 @@ export function LandingPage() {
                     <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
                       {foodHealthSub.map((sub, index) => {
                         const isGroceries = sub.id === "groceries"
-                        const borderHoverClass = isGroceries 
-                          ? "hover:border-amber-400 hover:bg-amber-50/20" 
+                        const borderHoverClass = isGroceries
+                          ? "hover:border-amber-400 hover:bg-amber-50/20"
                           : "hover:border-emerald-500 hover:bg-emerald-50/30"
-                        const textHoverClass = isGroceries 
-                          ? "group-hover:text-amber-800" 
+                        const textHoverClass = isGroceries
+                          ? "group-hover:text-amber-800"
                           : "group-hover:text-emerald-700"
-                        const badgeBgClass = isGroceries 
-                          ? "bg-amber-100 text-amber-900 border-amber-300" 
+                        const badgeBgClass = isGroceries
+                          ? "bg-amber-100 text-amber-900 border-amber-300"
                           : "bg-emerald-100/80 text-emerald-800 border-emerald-200"
 
                         return (
@@ -6194,11 +6241,10 @@ export function LandingPage() {
                       type="button"
                       disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                       onClick={() => setShowVegCartDrawer(true)}
-                      className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${
-                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                      className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
                           ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
                           : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                      }`}
+                        }`}
                     >
                       <ShoppingCart className="w-4 h-4" />
                       <span>Add to Cart</span>
@@ -6279,11 +6325,10 @@ export function LandingPage() {
                           }
                         })
                       }}
-                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
                           ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      }`}
+                        }`}
                     >
                       <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
                       <ArrowRight className="w-4 h-4" />
@@ -6476,82 +6521,82 @@ export function LandingPage() {
           document.body
         )}
 
-    <BkStyles />
-    {activeCategory && (
-      (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
-        <KitchenCleaningModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(null) } })}
-        />
-      ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
-        <SofaCleaningModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
-        />
-      ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
-        <BathroomCleaningModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
-        />
-      ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
-        <PaintingPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          packagesData={packagesData}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-          }}
-          onGetEstimate={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-          }}
-        />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.id === "civil" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase()?.includes("mason") || activeCategory.name?.toLowerCase()?.includes("civil")) ? (
-        <MasonPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          packagesData={packagesData}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-          }}
-          onGetEstimate={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-          }}
-        />
-      ) : (
-        <CustomCleaningPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-          }}
-        />
-      )
-    )}
+      <BkStyles />
+      {activeCategory && (
+        (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
+          <KitchenCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(null) } })}
+          />
+        ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
+          <SofaCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+          />
+        ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
+          <BathroomCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+          />
+        ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
+          <PaintingPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            packagesData={packagesData}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
+          />
+        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.id === "civil" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase()?.includes("mason") || activeCategory.name?.toLowerCase()?.includes("civil")) ? (
+          <MasonPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            packagesData={packagesData}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
+          />
+        ) : (
+          <CustomCleaningPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+          />
+        )
+      )}
 
       <CustomerEntryFlowModal
         isOpen={showCustomerEntryModal}

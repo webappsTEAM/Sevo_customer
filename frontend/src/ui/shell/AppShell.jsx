@@ -470,14 +470,15 @@ export function AppShell() {
       {/* ── Topbar ───────────────────────────── */}
       <header className="flex items-center justify-between h-[var(--header-height)] px-8 bg-surface/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-stroke dark:border-slate-800 z-50 shrink-0 shadow-sm">
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3.5">
             <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
             <div className="flex flex-col">
-              <span className="font-bold text-slate-900 dark:text-white text-base tracking-tight truncate max-w-[200px]" title={orgName || "Sevo"}>
-                {orgName || "Sevo"}
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-xs tracking-tight truncate max-w-[200px]" title={orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}>
+                {orgName && orgName !== "Sevo" ? orgName : "Operations Hub"}
               </span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] professional-subtitle text-blue-500 leading-none">Enterprise</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider leading-none">Admin Portal</span>
               </div>
             </div>
           </div>
