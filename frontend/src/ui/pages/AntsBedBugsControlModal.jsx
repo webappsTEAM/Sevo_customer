@@ -438,7 +438,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                             {service.includes.map((item, i) => (
                               <li key={i} className="flex items-start gap-2">
                                 <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                <span>{item}</span>
+                                <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                               </li>
                             ))}
                           </ul>
@@ -451,7 +451,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                               {service.notIncluded.map((item, i) => (
                                 <div key={i} className="flex items-start gap-2 text-xs text-slate-500">
                                   <span className="text-rose-500 font-bold shrink-0 mt-0.5">×</span>
-                                  <span>{item}</span>
+                                  <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                 </div>
                               ))}
                             </div>
@@ -567,7 +567,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -672,7 +672,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
