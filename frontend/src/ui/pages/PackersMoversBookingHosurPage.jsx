@@ -1287,14 +1287,20 @@ export function PackersMoversBookingHosurPage() {
       {/* ── Top Header Navigation (Uniform Image 2 Style) ─────────────── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(routes.landing)}>
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm">
-              <Boxes className="w-5 h-5" strokeWidth={2.5} />
-            </div>
+          <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={() => navigate(routes.landing)}>
+            <img
+              src="/assets/sevo_emblem_transparent.png"
+              alt="SEVO Emblem"
+              className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+              style={{ height: '36px', width: 'auto' }}
+            />
             <div className="flex flex-col">
-              <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-none">
-                Sevo
-              </span>
+              <img
+                src="/assets/sevo_text_logo.png"
+                alt="SEVO"
+                className="shrink-0 object-contain"
+                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+              />
               <span className="text-[10px] font-semibold text-emerald-700 tracking-wide uppercase mt-0.5">
                 Packers &amp; Movers
               </span>

@@ -4014,8 +4014,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   useEffect(() => {
     if (user) {
-      const uFullName = user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : ''
-      setProfileName(uFullName)
+      const uFullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '')
+      setProfileName(uFullName && uFullName !== 'Customer' ? uFullName : (user?.username && user.username !== 'Customer' ? user.username : ''))
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
       setProfileCustomerId(user?.customer_id || user?.customerId || '')
@@ -4030,6 +4030,12 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         const data = res?.data || res
         if (data?.customer_id) {
           setProfileCustomerId(data.customer_id)
+        }
+        if (data?.first_name || data?.name || data?.full_name) {
+          const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
+          if (fetchedName && fetchedName !== 'Customer') {
+            setProfileName(prev => prev || fetchedName)
+          }
         }
       })
       .catch(() => {
@@ -4497,9 +4503,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
 
-  const userFullName = user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : 'Customer'
-  const userEmail = user?.email || ''
-  const userPhone = user?.phone || ''
+  const userFullName = (profileName && profileName.trim()) || user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '') || (user?.email ? user.email.split('@')[0] : 'Customer')
+  const userEmail = profileEmail || user?.email || ''
+  const userPhone = profilePhone || user?.phone || ''
 
   const [mockAddresses, setMockAddresses] = useState([
     { id: 1, title: 'Home', address: 'Flat 402, Block A\nPrestige Sunrise\nBangalore, 560068' }
@@ -4701,8 +4707,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>{userFullName}</span>
                   {(profileCustomerId || user?.customer_id || user?.customerId) && (
-                    <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
-                      {profileCustomerId || user?.customer_id || user?.customerId}
+                    <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                      ID: {profileCustomerId || user?.customer_id || user?.customerId}
                     </span>
                   )}
                 </div>
@@ -6842,8 +6848,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
               <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
               {(profileCustomerId || user?.customer_id || user?.customerId) && (
-                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>
-                  🆔 {profileCustomerId || user?.customer_id || user?.customerId}
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                  ID: {profileCustomerId || user?.customer_id || user?.customerId}
                 </div>
               )}
             </div>
@@ -7878,6 +7884,7 @@ function StepWorkflowCheckout({
   const [showAddSearchModal, setShowAddSearchModal] = useState(false)
   const [showMapModal, setShowMapModal] = useState(false)
   const [selectedSearchLoc, setSelectedSearchLoc] = useState("")
+  const [showTaxesDropdown, setShowTaxesDropdown] = useState(false)
 
   const availableDates = useMemo(() => {
     const dates = []
@@ -8477,14 +8484,37 @@ function StepWorkflowCheckout({
                 </div>
               </div>
 
-              <div className="flex justify-between text-slate-600">
-                <span>Taxes & GST ({gstRate}%)</span>
-                <span className="font-bold text-slate-800">₹{roundedGst.toLocaleString("en-IN")}</span>
-              </div>
+              {/* Taxes & Fee Collapsible Dropdown */}
+              <div className="border border-slate-200/70 bg-slate-50/60 rounded-xl overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => setShowTaxesDropdown(prev => !prev)}
+                  className="w-full flex items-center justify-between p-2.5 text-xs text-slate-700 hover:text-slate-900 font-semibold cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Taxes and Fee</span>
+                    <ChevronDown
+                      size={14}
+                      className={`text-slate-400 transition-transform duration-200 ${showTaxesDropdown ? "rotate-180 text-slate-600" : ""}`}
+                    />
+                  </div>
+                  <span className="font-bold text-slate-800">
+                    ₹{(roundedGst + platformFee).toLocaleString("en-IN")}
+                  </span>
+                </button>
 
-              <div className="flex justify-between text-slate-600">
-                <span>Platform Fee</span>
-                <span className="font-bold text-slate-800">₹{platformFee.toLocaleString("en-IN")}</span>
+                {showTaxesDropdown && (
+                  <div className="px-3 pb-2.5 pt-1.5 space-y-1.5 border-t border-slate-200/60 bg-white text-[11px] animate-in fade-in duration-150">
+                    <div className="flex justify-between text-slate-500">
+                      <span>Taxes & GST ({gstRate}%)</span>
+                      <span className="font-semibold text-slate-700">₹{roundedGst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Platform Fee</span>
+                      <span className="font-semibold text-slate-700">₹{platformFee.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {discount > 0 && (
@@ -9439,13 +9469,21 @@ export function BookingPage() {
           {/* Brand Logo & Urban Location Selector */}
           <div className="flex items-center gap-3 sm:gap-6">
             <div
-              className="flex items-center gap-2 select-none cursor-pointer"
+              className="flex items-center gap-2 select-none cursor-pointer group"
               onClick={() => { setStep(1); setCategory(null); }}
             >
-              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/20">
-                <Home className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="text-lg font-black tracking-tight text-slate-900 hidden sm:inline">Sevo</span>
+              <img
+                src="/assets/sevo_emblem_transparent.png"
+                alt="SEVO Emblem"
+                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                style={{ height: '36px', width: 'auto' }}
+              />
+              <img
+                src="/assets/sevo_text_logo.png"
+                alt="SEVO"
+                className="shrink-0 object-contain hidden sm:block"
+                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+              />
             </div>
 
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
@@ -10531,15 +10569,21 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             <div className="flex items-center gap-3 sm:gap-5">
               {/* Logo */}
               <div
-                className="flex items-center gap-2 cursor-pointer"
+                className="flex items-center gap-2 cursor-pointer select-none group"
                 onClick={onClose}
               >
-                <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center shrink-0">
-                  <Home size={15} strokeWidth={2.5} className="text-white" />
-                </div>
-                <span className="text-sm font-black text-slate-900 hidden sm:block">
-                  <span className="text-teal-600">Cal</span>Services
-                </span>
+                <img
+                  src="/assets/sevo_emblem_transparent.png"
+                  alt="SEVO Emblem"
+                  className="h-8 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                  style={{ height: '32px', width: 'auto' }}
+                />
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain hidden sm:block"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
               </div>
 
               <div className="h-6 w-px bg-slate-200 hidden sm:block" />
@@ -12726,15 +12770,21 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             <div className="flex items-center gap-3 sm:gap-5">
               {/* Logo */}
               <div
-                className="flex items-center gap-2 cursor-pointer"
+                className="flex items-center gap-2 cursor-pointer select-none group"
                 onClick={onClose}
               >
-                <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center shrink-0">
-                  <Home size={15} strokeWidth={2.5} className="text-white" />
-                </div>
-                <span className="text-sm font-black text-slate-900 hidden sm:block">
-                  <span className="text-teal-600">Cal</span>Services
-                </span>
+                <img
+                  src="/assets/sevo_emblem_transparent.png"
+                  alt="SEVO Emblem"
+                  className="h-8 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                  style={{ height: '32px', width: 'auto' }}
+                />
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain hidden sm:block"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
               </div>
 
               <div className="h-6 w-px bg-slate-200 hidden sm:block" />
@@ -14426,15 +14476,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
-    if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service") return "AC Service & Cleaning";
-    if (subtabParam === "TV & Display") return "TV Service & Repair";
-    if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair") return "Washing Machine Jet Service";
-    if (subtabParam === "Refrigerator & Fridge" || subtabParam === "Refrigerator" || subtabParam === "Refrigerator Repair") return "Refrigerator Service & Repair";
-    if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave") return "Microwave Repair";
-    if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrician Services") return "Switches & Sockets";
-    if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers") return "Tap & Mixer";
-    if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter Services") return "Lock & Handle";
-    if (subtabParam === "Mason" || subtabParam === "mason") return "Brick & Block Work";
+    if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service" || subtabParam === "AC Service & Cleaning") return "AC Service & Cleaning";
+    if (subtabParam === "TV & Display" || subtabParam === "TV Service & Repair") return "TV Service & Repair";
+    if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair" || subtabParam === "Washing Machine Jet Service") return "Washing Machine Jet Service";
+    if (subtabParam === "Refrigerator & Fridge" || subtabParam === "Refrigerator" || subtabParam === "Refrigerator Repair" || subtabParam === "Refrigerator Service & Repair") return "Refrigerator Service & Repair";
+    if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave" || subtabParam === "Microwave") return "Microwave Repair";
+    if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrical" || subtabParam === "Electrician Services" || subtabParam === "Switches & Sockets") return "Switches & Sockets";
+    if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers" || subtabParam === "Tap & Mixer") return "Tap & Mixer";
+    if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter" || subtabParam === "Carpenter Services" || subtabParam === "Lock & Handle") return "Lock & Handle";
+    if (subtabParam === "Mason" || subtabParam === "mason" || subtabParam === "Brick & Block Work") return "Brick & Block Work";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
@@ -14551,8 +14601,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPlans, setExpandedPlans] = useState({});
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
-  const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
   const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
 
   useEffect(() => {
@@ -16232,13 +16282,37 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <span>Item Total</span>
                       <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
-                      <span>Taxes & GST (18%)</span>
-                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
-                      <span>Platform Fee</span>
-                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    {/* Taxes & Fee Dropdown (Desktop) */}
+                    <div className="border border-slate-200/60 bg-slate-50/60 rounded-lg overflow-hidden transition-all my-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowModalTaxesDropdown(prev => !prev)}
+                        className="w-full flex items-center justify-between p-1.5 text-[11px] text-slate-700 hover:text-slate-900 font-semibold cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Taxes and Fee</span>
+                          <ChevronDown
+                            size={12}
+                            className={`text-slate-400 transition-transform duration-200 ${showModalTaxesDropdown ? "rotate-180 text-slate-600" : ""}`}
+                          />
+                        </div>
+                        <span className="font-bold text-slate-800">
+                          ₹{(totalGst + platformFee).toLocaleString("en-IN")}
+                        </span>
+                      </button>
+
+                      {showModalTaxesDropdown && (
+                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-slate-200/50 bg-white text-[10px] animate-in fade-in duration-150">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Taxes & GST (18%)</span>
+                            <span className="font-semibold text-slate-700">+₹{totalGst.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500">
+                            <span>Platform Fee</span>
+                            <span className="font-semibold text-slate-700">+₹{platformFee.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {isVipJoined && (
                       <div className="flex justify-between text-slate-500">
@@ -21888,13 +21962,37 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       <span>Item Total</span>
                       <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
-                      <span>Taxes & GST (18%)</span>
-                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500 font-semibold">
-                      <span>Platform Fee</span>
-                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    {/* Taxes & Fee Dropdown (Mobile) */}
+                    <div className="border border-slate-200/60 bg-slate-50/60 rounded-lg overflow-hidden transition-all my-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowModalTaxesDropdown(prev => !prev)}
+                        className="w-full flex items-center justify-between p-1.5 text-[11px] text-slate-700 hover:text-slate-900 font-semibold cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Taxes and Fee</span>
+                          <ChevronDown
+                            size={12}
+                            className={`text-slate-400 transition-transform duration-200 ${showModalTaxesDropdown ? "rotate-180 text-slate-600" : ""}`}
+                          />
+                        </div>
+                        <span className="font-bold text-slate-800">
+                          ₹{(totalGst + platformFee).toLocaleString("en-IN")}
+                        </span>
+                      </button>
+
+                      {showModalTaxesDropdown && (
+                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-slate-200/50 bg-white text-[10px] animate-in fade-in duration-150">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Taxes & GST (18%)</span>
+                            <span className="font-semibold text-slate-700">+₹{totalGst.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500">
+                            <span>Platform Fee</span>
+                            <span className="font-semibold text-slate-700">+₹{platformFee.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-slate-200 pt-2">
                       <span>Total Amount</span>

@@ -82,17 +82,23 @@ export function LegalLayout({ children, activePage, pageTitle, subtitle, version
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900 font-sans text-slate-800 antialiased">
       {/* ── Top Header Navigation ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 sm:gap-6">
-          <div className="flex items-center gap-3 sm:gap-6">
-            <Link to="/home" className="flex items-center gap-2.5 select-none cursor-pointer group">
-              <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0 group-hover:bg-teal-700 transition-colors">
-                <Home size={18} strokeWidth={2.5} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-none group-hover:text-teal-700 transition-colors">
-                  Sevo
-                </span>
-                <span className="text-[10px] font-semibold text-slate-400 leading-tight mt-0.5">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-6">
+          <div className="flex items-center gap-2 sm:gap-6 shrink-0 min-w-0">
+            <Link to="/home" className="flex items-center gap-2 select-none cursor-pointer group">
+              <img
+                src="/assets/sevo_emblem_transparent.png"
+                alt="SEVO Emblem"
+                className="h-8 sm:h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                style={{ height: '32px', width: 'auto' }}
+              />
+              <div className="flex flex-col min-w-0">
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
+                <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 leading-tight mt-0.5 whitespace-nowrap">
                   Legal &amp; Policy Portal
                 </span>
               </div>
@@ -107,20 +113,20 @@ export function LegalLayout({ children, activePage, pageTitle, subtitle, version
             <Link to="/help" className="hover:text-teal-600 transition-colors">Help &amp; Support</Link>
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button
               type="button"
               onClick={() => navigate("/home")}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-700 font-bold text-xs border border-slate-200 hover:border-teal-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-700 font-bold text-xs border border-slate-200 hover:border-teal-200 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={13} />
               <span className="hidden sm:inline">Back to Home</span>
               <span className="sm:hidden">Home</span>
             </button>
 
             <Link
               to="/contact"
-              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+              className="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1 sm:gap-1.5 active:scale-95"
             >
               <Mail size={13} />
               <span className="hidden sm:inline">Contact Support</span>
