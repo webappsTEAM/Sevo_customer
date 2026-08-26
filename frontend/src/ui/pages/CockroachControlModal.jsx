@@ -528,7 +528,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -629,7 +629,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -741,7 +741,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -842,7 +842,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>

@@ -2060,7 +2060,7 @@ export default function CustomerCarePage() {
                                             <div>
                                               <span className="text-emerald-600 dark:text-emerald-450 font-bold text-[9px] uppercase tracking-wider block mb-1">✔️ Includes</span>
                                               <ul className="list-disc pl-3 text-[10px] text-slate-500 space-y-0.5">
-                                                {item.includes.map((inc, i) => <li key={i}>{inc}</li>)}
+                                                {item.includes.map((inc, i) => <li key={i}>{typeof inc === 'string' ? inc : (inc?.text || '')}</li>)}
                                               </ul>
                                             </div>
                                           )}
@@ -2068,7 +2068,7 @@ export default function CustomerCarePage() {
                                             <div>
                                               <span className="text-rose-600 dark:text-rose-450 font-bold text-[9px] uppercase tracking-wider block mb-1">❌ Excludes</span>
                                               <ul className="list-disc pl-3 text-[10px] text-slate-500 space-y-0.5">
-                                                {item.excludes.map((exc, i) => <li key={i}>{exc}</li>)}
+                                                {item.excludes.map((exc, i) => <li key={i}>{typeof exc === 'string' ? exc : (exc?.text || '')}</li>)}
                                               </ul>
                                             </div>
                                           )}

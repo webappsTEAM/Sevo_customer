@@ -11588,7 +11588,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Included</h4>
                           <ul style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.82rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.4rem', listStyleType: 'disc' }}>
                             {activeDetailService.includes.map((inc, i) => (
-                              <li key={i} style={{ lineHeight: 1.4 }}>{inc}</li>
+                              <li key={i} style={{ lineHeight: 1.4 }}>{typeof inc === 'string' ? inc : (inc?.text || '')}</li>
                             ))}
                           </ul>
                         </div>
@@ -13644,7 +13644,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       {activeDetailService.includes.map((inc, i) => (
                         <li key={i} style={{ fontSize: '0.82rem', color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.4 }}>
                           <span style={{ color: '#10b981', fontWeight: 'bold', marginTop: '1px' }}>•</span>
-                          <span>{inc}</span>
+                          <span>{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
                         </li>
                       ))}
                     </ul>
@@ -13659,7 +13659,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       {activeDetailService.excludes.map((exc, i) => (
                         <li key={i} style={{ fontSize: '0.82rem', color: '#9f1239', display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.4 }}>
                           <span style={{ color: '#f43f5e', fontWeight: 'bold', marginTop: '1px' }}>•</span>
-                          <span>{exc}</span>
+                          <span>{typeof exc === 'string' ? exc : (exc?.text || '')}</span>
                         </li>
                       ))}
                     </ul>
@@ -15804,10 +15804,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                         {/* Includes checklist */}
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
-                          {p.includes.map(inc => (
-                            <li key={inc} className="flex items-start gap-2">
+                          {p.includes.map((inc, i) => (
+                            <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{inc}</span>
+                              <span>{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
                             </li>
                           ))}
                         </ul>
@@ -15864,10 +15864,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </div>
 
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                          {p.includes.map(inc => (
-                            <li key={inc} className="flex items-start gap-2">
+                          {p.includes.map((inc, i) => (
+                            <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{inc}</span>
+                              <span>{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
                             </li>
                           ))}
                         </ul>
@@ -15923,10 +15923,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </div>
 
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                          {p.includes.map(inc => (
-                            <li key={inc} className="flex items-start gap-2">
+                          {p.includes.map((inc, i) => (
+                            <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{inc}</span>
+                              <span>{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
                             </li>
                           ))}
                         </ul>
@@ -16034,7 +16034,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                                           <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                                             <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                                             <span className="leading-relaxed">
-                                              {inc}
+                                              {typeof inc === 'string' ? inc : (inc?.text || '')}
                                               {isLastOfThree && (
                                                 <span
                                                   onClick={(e) => {
@@ -16069,10 +16069,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               </div>
                             ) : (
                               <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
-                                {p.includes.map(inc => (
-                                  <li key={inc} className="flex items-start gap-2">
+                                {p.includes.map((inc, i) => (
+                                  <li key={i} className="flex items-start gap-2">
                                     <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{inc}</span>
+                                    <span>{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -16604,7 +16604,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Included</h4>
                       <ul className="list-disc pl-4 text-xs text-slate-600 space-y-1.5">
                         {selectedMasonDetail.includes.map((inc, i) => (
-                          <li key={i} className="leading-relaxed">{inc}</li>
+                          <li key={i} className="leading-relaxed">{typeof inc === 'string' ? inc : (inc?.text || '')}</li>
                         ))}
                       </ul>
                     </div>
@@ -16615,7 +16615,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Not Included</h4>
                         <ul className="list-disc pl-4 text-xs text-slate-500 space-y-1.5">
                           {extra.excludes.map((exc, i) => (
-                            <li key={i} className="leading-relaxed">{exc}</li>
+                            <li key={i} className="leading-relaxed">{typeof exc === 'string' ? exc : (exc?.text || '')}</li>
                           ))}
                         </ul>
                       </div>
@@ -16865,7 +16865,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
+                      <span className="leading-relaxed">{typeof item === 'string' ? item : (item?.text || '')}</span>
                     </div>
                   ))}
                 </div>
@@ -16886,7 +16886,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
+                      <span className="leading-relaxed">{typeof item === 'string' ? item : (item?.text || '')}</span>
                     </div>
                   ))}
                 </div>
@@ -21495,6 +21495,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
   const [dbPackages, setDbPackages] = useState([]);
 
   useEffect(() => {

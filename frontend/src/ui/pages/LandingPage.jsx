@@ -4216,6 +4216,7 @@ export function LandingPage() {
                                 <img
                                   src={sub.image || (isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png")}
                                   alt={sub.name}
+                                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png"; }}
                                   className="w-full h-full object-cover rounded-xl"
                                 />
                                 {isGroceries && (
@@ -5797,6 +5798,7 @@ export function LandingPage() {
                               <img
                                 src={sub.image || (isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png")}
                                 alt={sub.name}
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png"; }}
                                 className="w-full h-full object-cover rounded-xl"
                               />
                               {isGroceries && (
