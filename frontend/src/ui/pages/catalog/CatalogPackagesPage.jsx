@@ -2007,6 +2007,16 @@ export function CatalogPackagesPage() {
               p.slug.startsWith("addon-"),
           },
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["packages", "appliance", "cabinet_tile", "addons"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const KITCHEN_SLUG_ORDER = [
           "occ-basic",
@@ -2092,6 +2102,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug === "quick-balcony-upto-4ft" || p.slug === "quick-balcony-above-4ft" || p.slug === "window-clean-under-4" || p.slug === "window-clean-above-4" || p.slug === "quick-dining-table" || p.slug === "kitchen-microwave-clean",
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["full_apartment", "unoccupied_apartment", "full_bungalow", "unoccupied_bungalow", "partial_home"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const HOUSE_SLUG_ORDER = [
           "classic-apt-deep",
@@ -2195,6 +2215,16 @@ export function CatalogPackagesPage() {
             }
           },
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["sofa", "mattress", "carpet", "addons"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const SOFA_SLUG_ORDER = [
           "fabric-sofa-clean",
@@ -2253,6 +2283,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug.includes("termite"),
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["cockroach", "termite"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const PEST_SLUG_ORDER = [
           "pest-kb-main",
@@ -2301,6 +2341,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug.includes("bedbug"),
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["ants", "bedbugs"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const PEST_SLUG_ORDER = [
           "pest-ant-kb",
@@ -2352,6 +2402,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => !p.slug.includes("sub-bath") && p.slug !== "bath-deep-clean" && p.slug !== "bath-intense-clean",
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["packages", "subscription", "minis"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const BATHROOM_SLUG_ORDER = [
           "bath-deep-clean",
@@ -2489,6 +2549,9 @@ export function CatalogPackagesPage() {
             ? editing.excludes.split(",").map((s) => s.trim()).filter(Boolean)
             : editing.excludes,
         offer_price: null,
+      }
+      if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
+        payload.tag = editing.virtualSlug
       }
       const res = editing.id
         ? await apiRequest(`/settings/catalog/v2/packages/${editing.id}/`, {
@@ -3244,7 +3307,7 @@ export function CatalogPackagesPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs sm:text-sm font-bold text-slate-900">
-                          {svcItem.displayName}
+                          {svcItem.service.slug === "kitchen-cleaning" && svcItem.service.virtualSlug === "packages" ? "Full Kitchen packages" : svcItem.displayName}
                         </span>
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
