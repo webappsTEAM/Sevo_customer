@@ -1432,11 +1432,29 @@ class AdminSRVerifyView(APIView):
         with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.VERIFIED, actor=request.user)
             sr.save(update_fields=["status", "updated_at"])
-            ServiceFeedback.objects.get_or_create(service_request=sr)
+            fb, _fb_created = ServiceFeedback.objects.get_or_create(service_request=sr)
+
+        # Fixes HS-E-02: this created the feedback token but never actually
+        # sent it anywhere -- send_completion_and_feedback_email() exists
+        # (its own docstring says 'sent automatically when employee marks job
+        # complete') but had no caller anywhere in the codebase, so a
+        # customer's feedback request was silently never delivered even
+        # after admin verification. Fire it from a background thread so
+        # this endpoint's response is never delayed by mail delivery.
+        try:
+            import threading
+            from .notifications import send_completion_and_feedback_email
+            threading.Thread(
+                target=send_completion_and_feedback_email,
+                args=(sr, str(fb.feedback_token)),
+                daemon=True,
+            ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start feedback-link notification for booking {sr.id}: {notify_err}")
 
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            message="Service request verified. Feedback link generated.",
+            message="Service request verified. Feedback link generated and sent to customer.",
         )
 
 
@@ -1467,7 +1485,23 @@ class AdminSRResendFeedbackView(APIView):
             return _error("Not found.", 404)
 
         fb, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
-        return _success(data={"feedback_token": str(fb.feedback_token)}, message="Feedback link retrieved.")
+
+        # Fixes HS-E-02: this endpoint is literally named 'resend feedback'
+        # but never called send_feedback_link() -- it only returned the
+        # token in the API response for whatever called this endpoint,
+        # never actually resent anything to the customer.
+        try:
+            import threading
+            from .notifications import send_feedback_link
+            threading.Thread(
+                target=send_feedback_link,
+                args=(sr, str(fb.feedback_token)),
+                daemon=True,
+            ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start feedback-link resend for booking {sr.id}: {notify_err}")
+
+        return _success(data={"feedback_token": str(fb.feedback_token)}, message="Feedback link resent to customer.")
 
 
 class AdminSRCloseView(APIView):
