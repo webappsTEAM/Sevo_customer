@@ -9,7 +9,7 @@ import {
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
-  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee
+  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
@@ -23,6 +23,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { ThemeToggle } from "../shell/ThemeToggle.jsx"
 import { apiUpdateCustomerLastLocation, apiFetchCustomerBookings } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
@@ -2156,7 +2157,7 @@ export function LandingPage() {
               priceStr: "₹" + s.price,
               duration: s.duration || "1 hr",
               payment_policy: s.payment_policy,
-              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              image: s.image || "",
               includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
               excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
@@ -2466,19 +2467,19 @@ export function LandingPage() {
   }, [SEARCH_ROTATING_SERVICES.length]);
 
   const allServicesCatalog = useMemo(() => [
-    { id: "kc-1", name: "Occupied Kitchen Cleaning (Basic)", price: 999, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
-    { id: "kc-2", name: "Occupied Kitchen Cleaning (Deep Clean)", price: 1499, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
-    { id: "kc-3", name: "Empty Kitchen Deep Cleaning", price: 1799, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
-    { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80&fit=crop", catId: "sofa_cleaning" },
-    { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "bathroom_cleaning" },
+    { id: "kc-1", name: "Occupied Kitchen Cleaning (Basic)", price: 999, categoryName: "Kitchen Cleaning", image: "/mockups/kitchen_basic_cleaning_card.png", catId: "kitchen_cleaning" },
+    { id: "kc-2", name: "Occupied Kitchen Cleaning (Deep Clean)", price: 1499, categoryName: "Kitchen Cleaning", image: "/mockups/kitchen_cleaning_hero.png", catId: "kitchen_cleaning" },
+    { id: "kc-3", name: "Empty Kitchen Deep Cleaning", price: 1799, categoryName: "Kitchen Cleaning", image: "/mockups/kitchen_tiles_slabs_clean.png", catId: "kitchen_cleaning" },
+    { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", catId: "sofa_cleaning" },
+    { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "/mockups/bathroom_cleaning.png", catId: "bathroom_cleaning" },
     { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: imgFoamSplit, catId: "hvac" },
     { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: imgAntiRust, catId: "hvac" },
     { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: acServiceImg, catId: "hvac" },
-    { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400&q=80&fit=crop", catId: "electrical" },
-    { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "plumbing" },
-    { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=400&q=80&fit=crop", catId: "carpentry" },
-    { id: "pc-1", name: "Cockroach & Ant Pest Control", price: 699, categoryName: "Pest Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "pest_control" },
-    { id: "app-1", name: "Automatic Washing Machine Service", price: 499, categoryName: "Appliance Repair", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=400&q=80&fit=crop", catId: "appliance_repair" }
+    { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "/mockups/hero_pro_electrical_rect.jpg", catId: "electrical" },
+    { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "/mockups/hero_pro_plumbing_rect.jpg", catId: "plumbing" },
+    { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "/mockups/hero_cleaning_office.jpg", catId: "carpentry" },
+    { id: "pc-1", name: "Cockroach & Ant Pest Control", price: 699, categoryName: "Pest Control", image: "/mockups/pest_control_header.jpg", catId: "pest_control" },
+    { id: "app-1", name: "Automatic Washing Machine Service", price: 499, categoryName: "Appliance Repair", image: "/mockups/hero_pro_appliance_rect.jpg", catId: "appliance_repair" }
   ], []);
 
   const searchResults = useMemo(() => {
@@ -2658,6 +2659,7 @@ export function LandingPage() {
                   }}
                 />
 
+
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
                   category={{ id: "pest_control", name: "Pest Control" }}
@@ -2689,6 +2691,7 @@ export function LandingPage() {
                   category={activeCategory}
                   cart={modalCart}
                   setCart={setModalCart}
+                  packagesData={packagesData}
                   isFullPage={true}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
@@ -2737,10 +2740,10 @@ export function LandingPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-[#F8FAFC] text-slate-800 antialiased font-sans" style={{ animation: "fadeUp 0.4s ease both" }}>
+      <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] antialiased font-sans transition-colors duration-200" style={{ animation: "fadeUp 0.4s ease both" }}>
         {/* ── Header ─────────────────────────────────────────── */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-xs">
-          <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between gap-6">
+        <header className="sticky top-0 z-40 bg-[var(--sevo-surface-glass)] backdrop-blur-md border-b border-[var(--sevo-border)] shadow-[var(--sevo-shadow-xs)] transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4 sm:gap-6">
             {/* Left: Official SEVO Brand Logo with Proportional Alignment */}
             <div className="flex items-center gap-2 select-none cursor-pointer shrink-0 group" onClick={() => navigate(routes.landing)}>
               <img
@@ -2774,8 +2777,8 @@ export function LandingPage() {
                     onClick={(e) => handleNavClick(e, item.id)}
                     className={`py-1 transition-all cursor-pointer ${
                       isActive
-                        ? "text-[#0057D9] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[#0057D9] after:rounded-full"
-                        : "text-slate-600 hover:text-slate-900 font-semibold"
+                        ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
+                        : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
                     }`}
                   >
                     {item.label}
@@ -2784,16 +2787,16 @@ export function LandingPage() {
               })}
             </nav>
 
-            {/* Right: Location Pill, Notifications & User Profile */}
-            <div className="flex items-center gap-3.5 sm:gap-4">
+            {/* Right: Location Pill, ThemeToggle, Notifications & User Profile */}
+            <div className="flex items-center gap-2 sm:gap-3.5">
               {/* Location Selector Pill */}
               <button
                 type="button"
                 onClick={() => setShowLocationPickerModal(true)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-blue-300 bg-slate-50/90 hover:bg-blue-50/50 text-slate-800 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[180px] sm:max-w-[240px] truncate"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-[var(--sevo-border)] hover:border-[var(--sevo-primary)] bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] text-xs font-bold transition-all cursor-pointer shadow-xs max-w-[150px] sm:max-w-[220px] truncate"
                 title="Select Location"
               >
-                <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0057D9]" />
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-[var(--sevo-primary)]" />
                 <span className="truncate">
                   {(() => {
                     if (activeLocationLabel) return activeLocationLabel
@@ -2806,13 +2809,16 @@ export function LandingPage() {
                     return "Hosur, Tamil Nadu"
                   })()}
                 </span>
-                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
+                <ChevronDown className="w-3 h-3 text-[var(--sevo-text-muted)] shrink-0 ml-auto" />
               </button>
 
-              {/* Notification Bell with red 1 badge */}
+              {/* Theme Switcher Toggle (Concept 3 Light <-> Concept 2 Dark) */}
+              <ThemeToggle className="shrink-0" />
+
+              {/* Notification Bell with red badge */}
               <button
                 type="button"
-                className="relative p-2 rounded-full hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                className="relative p-2 rounded-xl border border-transparent hover:border-[var(--sevo-border)] hover:bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
                 title="Notifications"
                 onClick={() => {
                   if (user) {
@@ -2823,9 +2829,9 @@ export function LandingPage() {
                   }
                 }}
               >
-                <Bell className="w-4.5 h-4.5 text-slate-700" />
+                <Bell className="w-4.5 h-4.5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  <span className="absolute -top-0.5 -right-0.5 bg-[var(--sevo-error)] text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-[var(--sevo-surface)] shadow-xs">
                     {notificationCount}
                   </span>
                 )}
@@ -2836,11 +2842,11 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={() => setShowCartDrawer(true)}
-                  className="relative p-2 rounded-full border border-blue-200 bg-blue-50 text-[#0057D9] hover:bg-blue-100 transition-all cursor-pointer shrink-0"
+                  className="relative p-2 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-light)] transition-all cursor-pointer shrink-0"
                   title="View Cart"
                 >
                   <ShoppingCart size={17} />
-                  <span className="absolute -top-1 -right-1 bg-[#16A34A] text-white font-black text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  <span className="absolute -top-1 -right-1 bg-[var(--sevo-primary)] text-white font-black text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-[var(--sevo-surface)] shadow-xs">
                     {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
                   </span>
                 </button>
@@ -2857,15 +2863,15 @@ export function LandingPage() {
                     goToLogin()
                   }
                 }}
-                className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer group"
+                className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl border border-transparent hover:border-[var(--sevo-border)] hover:bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] transition-colors cursor-pointer group"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs overflow-hidden border border-slate-200">
+                <div className="w-8 h-8 rounded-full bg-[var(--sevo-primary-gradient)] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs overflow-hidden border border-[var(--sevo-border)]">
                   {(user?.full_name || user?.fullName || user?.first_name || "Login").charAt(0).toUpperCase()}
                 </div>
-                <span className="font-bold text-xs text-slate-800 max-w-[100px] truncate hidden sm:inline-block">
+                <span className="font-bold text-xs text-[var(--sevo-text-primary)] max-w-[100px] truncate hidden sm:inline-block">
                   {user?.full_name || user?.fullName || user?.first_name || "Login"}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0" />
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--sevo-text-muted)] group-hover:text-[var(--sevo-text-primary)] transition-colors shrink-0" />
               </button>
             </div>
           </div>
@@ -2899,37 +2905,38 @@ export function LandingPage() {
           </div>
         )}
 
-        {/* ── Hero ───────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-6 pt-10 sm:pt-14 pb-12 sm:pb-16 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center scroll-mt-24">
+        {/* ── Hero Section ─────────────────────────────────────────── */}
+        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-8 sm:pb-12 grid lg:grid-cols-12 gap-8 lg:gap-8 items-center scroll-mt-24">
           {/* Left Column: Headline, Search & Trust Badges */}
-          <div className="lg:col-span-6 xl:col-span-6 space-y-6">
-            {/* Small Trust Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold shadow-2xs">
-              <ShieldCheck className="w-4 h-4 text-[#16A34A]" />
-              <span>Trusted Professionals</span>
+          <div className="lg:col-span-6 xl:col-span-6 space-y-5">
+            {/* Small Trust Badge (🛡️ Sevo Promise) */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] text-[var(--sevo-primary)] text-xs font-black shadow-xs">
+              <ShieldCheck className="w-4 h-4 text-[var(--sevo-primary)] stroke-[2.2]" />
+              <span>Sevo Promise</span>
             </div>
 
             {/* Main Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-black leading-[1.12] tracking-tight text-[#0F172A]">
+            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black leading-[1.12] tracking-tight text-[var(--sevo-text-primary)]">
               Reliable Home<br />
-              <span className="text-[#0057D9]">Services,</span><br />
-              <span className="text-[#16A34A]">Right on Time</span>
+              Services.<br />
+              <span className="text-[var(--sevo-primary)]">Right on Time</span>
             </h1>
 
             {/* Supporting Subtitle */}
-            <p className="text-slate-500 text-sm sm:text-base leading-relaxed max-w-lg">
-              Book trusted experts for AC, Plumbing, Electrical, Cleaning and more — all in one place.
+            <p className="text-[var(--sevo-text-secondary)] text-sm sm:text-base leading-relaxed max-w-lg font-medium">
+              Book trusted experts for AC, Plumbing, Cleaning, Electrical & more – anytime, anywhere.
             </p>
 
-            {/* Search / Booking Control Bar */}
+            {/* Search / Booking Control Bar — Pill Style (matches Concept 3 reference) */}
             <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
               <form
                 onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] ${isSearchOpen ? "border-[#0057D9] ring-4 ring-blue-500/10" : "border-slate-200 hover:border-slate-300"
-                  }`}
+                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${
+                  isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
+                }`}
               >
-                <div className="pl-3 pr-1 text-slate-400">
-                  <Search className="w-5 h-5" />
+                <div className="pl-3 pr-2 text-[var(--sevo-text-muted)]">
+                  <Search className="w-4.5 h-4.5" />
                 </div>
                 <input
                   value={query}
@@ -2938,33 +2945,25 @@ export function LandingPage() {
                     if (!isSearchOpen) setIsSearchOpen(true)
                   }}
                   onFocus={() => setIsSearchOpen(true)}
-                  placeholder={homeConfig.hero?.searchPlaceholder || "What service do you need?"}
-                  className="flex-1 bg-transparent px-2.5 py-2.5 text-sm font-medium outline-none placeholder:text-slate-400 text-slate-800"
+                  placeholder={homeConfig.hero?.searchPlaceholder || 'Type service or try "AC service"'}
+                  className="flex-1 bg-transparent px-1 py-2 text-sm font-medium outline-none placeholder:text-[var(--sevo-text-muted)] text-[var(--sevo-text-primary)] min-w-0"
                 />
                 {query && (
                   <button
                     type="button"
                     onClick={() => setQuery("")}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors mr-1 cursor-pointer"
+                    className="p-1.5 text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] rounded-full hover:bg-[var(--sevo-surface-raised)] transition-colors mr-1 cursor-pointer"
                     aria-label="Clear search"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 )}
-                <LocationDropdown
-                  className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3 text-xs font-bold text-slate-700"
-                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Hosur"}
-                  onCityChange={(newCity) => {
-                    setActiveLocationLabel(newCity)
-                    localStorage.setItem("calservice_user_location", newCity)
-                  }}
-                />
                 <button
                   type="submit"
                   aria-label="Search services"
-                  className="ml-1 bg-[#0057D9] hover:bg-blue-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-md hover:shadow-lg active:scale-95"
+                  className="bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] active:bg-[var(--sevo-primary-active)] text-white rounded-full w-10 h-10 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-sm hover:shadow-md active:scale-95"
                 >
-                  <Search className="w-4.5 h-4.5" />
+                  <Search className="w-4 h-4" />
                 </button>
               </form>
 
@@ -2976,11 +2975,11 @@ export function LandingPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 max-h-[380px] overflow-y-auto"
+                    className="absolute top-full left-0 right-0 mt-2 bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] shadow-[var(--sevo-shadow-lg)] overflow-hidden z-50 divide-y divide-[var(--sevo-border-subtle)] max-h-[380px] overflow-y-auto"
                   >
-                    <div className="p-2.5 bg-slate-50/80 flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="p-2.5 bg-[var(--sevo-surface-raised)] flex items-center justify-between text-xs font-bold text-[var(--sevo-text-secondary)] uppercase tracking-wider">
                       <span>{query.trim() ? `Matching Services (${filteredSearchResults.length})` : "Popular & Trending Services"}</span>
-                      <span className="text-[10px] text-[#0057D9] font-semibold lowercase">Instant Booking</span>
+                      <span className="text-[10px] text-[var(--sevo-primary)] font-semibold lowercase">Instant Booking</span>
                     </div>
 
                     {filteredSearchResults.length > 0 ? (
@@ -2990,10 +2989,10 @@ export function LandingPage() {
                             key={item.id}
                             type="button"
                             onClick={() => handleExecuteSearch(item)}
-                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/60 transition-colors text-left group cursor-pointer"
+                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-colors text-left group cursor-pointer"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-slate-600 group-hover:text-[#0057D9] shrink-0 transition-colors">
+                              <div className="w-8 h-8 rounded-lg bg-[var(--sevo-surface-raised)] group-hover:bg-[var(--sevo-primary-light)] flex items-center justify-center text-[var(--sevo-text-secondary)] group-hover:text-[var(--sevo-primary)] shrink-0 transition-colors">
                                 {item.category === "Home Cleaning" && <Home className="w-4 h-4" />}
                                 {item.category === "Pest Control" && <SprayCan className="w-4 h-4" />}
                                 {item.category === "AC & Appliances" && <AirVent className="w-4 h-4" />}
@@ -3004,21 +3003,21 @@ export function LandingPage() {
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-800 group-hover:text-[#0057D9] truncate">
+                                  <span className="text-sm font-bold text-[var(--sevo-text-primary)] group-hover:text-[var(--sevo-primary)] truncate">
                                     {item.title}
                                   </span>
                                   {item.badge && (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--sevo-success-bg)] text-[var(--sevo-success)] border border-[var(--sevo-success-border)] shrink-0">
                                       {item.badge}
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-xs text-slate-500 block truncate">
+                                <span className="text-xs text-[var(--sevo-text-secondary)] block truncate">
                                   {item.category} • {item.price}
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center text-[#0057D9] font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                            <div className="flex items-center text-[var(--sevo-primary)] font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
                               <span>Book</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </div>
@@ -3026,16 +3025,16 @@ export function LandingPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="p-6 text-center text-slate-500">
-                        <p className="text-sm font-semibold text-slate-700 mb-1">No exact matches for &quot;{query}&quot;</p>
-                        <p className="text-xs text-slate-400 mb-3">Browse all available categories or try a different keyword.</p>
+                      <div className="p-6 text-center text-[var(--sevo-text-secondary)]">
+                        <p className="text-sm font-semibold text-[var(--sevo-text-primary)] mb-1">No exact matches for &quot;{query}&quot;</p>
+                        <p className="text-xs text-[var(--sevo-text-muted)] mb-3">Browse all available categories or try a different keyword.</p>
                         <button
                           type="button"
                           onClick={() => {
                             setIsSearchOpen(false)
                             setIsHomeServicesCombinedModalOpen(true)
                           }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0057D9] hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                         >
                           <span>Explore All Services</span>
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -3047,89 +3046,235 @@ export function LandingPage() {
               </AnimatePresence>
             </div>
 
-            {/* 4 Trust & Guarantee Badges with Outlined Icons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4.5 h-4.5 text-[#0057D9]" strokeWidth={2} />
-                  <span className="text-xs font-black text-slate-900">Verified Pros</span>
+            {/* 6 Trust Badges in a 2x3 Grid (Matching Concept 3 Handover Blueprint) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pt-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-50 text-[var(--sevo-primary)] dark:bg-teal-950/50 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4.5 h-4.5 stroke-[2.2]" />
                 </div>
-                <span className="text-[11px] text-slate-400 font-medium">Background Checked</span>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Verified Experts</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Background Checked</span>
+                </div>
               </div>
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Star className="w-4.5 h-4.5 text-amber-500" strokeWidth={2} />
-                  <span className="text-xs font-black text-slate-900">4.8+ Rated</span>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
+                  <Star className="w-4.5 h-4.5 fill-amber-400 text-amber-500 stroke-[1.5]" />
                 </div>
-                <span className="text-[11px] text-slate-400 font-medium">Top Rated Experts</span>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">4.8+ Rated</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">By 10K+ Customers</span>
+                </div>
               </div>
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex items-center gap-1.5">
-                  <UserCheck className="w-4.5 h-4.5 text-[#16A34A]" strokeWidth={2} />
-                  <span className="text-xs font-black text-slate-900">10K+ Happy Homes</span>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 flex items-center justify-center shrink-0">
+                  <Clock className="w-4.5 h-4.5 stroke-[2.2]" />
                 </div>
-                <span className="text-[11px] text-slate-400 font-medium">Happy Customers</span>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">On-Time Service</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Punctual &amp; Reliable</span>
+                </div>
               </div>
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4.5 h-4.5 text-[#0057D9]" strokeWidth={2} />
-                  <span className="text-xs font-black text-slate-900">30 Day Guarantee</span>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[var(--sevo-secondary)] dark:bg-blue-950/50 flex items-center justify-center shrink-0">
+                  <IndianRupee className="w-4.5 h-4.5 stroke-[2.2]" />
                 </div>
-                <span className="text-[11px] text-slate-400 font-medium">Service Assurance</span>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Upfront Pricing</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">No Hidden Charges</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/50 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Easy Booking</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">In Just 2 Minutes</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
+                  <Headphones className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">24/7 Support</span>
+                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">We're Here Anytime</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: HeroServiceVisualization (Real DOM / React Components) */}
-          <div className="lg:col-span-6 xl:col-span-6 flex items-center justify-center">
-            <HeroServiceVisualization
-              onSelectService={(serviceId, action) => {
-                if (action === "ac_modal") {
-                  navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")
-                } else if (action === "plumbing_flow") {
-                  navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")
-                } else if (action === "electrical_flow") {
-                  navigate("?category=electrical&subtab=Switches%20%26%20Sockets")
-                } else if (action === "cleaning_flow") {
-                  setIsHomePestModalOpen(true)
-                } else if (action === "scroll") {
-                  const el = document.getElementById("why-choose-us")
-                  if (el) el.scrollIntoView({ behavior: "smooth" })
-                }
-              }}
+          {/* Right Column: Concept 3 Hero Illustration */}
+          <div className="lg:col-span-6 xl:col-span-6 flex items-center justify-center relative select-none">
+            <img
+              src="/assets/hero_illustration.jpg"
+              alt="SEVO professional home services"
+              className="w-full max-w-[420px] xl:max-w-[480px] object-contain drop-shadow-none"
+              loading="eager"
+              draggable="false"
             />
           </div>
         </section>
 
+        {/* ── Quick User Action & Navigation Strip (4 Cards Matching Concept 3 Blueprint) ── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {/* My Bookings */}
+            <button
+              type="button"
+              onClick={() => {
+                if (user) {
+                  setActiveAccountTab("My Bookings")
+                  setShowAccountPortal(true)
+                } else {
+                  goToLogin()
+                }
+              }}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-[var(--sevo-primary)] shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#E8F5F2] text-[#0B8F7A] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <ClipboardList className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-[var(--sevo-primary)] transition-colors">
+                  My Bookings
+                </span>
+                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
+                  View &amp; manage bookings
+                </span>
+              </div>
+            </button>
+
+            {/* Wallet & Offers */}
+            <button
+              type="button"
+              onClick={() => {
+                if (user) {
+                  setActiveAccountTab("Wallet & Offers")
+                  setShowAccountPortal(true)
+                } else {
+                  navigate(routes.offers || "/marketing/offers")
+                }
+              }}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-amber-500 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#FEF3C7] text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Wallet className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-amber-600 transition-colors">
+                  Wallet &amp; Offers
+                </span>
+                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
+                  Pay, save &amp; view offers
+                </span>
+              </div>
+            </button>
+
+            {/* Help & Support */}
+            <button
+              type="button"
+              onClick={() => {
+                if (user) {
+                  setActiveAccountTab("Customer Care")
+                  setShowAccountPortal(true)
+                } else {
+                  navigate(routes.contact_us || "/contact")
+                }
+              }}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-rose-400 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#FFE4E8] text-rose-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Headphones className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-rose-600 transition-colors">
+                  Help &amp; Support
+                </span>
+                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
+                  Chat with us 24/7
+                </span>
+              </div>
+            </button>
+
+            {/* For Business */}
+            <button
+              type="button"
+              onClick={() => navigate(routes.contact_us || "/contact")}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-purple-400 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Building2 className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-purple-600 transition-colors">
+                  For Business
+                </span>
+                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
+                  Manage corporate bookings
+                </span>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        {/* ── KYC Verification Progress Banner ─────────────────────── */}
+        {user && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+            <button
+              type="button"
+              onClick={() => { setActiveAccountTab("My Profile"); setShowAccountPortal(true) }}
+              className="w-full flex items-center justify-between gap-3 bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] rounded-2xl px-4 sm:px-5 py-2.5 cursor-pointer group hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors text-left"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-[var(--sevo-primary)] shrink-0" />
+                <span className="text-xs sm:text-sm font-semibold text-[var(--sevo-text-primary)]">
+                  KYC is in progress.
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[var(--sevo-primary)] text-xs sm:text-sm font-extrabold shrink-0 group-hover:underline">
+                <span>Verify Now</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </button>
+          </div>
+        )}
+
         {/* ── Browse by Category ─────────────────────────────── */}
-        <section id="categories" className="max-w-7xl mx-auto px-6 py-10 space-y-8 scroll-mt-24">
+        <section id="categories" className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6 scroll-mt-24">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Browse by Category</h2>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--sevo-text-primary)]">Browse by Category</h2>
             <button
               type="button"
               onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="text-sm font-bold text-[#0057D9] hover:text-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer group"
+              className="text-xs sm:text-sm font-bold text-[var(--sevo-primary)] hover:text-[var(--sevo-primary-hover)] flex items-center gap-1.5 transition-colors cursor-pointer group"
             >
               <span>View All Categories</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
 
-          {/* Row 1: 4 Large Discovery Category Cards with Exact 3D Models */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
+          {/* Row 1: 4 Discovery Category Cards — Matching Reference Visuals */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 w-full">
             {[
               {
                 id: "for_you",
                 title: "For You",
-                subtitle: "Curated services &\nrecommendations",
-                image: "/mockups/category_for_you_3d.jpg",
+                subtitle: "Recommended services",
+                image: "/assets/cat_for_you.jpg",
                 onClick: () => setIsForYouModalOpen(true)
               },
               {
                 id: "food_health",
                 title: "Food & Health",
-                subtitle: "Groceries &\nfresh vegetables",
-                image: "/mockups/category_food_health_3d.jpg",
+                subtitle: "Essentials & wellness",
+                image: "/assets/cat_food_health.jpg",
                 onClick: () => {
                   setSelectedFoodSubModuleId(null)
                   setIsFoodHealthModalOpen(true)
@@ -3137,42 +3282,42 @@ export function LandingPage() {
               },
               {
                 id: "home_services",
-                title: "Home & Repair Services",
-                subtitle: "Cleaning, repairs,\npainting & masonry",
-                image: "/mockups/category_home_repair_3d.jpg",
+                title: "Home & Repair",
+                subtitle: "Maintenance & improvements",
+                image: "/assets/cat_home_repair.jpg",
                 onClick: () => setIsHomeServicesCombinedModalOpen(true)
               },
               {
                 id: "goods_transport",
                 title: "Goods & Transport",
-                subtitle: "Mini trucks, 2-wheelers\n& logistics",
-                image: "/mockups/category_goods_transport_3d.jpg",
+                subtitle: "Moving made easy",
+                image: "/assets/cat_goods_transport.jpg",
                 onClick: () => setIsGoodsModalOpen(true)
               }
             ].map((cat) => (
               <div
                 key={cat.id}
                 onClick={cat.onClick}
-                className="group relative flex flex-col bg-[#F0F4F8] rounded-[24px] overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+                className="group relative flex flex-col bg-white border border-[#E8E3DB] rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)] hover:border-[var(--sevo-primary)] hover:-translate-y-1 transition-all duration-300 cursor-pointer"
               >
-                <div className="h-44 w-full overflow-hidden bg-slate-100 relative">
+                <div className="h-44 sm:h-52 w-full overflow-hidden relative bg-[#F5F2EB]">
                   <img
                     src={cat.image}
-                    onError={(e) => { e.currentTarget.src = "/mockups/occupied_apartment_diamond.png" }}
                     alt={cat.title}
+                    loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-3 bg-[#F0F4F8]">
+                <div className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-white">
                   <div className="min-w-0">
-                    <h3 className="text-base font-black text-[#0F172A] group-hover:text-[#0057D9] transition-colors truncate">
+                    <h3 className="text-sm sm:text-base font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
                       {cat.title}
                     </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5 whitespace-pre-line leading-tight">
+                    <p className="text-xs text-[#64748B] font-medium mt-1 leading-snug">
                       {cat.subtitle}
                     </p>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-white shadow-xs group-hover:bg-[#0057D9] text-slate-700 group-hover:text-white flex items-center justify-center shrink-0 border border-slate-200/50 group-hover:border-[#0057D9] transition-colors">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#F4F1EA] text-[#475569] group-hover:bg-[var(--sevo-primary)] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-200 shadow-2xs">
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </div>
@@ -3180,282 +3325,205 @@ export function LandingPage() {
             ))}
           </div>
 
-          {/* Row 2: 6 Compact Quick-Action 3D Icon Cards Matching Screenshot */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4 pt-2">
+          {/* Row 2: 7 Compact Quick-Action Cards with Realistic 3D Icons */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3.5 pt-2">
             {[
               {
                 name: "AC Service",
-                desc: "Installation,\nRepair &\nMaintenance",
-                image: "/mockups/icon_3d_ac.jpg",
+                image: "/assets/icon_3d_ac.jpg",
+                fallbackIcon: AirVent,
+                color: "bg-[#E6F6F3] text-[#0B8F7A]",
                 onClick: () => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")
               },
               {
                 name: "Plumbing",
-                desc: "Leakage, Repair\n& Installation",
-                image: "/mockups/icon_3d_tap.jpg",
+                image: "/assets/icon_3d_plumbing.jpg",
+                fallbackIcon: Droplet,
+                color: "bg-[#EBF4FC] text-[#0F5FBF]",
                 onClick: () => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")
               },
               {
                 name: "Electrical",
-                desc: "Wiring, Repair\n& Installation",
-                image: "/mockups/icon_3d_lightning.jpg",
+                image: "/assets/icon_3d_electrical.jpg",
+                fallbackIcon: Zap,
+                color: "bg-[#FEF9C3] text-[#CA8A04]",
                 onClick: () => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")
               },
               {
                 name: "Cleaning",
-                desc: "Home, Office\n& Deep Cleaning",
-                image: "/mockups/icon_3d_vacuum.jpg",
+                image: "/assets/icon_3d_cleaning.jpg",
+                fallbackIcon: Sparkles,
+                color: "bg-[#FEF3C7] text-[#D97706]",
                 onClick: () => navigate("?category=cleaning")
               },
               {
-                name: "Appliances",
-                desc: "Washing Machine,\nFridge & More",
-                image: "/mockups/icon_3d_washing_machine.jpg",
+                name: "Painting",
+                image: "/mockups/category_home_repair_3d.jpg",
+                fallbackIcon: PaintRoller,
+                color: "bg-[#DCFCE7] text-[#16A34A]",
+                onClick: () => {
+                  setActiveCategory({ id: "paintings", name: "Paintings" })
+                  setIsPaintingModalOpen(true)
+                }
+              },
+              {
+                name: "Appliance Repair",
+                image: "/assets/icon_3d_appliance.jpg",
+                fallbackIcon: Boxes,
+                color: "bg-[#ECFDF5] text-[#059669]",
                 onClick: () => setIsAcModalOpen(true)
               },
               {
-                name: "More Services",
-                desc: "Explore 100+\nServices",
-                image: "/mockups/icon_3d_more_grid.jpg",
-                onClick: () => setIsHomeServicesCombinedModalOpen(true)
+                name: "Pest Control",
+                image: "/assets/icon_3d_pest.png",
+                fallbackIcon: Bug,
+                color: "bg-[#FEFCE8] text-[#84CC16]",
+                onClick: () => setIsHomePestModalOpen(true)
               }
-            ].map((srv, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={srv.onClick}
-                className="group flex flex-col items-center text-center p-4 rounded-2xl bg-white border border-slate-100 hover:border-blue-400 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                <div className="w-16 h-16 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
-                  <img
-                    src={srv.image}
-                    onError={(e) => { e.currentTarget.src = "/mockups/occupied_apartment_diamond.png" }}
-                    alt={srv.name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                  />
-                </div>
-                <span className="text-sm font-black text-[#0F172A] group-hover:text-[#0057D9] transition-colors leading-tight">
-                  {srv.name}
-                </span>
-                <span className="text-[11px] text-slate-400 font-medium mt-1 leading-snug whitespace-pre-line text-center">
-                  {srv.desc}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Personalized for You ─────────────────────────────── */}
-
-        {/* ── Why Choose Sevo? ───────────────────────────────── */}
-        <section id="why-choose-us" className="max-w-7xl mx-auto px-6 py-8 space-y-4 scroll-mt-24">
-          <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Why Choose Sevo?</h2>
-
-          <div className="bg-white rounded-3xl border border-slate-100/90 shadow-[0_4px_25px_rgba(0,0,0,0.03)] p-6 sm:p-8">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 sm:gap-8">
-              {[
-                {
-                  icon: ShieldCheck,
-                  title: "Background Verified",
-                  desc: "Every professional is background verified",
-                },
-                {
-                  icon: IndianRupee,
-                  title: "Transparent Pricing",
-                  desc: "No hidden charges, pay what you see",
-                },
-                {
-                  icon: Clock,
-                  title: "On-time Service",
-                  desc: "We value your time and punctuality",
-                },
-                {
-                  icon: Award,
-                  title: "Quality Assured",
-                  desc: "High quality service you can trust",
-                },
-                {
-                  icon: Headphones,
-                  title: "24/7 Support",
-                  desc: "Our support team is always ready",
-                },
-                {
-                  icon: ThumbsUp,
-                  title: "100% Satisfaction",
-                  desc: "We ensure your complete satisfaction",
-                }
-              ].map((feat, idx) => (
-                <div
+            ].map((srv, idx) => {
+              const FallbackIcon = srv.fallbackIcon
+              return (
+                <button
                   key={idx}
-                  className="flex flex-col items-center text-center group"
+                  type="button"
+                  onClick={srv.onClick}
+                  className="group flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-[var(--sevo-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.07)] hover:-translate-y-1 transition-all duration-200 cursor-pointer"
                 >
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2.5 text-[#0057D9] group-hover:scale-110 transition-transform">
-                    <feat.icon className="w-8 h-8 stroke-[1.75]" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform overflow-hidden relative">
+                    {srv.image ? (
+                      <img
+                        src={srv.image}
+                        alt={srv.name}
+                        loading="lazy"
+                        className="w-full h-full object-contain drop-shadow-sm rounded-xl"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const nextEl = e.currentTarget.nextElementSibling;
+                          if (nextEl) nextEl.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`w-full h-full rounded-2xl ${srv.color} ${srv.image ? 'hidden' : 'flex'} items-center justify-center`}
+                    >
+                      <FallbackIcon className="w-6 h-6 stroke-[2.2]" />
+                    </div>
                   </div>
-                  <h4 className="text-xs sm:text-sm font-extrabold text-[#0F172A] leading-tight">
-                    {feat.title}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug max-w-[140px]">
-                    {feat.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
+                  <span className="text-xs font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
+                    {srv.name}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </section>
 
-        {/* ── Book Services on the Go! & Trust Statistics ──────── */}
-        <section id="professionals" className="max-w-7xl mx-auto px-6 py-6 scroll-mt-24">
-          <div className="bg-[#F3F7FD] rounded-3xl p-6 sm:p-10 border border-blue-100/70 shadow-xs grid lg:grid-cols-12 gap-8 items-center">
-            {/* Left Column: App Promo */}
-            <div className="lg:col-span-5 space-y-4">
-              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-[#0057D9]">
-                Book Services on the Go!
-              </h3>
-              <p className="text-slate-600 text-sm leading-relaxed max-w-sm font-medium">
-                Download SEVO App and get the best service experience.
-              </p>
-              <div className="flex flex-wrap gap-3 pt-2">
-                <GooglePlayBtn />
-                <AppStoreBtn />
-              </div>
-            </div>
-
-            {/* Center Column: Phone Mockup matching screenshot */}
-            <div className="lg:col-span-3 flex justify-center">
-              <div className="w-[210px] h-[360px] rounded-[36px] bg-slate-900 p-2.5 shadow-2xl border-4 border-slate-800 ring-1 ring-slate-700/50 relative overflow-hidden">
-                {/* Notch / Dynamic Island */}
-                <div className="absolute top-3.5 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-slate-900 rounded-full z-20"></div>
-
-                {/* Phone screen inner */}
-                <div className="w-full h-full bg-white rounded-[26px] overflow-hidden p-2.5 flex flex-col justify-between text-left">
-                  {/* Status bar */}
-                  <div className="flex items-center justify-between text-[8px] font-bold text-slate-800 px-1 pt-0.5">
-                    <span>12:01</span>
-                    <div className="flex items-center gap-1">
-                      <span className="w-2.5 h-1.5 bg-slate-800 rounded-xs"></span>
-                    </div>
-                  </div>
-
-                  {/* App header with SEVO logo & user icon */}
-                  <div className="mt-1 flex items-center justify-between px-0.5">
-                    <div className="flex items-center gap-1">
-                      <img src="/assets/sevo_emblem_transparent.png" alt="SEVO" className="h-4 w-auto object-contain" />
-                      <img src="/assets/sevo_text_logo.png" alt="SEVO" className="h-2 w-auto object-contain" />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Search className="w-3 h-3 text-slate-500" />
-                      <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-[7px] text-white font-bold">
-                        {(user?.full_name || user?.fullName || user?.first_name || "Guest").charAt(0).toUpperCase()}
+        {/* ── Why Choose Sevo? & Book Services on the Go Split Section (Matching Concept 3) ── */}
+        <section id="why-choose-us" className="max-w-7xl mx-auto px-4 sm:px-6 py-8 scroll-mt-24">
+          <div className="grid lg:grid-cols-12 gap-6 items-stretch">
+            {/* Left: Why Choose Sevo? 6-item Grid */}
+            <div className="lg:col-span-7 bg-white rounded-3xl border border-[#E8E3DB] shadow-[var(--sevo-shadow-xs)] p-6 sm:p-8 flex flex-col justify-between">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--sevo-text-primary)] mb-6">Why Choose Sevo?</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 sm:gap-6">
+                  {[
+                    {
+                      icon: ShieldCheck,
+                      title: "Certified & Verified",
+                      desc: "Trusted professionals",
+                    },
+                    {
+                      icon: IndianRupee,
+                      title: "Transparency",
+                      desc: "Clear pricing always",
+                    },
+                    {
+                      icon: Clock,
+                      title: "On-Time Service",
+                      desc: "We value your time",
+                    },
+                    {
+                      icon: Star,
+                      title: "Satisfaction",
+                      desc: "100% guaranteed",
+                    },
+                    {
+                      icon: CheckCircle2,
+                      title: "Easy Booking",
+                      desc: "Book in 2 minutes",
+                    },
+                    {
+                      icon: Headphones,
+                      title: "24/7 Support",
+                      desc: "We're always here",
+                    }
+                  ].map((feat, idx) => {
+                    const Icon = feat.icon
+                    return (
+                      <div key={idx} className="flex items-start gap-3 text-left group">
+                        <div className="w-9 h-9 rounded-xl bg-[#E8F5F2] text-[#0B8F7A] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <Icon className="w-4.5 h-4.5 stroke-[2.2]" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] leading-tight">
+                            {feat.title}
+                          </h4>
+                          <p className="text-[11px] text-[var(--sevo-text-muted)] font-medium mt-0.5 leading-snug">
+                            {feat.desc}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* User greeting */}
-                  <div className="mt-0.5 px-0.5">
-                    <p className="text-[7.5px] font-bold text-slate-400">Good Morning</p>
-                    <p className="text-[9px] font-black text-slate-900 leading-tight">{user ? (user.first_name || user.fullName || user.full_name || "User").split(" ")[0] : "Guest"} 👋</p>
-                    <div className="flex items-center gap-0.5 text-[7px] text-blue-600 font-semibold mt-0.5">
-                      <MapPin className="w-2.5 h-2.5 shrink-0" />
-                      <span className="truncate">Hosur, Tamil Nadu &gt;</span>
-                    </div>
-                  </div>
-
-                  {/* Book a Service section header */}
-                  <div className="mt-1 px-0.5">
-                    <span className="text-[8px] font-black text-slate-800">Book a Service</span>
-                  </div>
-
-                  {/* 8 Category Icons (2 rows of 4) */}
-                  <div className="grid grid-cols-4 gap-1.5 my-auto px-0.5">
-                    {[
-                      { l: "AC Service", icon: AirVent, color: "text-[#0057D9]" },
-                      { l: "Plumbing", icon: Wrench, color: "text-[#0057D9]" },
-                      { l: "Electrical", icon: Zap, color: "text-[#0057D9]" },
-                      { l: "Cleaning", icon: SprayCan, color: "text-[#0057D9]" },
-                      { l: "Appliance", icon: Boxes, color: "text-[#0057D9]" },
-                      { l: "Carpentry", icon: Hammer, color: "text-[#0057D9]" },
-                      { l: "Painting", icon: PaintRoller, color: "text-[#0057D9]" },
-                      { l: "More", icon: SlidersHorizontal, color: "text-[#0057D9]" },
-                    ].map((m, i) => (
-                      <div key={i} className="flex flex-col items-center text-center p-1 bg-slate-50 rounded-lg border border-slate-100">
-                        <m.icon className={`w-3.5 h-3.5 ${m.color}`} />
-                        <span className="text-[6.5px] text-slate-700 font-bold mt-0.5 leading-none truncate w-full">{m.l}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Mock CTA Button */}
-                  <div className="bg-[#0057D9] text-white text-[8px] font-bold py-1.5 rounded-lg text-center shadow-xs">
-                    Book a Service →
-                  </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Right Column: 2x2 Trust Statistics */}
-            <div className="lg:col-span-4 grid grid-cols-2 gap-3.5 sm:gap-4">
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div>
-                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">10K+</span>
-                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Happy Customers</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
-                  <Star className="w-5 h-5 fill-[#0057D9] text-[#0057D9]" />
-                </div>
-                <div>
-                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">4.8+</span>
-                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Customer Rating</span>
+            {/* Right: Book Services on the Go! App Card */}
+            <div className="lg:col-span-5 bg-[#F2F8F4] dark:bg-[#0B1E43] rounded-3xl p-6 sm:p-7 border border-[#D5EADB] dark:border-[var(--sevo-border)] shadow-[var(--sevo-shadow-xs)] flex items-center justify-between relative overflow-hidden gap-4">
+              <div className="space-y-3 z-10 max-w-[240px]">
+                <h3 className="text-xl sm:text-2xl font-black text-[#0B8F7A] tracking-tight leading-tight">
+                  Book Services on the Go!
+                </h3>
+                <p className="text-xs sm:text-sm text-[var(--sevo-text-secondary)] font-medium leading-relaxed">
+                  Download our app for a faster &amp; smoother experience.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <GooglePlayBtn />
+                  <AppStoreBtn />
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
-                  <UserCheck className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div>
-                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">500+</span>
-                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Expert Professionals</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
-                  <Headphones className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div>
-                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">24/7</span>
-                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Support Available</span>
-                </div>
+              {/* Phone Mockup Illustration */}
+              <div className="flex shrink-0 z-10">
+                <img
+                  src="/assets/phone_app_mockup.jpg"
+                  alt="SEVO App Mockup"
+                  className="w-28 sm:w-36 object-contain rounded-2xl drop-shadow-md select-none"
+                  loading="lazy"
+                />
               </div>
             </div>
           </div>
         </section>
 
         {/* ── Immediate Booking CTA Banner ───────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-4">
-          <div className="bg-gradient-to-r from-[#0057D9] via-[#0284C7] to-[#16A34A] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-xl shadow-blue-900/10 flex flex-col sm:flex-row items-center justify-between gap-5">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="bg-gradient-to-r from-[var(--sevo-primary)] to-[#087060] dark:from-[#102956] dark:to-[#0B1E43] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-5">
             <div className="flex items-center gap-4 text-center sm:text-left">
-              <div className="w-12 h-12 rounded-full bg-white text-[#0057D9] flex items-center justify-center shrink-0 shadow-sm">
-                <CalendarDays className="w-6 h-6 stroke-[2.2]" />
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs text-white flex items-center justify-center shrink-0 border border-white/20">
+                <CalendarDays className="w-6 h-6 stroke-[2]" />
               </div>
               <div>
-                <h3 className="text-xl sm:text-2xl font-black">Need Immediate Service?</h3>
-                <p className="text-blue-100 text-xs sm:text-sm mt-0.5 font-medium">Book now and get your problem solved quickly.</p>
+                <h3 className="text-lg sm:text-xl font-black">Need Immediate Service?</h3>
+                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">Book now and get your problem solved quickly.</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="px-6 py-2.5 bg-white text-[#0057D9] hover:bg-blue-50 font-bold rounded-xl text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-6 py-2.5 bg-white text-[var(--sevo-primary)] hover:bg-teal-50 font-bold rounded-xl text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <span>Book Now</span>
               <ArrowRight className="w-4 h-4" />
@@ -3463,9 +3531,9 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── Footer (White Background + Deep Blue Bottom Bar) ──── */}
-        <footer id="about-us" className="bg-white text-slate-600 pt-12 border-t border-slate-200/80 mt-10 scroll-mt-24">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10">
+        {/* ── Footer ──── */}
+        <footer id="about-us" className="bg-[var(--sevo-surface)] text-[var(--sevo-text-secondary)] pt-12 border-t border-[var(--sevo-border)] mt-10 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10">
             {/* Col 1: Brand Info & Socials */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 select-none shrink-0 cursor-pointer" onClick={() => navigate(routes.landing)}>
@@ -3482,87 +3550,154 @@ export function LandingPage() {
                   style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
                 />
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xs">
                 SEVO is your trusted partner for all home services. We connect you with verified professionals for a hassle-free experience.
               </p>
               <div className="flex items-center gap-2.5 pt-1">
-                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-blue-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
                   <FacebookMark className="w-3.5 h-3.5" />
                 </a>
-                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
                   <InstagramMark className="w-3.5 h-3.5" />
                 </a>
-                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-emerald-600 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
                   <WhatsAppMark className="w-3.5 h-3.5" />
                 </a>
-                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-red-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
                   <YoutubeMark className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
 
-            {/* Col 2: Quick Links */}
+            {/* Col 2: Our Services */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">Quick Links</h4>
-              <ul className="space-y-2 text-xs text-slate-500">
-                <li><a href="#home" className="hover:text-[#0057D9] transition-colors">Home</a></li>
-                <li><a href="#about-us" className="hover:text-[#0057D9] transition-colors">About Us</a></li>
-                <li><a href="#why-choose-us" className="hover:text-[#0057D9] transition-colors">How It Works</a></li>
-                <li><a href="#categories" className="hover:text-[#0057D9] transition-colors">Services</a></li>
-                <li><a href="#contact-us" className="hover:text-[#0057D9] transition-colors">Contact Us</a></li>
+              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Our Services</h4>
+              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
+                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">AC Service</button></li>
+                <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Plumbing</button></li>
+                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Electrical</button></li>
+                <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Cleaning</button></li>
+                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
+                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Pest Control</button></li>
               </ul>
             </div>
 
-            {/* Col 3: Services */}
+            {/* Col 3: Company */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">Services</h4>
-              <ul className="space-y-2 text-xs text-slate-500">
-                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">AC Service</button></li>
-                <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Plumbing</button></li>
-                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Electrical</button></li>
-                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Cleaning</button></li>
-                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
-                <li><button type="button" onClick={() => setIsHomeServicesCombinedModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">More Services</button></li>
+              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Company</h4>
+              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
+                <li><a href="#about-us" className="hover:text-[var(--sevo-primary)] transition-colors">About Us</a></li>
+                <li><a href="#why-choose-us" className="hover:text-[var(--sevo-primary)] transition-colors">How It Works</a></li>
+                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Careers</Link></li>
+                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Blog</Link></li>
+                <li><Link to="/terms" className="hover:text-[var(--sevo-primary)] transition-colors">Terms &amp; Conditions</Link></li>
               </ul>
             </div>
 
             {/* Col 4: Support */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">Support</h4>
-              <ul className="space-y-2 text-xs text-slate-500">
-                <li><Link to="/help" className="hover:text-[#0057D9] transition-colors">Help Center</Link></li>
-                <li><Link to="/terms" className="hover:text-[#0057D9] transition-colors">Terms &amp; Conditions</Link></li>
-                <li><Link to="/privacy" className="hover:text-[#0057D9] transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/cancellation-refund" className="hover:text-[#0057D9] transition-colors">Refund Policy</Link></li>
-                <li><Link to="/help" className="hover:text-[#0057D9] transition-colors">Sitemap</Link></li>
+              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Support</h4>
+              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
+                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Help Center</Link></li>
+                <li><Link to="/terms" className="hover:text-[var(--sevo-primary)] transition-colors">Terms &amp; Conditions</Link></li>
+                <li><Link to="/privacy" className="hover:text-[var(--sevo-primary)] transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/cancellation-refund" className="hover:text-[var(--sevo-primary)] transition-colors">Refund Policy</Link></li>
+                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Sitemap</Link></li>
               </ul>
             </div>
 
             {/* Col 5: Contact Us */}
             <div id="contact-us" className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">Contact Us</h4>
-              <ul className="space-y-2.5 text-xs text-slate-600">
+              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Contact Us</h4>
+              <ul className="space-y-2.5 text-xs text-[var(--sevo-text-secondary)]">
                 <li className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-[#0057D9]" />
+                  <Phone className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
                   <span className="font-semibold">+91 90909 90909</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Mail className="w-3.5 h-3.5 text-[#0057D9]" />
+                  <Mail className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
                   <span className="font-semibold">support@sevo.com</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-[#0057D9] shrink-0 mt-0.5" />
+                  <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)] shrink-0 mt-0.5" />
                   <span className="font-semibold">Hosur, Tamil Nadu, India</span>
                 </li>
               </ul>
             </div>
           </div>
 
-          {/* Solid Deep Blue Bottom Copyright Strip matching screenshot */}
-          <div className="bg-[#0B3C95] text-white py-3.5 text-center text-xs font-semibold">
-            © 2025 SEVO. All Rights Reserved.
+          {/* Bottom Copyright Strip */}
+          <div className="bg-[var(--sevo-surface-raised)] border-t border-[var(--sevo-border)] text-[var(--sevo-text-muted)] py-3.5 text-center text-xs font-semibold">
+            © {new Date().getFullYear()} SEVO. All Rights Reserved.
           </div>
         </footer>
+
+        {/* ── Mobile Sticky Bottom Navigation (Touch-optimized 44px+ tap targets) ──── */}
+        <nav aria-label="Mobile Bottom Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--sevo-surface-glass)] backdrop-blur-lg border-t border-[var(--sevo-border)] shadow-[var(--sevo-shadow-lg)] px-3 py-1.5 flex items-center justify-around transition-colors duration-200">
+          <button
+            type="button"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" })
+              setActiveNav("home")
+            }}
+            className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${
+              activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span>Home</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+            className="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
+          >
+            <SlidersHorizontal className="w-5 h-5" />
+            <span>Services</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (modalCart && modalCart.length > 0) {
+                setShowCartDrawer(true)
+              } else if (user) {
+                setActiveAccountTab("My Bookings")
+                setShowAccountPortal(true)
+              } else {
+                goToLogin()
+              }
+            }}
+            className="relative flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
+          >
+            <div className="relative">
+              <ShoppingCart className="w-5 h-5" />
+              {modalCart && modalCart.length > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-[var(--sevo-primary)] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                  {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
+                </span>
+              )}
+            </div>
+            <span>Cart</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (user) {
+                setActiveAccountTab("My Profile")
+                setShowAccountPortal(true)
+              } else {
+                goToLogin()
+              }
+            }}
+            className="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
+          >
+            <User className="w-5 h-5" />
+            <span>{user ? "Account" : "Login"}</span>
+          </button>
+        </nav>
 
         {/* ── 1. Home Services & Pest Control Modal Popup ── */}
         {isHomePestModalOpen &&
@@ -4266,6 +4401,7 @@ export function LandingPage() {
                                 <img
                                   src={sub.image || (isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png")}
                                   alt={sub.name}
+                                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png"; }}
                                   className="w-full h-full object-cover rounded-xl"
                                 />
                                 {isGroceries && (
@@ -5847,6 +5983,7 @@ export function LandingPage() {
                               <img
                                 src={sub.image || (isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png")}
                                 alt={sub.name}
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png"; }}
                                 className="w-full h-full object-cover rounded-xl"
                               />
                               {isGroceries && (

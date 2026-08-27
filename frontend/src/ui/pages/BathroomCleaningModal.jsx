@@ -8,9 +8,9 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
-  { id: "packages", name: "Full Clean", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
-  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" },
-  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
+  { id: "packages", name: "Full Clean", image: "/mockups/bathroom_cleaning.png" },
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "/mockups/bathroom_cleaning.png" },
+  { id: "minis", name: "Quick Extra Services", image: "/mockups/exhaust_fan.png" }
 ];
 
 const BATHROOM_SERVICES = {
@@ -24,7 +24,7 @@ const BATHROOM_SERVICES = {
       reviews: "1.5M reviews",
       price: 499,
       duration: "60 mins",
-      image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
+      image: "/mockups/bathroom_cleaning.png",
       includes: [
         "Deep cleaning of toilet, basin, floor and tiles",
         "Removes soap marks, dirt and common stains",
@@ -39,7 +39,7 @@ const BATHROOM_SERVICES = {
       reviews: "1.5M reviews",
       price: 300,
       duration: "60 mins",
-      image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop",
+      image: "/mockups/bathroom_cleaning.png",
       includes: [
         "Extra scrubbing for floors, tiles and bathroom fixtures",
         "Removes stubborn dirt, soap buildup and common stains",
@@ -639,23 +639,23 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   };
 
   return (
-    <div className="w-full text-slate-700 bg-white min-h-screen">
+    <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
       {/* Sticky Header + Tabs */}
-      <div className="sticky top-16 z-20 bg-white shadow-sm border-b border-slate-100">
-        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4 px-6">
+      <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md shadow-xs border-b border-[var(--sevo-border)]">
+        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <ChevronLeft size={14} /> Back to Services
             </button>
-            <h2 className="text-xl font-black text-slate-900">Bathroom Cleaning</h2>
+            <h2 className="text-xl font-black text-[var(--sevo-text-primary)]">Bathroom Cleaning</h2>
           </div>
         </div>
 
-        {/* Sub-tabs exactly styled like Sofa/Kitchen Cleaning */}
-        <div className="flex gap-5 pb-3 pt-4 px-6 border-b border-slate-100 justify-start bg-white">
+        {/* Sub-tabs */}
+        <div className="flex gap-5 pb-3 pt-4 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto">
           {BATHROOM_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
@@ -667,11 +667,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <img
                   src={tab.image}
                   alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md border-2 border-white" : "opacity-80 hover:opacity-100"
-                    }`}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
+                  }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                  }`}>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
+                }`}>
                   {tab.name}
                 </span>
               </button>
@@ -681,13 +683,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-6 px-6 max-w-7xl mx-auto gap-8 pb-20">
+      <div className="flex flex-col lg:flex-row flex-1 pt-6 px-4 sm:px-6 max-w-7xl mx-auto gap-8 pb-20">
         {/* Left Column */}
         <div className="flex-1 space-y-6">
           {/* Section title */}
           <div className="pt-1 mb-4 flex items-center gap-2">
-            <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+            <div className="w-1.5 h-4 bg-[var(--sevo-primary)] rounded-full" />
+            <h3 className="text-sm font-black text-[var(--sevo-text-primary)] uppercase tracking-widest">
               {getSectionTitle()}
             </h3>
           </div>
@@ -696,14 +698,14 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           {(() => {
             const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              packages: customB.packages || "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&q=80&fit=crop",
-              minis: customB.minis || "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=1200&q=80&fit=crop",
-              subscription: customB.subscription || "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=1200&q=80&fit=crop"
+              packages: customB.packages || "/mockups/bathroom_cleaning.png",
+              minis: customB.minis || "/mockups/exhaust_fan.png",
+              subscription: customB.subscription || "/mockups/bathroom_cleaning.png"
             };
             const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;
             return (
-              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
+              <div className="w-full aspect-[10/3] bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-5 border border-[var(--sevo-border)]">
                 <img
                   src={bannerUrl}
                   alt={getSectionTitle()}
@@ -717,37 +719,37 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             {activeServices.map((service) => {
               const count = cart.filter(i => i.id === service.id || i.id.startsWith(service.id + "-")).reduce((sum, i) => sum + i.quantity, 0);
               return (
-                <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
+                <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl shadow-xs border border-[var(--sevo-border)] p-5 relative transition-all hover:shadow-md hover:border-[var(--sevo-border-strong)]">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
-                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                       {service.description && (
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                        <span className="text-base font-black text-slate-900">
-                          {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
+                        <span className="text-base font-black text-[var(--sevo-text-primary)]">
+                          {service.options && <span className="text-[var(--sevo-text-muted)] font-medium text-xs mr-1">{service.options}</span>}
                           ₹{service.price}
                         </span>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-slate-500 font-semibold">{service.duration}</span>
+                        <span className="text-[var(--sevo-border)]">•</span>
+                        <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                       </div>
 
                       {service.highlight && (
-                        <p className="text-xs font-bold text-slate-800 mb-3">{service.highlight}</p>
+                        <p className="text-xs font-bold text-[var(--sevo-secondary)] mb-3">{service.highlight}</p>
                       )}
 
                       {service.includes && service.includes.length > 0 && (
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                        <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                           {service.includes.map((item, i) => {
                             const labelText = typeof item === "string" ? item : (item?.text || "");
                             const isEnabled = typeof item === "string" ? true : (item?.checked !== false && item?.enabled !== false);
                             if (!labelText || !isEnabled) return null;
                             return (
                               <li key={i} className="flex items-start gap-2">
-                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
                                 <span>{labelText}</span>
                               </li>
                             );
@@ -757,22 +759,22 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
                       <button
                         onClick={() => handleOpenDetails(service)}
-                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline cursor-pointer"
+                        className="text-xs font-semibold text-[var(--sevo-primary)] mt-2 hover:underline cursor-pointer"
                       >
                         View details
                       </button>
                     </div>
 
                     <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
-                      <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
+                      <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="w-24 z-10">
                         {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={(e) => { e.stopPropagation(); handleRemoveOneOfService(service.id); }} className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm">-</button>
+                          <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-xl px-2.5 py-1.5 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
+                            <button onClick={(e) => { e.stopPropagation(); handleRemoveOneOfService(service.id); }} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-black text-sm">-</button>
                             <span>{count}</span>
-                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }} className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm">+</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-black text-sm">+</button>
                           </div>
                         ) : (
                           <button
@@ -784,7 +786,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                                 handleOpenDetails(service);
                               }
                             }}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                            className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-xs py-2 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                           >
                             <ShoppingCart size={14} /> Add
                           </button>
@@ -797,7 +799,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             })}
 
             {activeServices.length === 0 && (
-              <div className="py-10 text-center text-slate-400 text-sm">
+              <div className="py-10 text-center text-[var(--sevo-text-muted)] text-sm">
                 No services found.
               </div>
             )}
@@ -806,10 +808,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
         {/* Right Column: Order Summary */}
         <div className="w-full lg:w-[320px] shrink-0">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
-            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-              <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-              <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
+          <div className="bg-[var(--sevo-surface)] border border-[var(--sevo-border)] rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
+            <div className="border-b border-[var(--sevo-border-subtle)] pb-3 flex justify-between items-center">
+              <h5 className="font-extrabold text-xs text-[var(--sevo-text-primary)] uppercase tracking-wide">Order Summary</h5>
+              <span className="text-[10px] font-bold text-[var(--sevo-text-muted)]">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
             </div>
 
             {cart.length > 0 ? (
@@ -817,28 +819,28 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 {cart.map(item => (
                   <div key={item.id} className="flex justify-between items-start text-xs gap-3">
                     <div className="flex-1">
-                      <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      <span className="font-bold text-[var(--sevo-text-primary)] block leading-tight">{item.name}</span>
+                      <span className="text-[10px] text-[var(--sevo-text-muted)] block mt-0.5">{item.duration}</span>
                     </div>
                     <div className="text-right flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <div className="inline-flex items-center gap-1.5 border border-slate-200 rounded-md px-1.5 py-0.5 bg-slate-50">
-                        <button onClick={() => removeItemFromCart(item.id)} className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]">-</button>
-                        <span className="text-[10px] font-black text-slate-700 min-w-3 text-center">{item.quantity}</span>
+                      <span className="font-extrabold text-[var(--sevo-text-primary)]">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                      <div className="inline-flex items-center gap-1.5 border border-[var(--sevo-border)] rounded-md px-1.5 py-0.5 bg-[var(--sevo-surface-raised)]">
+                        <button onClick={() => removeItemFromCart(item.id)} className="text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] font-bold bg-transparent border-none cursor-pointer text-[10px]">-</button>
+                        <span className="text-[10px] font-black text-[var(--sevo-text-primary)] min-w-3 text-center">{item.quantity}</span>
                         <button onClick={() => {
                           const baseId = item.id.split("-")[0];
                           const parts = item.name.split(" (");
                           const nameOnly = parts[0];
                           const detailsString = parts.length > 1 ? parts.slice(1).join(" (").slice(0, -1) : "";
                           addCustomizedItemToCart(baseId, nameOnly, item.price, item.duration, detailsString);
-                        }} className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]">+</button>
+                        }} className="text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] font-bold bg-transparent border-none cursor-pointer text-[10px]">+</button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-400 text-[11px] px-4 leading-relaxed">
+              <div className="text-center py-8 text-[var(--sevo-text-muted)] text-[11px] px-4 leading-relaxed">
                 No cleaning services added. Select from the packages on the left.
               </div>
             )}
@@ -849,28 +851,28 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
               const grandTotal = itemTotal + totalGst + platformFee;
               return (
-                <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                <div className="border-t border-[var(--sevo-border-subtle)] pt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Item Total</span>
-                    <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-text-primary)] font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Taxes & GST (18%)</span>
-                    <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-secondary)] font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Platform Fee</span>
-                    <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-primary)] font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-100">
+                  <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-2 border-t border-[var(--sevo-border-subtle)]">
                     <span>Total Amount</span>
-                    <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-primary)]">₹{grandTotal.toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               );
             })() : (
-              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+              <div className="border-t border-[var(--sevo-border-subtle)] pt-3 space-y-2 text-xs">
+                <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-1">
                   <span>Total Amount</span>
                   <span>₹0</span>
                 </div>
@@ -881,7 +883,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               <button
                 disabled={cart.length === 0}
                 onClick={onCheckout}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-white/60 disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+                className="w-full py-3.5 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] disabled:bg-[var(--sevo-surface-raised)] disabled:text-[var(--sevo-text-muted)] disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
               >
                 Proceed to Schedule
               </button>

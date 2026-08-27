@@ -8,11 +8,11 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const FULL_HOUSE_SUB_TABS = [
-  { id: "full_apartment", name: "Occupied Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=150&q=80&fit=crop" },
-  { id: "unoccupied_apartment", name: "Unoccupied Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150&q=80&fit=crop" },
-  { id: "full_bungalow", name: "Occupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=150&q=80&fit=crop" },
-  { id: "unoccupied_bungalow", name: "Unoccupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150&q=80&fit=crop" },
-  { id: "partial_home", name: "quick extra service", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150&q=80&fit=crop" }
+  { id: "full_apartment", name: "Occupied Apartment", image: "/mockups/occupied_apartment_diamond.png" },
+  { id: "unoccupied_apartment", name: "Unoccupied Apartment", image: "/mockups/unoccupied_apartment_cleaning.png" },
+  { id: "full_bungalow", name: "Occupied Bungalow/duplex", image: "/mockups/sub_furnished_villa.png" },
+  { id: "unoccupied_bungalow", name: "Unoccupied Bungalow/duplex", image: "/mockups/sub_unfurnished_villa.png" },
+  { id: "partial_home", name: "quick extra service", image: "/mockups/quick_extra_services_hero.png" }
 ];
 
 const FULL_HOUSE_SERVICES = {
@@ -1033,10 +1033,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   };
 
   return (
-    <div className="w-full text-slate-700 bg-white min-h-screen">
+    <div className="w-full text-slate-700 bg-[#FAF7F0] min-h-screen">
       {/* Sticky Header + Tabs */}
-      <div className="sticky top-16 z-20 bg-white shadow-sm border-b border-slate-100">
-        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4 px-6">
+      <div className="sticky top-16 z-20 bg-[#FEFCF8] shadow-sm border-b border-[#E8E3DB]">
+        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#FEFCF8] py-4 px-6">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
@@ -1050,7 +1050,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         </div>
 
         {/* Sub-tabs exactly styled like Sofa/Kitchen/Bathroom Cleaning */}
-        <div className="flex gap-5 pb-3 pt-4 px-6 border-b border-slate-100 justify-start bg-white overflow-x-auto scrollbar-none">
+        <div className="flex gap-5 pb-3 pt-4 px-6 border-b border-[#E8E3DB] justify-start bg-[#FEFCF8] overflow-x-auto scrollbar-none">
           {FULL_HOUSE_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
@@ -1090,11 +1090,11 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
           {(() => {
             const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              full_apartment: customB.full_apartment || "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80&fit=crop",
-              unoccupied_apartment: customB.unoccupied_apartment || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&q=80&fit=crop",
-              full_bungalow: customB.full_bungalow || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&q=80&fit=crop",
-              unoccupied_bungalow: customB.unoccupied_bungalow || "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80&fit=crop",
-              partial_home: customB.partial_home || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+              full_apartment: customB.full_apartment || "/mockups/occupied_apartment_diamond.png",
+              unoccupied_apartment: customB.unoccupied_apartment || "/mockups/unoccupied_apartment_cleaning.png",
+              full_bungalow: customB.full_bungalow || "/mockups/sub_furnished_villa.png",
+              unoccupied_bungalow: customB.unoccupied_bungalow || "/mockups/sub_unfurnished_villa.png",
+              partial_home: customB.partial_home || "/mockups/quick_extra_services_hero.png"
             };
             const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;
@@ -1113,7 +1113,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             {activeServices.map((service) => {
               const count = getServiceCount(service.id);
               return (
-                <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
+                <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-[#E8E3DB] p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
                       <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
@@ -1132,7 +1132,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                       </div>
 
                       {service.includes && service.includes.length > 0 && service.includes.some(item => typeof item === 'string' || item.checked !== false) && (
-                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                        <ul className="text-xs text-slate-600 space-y-1 bg-[#F5F0E6]/60 p-3.5 rounded-xl border border-[#E2DDD5] mb-4">
                           {service.includes.filter(item => typeof item === 'string' || item.checked !== false).map((item, i) => (
                             <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -1203,8 +1203,8 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
         {/* Right Column: Order Summary */}
         <div className="w-full lg:w-[320px] shrink-0">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
-            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+          <div className="bg-[#FEFCF8] border border-[#E8E3DB] rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
+            <div className="border-b border-[#E8E3DB] pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
               <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
             </div>
@@ -1219,7 +1219,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                     </div>
                     <div className="text-right flex items-center gap-2">
                       <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <div className="inline-flex items-center gap-1.5 border border-slate-200 rounded-md px-1.5 py-0.5 bg-slate-50">
+                      <div className="inline-flex items-center gap-1.5 border border-[#E2DDD5] rounded-md px-1.5 py-0.5 bg-[#F5F0E6]/50">
                         <button
                           onClick={() => removeItemFromCart(item.id)}
                           className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]"
@@ -1260,7 +1260,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
               const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
               const grandTotal = itemTotal + totalGst + platformFee;
               return (
-                <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                <div className="border-t border-[#E8E3DB] pt-3 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-500 font-semibold">
                     <span>Item Total</span>
                     <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
@@ -1273,14 +1273,14 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                     <span>Platform Fee</span>
                     <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-100">
+                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-[#E8E3DB]">
                     <span>Total Amount</span>
                     <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               );
             })() : (
-              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
+              <div className="border-t border-[#E8E3DB] pt-3 space-y-2 text-xs">
                 <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
                   <span>Total Amount</span>
                   <span>₹0</span>
@@ -1311,18 +1311,18 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+            className="bg-[#FAF7F0] rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
           >
             {/* Close button */}
             <button
               onClick={() => setSelectedServiceDetails(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-[#FEFCF8]/90 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
             >
               <X size={16} />
             </button>
 
             {/* Header image */}
-            <div className="h-36 border-b border-slate-100 shrink-0">
+            <div className="h-36 border-b border-[#E8E3DB] shrink-0">
               <img
                 src={selectedServiceDetails.image}
                 alt={selectedServiceDetails.name}
@@ -1333,7 +1333,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
               {/* Title & Ratings */}
-              <div className="border-b border-slate-100 pb-5">
+              <div className="border-b border-[#E8E3DB] pb-5">
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">
                   {activeTab === "full_apartment" ? `Occupied Apartment - ${selectedServiceDetails.name}` :
                     activeTab === "full_bungalow" ? `Occupied Bungalow - ${selectedServiceDetails.name}` :
@@ -1358,7 +1358,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 if (!hasRequirements) return null;
                 return (
                   <div className="space-y-6">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">Select Requirements</h4>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-[#E8E3DB] pb-2">Select Requirements</h4>
 
                     {/* 1. Size Selection (Apartment size or Bungalow size) */}
                     {details.apartmentSizes && (
@@ -1671,7 +1671,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 const tools = (selectedServiceDetails.tools || []).filter(t => typeof t === 'string' || t.enabled !== false).map(t => typeof t === 'string' ? t : (t.text || ''));
                 if (tools.length === 0) return null;
                 return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                     <div className="space-y-2">
                       {tools.map((item, i) => (
@@ -1690,7 +1690,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 const ready = (selectedServiceDetails.ready || []).filter(r => typeof r === 'string' || r.enabled !== false).map(r => typeof r === 'string' ? r : (r.text || ''));
                 if (ready.length === 0) return null;
                 return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                     <div className="space-y-2">
                       {ready.map((item, i) => (
@@ -1709,11 +1709,11 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 const reviews = (selectedServiceDetails.reviews_list || []).filter(r => r.enabled !== false);
                 if (reviews.length === 0) return null;
                 return (
-                  <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                  <div className="space-y-4 border-t border-[#E8E3DB] pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                     <div className="space-y-3">
                       {reviews.map((rev, i) => (
-                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div key={i} className="p-3 bg-[#F5F0E6]/60 rounded-xl border border-[#E8E3DB]">
                           <div className="flex justify-between items-center mb-1.5">
                             <div className="text-[11px] font-bold text-slate-700">{rev.name}</div>
                             <div className="text-[11px] text-violet-600 font-extrabold flex items-center gap-1">
@@ -1734,22 +1734,22 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 const faqs = (selectedServiceDetails.faqs || []).filter(f => f.enabled !== false);
                 if (faqs.length === 0) return null;
                 return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
                     <div className="space-y-2">
                       {faqs.map((faq, idx) => {
                         const isFaqOpen = activeFaq === idx;
                         return (
-                          <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                          <div key={idx} className="border border-[#E8E3DB] rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
                             <button
                               onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
-                              className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50 border-none outline-none"
+                              className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-[#F5F0E6]/40 border-none outline-none"
                             >
                               <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
                               <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
                             </button>
                             {isFaqOpen && (
-                              <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                              <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-[#E8E3DB]/40 bg-[#F5F0E6]/20">
                                 {faq.a}
                               </div>
                             )}
@@ -1763,7 +1763,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             </div>
 
             {/* Sticky Footer */}
-            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="border-t border-[#E8E3DB] p-4 bg-[#F5F0E6] flex items-center justify-between shrink-0">
               <div>
                 {(() => {
                   const baseFare = getModalPrice();
