@@ -4163,43 +4163,108 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   // ── Customer Support Chat State ───────────────────────────────────────────────
   const [showContactSupportChat, setShowContactSupportChat] = useState(false)
   const [supportTicket, setSupportTicket] = useState(null)
+  const [customerTicketsList, setCustomerTicketsList] = useState([])
   const [supportMessages, setSupportMessages] = useState([])
   const [supportTicketLoading, setSupportTicketLoading] = useState(false)
   const [supportInputMessage, setSupportInputMessage] = useState('')
   const [supportIsInternalNote, setSupportIsInternalNote] = useState(false)
   const [supportActionLoading, setSupportActionLoading] = useState(false)
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState(null)
+  const [supportLinkedBooking, setSupportLinkedBooking] = useState(null)
+  const [supportNewCategory, setSupportNewCategory] = useState('general')
   const supportChatScrollRef = useRef(null)
 
-  const fetchCustomerSupportChat = async () => {
+  const fetchCustomerSupportChat = async (autoSelectId = null) => {
     setSupportTicketLoading(true)
     try {
       const res = await apiRequest('/customer-care/tickets/')
-      const tickets = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+      const tickets = Array.isArray(res?.data) 
+        ? res.data 
+        : Array.isArray(res?.results) 
+          ? res.results 
+          : Array.isArray(res) 
+            ? res 
+            : []
+      setCustomerTicketsList(tickets)
+
       if (tickets.length > 0) {
-        const ticket = tickets[0]
-        setSupportTicket(ticket)
-        const detailRes = await apiRequest(`/customer-care/tickets/${ticket.id}/`)
-        const detailData = detailRes?.data || detailRes || ticket
+        let ticketToLoad = tickets[0]
+        if (autoSelectId) {
+          const found = tickets.find(t => String(t.id) === String(autoSelectId))
+          if (found) ticketToLoad = found
+        } else if (supportTicket?.id) {
+          const found = tickets.find(t => String(t.id) === String(supportTicket.id))
+          if (found) ticketToLoad = found
+        }
+        setSupportTicket(ticketToLoad)
+        const detailRes = await apiRequest(`/customer-care/tickets/${ticketToLoad.id}/`)
+        const detailData = detailRes?.data || detailRes || ticketToLoad
         setSupportTicket(detailData)
         setSupportMessages(Array.isArray(detailData.messages) ? detailData.messages : [])
       } else {
-        setSupportTicket(null)
-        setSupportMessages([])
+        if (!autoSelectId) {
+          setSupportTicket(null)
+          setSupportMessages([])
+        }
       }
     } catch (e) {
       console.warn('Failed to load customer support tickets:', e)
-      setSupportTicket(null)
-      setSupportMessages([])
     } finally {
       setSupportTicketLoading(false)
     }
   }
 
+  const selectCustomerTicket = async (ticket) => {
+    setSupportTicket(ticket)
+    setSupportLinkedBooking(null)
+    setShowContactSupportChat(true)
+    setSupportTicketLoading(true)
+    try {
+      const detailRes = await apiRequest(`/customer-care/tickets/${ticket.id}/`)
+      const detailData = detailRes?.data || detailRes || ticket
+      setSupportTicket(detailData)
+      setSupportMessages(Array.isArray(detailData.messages) ? detailData.messages : [])
+    } catch (e) {
+      console.warn('Failed to load ticket detail:', e)
+    } finally {
+      setSupportTicketLoading(false)
+    }
+  }
+
+  const startNewSupportTicket = (booking = null, category = 'general') => {
+    setSupportTicket(null)
+    setSupportMessages([])
+    setSupportLinkedBooking(booking)
+    setSupportNewCategory(category)
+    setShowContactSupportChat(true)
+  }
+
+  const handleStartBookingSupport = (booking) => {
+    setActiveTab("Help & Support")
+    startNewSupportTicket(booking, 'booking_issue')
+  }
+
   useEffect(() => {
-    if (showContactSupportChat) {
+    if (activeTab === 'Help & Support') {
       fetchCustomerSupportChat()
     }
-  }, [showContactSupportChat])
+  }, [activeTab])
+
+  useEffect(() => {
+    if (showContactSupportChat && supportTicket?.id) {
+      fetchCustomerSupportChat(supportTicket.id)
+      const pollInterval = setInterval(() => {
+        fetchCustomerSupportChat(supportTicket.id)
+      }, 4000)
+      return () => clearInterval(pollInterval)
+    }
+  }, [showContactSupportChat, supportTicket?.id])
+
+  useEffect(() => {
+    if (supportChatScrollRef.current) {
+      supportChatScrollRef.current.scrollTop = supportChatScrollRef.current.scrollHeight
+    }
+  }, [supportMessages])
 
   const handleSendSupportMessage = async (e) => {
     if (e) e.preventDefault()
@@ -4210,19 +4275,25 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       let activeTicket = supportTicket
       if (!activeTicket || !activeTicket.id) {
         const custName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user?.username || 'Customer')
+        const payload = {
+          category: supportNewCategory || (supportLinkedBooking ? 'booking_issue' : 'general'),
+          priority: 'medium',
+          channel: 'chat',
+          customer_name: custName,
+          phone: user?.phone || '',
+          email: user?.email || ''
+        }
+        if (supportLinkedBooking?.id) {
+          payload.booking = supportLinkedBooking.id
+        }
         const createRes = await apiRequest('/customer-care/tickets/', {
           method: 'POST',
-          json: {
-            category: 'general',
-            priority: 'medium',
-            channel: 'chat',
-            customer_name: custName,
-            phone: user?.phone || '',
-            email: user?.email || ''
-          }
+          json: payload
         })
         activeTicket = createRes?.data || createRes
         setSupportTicket(activeTicket)
+        setSupportLinkedBooking(null)
+        fetchCustomerSupportChat(activeTicket?.id)
       }
 
       if (activeTicket?.id) {
@@ -5155,12 +5226,18 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
                                   Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
                                   ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
+                                  'contact_support',
                                   'view_invoice',
                                   b.refund_status ? 'refund_status' : null,
                                   'report_problem'
                                 ].filter(Boolean)
                             ).map(act => {
                               const cleanAct = String(act).replace(/^can_/, '')
+                              if (cleanAct === "contact_support") return (
+                                <button key={act} onClick={() => handleStartBookingSupport(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 1px 2px rgba(29,78,216,0.05)' }}>
+                                  <Headset size={14} /> Need Help?
+                                </button>
+                              )
                               if (cleanAct === "retry_payment" || cleanAct === "pay") return (
                                 <button key={act} onClick={async () => {
                                   try {
@@ -5782,35 +5859,142 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           </motion.div>
         )
       case "Help & Support":
+        const TICKET_STATUS_STYLES = {
+          new: { label: "New", bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" },
+          assigned: { label: "Assigned", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+          in_progress: { label: "In Progress", bg: "#f0f9ff", text: "#0284c7", border: "#bae6fd" },
+          waiting_on_customer: { label: "Waiting on You", bg: "#faf5ff", text: "#7e22ce", border: "#e9d5ff" },
+          waiting_on_internal: { label: "Under Review", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+          escalated: { label: "Escalated", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
+          resolved: { label: "Resolved", bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0" },
+          reopened: { label: "Reopened", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+          closed: { label: "Closed", bg: "#f8fafc", text: "#475569", border: "#e2e8f0" }
+        }
+
+        const TICKET_CATEGORY_INFO = {
+          booking_issue: { label: "Booking Issue", emoji: "📅" },
+          service_quality: { label: "Service Quality", emoji: "⭐" },
+          technician_issue: { label: "Technician Issue", emoji: "🔧" },
+          payment_issue: { label: "Payment Issue", emoji: "💳" },
+          refund: { label: "Refund", emoji: "💵" },
+          cancellation: { label: "Cancellation", emoji: "❌" },
+          reschedule: { label: "Reschedule", emoji: "⏰" },
+          pricing_issue: { label: "Pricing Issue", emoji: "🏷️" },
+          missing_damaged: { label: "Missing / Damaged", emoji: "📦" },
+          safety_issue: { label: "Safety Issue", emoji: "🛡️" },
+          other: { label: "Support Inquiry", emoji: "❓" },
+          general: { label: "General Support", emoji: "📌" },
+          billing: { label: "Billing & Payments", emoji: "💳" },
+          technical: { label: "Technical Issue", emoji: "⚙️" },
+          scheduling: { label: "Scheduling & Dispatch", emoji: "⏰" },
+          feedback: { label: "Customer Feedback", emoji: "💬" }
+        }
+
+        const SUPPORT_FAQS = [
+          {
+            q: "How do I cancel or reschedule my booking?",
+            a: "You can reschedule or cancel directly from the 'My Bookings' tab up to 2 hours before your scheduled slot with zero cancellation charges. For emergency adjustments or immediate changes, message us directly in this Live Support Chat."
+          },
+          {
+            q: "How are refunds processed to original payment?",
+            a: "Once approved by our support team, refunds are initiated immediately to your original payment method (UPI / Cards / Net Banking). Funds typically reflect in your account within 2 to 4 business days depending on your bank."
+          },
+          {
+            q: "Are CalServices technicians verified and trained?",
+            a: "Yes! 100% of our technicians undergo rigorous background verification, police verification, skill assessment, and standard operating training before being assigned to customer jobs."
+          }
+        ]
+
+        const QUICK_PROMPT_CHIPS = [
+          "📍 Where is my technician?",
+          "📅 I need to reschedule my time slot",
+          "🧾 Please send me the service invoice",
+          "💳 Update on my refund status",
+          "⭐ Report a service quality issue"
+        ]
+
         if (showContactSupportChat) {
+          const currentStatus = supportTicket?.status || 'new'
+          const statusStyle = TICKET_STATUS_STYLES[currentStatus] || TICKET_STATUS_STYLES.new
+          const catInfo = TICKET_CATEGORY_INFO[supportTicket?.category || supportNewCategory] || TICKET_CATEGORY_INFO.general
+
           return (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ display: 'flex', flexDirection: 'column', height: '650px', background: 'white', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ display: 'flex', flexDirection: 'column', height: '680px', background: 'white', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05)' }}>
               {/* Header bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => setShowContactSupportChat(false)} style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={() => setShowContactSupportChat(false)} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                     <ArrowLeft size={14} /> Back
                   </button>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>Customer Support Live Chat</div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>{supportTicket?.ticket_number ? `Ticket: ${supportTicket.ticket_number}` : 'Connected with Support Team'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>Live Support Chat</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: statusStyle.bg, color: statusStyle.text, border: `1px solid ${statusStyle.border}` }}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <span>{catInfo.emoji} {catInfo.label}</span>
+                      <span>•</span>
+                      <span>{supportTicket?.ticket_number ? `Ticket: ${supportTicket.ticket_number}` : 'New Conversation'}</span>
+                      {(supportTicket?.booking_request_id || supportLinkedBooking) && (
+                        <>
+                          <span>•</span>
+                          <span style={{ color: '#4f46e5', fontWeight: 700 }}>
+                            Booking #{supportTicket?.booking_request_id || supportLinkedBooking?.id}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <button onClick={fetchCustomerSupportChat} title="Refresh Messages" style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', borderRadius: 6 }}>
-                  <RefreshCw size={15} className={supportTicketLoading ? "animate-spin" : ""} />
-                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {customerTicketsList.length > 1 && (
+                    <select
+                      value={supportTicket?.id || ''}
+                      onChange={(e) => {
+                        const target = customerTicketsList.find(t => String(t.id) === String(e.target.value))
+                        if (target) selectCustomerTicket(target)
+                      }}
+                      style={{ fontSize: '0.72rem', fontWeight: 700, padding: '4px 8px', borderRadius: 8, border: '1px solid #e2e8f0', background: 'white', color: '#334155', cursor: 'pointer' }}
+                    >
+                      {customerTicketsList.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.ticket_number} ({t.status})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  <button
+                    onClick={() => startNewSupportTicket()}
+                    title="Start New Ticket"
+                    style={{ padding: '6px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.72rem', fontWeight: 800, color: '#4f46e5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Plus size={13} /> New
+                  </button>
+
+                  <button onClick={() => fetchCustomerSupportChat(supportTicket?.id)} title="Refresh Messages" style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', borderRadius: 6 }}>
+                    <RefreshCw size={15} className={supportTicketLoading ? "animate-spin" : ""} />
+                  </button>
+                </div>
               </div>
 
               {/* Messages Thread list */}
               <div ref={supportChatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: 14, background: '#ffffff' }}>
                 {supportMessages.length === 0 ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '3rem 1.5rem', color: '#94a3b8' }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                      <LifeBuoy size={26} color="#6366f1" />
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                      <LifeBuoy size={26} color="#3b82f6" />
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a', marginBottom: 6 }}>No Messages Yet</div>
-                    <p style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: 340, lineHeight: 1.5, margin: 0 }}>
-                      {supportTicket ? "Your support ticket is open. Type a message below to connect with our support agents." : "You have not raised any support ticket yet. Type a message below to start a conversation with our support team."}
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a', marginBottom: 6 }}>
+                      {supportTicket ? "Support Ticket Open" : "Start a New Conversation"}
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5, margin: 0 }}>
+                      {supportTicket 
+                        ? `Your ticket #${supportTicket.ticket_number} is connected. Send a message below to chat with our care team.`
+                        : "Type your query below or pick a quick prompt to immediately start a live chat with our support team."}
                     </p>
                   </div>
                 ) : (
@@ -5845,9 +6029,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           }}>
                             {/* Persona & Username badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
-                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'ADMIN')}</span>
+                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'CALSERVICES AGENT')}</span>
                               <span>•</span>
-                              <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'AGENT')}</span>
+                              <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'CARE AGENT')}</span>
                             </div>
 
                             {/* Message Bubble */}
@@ -5865,9 +6049,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 border: '1px solid #e2e8f0',
                                 color: '#1e293b'
                               } : {
-                                background: '#4f46e5',
-                                border: '1px solid #4338ca',
-                                color: '#ffffff'
+                                background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                                border: '1px solid #3730a3',
+                                color: '#ffffff',
+                                boxShadow: '0 4px 12px rgba(79,70,229,0.2)'
                               })
                             }}>
                               {msg.is_internal_note && (
@@ -5890,8 +6075,36 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 )}
               </div>
 
+              {/* Quick Prompt Chips */}
+              <div style={{ padding: '6px 18px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {QUICK_PROMPT_CHIPS.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSupportInputMessage(chip)}
+                    style={{
+                      whiteSpace: 'nowrap',
+                      padding: '4px 10px',
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 99,
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      flexShrink: 0
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#4f46e5' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569' }}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
               {/* Compose Form at Bottom */}
-              <form onSubmit={handleSendSupportMessage} style={{ borderTop: '1px solid #f1f5f9', padding: '14px 18px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <form onSubmit={handleSendSupportMessage} style={{ borderTop: '1px solid #f1f5f9', padding: '12px 18px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: (user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent) ? 'space-between' : 'flex-end', fontSize: '0.78rem' }}>
                   {(user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent) && (
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 700, color: '#64748b', userSelect: 'none' }}>
@@ -5908,7 +6121,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                   <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: '#4f46e5', fontWeight: 700, fontSize: '0.78rem' }}>
                     <Paperclip size={14} />
-                    <span>Attach File</span>
+                    <span>Attach Evidence / Bill</span>
                     <input type="file" style={{ display: 'none' }} onChange={async (e) => {
                       const f = e.target.files?.[0]
                       if (f && supportTicket?.id) {
@@ -5919,7 +6132,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             method: "POST",
                             body: formData
                           })
-                          fetchCustomerSupportChat()
+                          fetchCustomerSupportChat(supportTicket.id)
                         } catch (err) {
                           console.error(err)
                         }
@@ -5951,8 +6164,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     type="submit"
                     disabled={supportActionLoading || !supportInputMessage.trim()}
                     style={{
-                      padding: '10px 14px',
-                      background: '#6366f1',
+                      padding: '10px 16px',
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
                       color: 'white',
                       border: 'none',
                       borderRadius: 14,
@@ -5961,7 +6174,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                       alignItems: 'center',
                       justifyContent: 'center',
                       opacity: (!supportInputMessage.trim() || supportActionLoading) ? 0.5 : 1,
-                      boxShadow: '0 4px 10px rgba(99,102,241,0.3)',
+                      boxShadow: '0 4px 12px rgba(79,70,229,0.3)',
                       transition: 'all 0.2s'
                     }}
                   >
@@ -5972,22 +6185,257 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </motion.div>
           )
         }
+
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Help & Support</h3>
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, background: 'linear-gradient(to right bottom, #f8fafc, #f1f5f9)' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Need assistance?</h4>
-              <p style={{ margin: '0 0 24px', color: '#475569', fontSize: '0.9rem', lineHeight: 1.6 }}>Our dedicated support team is available 24/7 to help you with your bookings, payments, and general queries.</p>
-              <button onClick={() => setShowContactSupportChat(true)} style={{ padding: '0.85rem 1.75rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>Contact Support</button>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Header Title */}
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Help & Support Center</h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>We're available 24/7 to resolve your booking queries, schedule changes, and payment inquiries.</p>
             </div>
-            <h4 style={{ margin: '32px 0 16px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Frequently Asked Questions</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {["How to cancel a booking?", "What is the 30-day guarantee?", "How to change my address?", "Are the professionals background checked?"].map((q, i) => (
-                <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: 'white', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = '#cbd5e1'} onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#334155' }}>{q}</span>
-                  <ChevronDown size={18} color="#94a3b8" />
+
+            {/* Hero Assistance Banner */}
+            <div style={{
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #312e81 100%)',
+              borderRadius: 20,
+              padding: '24px 28px',
+              color: 'white',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: '0 10px 25px -5px rgba(15,23,42,0.2)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e', display: 'inline-block' }} />
+                <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#86efac' }}>
+                  Support Agents Active 24/7
+                </span>
+              </div>
+              <h4 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>How can we help you today?</h4>
+              <p style={{ margin: '0 0 20px', color: '#cbd5e1', fontSize: '0.85rem', lineHeight: 1.6, maxWidth: 500 }}>
+                Start a live chat with our dedicated customer care team or call our toll-free direct support line for rapid resolutions.
+              </p>
+
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => startNewSupportTicket()}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 12,
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: '0 4px 14px rgba(99,102,241,0.4)'
+                  }}
+                >
+                  <MessageSquare size={16} /> Start Live Chat
+                </button>
+
+                <a
+                  href="tel:18002257378"
+                  style={{
+                    padding: '10px 18px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'white',
+                    borderRadius: 12,
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Phone size={14} /> 1800-CAL-CARE
+                </a>
+
+                <a
+                  href="https://wa.me/916369505772"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    padding: '10px 18px',
+                    background: 'rgba(34,197,94,0.15)',
+                    border: '1px solid rgba(34,197,94,0.3)',
+                    color: '#86efac',
+                    borderRadius: 12,
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  💬 WhatsApp Support
+                </a>
+              </div>
+            </div>
+
+            {/* My Support Tickets Section */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Ticket size={18} color="#4f46e5" />
+                  <span>My Support Tickets ({customerTicketsList.length})</span>
+                </h4>
+                {customerTicketsList.length > 0 && (
+                  <button
+                    onClick={() => startNewSupportTicket()}
+                    style={{ padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: '0.78rem', fontWeight: 800, color: '#1d4ed8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <Plus size={14} /> New Request
+                  </button>
+                )}
+              </div>
+
+              {customerTicketsList.length === 0 ? (
+                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 16, padding: '24px 20px', textAlign: 'center', color: '#64748b' }}>
+                  <LifeBuoy size={28} color="#94a3b8" style={{ margin: '0 auto 8px' }} />
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#334155' }}>No Support Tickets Yet</div>
+                  <p style={{ margin: '4px 0 12px', fontSize: '0.8rem' }}>When you raise an inquiry or report an issue, it will be tracked here with live updates.</p>
+                  <button onClick={() => startNewSupportTicket()} style={{ padding: '8px 16px', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>
+                    Raise a Ticket
+                  </button>
                 </div>
-              ))}
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {customerTicketsList.map(t => {
+                    const stStyle = TICKET_STATUS_STYLES[t.status] || TICKET_STATUS_STYLES.new
+                    const cat = TICKET_CATEGORY_INFO[t.category] || TICKET_CATEGORY_INFO.general
+                    const createdDate = t.created_at ? new Date(t.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Recently"
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => selectCustomerTicket(t)}
+                        style={{
+                          background: 'white',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 14,
+                          padding: '14px 18px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = '#faf5ff10' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white' }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#0f172a' }}>{t.ticket_number}</span>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: stStyle.bg, color: stStyle.text, border: `1px solid ${stStyle.border}` }}>
+                              {stStyle.label}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, background: '#f1f5f9', padding: '2px 8px', borderRadius: 6 }}>
+                              {cat.emoji} {cat.label}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {t.booking_request_id && (
+                              <span style={{ color: '#4f46e5', fontWeight: 700 }}>
+                                📦 Booking #{t.booking_request_id}
+                              </span>
+                            )}
+                            <span>Created: {createdDate}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4f46e5', fontWeight: 800, fontSize: '0.8rem' }}>
+                          <span>Open Chat</span>
+                          <ChevronRight size={16} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Frequently Asked Questions */}
+            <div>
+              <h4 style={{ margin: '0 0 14px', color: '#0f172a', fontSize: '1.05rem', fontWeight: 800 }}>Frequently Asked Questions</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {SUPPORT_FAQS.map((faq, i) => {
+                  const isExpanded = expandedFaqIndex === i
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 14,
+                        background: 'white',
+                        overflow: 'hidden',
+                        transition: 'all 0.2s',
+                        borderColor: isExpanded ? '#6366f1' : '#e2e8f0'
+                      }}
+                    >
+                      <div
+                        onClick={() => setExpandedFaqIndex(isExpanded ? null : i)}
+                        style={{
+                          padding: '16px 20px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: isExpanded ? '#4f46e5' : '#1e293b' }}>
+                          {faq.q}
+                        </span>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: isExpanded ? '#eff6ff' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isExpanded ? <ChevronUp size={16} color="#4f46e5" /> : <ChevronDown size={16} color="#94a3b8" />}
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            style={{ padding: '0 20px 16px', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}
+                          >
+                            <p style={{ margin: '12px 0 0', fontSize: '0.84rem', color: '#475569', lineHeight: 1.6 }}>
+                              {faq.a}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Value Guarantees Banner */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 8 }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Clock size={22} color="#6366f1" />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0f172a' }}>Fast Rescheduling</div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Adjust slots in 2 taps</div>
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckCircle2 size={22} color="#0284c7" />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0f172a' }}>Verified Experts</div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Police & background verified</div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )

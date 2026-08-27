@@ -111,8 +111,12 @@ export function AuthProvider({ children }) {
     async (identifier, password) => {
       const res = await apiLogin(identifier, password)
       if (res?.requires_2fa) return { requires2FA: true }
-      const meUser = await refreshMe()
-      if (meUser) return meUser
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
@@ -127,6 +131,8 @@ export function AuthProvider({ children }) {
           return u
         }
       }
+      const meUser = await refreshMe()
+      if (meUser) return meUser
       return null
     },
     [refreshMe]
@@ -153,7 +159,27 @@ export function AuthProvider({ children }) {
   // ── Google OAuth (Staff) ──────────────────────────────────────────────────
   const loginWithGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiGoogleLogin(googleAccessToken)
+      const res = await apiGoogleLogin(googleAccessToken)
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
+      if (res?.user) {
+        const u = formatUser(res.user)
+        if (u) {
+          setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
+          if (res.user.company_name) {
+            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            window.dispatchEvent(new CustomEvent("quicktims:orgName"))
+          }
+          return u
+        }
+      }
       return await refreshMe()
     },
     [refreshMe]
@@ -162,7 +188,23 @@ export function AuthProvider({ children }) {
   // ── Customer Google OAuth ─────────────────────────────────────────────────
   const loginWithCustomerGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiCustomerGoogleLogin(googleAccessToken)
+      const res = await apiCustomerGoogleLogin(googleAccessToken)
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
+      if (res?.user) {
+        const u = formatUser(res.user)
+        if (u) {
+          setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
+          return u
+        }
+      }
       return await refreshMe()
     },
     [refreshMe]
