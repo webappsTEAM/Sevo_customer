@@ -49,8 +49,8 @@ def sync_prices():
         truck_packages = [
             {"slug": "3-wheeler", "name": "3 Wheeler (500kg)", "base_price": Decimal("160.00"), "duration": "15 mins", "tag": "Light Load", "description": "5ft x 6ft cargo bed, ideal for groceries, small appliances & up to 500kg parcels."},
             {"slug": "tata-ace", "name": "Tata Ace (750kg)", "base_price": Decimal("205.00"), "duration": "20 mins", "tag": "Best Seller", "description": "6ft x 7ft bed, ideal for 1 BHK furniture, refrigerators & business stock up to 750kg."},
-            {"slug": "pickup-8ft", "name": "Pickup 8ft (1250 kg)", "base_price": Decimal("300.00"), "duration": "20 mins", "tag": "Heavy (above 750kg)", "description": "5.5ft x 8ft covered bed, ideal for sofas, double beds & commercial inventory up to 1250kg."},
-            {"slug": "1-7-ton", "name": "1.7 ton (1700 kg)", "base_price": Decimal("380.00"), "duration": "30 mins", "tag": "Heavy (above 750kg)", "description": "6.1ft x 9ft heavy Bolero bed for industrial machinery & large commercial loads up to 1700kg."},
+            {"slug": "pickup-8ft", "name": "Pickup 8ft (1250 kg)", "base_price": Decimal("300.00"), "duration": "20 mins", "tag": "Coming Soon", "description": "5.5ft x 8ft covered bed, ideal for sofas, double beds & commercial inventory up to 1250kg."},
+            {"slug": "1-7-ton", "name": "1.7 ton (1700 kg)", "base_price": Decimal("380.00"), "duration": "30 mins", "tag": "Coming Soon", "description": "6.1ft x 9ft heavy Bolero bed for industrial machinery & large commercial loads up to 1700kg."},
         ]
         for tp in truck_packages:
             Package.objects.create(

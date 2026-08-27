@@ -11,7 +11,7 @@
  *  - Live map preview of all zones as polygons/circles
  */
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, Circle, Polygon, Polyline, Popup, Marker, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import "leaflet-draw/dist/leaflet.draw.css"
@@ -19,10 +19,11 @@ import {
   Plus, Trash2, Pencil, X, Save, Loader2, MapPin, Target,
   CheckCircle2, XCircle, AlertTriangle, ToggleLeft, ToggleRight,
   Map, List, Shield, Navigation, Search, Layers, CheckSquare, Square,
-  Crosshair, LocateFixed, Compass, Sparkles
+  Crosshair, LocateFixed, Compass, Sparkles, Undo2, RotateCcw
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { getAddress } from "../../../api/geocoding.js"
+import { searchHosurPlacesOnline, filterLocationSuggestions, formatExactLocation } from "../../../services/hosurLocations.js"
 
 /* ── Constants ───────────────────────────────────────────────────────────────── */
 
@@ -159,6 +160,24 @@ const createCurrentLocationIcon = () =>
     popupAnchor: [0, -12],
   })
 
+const createVertexIcon = (index = 0, color = "#4F46E5") =>
+  L.divIcon({
+    className: "polygon-vertex-badge",
+    html: `<div style="
+      width: 24px; height: 24px;
+      background: ${color};
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 900;
+      cursor: pointer;
+    ">${index + 1}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  })
+
 function MapClickCapture({ enabled, onMapClick }) {
   const map = useMap()
   useEffect(() => {
@@ -224,19 +243,29 @@ function FlyTo({ lat, lng, zoom = 14 }) {
 
 /* ── Zone Map Preview ────────────────────────────────────────────────────────── */
 
-function ZoneOverlays({ zones }) {
+function ZoneOverlays({ zones, selectedZoneId }) {
   return zones.map(zone => {
+    const isSelected = selectedZoneId === zone.id
     if (zone.zone_type === "polygon" && zone.polygon?.coordinates?.[0]) {
       const positions = zone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])
       return (
         <Polygon
           key={zone.id}
           positions={positions}
-          pathOptions={{ color: zone.color, fillColor: zone.color, fillOpacity: 0.15, weight: 2 }}
+          pathOptions={{
+            color: zone.color,
+            fillColor: zone.color,
+            fillOpacity: isSelected ? 0.35 : 0.15,
+            weight: isSelected ? 3.5 : 2,
+            dashArray: isSelected ? "6, 6" : undefined
+          }}
         >
           <Popup>
-            <strong>{zone.name}</strong><br />
-            {zone.is_active ? "✅ Active" : "⛔ Inactive"}
+            <div style={{ fontSize: 12 }}>
+              <strong>{zone.name}</strong><br />
+              {zone.is_active ? "✅ Active" : "⛔ Inactive"}<br />
+              <span style={{ fontSize: 10, color: "#64748b" }}>Polygon Area ({positions.length} corners)</span>
+            </div>
           </Popup>
         </Polygon>
       )
@@ -247,12 +276,20 @@ function ZoneOverlays({ zones }) {
           key={zone.id}
           center={[zone.center_lat, zone.center_lng]}
           radius={zone.radius_meters || 5000}
-          pathOptions={{ color: zone.color, fillColor: zone.color, fillOpacity: 0.15, weight: 2 }}
+          pathOptions={{
+            color: zone.color,
+            fillColor: zone.color,
+            fillOpacity: isSelected ? 0.35 : 0.15,
+            weight: isSelected ? 3.5 : 2,
+            dashArray: isSelected ? "6, 6" : undefined
+          }}
         >
           <Popup>
-            <strong>{zone.name}</strong><br />
-            Radius: {(zone.radius_meters / 1000).toFixed(1)} km<br />
-            {zone.is_active ? "✅ Active" : "⛔ Inactive"}
+            <div style={{ fontSize: 12 }}>
+              <strong>{zone.name}</strong><br />
+              Radius: {(zone.radius_meters / 1000).toFixed(1)} km<br />
+              {zone.is_active ? "✅ Active" : "⛔ Inactive"}
+            </div>
           </Popup>
         </Circle>
       )
@@ -285,7 +322,17 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
       services: (editZone.services || []).map(s => s.service_slug),
     } : { ...EMPTY_FORM }
   )
-  const [drawn, setDrawn] = useState(null)
+  const [polygonPoints, setPolygonPoints] = useState(() => {
+    if (editZone?.zone_type === "polygon" && editZone?.polygon?.coordinates?.[0]) {
+      const pts = editZone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])
+      if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) {
+        return pts.slice(0, -1)
+      }
+      return pts
+    }
+    return []
+  })
+  const [drawn, setDrawn] = useState(editZone?.polygon || null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [locatingGPS, setLocatingGPS] = useState(false)
@@ -294,7 +341,117 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("all")
   const [centerSearch, setCenterSearch] = useState("")
   const [centerSearching, setCenterSearching] = useState(false)
-  const [centerResults, setCenterResults] = useState([])
+  const [onlineCenterSuggestions, setOnlineCenterSuggestions] = useState([])
+  const [showCenterSuggestions, setShowCenterSuggestions] = useState(false)
+  const centerSearchWrapperRef = useRef(null)
+
+  // Debounced dynamic search for Hosur center location (Matching customer booking page)
+  useEffect(() => {
+    if (!centerSearch || centerSearch.trim().length < 2) {
+      setOnlineCenterSuggestions([])
+      setCenterSearching(false)
+      return
+    }
+    setCenterSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchHosurPlacesOnline(centerSearch)
+        setOnlineCenterSuggestions(res || [])
+      } catch {
+        setOnlineCenterSuggestions([])
+      } finally {
+        setCenterSearching(false)
+      }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [centerSearch])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (centerSearchWrapperRef.current && !centerSearchWrapperRef.current.contains(e.target)) {
+        setShowCenterSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const localCenterMatches = filterLocationSuggestions(centerSearch)
+  const centerSuggestions = [
+    ...localCenterMatches,
+    ...onlineCenterSuggestions.filter(
+      (on) => !localCenterMatches.some((loc) => loc.name.toLowerCase() === on.name.toLowerCase())
+    ),
+  ]
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // Handler for adding corner points when clicking map in Polygon mode
+  const handlePolygonMapClick = (lat, lng) => {
+    setPolygonPoints(prev => {
+      const next = [...prev, [lat, lng]]
+      if (next.length >= 3) {
+        const closed = [...next, next[0]].map(([la, ln]) => [ln, la])
+        const geom = { type: "Polygon", coordinates: [closed] }
+        set("polygon", geom)
+        const avgLat = next.reduce((s, p) => s + p[0], 0) / next.length
+        const avgLng = next.reduce((s, p) => s + p[1], 0) / next.length
+        set("center_lat", avgLat)
+        set("center_lng", avgLng)
+        setDrawn(geom)
+      } else {
+        set("polygon", null)
+        setDrawn(null)
+      }
+      setError("")
+      return next
+    })
+  }
+
+  const handleVertexDrag = (index, lat, lng) => {
+    setPolygonPoints(prev => {
+      const next = [...prev]
+      next[index] = [lat, lng]
+      if (next.length >= 3) {
+        const closed = [...next, next[0]].map(([la, ln]) => [ln, la])
+        const geom = { type: "Polygon", coordinates: [closed] }
+        set("polygon", geom)
+        const avgLat = next.reduce((s, p) => s + p[0], 0) / next.length
+        const avgLng = next.reduce((s, p) => s + p[1], 0) / next.length
+        set("center_lat", avgLat)
+        set("center_lng", avgLng)
+        setDrawn(geom)
+      }
+      return next
+    })
+  }
+
+  const handleUndoPolygonPoint = () => {
+    setPolygonPoints(prev => {
+      const next = prev.slice(0, -1)
+      if (next.length >= 3) {
+        const closed = [...next, next[0]].map(([la, ln]) => [ln, la])
+        const geom = { type: "Polygon", coordinates: [closed] }
+        set("polygon", geom)
+        const avgLat = next.reduce((s, p) => s + p[0], 0) / next.length
+        const avgLng = next.reduce((s, p) => s + p[1], 0) / next.length
+        set("center_lat", avgLat)
+        set("center_lng", avgLng)
+        setDrawn(geom)
+      } else {
+        set("polygon", null)
+        setDrawn(null)
+      }
+      return next
+    })
+  }
+
+  const handleClearPolygon = () => {
+    setPolygonPoints([])
+    set("polygon", null)
+    setDrawn(null)
+  }
 
   // Auto-pin user's current GPS location if creating a new zone without coordinates
   useEffect(() => {
@@ -365,8 +522,6 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
     loadCatalogServices()
   }, [])
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  
   const toggleService = (slug) =>
     setForm(f => ({
       ...f,
@@ -461,59 +616,66 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
     }
   }
 
-  // Center place search handler — RESTRICTED TO INDIA ONLY
-  const handleSearchCenter = async (queryText) => {
-    setCenterSearch(queryText)
-    if (!queryText || queryText.length < 2) {
-      setCenterResults([])
-      return
-    }
-    setCenterSearching(true)
-    try {
-      const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-      if (googleApiKey) {
-        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(queryText)}&components=country:IN&key=${googleApiKey}`)
-        const data = await res.json()
-        if (data.status === "OK" && data.results) {
-          setCenterResults(data.results.slice(0, 6).map(r => ({
-            name: r.formatted_address,
-            lat: r.geometry.location.lat,
-            lng: r.geometry.location.lng,
-          })))
-          return
-        }
-      }
-      
-      // Fallback: Photon restricted to India (countrycodes=in)
-      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(queryText)}&countrycodes=in&lat=12.9716&lon=77.5946&limit=8`)
-      const data = await res.json()
-      if (data && data.features) {
-        const indiaOnly = data.features
-          .filter(f => {
-            const [lng, lat] = f.geometry.coordinates
-            return lat >= 6.5 && lat <= 37.5 && lng >= 68.0 && lng <= 97.5
-          })
-          .map(f => ({
-            name: [f.properties.name, f.properties.city || f.properties.district, f.properties.state, "India"].filter(Boolean).join(", "),
-            lat: f.geometry.coordinates[1],
-            lng: f.geometry.coordinates[0],
-          }))
-        setCenterResults(indiaOnly)
-      }
-    } catch { }
-    finally {
-      setCenterSearching(false)
-    }
+  // Exact coordinate lookup map for Hosur landmarks & residential layouts
+  const HOSUR_COORDINATES_MAP = {
+    "vassuthaa garden": [12.75140, 77.84035],
+    "vassudha garden": [12.75140, 77.84035],
+    "flower by design": [12.75265, 77.84158],
+    "samathuvapuram": [12.75132, 77.83987],
+    "kcc nagar": [12.7542, 77.8382],
+    "nallur": [12.7560, 77.8410],
+    "sipcot": [12.7475, 77.7950],
+    "sipcot phase 1": [12.7475, 77.7950],
+    "sipcot phase 2": [12.7215, 77.8540],
+    "golden fairmart": [12.7215, 77.8540],
+    "hosur bus stand": [12.7335, 77.8283],
+    "central bus stand": [12.7335, 77.8283],
+    "hosur railway station": [12.7380, 77.8220],
+    "mathigiri": [12.7120, 77.8010],
+    "titan township": [12.7120, 77.8010],
+    "cattle farm": [12.7130, 77.7980],
+    "bagalur": [12.7620, 77.8420],
+    "bagalur road": [12.7620, 77.8420],
+    "attibele": [12.7780, 77.7710],
+    "attibele border": [12.7780, 77.7710],
+    "zuzuvadi": [12.7750, 77.7820],
+    "moranapalli": [12.7650, 77.8650],
+    "mookandapalli": [12.7480, 77.8150],
+    "avalapalli": [12.7580, 77.8120],
+    "avalapalli road": [12.7580, 77.8120],
+    "denkanikottai road": [12.7250, 77.8180],
+    "thally road": [12.7150, 77.7850],
+    "dinnur": [12.7410, 77.8290],
+    "kamaraj nagar": [12.7430, 77.8310],
+    "shanthi nagar": [12.7390, 77.8350],
+    "nethaji nagar": [12.7440, 77.8330],
+    "alasanatham": [12.7305, 77.8340],
+    "chennathur": [12.7190, 77.8410],
+    "rayakottai road": [12.7190, 77.8410],
+    "kelamangalam": [12.6020, 77.8520],
+    "elcot it park": [12.7350, 77.8450],
+    "grand city mall": [12.7250, 77.8180],
+    "fairmart": [12.7250, 77.8180],
+    "nilgiris": [12.7370, 77.8280],
+    "mg road": [12.7370, 77.8280],
   }
 
-  const handleSelectCenterResult = (result) => {
-    set("center_lat", result.lat)
-    set("center_lng", result.lng)
-    setCenterSearch(result.name)
-    setCenterResults([])
-    if (!form.name.trim() || form.name.startsWith("Service Area")) {
-      const cityGuess = result.name.split(",")[0].trim()
-      set("name", `${cityGuess} Service Area`)
+  const handleSelectCenterSuggestion = (loc) => {
+    const key = (loc.name || "").toLowerCase()
+    const foundCoord = HOSUR_COORDINATES_MAP[key] ||
+      (Object.entries(HOSUR_COORDINATES_MAP).find(([k]) => key.includes(k) || k.includes(key))?.[1])
+
+    const lat = loc.lat || (foundCoord ? foundCoord[0] : (loc.geometry?.location?.lat || 12.7542))
+    const lng = loc.lng || (foundCoord ? foundCoord[1] : (loc.geometry?.location?.lng || 77.8382))
+
+    set("center_lat", lat)
+    set("center_lng", lng)
+    const exact = formatExactLocation(loc)
+    setCenterSearch(exact)
+    setShowCenterSuggestions(false)
+    if (!form.name.trim() || form.name.startsWith("Service Area") || form.name.startsWith("Zone @")) {
+      const cleanName = loc.name.split("(")[0].trim()
+      set("name", `${cleanName} Service Area`)
     }
   }
 
@@ -523,8 +685,8 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
     if (form.zone_type === "circle" && (!form.center_lat || !form.center_lng)) {
       setError("Please click on the map or use GPS to pin the center location."); return
     }
-    if (form.zone_type === "polygon" && !form.polygon) {
-      setError("Draw a polygon boundary on the map first."); return
+    if (form.zone_type === "polygon" && (!form.polygon || polygonPoints.length < 3)) {
+      setError("Please click at least 3 points on the map below to define a closed polygon boundary."); return
     }
 
     setSaving(true); setError("")
@@ -556,8 +718,8 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
     }
   }
 
-  const flyLat = form.center_lat || DEFAULT_INDIA_CENTER[0]
-  const flyLng = form.center_lng || DEFAULT_INDIA_CENTER[1]
+  const flyLat = form.center_lat || (polygonPoints.length > 0 ? polygonPoints[0][0] : DEFAULT_INDIA_CENTER[0])
+  const flyLng = form.center_lng || (polygonPoints.length > 0 ? polygonPoints[0][1] : DEFAULT_INDIA_CENTER[1])
   const radiusKm = (Number(form.radius_meters) / 1000).toFixed(1)
 
   return (
@@ -586,8 +748,12 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <MapPin size={18} style={{ color: "#4F46E5" }} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)" }}>Pin Place on Map (India)</div>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>Click any location on the map below or use your current GPS</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)" }}>
+                {form.zone_type === "polygon" ? "Draw Polygon Layout on Map" : "Pin Place on Map (India)"}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                {form.zone_type === "polygon" ? "Click points directly on the map to trace your layout boundary" : "Click any location on the map below or use your current GPS"}
+              </div>
             </div>
           </div>
           <button
@@ -616,7 +782,7 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
           <input
             value={form.name}
             onChange={e => set("name", e.target.value)}
-            placeholder="e.g. Hosur Service Area, Bengaluru South, Attibele..."
+            placeholder="e.g. Hosur Service Area, KCC Nagar Layout, Attibele..."
             style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }}
           />
         </div>
@@ -649,31 +815,73 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
                 </label>
                 <span style={{ fontSize: 10, color: "#4F46E5", fontWeight: 700 }}>🇮🇳 India Locations</span>
               </div>
-              <div style={{ position: "relative" }}>
+              <div ref={centerSearchWrapperRef} style={{ position: "relative" }}>
                 <input
                   value={centerSearch}
-                  onChange={e => handleSearchCenter(e.target.value)}
-                  placeholder="Search Indian city, area, pin code (e.g. Hosur, Koramangala, Whitefield)..."
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, boxSizing: "border-box" }}
+                  onFocus={() => setShowCenterSuggestions(true)}
+                  onClick={() => setShowCenterSuggestions(true)}
+                  onChange={e => {
+                    setCenterSearch(e.target.value)
+                    setShowCenterSuggestions(true)
+                  }}
+                  placeholder="Search Indian city, area, pin code (e.g. Rachana Villas, Hosur, KCC Nagar)..."
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, boxSizing: "border-box" }}
+                  autoComplete="off"
                 />
                 {centerSearching && (
-                  <div style={{ position: "absolute", right: 10, top: 8, fontSize: 12, color: "#6366F1" }}>
+                  <div style={{ position: "absolute", right: 10, top: 10, fontSize: 11, color: "#6366F1", fontWeight: 700 }}>
                     Searching...
                   </div>
                 )}
-                {centerResults.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1000, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
-                    {centerResults.map((r, i) => (
-                      <div
-                        key={i}
-                        onClick={() => handleSelectCenterResult(r)}
-                        style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, borderBottom: "1px solid #f1f5f9", color: "#1e293b" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                      >
-                        📍 {r.name}
-                      </div>
-                    ))}
+                {showCenterSuggestions && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1050, background: "#ffffff", borderRadius: 16, boxShadow: "0 20px 40px rgba(0,0,0,0.15)", border: "1px solid #e2e8f0", overflow: "hidden", maxHeight: 280, overflowY: "auto", marginTop: 4 }}>
+                    <div style={{ padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <span>{centerSearch ? `Suggestions for "${centerSearch}"` : "Suggested Hosur Locations"}</span>
+                      <span style={{ fontSize: 9, color: "#059669", fontWeight: 700 }}>{centerSuggestions.length} found</span>
+                    </div>
+                    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                      {centerSuggestions.length > 0 ? (
+                        centerSuggestions.map((loc, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              handleSelectCenterSuggestion(loc)
+                            }}
+                            style={{
+                              width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 10,
+                              background: "transparent", border: "none", cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                              transition: "background 0.15s ease"
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#ecfdf5"}
+                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <MapPin size={14} style={{ color: "#64748b" }} />
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {loc.name}
+                                </div>
+                                <div style={{ fontSize: 10, color: "#64748b", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {loc.subtitle || loc.fullAddress}
+                                </div>
+                              </div>
+                            </div>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#f1f5f9", color: "#475569", flexShrink: 0 }}>
+                              {loc.category || "Hosur Location"}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <div style={{ padding: "12px", textAlign: "center", fontSize: 12, color: "#64748b" }}>
+                          No matching location found for "{centerSearch}"
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -757,28 +965,65 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
           </div>
         )}
 
-        {/* Polygon hint */}
+        {/* Polygon Interactive Draw Control Header */}
         {form.zone_type === "polygon" && (
-          <div style={{ padding: "10px 14px", borderRadius: 8, background: drawn ? "#ecfdf5" : "#eef2ff", border: `1px solid ${drawn ? "#a7f3d0" : "#c7d2fe"}`, color: drawn ? "#065f46" : "#3730a3", fontSize: 12, fontWeight: 600 }}>
-            {drawn ? "✓ Polygon captured — click Save to apply." : "Use the polygon tool on the map to draw your service zone boundary."}
+          <div style={{ padding: "12px 14px", borderRadius: 10, background: polygonPoints.length >= 3 ? "#ecfdf5" : "#eef2ff", border: `1.5px solid ${polygonPoints.length >= 3 ? "#a7f3d0" : "#c7d2fe"}`, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: polygonPoints.length >= 3 ? "#065f46" : "#3730a3", background: polygonPoints.length >= 3 ? "#d1fae5" : "#e0e7ff", padding: "3px 8px", borderRadius: 6 }}>
+                  📍 {polygonPoints.length} Point{polygonPoints.length === 1 ? "" : "s"} Plotted
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: polygonPoints.length >= 3 ? "#047857" : "#4338ca" }}>
+                  {polygonPoints.length === 0 && "Click anywhere on the map to add your 1st boundary point."}
+                  {polygonPoints.length === 1 && "Click to add your 2nd boundary point."}
+                  {polygonPoints.length === 2 && "Click to add your 3rd point to form a closed layout."}
+                  {polygonPoints.length >= 3 && `✓ Custom polygon layout marked (${polygonPoints.length} corners). Click more points to refine shape.`}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {polygonPoints.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleUndoPolygonPoint}
+                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #c7d2fe", background: "#ffffff", color: "#4F46E5", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    <Undo2 size={12} /> Undo Point
+                  </button>
+                )}
+                {polygonPoints.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearPolygon}
+                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #fecaca", background: "#ffffff", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    <Trash2 size={12} /> Clear
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Interactive Map with Pin */}
-        <div style={{ borderRadius: 12, overflow: "hidden", border: "1.5px solid var(--stroke)", height: 290, position: "relative" }}>
+        {/* Interactive Map with Pin / Vertices */}
+        <div style={{ borderRadius: 12, overflow: "hidden", border: "1.5px solid var(--stroke)", height: 340, minHeight: 340, width: "100%", position: "relative", zIndex: 1 }}>
           <MapContainer
-            center={[flyLat, flyLng]}
-            zoom={12}
+            key={`zone_map_${form.zone_type}_${editZone?.id || 'new'}`}
+            center={[form.center_lat || DEFAULT_INDIA_CENTER[0], form.center_lng || DEFAULT_INDIA_CENTER[1]]}
+            zoom={form.center_lat ? 14 : 12}
             maxBounds={INDIA_BOUNDS}
             minZoom={4}
-            style={{ width: "100%", height: "100%" }}
+            style={{ width: "100%", height: "100%", minHeight: 340 }}
             zoomControl={true}
           >
             <TileLayer
               url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
               attribution="&copy; Google Maps"
             />
-            {/* Draggable Center Pin */}
+            {/* Auto-fly map to selected / typed coordinates */}
+            {form.center_lat && form.center_lng && (
+              <FlyTo lat={form.center_lat} lng={form.center_lng} zoom={14} />
+            )}
+            {/* Draggable Center Pin (Circle Mode) */}
             {form.zone_type === "circle" && form.center_lat && form.center_lng && (
               <>
                 <Marker
@@ -808,25 +1053,58 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
                 />
               </>
             )}
-            {/* Polygon preview */}
-            {form.zone_type === "polygon" && form.polygon?.coordinates?.[0] && (
-              <Polygon
-                positions={form.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])}
-                pathOptions={{ color: form.color, fillColor: form.color, fillOpacity: 0.2, weight: 2 }}
+
+            {/* Polygon Mode: Display Numbered Vertices */}
+            {form.zone_type === "polygon" && polygonPoints.map((pt, idx) => (
+              <Marker
+                key={idx}
+                position={pt}
+                draggable={true}
+                icon={createVertexIcon(idx, form.color)}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const pos = e.target.getLatLng()
+                    handleVertexDrag(idx, pos.lat, pos.lng)
+                  }
+                }}
+              >
+                <Popup>
+                  <div style={{ fontSize: 12 }}>
+                    <strong>Corner Point #{idx + 1}</strong><br />
+                    <span style={{ fontSize: 10, color: "#64748b" }}>Drag to adjust corner position</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {/* Polygon Mode: Connecting Lines (2 points) */}
+            {form.zone_type === "polygon" && polygonPoints.length === 2 && (
+              <Polyline
+                positions={polygonPoints}
+                pathOptions={{ color: form.color, weight: 3, dashArray: "4, 6" }}
               />
             )}
-            {/* Circle: click map to pin/set center */}
+
+            {/* Polygon Mode: Shaded Enclosed Area (>= 3 points) */}
+            {form.zone_type === "polygon" && polygonPoints.length >= 3 && (
+              <Polygon
+                positions={polygonPoints}
+                pathOptions={{ color: form.color, fillColor: form.color, fillOpacity: 0.25, weight: 3 }}
+              />
+            )}
+
+            {/* Map click listener for Circle or Polygon */}
             <MapClickCapture
-              enabled={form.zone_type === "circle"}
-              onMapClick={(lat, lng) => handleMapPin(lat, lng)}
+              enabled={true}
+              onMapClick={(lat, lng) => {
+                if (form.zone_type === "polygon") {
+                  handlePolygonMapClick(lat, lng)
+                } else {
+                  handleMapPin(lat, lng)
+                }
+              }}
             />
-            {/* Polygon: draw tool */}
-            <DrawControl
-              active={form.zone_type === "polygon"}
-              onDrawComplete={handleDrawComplete}
-              onDrawDelete={() => { setDrawn(null); set("polygon", null) }}
-            />
-            <FlyTo lat={flyLat} lng={flyLng} zoom={form.center_lat ? 12 : 10} />
+            <FlyTo lat={flyLat} lng={flyLng} zoom={form.center_lat ? 13 : 11} />
           </MapContainer>
         </div>
 
@@ -1108,10 +1386,11 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
 
 /* ── Zone Card ───────────────────────────────────────────────────────────────── */
 
-function ZoneCard({ zone, onEdit, onDelete, onToggleActive }) {
+function ZoneCard({ zone, isSelected, onSelect, onEdit, onDelete, onToggleActive }) {
   const [toggling, setToggling] = useState(false)
 
-  const handleToggle = async () => {
+  const handleToggle = async (e) => {
+    e?.stopPropagation?.()
     setToggling(true)
     try {
       const updated = await apiRequest(`/settings/service-zones/${zone.id}/`, {
@@ -1122,12 +1401,20 @@ function ZoneCard({ zone, onEdit, onDelete, onToggleActive }) {
   }
 
   return (
-    <div style={{
-      borderRadius: 14, border: "1px solid var(--stroke)", background: "var(--surface)",
-      overflow: "hidden", transition: "box-shadow 0.2s",
-    }}>
+    <div
+      onClick={() => onSelect?.(zone)}
+      style={{
+        borderRadius: 14,
+        border: isSelected ? "2px solid #4F46E5" : "1px solid var(--stroke)",
+        background: isSelected ? "linear-gradient(135deg, #f8faff, #eef2ff)" : "var(--surface)",
+        boxShadow: isSelected ? "0 8px 24px rgba(79,70,229,0.16)" : "0 1px 3px rgba(0,0,0,0.04)",
+        overflow: "hidden", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        cursor: "pointer",
+        position: "relative"
+      }}
+    >
       {/* Colour band */}
-      <div style={{ height: 4, background: zone.color }} />
+      <div style={{ height: isSelected ? 5 : 4, background: zone.color }} />
 
       <div style={{ padding: "14px 16px" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -1135,7 +1422,14 @@ function ZoneCard({ zone, onEdit, onDelete, onToggleActive }) {
             {zone.zone_type === "circle" ? <Target size={20} /> : <Map size={20} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "var(--fg)", lineHeight: 1.2 }}>{zone.name}</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: isSelected ? "#3730a3" : "var(--fg)", lineHeight: 1.2 }}>{zone.name}</div>
+              {isSelected && (
+                <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: "#4F46E5", color: "#fff", flexShrink: 0 }}>
+                  👁️ VIEWING
+                </span>
+              )}
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: `${zone.color}18`, color: zone.color }}>
                 {zone.zone_type === "circle" ? `⊙ Circle · ${(zone.radius_meters / 1000).toFixed(1)} km` : "⬡ Polygon"}
@@ -1188,11 +1482,11 @@ function ZoneCard({ zone, onEdit, onDelete, onToggleActive }) {
             {zone.is_active ? "Disable" : "Enable"}
           </button>
           <div style={{ flex: 1 }} />
-          <button onClick={() => onEdit(zone)}
+          <button onClick={(e) => { e?.stopPropagation?.(); onEdit(zone) }}
             style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--stroke)", background: "transparent", cursor: "pointer", color: "var(--muted)" }}>
             <Pencil size={14} />
           </button>
-          <button onClick={() => onDelete(zone.id)}
+          <button onClick={(e) => { e?.stopPropagation?.(); onDelete(zone.id) }}
             style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #fecaca", background: "transparent", cursor: "pointer", color: "#EF4444" }}>
             <Trash2 size={14} />
           </button>
@@ -1209,6 +1503,7 @@ export function ServiceAreasPanel() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editZone, setEditZone] = useState(null)
+  const [selectedZone, setSelectedZone] = useState(null)
   const [mapView, setMapView] = useState(true)
   const [currentLocation, setCurrentLocation] = useState(null)
   const [pinnedLocation, setPinnedLocation] = useState(null)
@@ -1425,6 +1720,8 @@ export function ServiceAreasPanel() {
                 <ZoneCard
                   key={zone.id}
                   zone={zone}
+                  isSelected={selectedZone?.id === zone.id}
+                  onSelect={(z) => setSelectedZone(prev => prev?.id === z.id ? null : z)}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onToggleActive={handleToggleActive}
@@ -1512,7 +1809,36 @@ export function ServiceAreasPanel() {
                 url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
                 attribution="&copy; Google Maps"
               />
-              <ZoneOverlays zones={zones} />
+              <ZoneOverlays zones={zones} selectedZoneId={selectedZone?.id} />
+
+              {/* Auto-fly to selected zone geofence on card click */}
+              {selectedZone && (
+                <FlyTo
+                  lat={
+                    selectedZone.center_lat ||
+                    (selectedZone.polygon?.coordinates?.[0]
+                      ? selectedZone.polygon.coordinates[0].reduce((s, c) => s + c[1], 0) / selectedZone.polygon.coordinates[0].length
+                      : DEFAULT_INDIA_CENTER[0])
+                  }
+                  lng={
+                    selectedZone.center_lng ||
+                    (selectedZone.polygon?.coordinates?.[0]
+                      ? selectedZone.polygon.coordinates[0].reduce((s, c) => s + c[0], 0) / selectedZone.polygon.coordinates[0].length
+                      : DEFAULT_INDIA_CENTER[1])
+                  }
+                  zoom={
+                    selectedZone.zone_type === "polygon"
+                      ? 15
+                      : selectedZone.radius_meters >= 40000
+                        ? 9
+                        : selectedZone.radius_meters >= 20000
+                          ? 10
+                          : selectedZone.radius_meters >= 10000
+                            ? 12
+                            : 13
+                  }
+                />
+              )}
 
               {/* User Current GPS Location Marker */}
               {currentLocation && (

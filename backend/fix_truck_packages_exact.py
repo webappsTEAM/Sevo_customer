@@ -74,7 +74,7 @@ def fix():
                 "name": "Pickup 8ft (1250 kg)",
                 "base_price": Decimal("300.00"),
                 "duration": "20 mins",
-                "tag": "Heavy (above 750kg)",
+                "tag": "Coming Soon",
                 "description": "5.5ft x 8ft covered bed, ideal for sofas, double beds & commercial inventory up to 1250kg."
             },
             {
@@ -82,7 +82,7 @@ def fix():
                 "name": "1.7 ton (1700 kg)",
                 "base_price": Decimal("380.00"),
                 "duration": "30 mins",
-                "tag": "Heavy (above 750kg)",
+                "tag": "Coming Soon",
                 "description": "6.1ft x 9ft heavy Bolero bed for industrial machinery & large commercial loads up to 1700kg."
             },
         ]

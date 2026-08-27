@@ -38,6 +38,7 @@ import { BookingCancellationModal } from "../components/BookingCancellationModal
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
+import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js";
 import acServiceImg from "../../assets/ac service.png";
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png";
 import imgFoamWin from "../../assets/Foam & Power Jet AC Service — Window.png";
@@ -7717,6 +7718,8 @@ function QuickCommerceCartCheckout({
     setIsAddressScreenOpen(false)
   }
 
+  const vegTiming = getVegetableTimingInfo()
+
   const handleProceedToPay = async () => {
     if (cart.length === 0) return
     if (!user) {
@@ -7726,16 +7729,18 @@ function QuickCommerceCartCheckout({
     setIsSubmitting(true)
     setErrorMsg("")
     try {
-      const today = new Date().toISOString().split("T")[0]
+      const deliveryDate = vegTiming.deliveryDateStr
       const payload = {
         customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
         phone: user?.phone || "9876543210",
         service_category: "vegetables_quick_delivery",
-        issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
+        issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
         description: `Quick Commerce Vegetable Order
+Delivery Slot: 6:00 PM – 8:00 PM on ${deliveryDate} (${vegTiming.deliveryDay})
 Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address || "Hosur, Tamil Nadu",
-        preferred_date: today,
+        preferred_date: deliveryDate,
+        preferred_time_slot: "6:00 PM - 8:00 PM",
         total_amount: grandTotal,
         payment_method: "COD",
         cart_data: cart.map(c => ({
@@ -7760,13 +7765,75 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address,
         total: grandTotal,
         itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
-        eta: "15-20 minutes"
+        deliveryDayText: vegTiming.deliveryDay,
+        deliverySlot: vegTiming.deliverySlot,
+        deliveryNotice: vegTiming.afterTwelveNotice
+          ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
+          : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
       })
     } catch (err) {
       setErrorMsg(err?.message || "Failed to place order. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Order Confirmed View
+  if (orderConfirmedData) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-6 sm:py-12 px-4 font-sans">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 text-center space-y-5 animate-in fade-in">
+          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/30">
+            <Check className="w-9 h-9 stroke-[3]" />
+          </div>
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              Order Confirmed
+            </span>
+            <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2">
+              Fresh Vegetables Order Placed!
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Order ID: <span className="font-bold text-slate-800">{orderConfirmedData.requestId}</span>
+            </p>
+          </div>
+
+          {/* Delivery Schedule Info Box */}
+          <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-left space-y-2">
+            <div className="flex items-center gap-2 text-xs font-black text-emerald-900">
+              <Clock className="w-4 h-4 text-emerald-700" />
+              <span>Delivery Time: 6:00 PM – 8:00 PM ({orderConfirmedData.deliveryDayText})</span>
+            </div>
+            <p className="text-[11px] text-emerald-800 font-semibold leading-relaxed">
+              {orderConfirmedData.deliveryNotice}
+            </p>
+          </div>
+
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-left text-xs space-y-2">
+            <div className="flex justify-between text-slate-600 font-semibold">
+              <span>Items Total ({orderConfirmedData.itemsCount} items):</span>
+              <span className="font-bold text-slate-900">₹{orderConfirmedData.total}</span>
+            </div>
+            <div className="flex justify-between text-slate-600 font-semibold">
+              <span>Payment Mode:</span>
+              <span className="font-bold text-slate-900">Cash on Delivery (COD)</span>
+            </div>
+            <div className="pt-2 border-t border-slate-200 text-slate-500 text-[11px]">
+              <span>📍 Delivering to: </span>
+              <span className="font-semibold text-slate-700">{orderConfirmedData.address || "Hosur, Tamil Nadu"}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Address Selection View
@@ -7955,20 +8022,37 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
 
           <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
             {/* Delivery Time Banner */}
-            <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
-                <Clock className="w-5 h-5 stroke-[2.5]" />
+            {vegTiming.afterTwelveNotice ? (
+              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex items-start gap-3.5 shadow-3xs border-l-4 border-l-amber-500">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-3xs mt-0.5">
+                  <Clock className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                    Next-Day Delivery: Tomorrow (6:00 PM – 8:00 PM)
+                    <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">After 12 PM Notice</span>
+                  </h3>
+                  <p className="text-xs text-amber-900 font-semibold mt-1 leading-relaxed">
+                    Same-day booking is open 6:00 AM – 12:00 PM. Booking is not available for same-day delivery right now — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
-                  Priority Express Delivery
-                  <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
-                </h3>
-                <p className="text-xs text-slate-600 font-medium mt-0.5">
-                  Arriving in <span className="font-bold text-emerald-800">15 minutes</span> • {cart.reduce((a, b) => a + (b.quantity || 1), 0)} fresh items
-                </p>
+            ) : (
+              <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
+                  <Clock className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
+                    Evening Delivery Today (6:00 PM – 8:00 PM)
+                    <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">
+                    Morning order window: 6:00 AM – 12:00 PM • Evening delivery: 6:00 PM – 8:00 PM
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Free Delivery Incentive Card */}
             {itemsTotal > 0 && (
@@ -8025,7 +8109,9 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                     <h4 className="text-xs sm:text-sm font-bold text-slate-805 line-clamp-1 leading-snug">
                       {item.displayName || item.name}
                     </h4>
-                    <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
+                    <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                      {(item.unit && !item.unit.includes("MINS")) ? item.unit : "500 g"}
+                    </p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-black text-slate-900">₹{item.price}</span>
                       {item.mrp && (
@@ -8243,7 +8329,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
               <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
             <div className="flex items-center gap-1.5 font-bold text-white transition-colors">
-              <span>{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <span>{isSubmitting ? "Placing Order..." : `Proceed to Pay • ${vegTiming.deliveryDay} (6-8 PM)`}</span>
               <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </button>

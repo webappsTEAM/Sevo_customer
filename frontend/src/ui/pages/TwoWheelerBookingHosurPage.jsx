@@ -699,9 +699,6 @@ export function TwoWheelerBookingHosurPage() {
     } else if (norm.includes("yr") || norm.includes("year")) {
       const num = parseInt(norm) || 0
       durationMs = num * 365 * 24 * 60 * 60 * 1000
-    } else if (norm.includes("min")) {
-      const num = parseInt(norm) || 0
-      durationMs = num * 60 * 1000
     } else {
       return true
     }
@@ -1475,14 +1472,21 @@ export function TwoWheelerBookingHosurPage() {
                 {vehicle.badge && (
                   <span
                     className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
-                      vehicle.badge.toLowerCase().includes("popular")
+                      vehicle.badge.toLowerCase().includes("coming")
+                        ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider px-3"
+                        : vehicle.badge.toLowerCase().includes("popular")
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : vehicle.badge.toLowerCase().includes("rare")
                         ? "bg-slate-100 text-slate-700 border-slate-200"
+                        : vehicle.badge.toLowerCase().includes("best")
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        : vehicle.badge.toLowerCase().includes("trend")
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
                         : "bg-blue-50 text-blue-700 border-blue-200"
                     }`}
                   >
-                    ★ {vehicle.badge}
+                    {vehicle.badge.toLowerCase().includes("coming") ? "" : "★ "}
+                    {vehicle.badge}
                   </span>
                 )}
 
