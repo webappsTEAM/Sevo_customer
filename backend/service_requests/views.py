@@ -411,8 +411,30 @@ class BookingCreateView(APIView):
                         final_amount=final_tot
                     )
 
-        # Dispatch booking notification to workforce management system
-        WorkforceIntegrationService.dispatch_job(sr.id)
+        # Dispatch booking notification to workforce management system.
+        #
+        # Fixes X-02: this used to call dispatch_job() synchronously and
+        # unwrap nothing from the result. WorkforceIntegrationService.dispatch_job()
+        # POSTs to a vendor endpoint (/jobs/dispatch/) that does not exist in
+        # workforce_api/urls.py, so it always fails after paying its full
+        # `timeout=5` cost (or whatever the network needs to fail) on every
+        # single booking creation request, before ever reaching the customer's
+        # response — and the vendor app dispatches independently anyway, via
+        # its own dispatch_pending_workforce_jobs polling loop reading this
+        # same shared table. Firing it in a background thread means a booking
+        # confirms immediately regardless of whether that integration call
+        # ever succeeds; if/when a real dispatch-webhook endpoint exists on
+        # the vendor side, this still delivers it, just without blocking the
+        # request that doesn't need to wait on it.
+        try:
+            import threading
+            threading.Thread(
+                target=WorkforceIntegrationService.dispatch_job,
+                args=(sr.id,),
+                daemon=True,
+            ).start()
+        except Exception as dispatch_err:
+            logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
 
         if is_admin_booking_on_behalf:
             try:
