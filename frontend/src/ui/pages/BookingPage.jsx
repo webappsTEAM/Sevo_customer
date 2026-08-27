@@ -20560,7 +20560,7 @@ const KITCHEN_SUB_TABS = [
   },
   {
     id: "appliance",
-    name: "Single Appliance Cleaning",
+    name: "single appliance cleaning",
     image: "/mockups/appliance_cleaning_hero.png",
   },
   {
