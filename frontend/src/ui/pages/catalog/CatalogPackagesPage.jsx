@@ -3244,7 +3244,7 @@ export function CatalogPackagesPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs sm:text-sm font-bold text-slate-900">
-                          {svcItem.service.slug === "kitchen-cleaning" ? "Full Kitchen packages" : svcItem.displayName}
+                          {svcItem.service.slug === "kitchen-cleaning" && svcItem.service.virtualSlug === "packages" ? "Full Kitchen packages" : svcItem.displayName}
                         </span>
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
