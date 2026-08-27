@@ -241,6 +241,23 @@ class BookingCreateView(APIView):
     throttle_scope    = "booking_create"
 
     def post(self, request):
+        # Fixes EC-03 (partial): booking creation has no idempotency
+        # protection, so a double-tap submit or a client retry after a
+        # timed-out-but-actually-succeeded request creates a second, separate
+        # booking. A client-supplied Idempotency-Key header lets us return the
+        # original response instead of creating a duplicate. This is opt-in --
+        # if the frontend doesn't send the header, behaviour is byte-for-byte
+        # unchanged from before, since we can't safely infer "duplicate" from
+        # payload contents alone without risking two genuinely different
+        # bookings from the same customer being wrongly deduplicated.
+        idem_key = (request.headers.get("Idempotency-Key") or "").strip()
+        idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
+        if idem_cache_key:
+            from django.core.cache import cache
+            cached = cache.get(idem_cache_key)
+            if cached is not None:
+                return Response(cached["body"], status=cached["status"])
+
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -514,7 +531,7 @@ class BookingCreateView(APIView):
             except Exception:
                 pass
 
-        return _success(
+        response = _success(
             data={
                 "request_id": sr.request_id,
                 "id": sr.id,
@@ -529,6 +546,9 @@ class BookingCreateView(APIView):
             message="Your service request has been submitted successfully.",
             status_code=201,
         )
+        if idem_cache_key:
+            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code}, timeout=600)
+        return response
 
 
 class CustomerMyBookingsView(APIView):
