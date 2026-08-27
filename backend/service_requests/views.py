@@ -395,6 +395,7 @@ class BookingCreateView(APIView):
 
         customer_user = None
         is_admin_booking_on_behalf = False
+        _new_account_created = False  # Fixes HS-A-02 (partial)
 
         if request.user and request.user.is_authenticated:
             if request.user.role == getattr(User.Role, "CUSTOMER", "customer"):
@@ -436,6 +437,7 @@ class BookingCreateView(APIView):
                         last_name=last_name,
                         role=getattr(User.Role, 'CUSTOMER', 'CUSTOMER')
                     )
+                    _new_account_created = True
                 except Exception:
                     if phone_clean:
                         customer_user = User.objects.filter(phone=phone_clean).first()
@@ -525,6 +527,23 @@ class BookingCreateView(APIView):
             ).start()
         except Exception as dispatch_err:
             logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
+
+        # Fixes HS-A-02 (partial): tell the customer an account was
+        # created for them by this booking, since User.objects.create()
+        # above did that silently. Background thread, same reasoning as
+        # the dispatch call above -- this must never delay the booking
+        # response.
+        if _new_account_created:
+            try:
+                import threading
+                from .notifications import notify_account_created
+                threading.Thread(
+                    target=notify_account_created,
+                    args=(customer_user, sr),
+                    daemon=True,
+                ).start()
+            except Exception as notify_err:
+                logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
         if is_admin_booking_on_behalf:
             try:

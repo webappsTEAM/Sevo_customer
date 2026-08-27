@@ -259,6 +259,61 @@ def send_feedback_link(service_request, feedback_token: str) -> None:
         )
 
 
+def notify_account_created(customer_user, service_request) -> None:
+    """
+    Fixes HS-A-02 (partial): booking as a guest silently creates a
+    login-capable account (BookingCreateView.post(), User.objects.create()
+    with no password) with no communication to the customer that this
+    happened at all -- they find out only if they later try to log in and
+    it works. This doesn't change that account-creation behaviour (a
+    genuine 'ask before creating an account' flow is a bigger frontend/UX
+    change), but it at least tells them an account now exists and how to
+    use it, right after the booking that created it.
+    """
+    recipient = getattr(customer_user, "email", "") or service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for new account on booking %s -- account-created notice skipped.", service_request.request_id)
+        return
+
+    subject = "An account was created for you"
+    details = {
+        "Request ID": service_request.request_id,
+        "Phone"     : getattr(customer_user, "phone", "") or "N/A",
+        "Email"     : recipient,
+    }
+    html_body = _render_html_template(
+        title="Account Created",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=(
+            "Since this was your first booking with us, we've created an account so you "
+            "can track this and future bookings in one place. There's no password to "
+            "remember -- log in anytime using a one-time code sent to this phone number "
+            "or email."
+        ),
+        details_dict=details,
+        footer_note="If you'd prefer not to have an account, contact support and we'll remove it."
+    )
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=(
+                f"An account was created for you when you booked {service_request.request_id}. "
+                f"Log in anytime with a one-time code sent to your phone or email -- no password needed."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Account-created notice sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (account created) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send account-created email for %s: %s", service_request.request_id, exc)
+
+
 def send_booking_confirmation(service_request) -> None:
     """Send a booking confirmation email to the customer."""
     category_name = _get_category_display_name(service_request)
