@@ -339,7 +339,7 @@ def notify_reschedule_created(reschedule_request) -> None:
 
     subject = f"[CalTrack] Reschedule Request — {booking.request_id}"
     try:
-        send_mail(
+        _sent = send_mail(
             subject,
             (
                 f"A reschedule request has been submitted.\n\n"
@@ -354,7 +354,13 @@ def notify_reschedule_created(reschedule_request) -> None:
             [admin_email],
             fail_silently=True,
         )
-        logger.info("[Reschedule] Notification sent to %s for booking %s", admin_email, booking.request_id)
+        # Fixes X-07/HS-D-04/EC-05: fail_silently=True means send_mail never
+        # raises on delivery failure, so the except block below never fired
+        # for real send failures — only its return value tells us. Check it.
+        if _sent:
+            logger.info("[Reschedule] Notification sent to %s for booking %s", admin_email, booking.request_id)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered to %s for booking %s", admin_email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify admin: %s", exc)
 
@@ -382,8 +388,11 @@ def notify_reschedule_decision(reschedule_request) -> None:
         )
 
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
-        logger.info("[Reschedule] Decision notification sent to %s", customer_email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Decision notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (decision notification) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send decision notification: %s", exc)
 
@@ -417,9 +426,12 @@ def notify_employee_reschedule_request(reschedule_request) -> None:
         footer_note="Please accept or decline this reschedule in your employee app.",
     )
     try:
-        send_mail(subject, f"Reschedule confirmation needed for booking {booking.request_id}.",
+        _sent = send_mail(subject, f"Reschedule confirmation needed for booking {booking.request_id}.",
                   settings.DEFAULT_FROM_EMAIL, [emp.user.email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Employee notification sent to %s", emp.user.email)
+        if _sent:
+            logger.info("[Reschedule] Employee notification sent to %s", emp.user.email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (employee notification) to %s", emp.user.email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify employee: %s", exc)
 
@@ -451,8 +463,11 @@ def notify_admin_employee_rejection(reschedule_request) -> None:
         f"Please log in to the admin panel to reassign another technician."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
-        logger.info("[Reschedule] Admin notified of employee rejection for %s", booking.request_id)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Admin notified of employee rejection for %s", booking.request_id)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (employee rejection) to %s for booking %s", admin.email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify admin of rejection: %s", exc)
 
@@ -479,9 +494,12 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
         footer_note="Please log in to your account to accept or decline this suggestion.",
     )
     try:
-        send_mail(subject, "Admin has suggested a new schedule slot for your booking.",
+        _sent = send_mail(subject, "Admin has suggested a new schedule slot for your booking.",
                   settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Slot suggestion notification sent to %s", customer_email)
+        if _sent:
+            logger.info("[Reschedule] Slot suggestion notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (slot suggestion) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify customer of slot suggestion: %s", exc)
 
@@ -509,9 +527,12 @@ def notify_customer_rescheduled(reschedule_request) -> None:
         footer_note="We look forward to serving you. You will receive a reminder closer to the appointment.",
     )
     try:
-        send_mail(subject, f"Your booking {booking.request_id} has been rescheduled.",
+        _sent = send_mail(subject, f"Your booking {booking.request_id} has been rescheduled.",
                   settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Customer rescheduled notification sent to %s", customer_email)
+        if _sent:
+            logger.info("[Reschedule] Customer rescheduled notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (rescheduled) to %s for booking %s", customer_email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send rescheduled notification: %s", exc)
 
@@ -531,8 +552,11 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
         f"Please contact support if you need further assistance."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
-        logger.info("[Reschedule] Rejection notification sent to %s", customer_email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Rejection notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (rejection) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send rejection notification: %s", exc)
 
@@ -560,8 +584,11 @@ def notify_refund_status_change(refund_request) -> None:
     body = status_messages.get(status, f"Your refund request status is now: {status}.")
 
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email], fail_silently=True)
-        logger.info("[Refund] Status notification sent to %s — %s", customer.email, status)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email], fail_silently=True)
+        if _sent:
+            logger.info("[Refund] Status notification sent to %s — %s", customer.email, status)
+        else:
+            logger.error("[Refund] send_mail reported 0 messages delivered to %s — %s", customer.email, status)
     except Exception as exc:
         logger.error("[Refund] Failed to send status notification: %s", exc)
 
@@ -597,8 +624,11 @@ def notify_complaint_created(complaint) -> None:
         f"Please review in the admin panel."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
-        logger.info("[Complaint] Created notification sent to %s", admin.email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
+        if _sent:
+            logger.info("[Complaint] Created notification sent to %s", admin.email)
+        else:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (created) to %s", admin.email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send created notification: %s", exc)
 
@@ -617,7 +647,9 @@ def notify_complaint_status_change(complaint) -> None:
         f"Resolution Notes: {complaint.resolution_notes or 'N/A'}"
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if not _sent:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (status change) to %s", customer_email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send status change notification: %s", exc)
 
@@ -638,13 +670,15 @@ def notify_complaint_response(complaint, response) -> None:
 
     for email in recipients:
         try:
-            send_mail(
+            _sent = send_mail(
                 f"[CalTrack] New Response on Your Complaint",
                 f"A new response has been added to your complaint.\n\n{response.message}",
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
                 fail_silently=True,
             )
+            if not _sent:
+                logger.error("[Complaint] send_mail reported 0 messages delivered (response) to %s", email)
         except Exception as exc:
             logger.error("[Complaint] Failed to send response notification: %s", exc)
 
@@ -659,7 +693,7 @@ def notify_complaint_assigned(complaint) -> None:
 
     customer = complaint.raised_by
     try:
-        send_mail(
+        _sent = send_mail(
             "[CalTrack] Complaint Assigned To You",
             (
                 f"A complaint has been assigned to you.\n\n"
@@ -672,7 +706,10 @@ def notify_complaint_assigned(complaint) -> None:
             [emp_email],
             fail_silently=True,
         )
-        logger.info("[Complaint] Assignment notification sent to %s", emp_email)
+        if _sent:
+            logger.info("[Complaint] Assignment notification sent to %s", emp_email)
+        else:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (assignment) to %s", emp_email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send assignment notification: %s", exc)
 

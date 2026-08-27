@@ -47,7 +47,7 @@ from .serializers import (
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
-from .services.logistics_pricing import resolve_logistics_fare
+from .services.logistics_pricing import resolve_logistics_fare, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
 from .services.address_service import AddressService
 
 
@@ -283,12 +283,57 @@ class BookingCreateView(APIView):
             )
         # ── END ZONE GATE ─────────────────────────────────────────────────────
 
-        corrected_fare = resolve_logistics_fare(
-            service_category=serializer.validated_data.get("service_category", ""),
-            logistics_tier=serializer.validated_data.get("logistics_tier"),
-            logistics_lane=serializer.validated_data.get("logistics_lane"),
-            submitted_amount=serializer.validated_data.get("total_amount", 0),
-        )
+        try:
+            corrected_fare = resolve_logistics_fare(
+                service_category=serializer.validated_data.get("service_category", ""),
+                logistics_tier=serializer.validated_data.get("logistics_tier"),
+                logistics_lane=serializer.validated_data.get("logistics_lane"),
+                submitted_amount=serializer.validated_data.get("total_amount", 0),
+            )
+        except UnresolvedLogisticsFareError:
+            # Fixes GT-B-01: a logistics booking with neither a resolvable
+            # Lane nor ServiceTier has no server-verifiable price, so reject
+            # it with a clear message instead of recording a client-supplied
+            # amount unchecked.
+            return _error(
+                "We couldn't verify a fare for this route/tier. Please pick a valid "
+                "route or service tier and try again.",
+                400,
+            )
+
+        # Fixes HS-B-01 (partial): for non-logistics (home-services) bookings,
+        # `corrected_fare` above is just the client-submitted total_amount —
+        # resolve_logistics_fare() only verifies logistics categories. A full
+        # recompute against Package/AddOn catalog prices isn't possible here
+        # because `cart_data` items don't carry a package_id/addon_id back to
+        # the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md). As a bounded,
+        # safe-to-ship mitigation, we at least check that the submitted total
+        # is internally consistent with the submitted cart line items — this
+        # catches the common tampering/bug pattern of a total_amount that
+        # doesn't match what the cart itself lists, without needing catalog
+        # resolution.
+        _cart_for_check = serializer.validated_data.get("cart_data") or []
+        if (
+            serializer.validated_data.get("service_category", "") not in LOGISTICS_CATEGORIES
+            and isinstance(_cart_for_check, list)
+            and len(_cart_for_check) > 0
+        ):
+            try:
+                _cart_total = sum(
+                    float(item.get("price", 0)) * int(item.get("quantity", 1))
+                    for item in _cart_for_check
+                    if isinstance(item, dict)
+                )
+            except (TypeError, ValueError):
+                _cart_total = None
+            if _cart_total is not None and _cart_total > 0:
+                _tolerance = max(5.0, _cart_total * 0.01)
+                if abs(float(corrected_fare) - _cart_total) > _tolerance:
+                    return _error(
+                        "The submitted amount doesn't match the selected services. "
+                        "Please refresh and try booking again.",
+                        400,
+                    )
 
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":

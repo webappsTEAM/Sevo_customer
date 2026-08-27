@@ -190,6 +190,25 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Value must be valid JSON.")
         return value
 
+    def validate_total_amount(self, value):
+        # Fixes HS-B-01 (partial): reject obviously-tampered amounts outright.
+        # A full server-side recompute against Package/AddOn catalog prices
+        # isn't possible here because `cart_data` items carry only
+        # {name, price, quantity} with no package_id/addon_id back-reference
+        # to the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md for the full
+        # writeup and the schema change that would close this properly).
+        # This at least stops the crude cases: negative/zero submitted
+        # amounts and unreasonably large ones.
+        try:
+            amt = float(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Enter a valid amount.")
+        if amt <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
+        if amt > 1000000:
+            raise serializers.ValidationError("Amount is outside the allowed range.")
+        return value
+
     def validate_preferred_date(self, value):
         from django.utils.timezone import localdate
         if value < localdate():
