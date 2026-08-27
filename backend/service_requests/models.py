@@ -7,7 +7,7 @@ FKs reference the existing Employee and User models — no duplication.
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 
 
@@ -335,8 +335,10 @@ class ServiceRequest(models.Model):
         if not is_new:
             old_status = ServiceRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first() or ""
 
+        _request_id_was_generated = False
         if not self.request_id:
             self.request_id = _generate_request_id(self.service_category)
+            _request_id_was_generated = True
         if self.customer and getattr(self.customer, "customer_id", None):
             self.customer_code = self.customer.customer_id
         elif not self.customer_code and (self.phone or self.email):
@@ -361,7 +363,26 @@ class ServiceRequest(models.Model):
         if not self.tracking_token:
             import uuid
             self.tracking_token = uuid.uuid4()
-        super().save(*args, **kwargs)
+
+        # Fixes EC-04: _generate_request_id() reads the current max id and
+        # loops checking existence, but that check-then-insert has a gap --
+        # two concurrent bookings can both pass the uniqueness check before
+        # either commits, and the second INSERT then fails with an
+        # IntegrityError on request_id's unique constraint (a 500 for that
+        # customer, not data corruption, but a real booking-creation failure
+        # under concurrent load). Retry with a freshly generated id a bounded
+        # number of times inside a savepoint, so one collision doesn't also
+        # abort whatever outer transaction the caller may be in.
+        _max_attempts = 5
+        for _attempt in range(1, _max_attempts + 1):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if not _request_id_was_generated or _attempt == _max_attempts:
+                    raise
+                self.request_id = _generate_request_id(self.service_category)
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
