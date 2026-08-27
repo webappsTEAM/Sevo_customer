@@ -261,8 +261,20 @@ class BookingCreateView(APIView):
         _lat = serializer.validated_data.get("latitude")
         _lng = serializer.validated_data.get("longitude")
         if _lat is None or _lng is None:
-            _lat = 12.7409
-            _lng = 77.8253
+            # Fixes HS-B-04: this used to silently substitute a hardcoded
+            # Bangalore coordinate here ONLY for the zone-eligibility check
+            # below, while the ServiceRequest itself was still saved with
+            # latitude/longitude = None (serializer.save() uses the real
+            # submitted values, not this fallback). That let a booking with
+            # no coordinates pass the zone check and get created, then sit
+            # with no location for any distance-based technician dispatch to
+            # work from -- exactly the "created, then never dispatched" gap.
+            # Reject it up front instead.
+            return _error(
+                "We couldn't determine your location. Please select your address "
+                "on the map and try again.",
+                400,
+            )
         _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
 
         zone_result = check_booking_eligibility(
