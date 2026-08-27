@@ -17,6 +17,7 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
+import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
@@ -1916,6 +1917,7 @@ export function LandingPage() {
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [showCartDrawer, setShowCartDrawer] = useState(false)
   const [showVegCartDrawer, setShowVegCartDrawer] = useState(false)
+  const vegTiming = getVegetableTimingInfo()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
@@ -4240,7 +4242,13 @@ export function LandingPage() {
                       </button>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                          <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                          {selectedFoodSubModule?.id === "vegetables" ? (
+                            <span>{vegTiming.headerBadge}</span>
+                          ) : (
+                            <>
+                              <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                            </>
+                          )}
                         </span>
                         {/* Top Right Quick Commerce Cart Button matching Image 3 */}
                         {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 && (
@@ -4503,6 +4511,24 @@ export function LandingPage() {
                         </div>
                       ) : (
                         <>
+                          {/* Booking Notice Banner for Fresh Vegetables (After 12 PM / Outside 6 AM - 12 PM Window) */}
+                          {selectedFoodSubModule?.id === "vegetables" && vegTiming.afterTwelveNotice && (
+                            <div className="mb-4 p-3.5 sm:p-4 bg-amber-50 border border-amber-300/80 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
+                              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                                <Clock className="w-4 h-4 text-amber-700" />
+                              </div>
+                              <div className="flex-1 text-xs">
+                                <div className="font-extrabold text-amber-900 text-xs sm:text-sm mb-0.5 flex items-center gap-2">
+                                  <span>Booking Notice (After 12:00 PM)</span>
+                                  <span className="text-[10px] font-black bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full uppercase">Next-Day Delivery</span>
+                                </div>
+                                <p className="font-semibold text-amber-900 leading-relaxed">
+                                  Same-day vegetable booking is open from <strong>6:00 AM to 12:00 PM</strong>. Same-day booking is not available at the moment — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Products Grid matching Quick Commerce Layout */}
                           {(selectedFoodSubModule?.items || []).filter((item) => {
                             const q = vegSearchQuery.toLowerCase()
@@ -4572,9 +4598,13 @@ export function LandingPage() {
                                               }
                                             }}
                                           />
-                                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
                                             <Clock className="w-2.5 h-2.5 text-emerald-600" />
-                                            <span>{item.delivery || "8 MINS"}</span>
+                                            <span>
+                                              {selectedFoodSubModule.id === "vegetables"
+                                                ? vegTiming.cardDeliveryBadge
+                                                : (item.delivery || "8 MINS")}
+                                            </span>
                                           </div>
                                           {item.discount && (
                                             <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -4834,9 +4864,18 @@ export function LandingPage() {
                               return sum + matchedPrice * qty
                             }, 0)}
                           </span>
+                          <span className="text-[11px] font-semibold text-emerald-800 hidden sm:inline">
+                            • {vegTiming.deliverySlot}
+                          </span>
                         </div>
                       ) : (
-                        <span>Select vegetables above for instant Hosur door delivery</span>
+                        <span>
+                          {selectedFoodSubModule.id === "vegetables"
+                            ? (vegTiming.afterTwelveNotice
+                              ? "⚠️ Orders placed now will be delivered Tomorrow (6:00 PM – 8:00 PM)"
+                              : "🥦 Order Window: 6:00 AM – 12:00 PM • Delivery Today: 6:00 PM – 8:00 PM")
+                            : "Select vegetables above for instant Hosur door delivery"}
+                        </span>
                       )}
                     </div>
 
@@ -4920,13 +4959,15 @@ export function LandingPage() {
                                 id: "vegetables_quick_delivery",
                                 name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                                 isQuickCommerce: true,
-                                deliveryTime: "15-25 mins",
+                                deliveryTime: vegTiming.deliverySlot,
                                 foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                                vegTiming: vegTiming,
                               },
-                              cart: itemsList,
+                              cart: itemsList.map(it => ({ ...it, deliveryTime: vegTiming.deliverySlot })),
                               isQuickCommerce: true,
                               foodCart: foodCart,
                               foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                              vegTiming: vegTiming,
                             }
                           })
                         }}
@@ -4935,7 +4976,11 @@ export function LandingPage() {
                             : "bg-slate-200 text-slate-400 cursor-not-allowed"
                           }`}
                       >
-                        <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                        <span>
+                          {selectedFoodSubModule.id === "vegetables"
+                            ? vegTiming.cartButtonText
+                            : `Confirm & Schedule ${selectedFoodSubModule.name} Delivery`}
+                        </span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -5862,7 +5907,13 @@ export function LandingPage() {
                     </button>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                        <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                        {selectedFoodSubModule?.id === "vegetables" ? (
+                          <span>{vegTiming.headerBadge}</span>
+                        ) : (
+                          <>
+                            <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -6085,6 +6136,24 @@ export function LandingPage() {
                       </div>
                     ) : (
                       <>
+                        {/* Booking Notice Banner for Fresh Vegetables (After 12 PM / Outside 6 AM - 12 PM Window) */}
+                        {selectedFoodSubModule?.id === "vegetables" && vegTiming.afterTwelveNotice && (
+                          <div className="mb-4 p-3.5 sm:p-4 bg-amber-50 border border-amber-300/80 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
+                            <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                              <Clock className="w-4 h-4 text-amber-700" />
+                            </div>
+                            <div className="flex-1 text-xs">
+                              <div className="font-extrabold text-amber-900 text-xs sm:text-sm mb-0.5 flex items-center gap-2">
+                                <span>Booking Notice (After 12:00 PM)</span>
+                                <span className="text-[10px] font-black bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full uppercase">Next-Day Delivery</span>
+                              </div>
+                              <p className="font-semibold text-amber-900 leading-relaxed">
+                                Same-day vegetable booking is open from <strong>6:00 AM to 12:00 PM</strong>. Same-day booking is not available at the moment — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Products Grid matching Quick Commerce Layout */}
                         {(selectedFoodSubModule?.items || []).filter((item) => {
                           const q = vegSearchQuery.toLowerCase()
@@ -6154,9 +6223,13 @@ export function LandingPage() {
                                             }
                                           }}
                                         />
-                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
                                           <Clock className="w-2.5 h-2.5 text-emerald-600" />
-                                          <span>{item.delivery || "8 MINS"}</span>
+                                          <span>
+                                            {selectedFoodSubModule.id === "vegetables"
+                                              ? vegTiming.cardDeliveryBadge
+                                              : (item.delivery || "8 MINS")}
+                                          </span>
                                         </div>
                                         {item.discount && (
                                           <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -6416,9 +6489,18 @@ export function LandingPage() {
                             return sum + matchedPrice * qty
                           }, 0)}
                         </span>
+                        <span className="text-[11px] font-semibold text-emerald-800 hidden sm:inline">
+                          • {vegTiming.deliverySlot}
+                        </span>
                       </div>
                     ) : (
-                      <span>Select vegetables above for instant Hosur door delivery</span>
+                      <span>
+                        {selectedFoodSubModule.id === "vegetables"
+                          ? (vegTiming.afterTwelveNotice
+                            ? "⚠️ Orders placed now will be delivered Tomorrow (6:00 PM – 8:00 PM)"
+                            : "🥦 Order Window: 6:00 AM – 12:00 PM • Delivery Today: 6:00 PM – 8:00 PM")
+                          : "Select vegetables above for instant Hosur door delivery"}
+                      </span>
                     )}
                   </div>
 
@@ -6502,13 +6584,15 @@ export function LandingPage() {
                               id: "vegetables_quick_delivery",
                               name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                               isQuickCommerce: true,
-                              deliveryTime: "15-25 mins",
+                              deliveryTime: vegTiming.deliverySlot,
                               foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                              vegTiming: vegTiming,
                             },
-                            cart: itemsList,
+                            cart: itemsList.map(it => ({ ...it, deliveryTime: vegTiming.deliverySlot })),
                             isQuickCommerce: true,
                             foodCart: foodCart,
                             foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                            vegTiming: vegTiming,
                           }
                         })
                       }}
@@ -6517,7 +6601,11 @@ export function LandingPage() {
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
-                      <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                      <span>
+                        {selectedFoodSubModule.id === "vegetables"
+                          ? vegTiming.cartButtonText
+                          : `Confirm & Schedule ${selectedFoodSubModule.name} Delivery`}
+                      </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>

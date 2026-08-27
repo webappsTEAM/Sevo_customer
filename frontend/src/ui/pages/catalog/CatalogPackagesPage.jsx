@@ -3380,16 +3380,21 @@ export function CatalogPackagesPage() {
                                 {pkg.tag || pkg.popular ? (
                                   <span
                                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
-                                      (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
+                                      (pkg.tag || "").toLowerCase().includes("coming")
+                                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                                        : (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
                                         ? "bg-amber-50 text-amber-700 border-amber-200/90"
                                         : (pkg.tag || "").toLowerCase().includes("rare")
                                         ? "bg-slate-100 text-slate-700 border-slate-200"
                                         : (pkg.tag || "").toLowerCase().includes("best")
                                         ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                        : (pkg.tag || "").toLowerCase().includes("trend")
+                                        ? "bg-rose-50 text-rose-700 border-rose-200"
                                         : "bg-blue-50 text-blue-700 border-blue-200"
                                     }`}
                                   >
-                                    ★ {pkg.tag || "Popular"}
+                                    {(pkg.tag || "").toLowerCase().includes("coming") ? "" : "★ "}
+                                    {pkg.tag || "Popular"}
                                   </span>
                                 ) : (
                                   <span className="text-slate-300 text-xs font-medium">—</span>
@@ -5413,6 +5418,7 @@ export function CatalogPackagesPage() {
               {/* Quick Select Pills */}
               <div className="flex flex-wrap gap-2 pt-1">
                 {[
+                  { label: "⏳ Coming Soon", val: "Coming Soon", tone: "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200" },
                   { label: "★ Popular", val: "Popular", tone: "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100" },
                   { label: "📦 Rarely Used", val: "Rarely Used", tone: "bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200" },
                   { label: "⚡ Best Seller", val: "Best Seller", tone: "bg-indigo-50 text-indigo-800 border-indigo-300 hover:bg-indigo-100" },
