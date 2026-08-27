@@ -87,6 +87,8 @@ class WorkforceWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way
+
         if not _verify_webhook_signature(request):
             logger.warning("Unauthorized workforce webhook attempt (invalid signature/secret)")
             return Response(
@@ -265,6 +267,9 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_accepted"))
+                    # Fixes HS-D-06 (partial): customer previously heard nothing
+                    # between booking confirmation and job completion.
+                    transaction.on_commit(lambda: self._notify(notify_technician_assigned, sr))
 
                 # ── 3. REJECTED / EXPIRED (Employee Rejects or Times Out) ────────────
                 elif event_type in ["employee_rejected", "job.rejected", "assignment_expired", "job.expired"]:
@@ -304,6 +309,8 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_on_the_way"))
+                    # Fixes HS-D-06 (partial)
+                    transaction.on_commit(lambda: self._notify(notify_technician_on_the_way, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
                 elif event_type in ["employee_arrived", "job.arrived"]:
@@ -470,6 +477,16 @@ class WorkforceWebhookView(APIView):
             broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
+
+    @classmethod
+    def _notify(cls, notify_fn, sr):
+        # Small wrapper so a notification failure (bad email config, etc.)
+        # can never affect the webhook's own success response -- same
+        # fire-and-forget-but-visible pattern as _broadcast_event above.
+        try:
+            notify_fn(sr)
+        except Exception as n_err:
+            logger.warning(f"Error sending {getattr(notify_fn, '__name__', notify_fn)} notification: {n_err}")
 
 
 class WorkforceSlotsView(APIView):

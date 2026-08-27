@@ -310,6 +310,97 @@ def send_booking_confirmation(service_request) -> None:
         logger.error("[ServiceRequests] Failed to send booking confirmation email for %s: %s", service_request.request_id, exc)
 
 
+def notify_technician_assigned(service_request, technician_name="") -> None:
+    """
+    Fixes HS-D-06 (partial): the job lifecycle had notifications for
+    'booking confirmed' and 'completed', with nothing in between --
+    a customer got no email when a technician was actually assigned to
+    their job. Called from WorkforceWebhookView on employee_accepted.
+    """
+    category_name = _get_category_display_name(service_request)
+    tech_display = technician_name or service_request.technician_name or "Your assigned professional"
+    subject = f"A technician has been assigned [{service_request.request_id}]"
+
+    details = {
+        "Request ID"      : service_request.request_id,
+        "Service Category": category_name,
+        "Technician"      : tech_display,
+        "Preferred Date"  : str(service_request.preferred_date),
+    }
+
+    html_body = _render_html_template(
+        title="Technician Assigned",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=f"{tech_display} has been assigned to your booking and will be in touch shortly.",
+        details_dict=details,
+        footer_note="We'll notify you again once they're on the way."
+    )
+
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- technician-assigned notification skipped.", service_request.request_id)
+        return
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"{tech_display} has been assigned to your booking {service_request.request_id}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Technician-assigned notification sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (technician assigned) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send technician-assigned email for %s: %s", service_request.request_id, exc)
+
+
+def notify_technician_on_the_way(service_request, technician_name="") -> None:
+    """Fixes HS-D-06 (partial): email when the technician starts heading over."""
+    category_name = _get_category_display_name(service_request)
+    tech_display = technician_name or service_request.technician_name or "Your assigned professional"
+    subject = f"Your technician is on the way [{service_request.request_id}]"
+
+    details = {
+        "Request ID"      : service_request.request_id,
+        "Service Category": category_name,
+        "Technician"      : tech_display,
+    }
+
+    html_body = _render_html_template(
+        title="Technician On The Way",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=f"{tech_display} is now on the way to your location.",
+        details_dict=details,
+        cta_url=None,
+        footer_note="You can track their live location from your booking's tracking link."
+    )
+
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- on-the-way notification skipped.", service_request.request_id)
+        return
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"{tech_display} is on the way for your booking {service_request.request_id}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] On-the-way notification sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (on the way) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send on-the-way email for %s: %s", service_request.request_id, exc)
+
+
 def send_work_completion_email(service_request) -> None:
     """DEPRECATED no-op. Use send_completion_and_feedback_email() instead."""
     pass
