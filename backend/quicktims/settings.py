@@ -117,6 +117,10 @@ elif USE_POSTGRES:
         except Exception:
             _db_host = "3.111.105.85"
 
+    _db_port = os.getenv("DB_PORT", "")
+    if not _db_port:
+        _db_port = "6543" if "pooler.supabase.com" in _db_host else "5432"
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -124,7 +128,7 @@ elif USE_POSTGRES:
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": _db_host,
-            "PORT": os.getenv("DB_PORT", "5432"),
+            "PORT": _db_port,
             "OPTIONS": _db_options,
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
             "CONN_HEALTH_CHECKS": True,

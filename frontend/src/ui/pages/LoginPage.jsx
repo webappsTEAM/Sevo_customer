@@ -186,8 +186,13 @@ export function LoginPage() {
   const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
   const postLoginRoute = (usr) => {
     const role = usr?.role
+    if (usr?.isSuperAdmin || usr?.is_super_admin || role === "super_admin" || role === "superadmin") {
+      return "/platform/dashboard"
+    }
     if (role === "customer") return routes.landing
     if (role === "support" || usr?.isCareAgent) return "/support/tickets"
+    if (role === "catalog") return routes.catalog
+    if (role === "finance") return "/customers/payments"
     const isAdmin = role === "admin" || role === "manager"
     if (isAdmin) {
       const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true"

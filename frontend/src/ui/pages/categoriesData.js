@@ -8,7 +8,7 @@ export const CATEGORIES = [
   { id: "carpentry", name: "Carpentry", image: "/mockups/hero_cleaning_office.jpg", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
   { id: "hvac", name: "AC & Heating", image: "/mockups/hero_pro_ac_rect.jpg", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
   { id: "pest_control", name: "Pest Control", image: "/mockups/pest_control_header.jpg", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
-  { id: "painting", name: "Painting", image: "/mockups/occupied_apartment_diamond.png", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
+  { id: "painting", name: "Painting", image: "/assets/Painting/Interior.webp", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
   { id: "mason", name: "Mason", image: "/mockups/brick_wall_construction_red.jpg", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
   { id: "appliance_repair", name: "Appliances", image: "/mockups/hero_pro_appliance_rect.jpg", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
   { id: "security", name: "Security Systems", image: "/mockups/service_inspection.png", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },

@@ -431,8 +431,16 @@ class GoogleLoginView(APIView):
             return Response({"detail": "This account is deactivated."}, status=status.HTTP_400_BAD_REQUEST)
 
         refresh = CustomTokenObtainPairSerializer.get_token(user)
-        response = Response({"success": True, "message": "Google login successful."})
-        _set_auth_cookies(response, str(refresh.access_token), str(refresh))
+        access_token_str = str(refresh.access_token)
+        refresh_token_str = str(refresh)
+        response = Response({
+            "success": True,
+            "message": "Google login successful.",
+            "access": access_token_str,
+            "refresh": refresh_token_str,
+            "user": UserSerializer(user, context={"request": request}).data if user else None,
+        })
+        _set_auth_cookies(response, access_token_str, refresh_token_str)
         return response
 
 
