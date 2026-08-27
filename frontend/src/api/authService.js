@@ -47,10 +47,20 @@ async function fetchJSON(path, options = {}) {
  * If 2FA is enabled, returns { success: true, requires_2fa: true } without cookies.
  */
 export async function apiLogin(username, password) {
-  return fetchJSON("/auth/login/", {
+  const data = await fetchJSON("/auth/login/", {
     method: "POST",
     body: JSON.stringify({ username, password })
   })
+  if (data?.access) {
+    try {
+      localStorage.setItem("caltrack_access_token", data.access)
+      localStorage.setItem("qt_access", data.access)
+      if (data.user) {
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
+      }
+    } catch (_) {}
+  }
+  return data
 }
 
 /**
@@ -287,20 +297,40 @@ export async function apiGoogleLogin(googleAccessToken, inviteToken = null) {
   if (inviteToken) {
     payload.invite_token = inviteToken
   }
-  return fetchJSON("/auth/google/", {
+  const data = await fetchJSON("/auth/google/", {
     method: "POST",
     body: JSON.stringify(payload),
   })
+  if (data?.access) {
+    try {
+      localStorage.setItem("caltrack_access_token", data.access)
+      localStorage.setItem("qt_access", data.access)
+      if (data.user) {
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
+      }
+    } catch (_) {}
+  }
+  return data
 }
 
 /**
  * Customer Google OAuth — logs in or creates customer account, sets cookies.
  */
 export async function apiCustomerGoogleLogin(googleAccessToken) {
-  return fetchJSON("/auth/customer/google/", {
+  const data = await fetchJSON("/auth/customer/google/", {
     method: "POST",
     body: JSON.stringify({ access_token: googleAccessToken }),
   })
+  if (data?.access) {
+    try {
+      localStorage.setItem("caltrack_access_token", data.access)
+      localStorage.setItem("qt_access", data.access)
+      if (data.user) {
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
+      }
+    } catch (_) {}
+  }
+  return data
 }
 
 
