@@ -26,6 +26,22 @@ logger = logging.getLogger("workforce_integration")
 
 WORKFORCE_WEBHOOK_SECRET = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", os.getenv("WORKFORCE_WEBHOOK_SECRET", "wf_webhook_secret_default"))
 
+if WORKFORCE_WEBHOOK_SECRET == "wf_webhook_secret_default":
+    # Fixes the webhook-auth bypass flagged during Stage 1 (X-03 reconciliation
+    # pass): this default used to be accepted as valid EVEN WHEN a real secret
+    # was configured (see _verify_webhook_signature and
+    # WorkforceBookingFromQuoteView.post below), which meant anyone who read
+    # this source file could forge webhook calls regardless of the deployed
+    # secret. That bypass is removed below. This warning stays because the
+    # *fallback* value itself is still this well-known string when
+    # WORKFORCE_WEBHOOK_SECRET is never set at all -- set it in the
+    # environment for any non-local deployment.
+    logger.warning(
+        "WORKFORCE_WEBHOOK_SECRET is not configured -- falling back to the "
+        "publicly-known default. Set WORKFORCE_WEBHOOK_SECRET in the "
+        "environment before deploying."
+    )
+
 
 def _verify_webhook_signature(request) -> bool:
     """
@@ -37,7 +53,11 @@ def _verify_webhook_signature(request) -> bool:
         or request.META.get("HTTP_X_WORKFORCE_WEBHOOK_SECRET")
         or request.META.get("HTTP_X_WORKFORCE_SECRET")
     )
-    if provided_secret and (provided_secret == WORKFORCE_WEBHOOK_SECRET or provided_secret == "wf_webhook_secret_default"):
+    # Fixes webhook-auth bypass: previously this also accepted the literal
+    # string "wf_webhook_secret_default" even when WORKFORCE_WEBHOOK_SECRET
+    # was configured to something else, so the well-known default always
+    # worked as a skeleton key regardless of the real deployed secret.
+    if provided_secret and hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
         return True
 
     signature = (
@@ -484,7 +504,10 @@ class WorkforceBookingFromQuoteView(APIView):
         if provided_secret:
             if "Bearer " in provided_secret:
                 provided_secret = provided_secret.replace("Bearer ", "")
-            if provided_secret not in [WORKFORCE_WEBHOOK_SECRET, "wf_webhook_secret_default", "wf_integration_key_default"]:
+            # Fixes the same webhook-auth bypass as _verify_webhook_signature
+            # above -- this used to also accept the well-known default
+            # strings unconditionally, regardless of the configured secret.
+            if not hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
                 return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
         else:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
