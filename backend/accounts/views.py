@@ -1,5 +1,6 @@
 import uuid
 import traceback
+import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -17,6 +18,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 import requests
 
 from .serializers import UserSerializer
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -1083,12 +1086,28 @@ class SendOTPView(APIView):
 
         delivery_channel = "sms" if sent_real_sms else "console"
 
-        # Print OTP to server console
-        print("\n" + "=" * 50)
-        print(f"  [SMS GATEWAY] OTP for {normalized_phone} is: {code} (Original input: {phone})")
-        if delivery_error:
-            print(f"  [SMS GATEWAY] Twilio delivery skipped/failed: {delivery_error}")
-        print("" + "=" * 50 + "\n")
+        # Fixes HS-A-01: printing the raw OTP to the server console/log stream
+        # meant anyone with log access (not just server operators -- hosting
+        # dashboards, log aggregators, error trackers) could read it and log in
+        # as any customer. Keep the console fallback for local development only
+        # (settings.DEBUG) where it is the intended MVP delivery mechanism when
+        # no SMS provider is configured; in a real deployment (DEBUG=False),
+        # never print the code -- log that delivery fell back to console
+        # without the code itself, so ops can see the gap and fix Twilio config
+        # instead of quietly leaking every customer's login code to logs.
+        if not sent_real_sms:
+            if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
+                print("\n" + "=" * 50)
+                print(f"  [SMS GATEWAY] OTP for {normalized_phone} is: {code} (Original input: {phone})")
+                if delivery_error:
+                    print(f"  [SMS GATEWAY] Twilio delivery skipped/failed: {delivery_error}")
+                print("" + "=" * 50 + "\n")
+            else:
+                logger.error(
+                    "OTP SMS delivery unavailable for %s (Twilio not configured or failed: %s). "
+                    "OTP was generated but NOT printed to logs -- fix SMS provider config.",
+                    normalized_phone, delivery_error or "not configured",
+                )
 
         # Log to Audit Trail
         OTPAuditLog.objects.create(
