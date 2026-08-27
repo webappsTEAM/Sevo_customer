@@ -1839,7 +1839,32 @@ export function LandingPage() {
     }
   }
 
-  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
+  const [modalCart, setModalCart] = useState(() => {
+    const stateCart = location.state?.cart;
+    if (stateCart && stateCart.length > 0) {
+      return stateCart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
+    }
+    try {
+      const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse saved cart in LandingPage:", e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("calservices_customer_cart", JSON.stringify(modalCart));
+    } catch (e) {
+      console.error("Failed to save modalCart to localStorage:", e);
+    }
+  }, [modalCart]);
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -2319,6 +2344,8 @@ export function LandingPage() {
       navigate("/home", { state: { openElecModal: true } })
     } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openGoodsModal: true } })
+    } else if (["cleaning", "pest"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openHomePestModal: true } })
     } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
       navigate("/home")
     } else {

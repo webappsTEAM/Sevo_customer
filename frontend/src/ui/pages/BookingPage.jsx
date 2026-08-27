@@ -31,10 +31,10 @@ import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
-import { resolveImageUrl } from "../../utils/imageUrl.js"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -8067,11 +8067,6 @@ function StepWorkflowCheckout({
       if (!existing) return prev;
       if (existing.quantity <= 1) {
         const nextCart = prev.filter(item => item.id !== id);
-        if (nextCart.length === 0 && onBack) {
-          setTimeout(() => {
-            onBack();
-          }, 100);
-        }
         return nextCart;
       }
       return prev.map(item => item.id === id ? { ...item, quantity: item.quantity - 1 } : item);
@@ -8104,6 +8099,31 @@ function StepWorkflowCheckout({
       return prev.map(i => i.id === extraItemId ? { ...i, quantity: i.quantity - 1 } : i);
     });
   };
+
+  if (!cart || cart.length === 0) {
+    return (
+      <div className="w-full max-w-md mx-auto px-4 py-16 text-center font-sans text-slate-800">
+        <div className="bg-white border border-slate-200/85 rounded-3xl p-8 shadow-md space-y-6">
+          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mx-auto">
+            <ShoppingCart size={32} />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-black text-slate-900">Your cart is empty</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              You have removed all services from your cart. Please select a service to proceed with booking.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 border-none"
+          >
+            Book Another Service
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
@@ -8507,15 +8527,26 @@ function StepWorkflowCheckout({
                 </button>
 
                 {showTaxesDropdown && (
-                  <div className="px-3 pb-2.5 pt-1.5 space-y-1.5 border-t border-slate-200/60 bg-white text-[11px] animate-in fade-in duration-150">
-                    <div className="flex justify-between text-slate-500">
-                      <span>Taxes & GST ({gstRate}%)</span>
-                      <span className="font-semibold text-slate-700">₹{roundedGst.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>Platform Fee</span>
-                      <span className="font-semibold text-slate-700">₹{platformFee.toLocaleString("en-IN")}</span>
-                    </div>
+                  <div className="px-3 pb-2.5 pt-1.5 space-y-2.5 border-t border-slate-200/60 bg-white text-[11px] animate-in fade-in duration-150 text-left">
+                    {items.map(item => {
+                      const itemBaseTotal = item.price * item.quantity;
+                      const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18;
+                      const itemTax = Math.round(itemBaseTotal * (rate / 100));
+                      const itemFee = isFreeCategory ? 0 : (Number(item.platform_fee) || 29);
+                      return (
+                        <div key={item.id} className="border-b border-slate-100 pb-2 last:border-0 last:pb-0 space-y-1">
+                          <div className="font-bold text-slate-700">{item.name}</div>
+                          <div className="flex justify-between text-slate-500 pl-2">
+                            <span>Taxes & GST ({rate}%)</span>
+                            <span className="font-semibold text-slate-600">₹{itemTax.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 pl-2">
+                            <span>Platform Fee</span>
+                            <span className="font-semibold text-slate-600">₹{itemFee.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -8789,7 +8820,16 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
     if (combined.includes("goods") || combined.includes("transport") || combined.includes("truck") || combined.includes("mover") || combined.includes("packer")) {
       return { id: "goods_transport", name: "Goods & Transport", slug: "goods_transport" };
     }
-    if (combined.includes("clean") || combined.includes("sofa") || combined.includes("bath") || combined.includes("kitchen") || combined.includes("house")) {
+    if (combined.includes("sofa") || combined.includes("carpet") || combined.includes("mattress")) {
+      return { id: "sofa_cleaning", name: "Sofa Cleaning", slug: "sofa_cleaning" };
+    }
+    if (combined.includes("kitchen") || combined.includes("chimney")) {
+      return { id: "kitchen_cleaning", name: "Kitchen Cleaning", slug: "kitchen_cleaning" };
+    }
+    if (combined.includes("bath") || combined.includes("toilet") || combined.includes("washroom")) {
+      return { id: "bathroom_cleaning", name: "Bathroom Cleaning", slug: "bathroom_cleaning" };
+    }
+    if (combined.includes("clean") || combined.includes("house") || combined.includes("home") || combined.includes("apartment") || combined.includes("villa")) {
       return { id: "cleaning", name: "Cleaning", slug: "cleaning" };
     }
   }
@@ -8862,7 +8902,7 @@ export function BookingPage() {
 
   // Sync cart to local storage
   useEffect(() => {
-    if (Array.isArray(cart) && cart.length > 0) {
+    if (Array.isArray(cart)) {
       try { localStorage.setItem("calservices_customer_cart", JSON.stringify(cart)) } catch (e) { }
     }
   }, [cart])
@@ -8872,14 +8912,9 @@ export function BookingPage() {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // When customer removes all items (- button), move back to home services only during active shopping steps (not during tracking step 0)
+  // When customer removes all items, stay on the page and show empty state (no redirect)
   useEffect(() => {
-    if (step > 0 && !trackParam && Array.isArray(cart) && cart.length === 0 && !incomingCategory) {
-      const timer = setTimeout(() => {
-        navigate(routes.landing, { replace: true });
-      }, 300);
-      return () => clearTimeout(timer);
-    }
+    // Left empty intentionally to disable redirect
   }, [cart, step, trackParam, incomingCategory, navigate]);
 
   // Synchronize step and successData when active tracking ID changes
@@ -9594,9 +9629,13 @@ export function BookingPage() {
                 loading={loading}
                 error={error}
                 onBack={() => {
-                  let activeCat = resolveCategoryFromCart(category, cart);
-                  const catId = activeCat?.id || activeCat?.slug || "cleaning";
-                  navigate(`/?category=${encodeURIComponent(catId)}`);
+                  if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    let activeCat = resolveCategoryFromCart(category, cart);
+                    const catId = activeCat?.id || activeCat?.slug || "cleaning";
+                    navigate(`/?category=${encodeURIComponent(catId)}`);
+                  }
                 }}
                 setFormData={setFormData}
                 setLocation={setLocation}
@@ -16371,15 +16410,25 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       </button>
 
                       {showModalTaxesDropdown && (
-                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-[#E8E3DB] bg-white text-[10px] animate-in fade-in duration-150">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Taxes & GST (18%)</span>
-                            <span className="font-semibold text-slate-700">+₹{totalGst.toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between text-slate-500">
-                            <span>Platform Fee</span>
-                            <span className="font-semibold text-slate-700">+₹{platformFee.toLocaleString("en-IN")}</span>
-                          </div>
+                        <div className="px-2 pb-1.5 pt-1 space-y-2 border-t border-[#E8E3DB] bg-white text-[10px] animate-in fade-in duration-150 text-left">
+                          {cart.map(item => {
+                            const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18;
+                            const itemTax = Math.round((item.price * item.quantity) * (rate / 100));
+                            const itemFee = Number(item.platform_fee) || 29;
+                            return (
+                              <div key={item.id} className="border-b border-slate-100 pb-1.5 last:border-0 last:pb-0 space-y-0.5">
+                                <div className="font-bold text-slate-700">{item.name}</div>
+                                <div className="flex justify-between text-slate-500 pl-1.5">
+                                  <span>Taxes & GST ({rate}%)</span>
+                                  <span className="font-semibold text-slate-600">+₹{itemTax.toLocaleString("en-IN")}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-500 pl-1.5">
+                                  <span>Platform Fee</span>
+                                  <span className="font-semibold text-slate-600">+₹{itemFee.toLocaleString("en-IN")}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -21607,12 +21656,32 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
+  const customSubTabs = dbPackages[0]?.service_customization?.subtabs;
+  const activeSubTabsList = (customSubTabs && customSubTabs.length > 0)
+    ? customSubTabs.filter(tab => tab.enabled !== false).map(tab => ({ id: tab.id, name: tab.label, image: resolveImageUrl(dbPackages[0]?.service_customization?.subtab_banners?.[tab.id], "/mockups/kitchen_top_new.png") }))
+    : KITCHEN_SUB_TABS;
+
   const getActiveServices = () => {
     let list = [];
     if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
     else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
     else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
     else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
+    else {
+      // Dynamic custom tabs fallback
+      const matchingDbPkgs = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.customization && p.customization.subtab === activeTab));
+      list = matchingDbPkgs.map(p => ({
+        id: p.slug,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "1 hr",
+        description: p.description,
+        image: p.image || "/mockups/kitchen_top_new.png",
+        includes: Array.isArray(p.includes) ? p.includes : [],
+        gst_rate: p.gst_rate !== undefined ? parseFloat(p.gst_rate) : 18,
+        platform_fee: p.platform_fee !== undefined ? parseFloat(p.platform_fee) : 29
+      }));
+    }
 
     if (dbPackages.length > 0) {
       list = list.map(item => {
@@ -21749,7 +21818,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           </div>
         )}
         <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
-          {KITCHEN_SUB_TABS.map(tab => {
+          {activeSubTabsList.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
               <button
@@ -21783,7 +21852,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           <div className="pt-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
               <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : activeTab === "cabinet_tile" ? "Cabinet & Tile Care" : "Quick Extra Services"}
+              {activeSubTabsList.find(t => t.id === activeTab)?.name || "Kitchen Cleaning Services"}
             </h3>
           </div>
 
@@ -21797,13 +21866,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
                       <img
-                        src={(() => {
-                          const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
-                          if (activeTab === "packages") return customB.packages || "/mockups/kitchen_top_new.png";
-                          if (activeTab === "appliance") return customB.appliance || "/mockups/appliance_cleaning_hero.png";
-                          if (activeTab === "cabinet_tile") return customB.cabinet_tile || "/mockups/kitchen_cleaning_hero.png";
-                          return customB.addons || "/mockups/quick_extra_services_hero.png";
-                        })()}
+                        src={resolveImageUrl(activeSubTabsList.find(t => t.id === activeTab)?.image, "/mockups/kitchen_top_new.png")}
                         alt={service.name}
                         className="w-full h-full object-cover object-center"
                       />
@@ -22049,15 +22112,25 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       </button>
 
                       {showModalTaxesDropdown && (
-                        <div className="px-2 pb-1.5 pt-1 space-y-1 border-t border-slate-200/50 bg-white text-[10px] animate-in fade-in duration-150">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Taxes & GST (18%)</span>
-                            <span className="font-semibold text-slate-700">+₹{totalGst.toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between text-slate-500">
-                            <span>Platform Fee</span>
-                            <span className="font-semibold text-slate-700">+₹{platformFee.toLocaleString("en-IN")}</span>
-                          </div>
+                        <div className="px-2 pb-1.5 pt-1 space-y-2 border-t border-slate-200/50 bg-white text-[10px] animate-in fade-in duration-150 text-left">
+                          {cart.map(item => {
+                            const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18;
+                            const itemTax = Math.round((item.price * item.quantity) * (rate / 100));
+                            const itemFee = Number(item.platform_fee) || 29;
+                            return (
+                              <div key={item.id} className="border-b border-slate-100 pb-1.5 last:border-0 last:pb-0 space-y-0.5">
+                                <div className="font-bold text-slate-700">{item.name}</div>
+                                <div className="flex justify-between text-slate-500 pl-1.5">
+                                  <span>Taxes & GST ({rate}%)</span>
+                                  <span className="font-semibold text-slate-600">+₹{itemTax.toLocaleString("en-IN")}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-500 pl-1.5">
+                                  <span>Platform Fee</span>
+                                  <span className="font-semibold text-slate-600">+₹{itemFee.toLocaleString("en-IN")}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
