@@ -1918,7 +1918,7 @@ export function CatalogPackagesPage() {
           },
           {
             subSlug: "appliance",
-            displayName: "single appliance cleaning",
+            displayName: "Single Appliance Cleaning",
             filterFn: (p) =>
               p.slug.startsWith("appliance-") ||
               p.slug.startsWith("app-") ||
