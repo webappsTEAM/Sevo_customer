@@ -248,6 +248,17 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": os.getenv("THROTTLE_ANON", "60/minute"),
         "user": os.getenv("THROTTLE_USER", "300/minute"),
+        # Fixes EC-06: the blanket anon/user rates above are the only
+        # protection every endpoint had, including ones a blunt 60/min
+        # limit does not fit (booking creation, payment, invoice/PII
+        # lookups). These scopes are opt-in per view via
+        # ScopedRateThrottle + throttle_scope, tighter than the default.
+        "booking_create": os.getenv("THROTTLE_BOOKING_CREATE", "20/hour"),
+        "payment": os.getenv("THROTTLE_PAYMENT", "15/minute"),
+        "tracking_lookup": os.getenv("THROTTLE_TRACKING", "60/minute"),
+        "feedback": os.getenv("THROTTLE_FEEDBACK", "10/hour"),
+        "coupon_validate": os.getenv("THROTTLE_COUPON", "20/minute"),
+        "invoice_download": os.getenv("THROTTLE_INVOICE", "20/hour"),
     },
 }
 
@@ -352,6 +363,19 @@ else:
     DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+AUTO_GENERATE_OTP = os.getenv("AUTO_GENERATE_OTP", "False").strip().lower() in ("1", "true", "yes")
+
+# ── Payment Gateway (Razorpay) ────────────────────────────
+# Fixes HS-C-01: real order creation and signature verification only run
+# when live gateway keys are configured. When they are not, PaymentVerifyView
+# refuses to mark bookings paid instead of trusting an unauthenticated,
+# client-supplied "mock_success" flag (the previous behaviour).
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+# Explicit opt-in only: lets a developer exercise the payment flow end-to-end
+# on a machine with no gateway credentials. Must never be enabled outside
+# local development.
+PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")

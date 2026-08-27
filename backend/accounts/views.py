@@ -1103,7 +1103,7 @@ class SendOTPView(APIView):
             "message": "OTP sent successfully.",
             "delivery_channel": delivery_channel
         }
-        if settings.DEBUG:
+        if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
             response_data["code"] = code
 
         return Response(response_data)
@@ -1435,7 +1435,7 @@ class SendEmailOTPView(APIView):
             "success": True,
             "message": "Verification code sent to your email successfully."
         }
-        if settings.DEBUG:
+        if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
             response_data["code"] = code
 
         return Response(response_data)
