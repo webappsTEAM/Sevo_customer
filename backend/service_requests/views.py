@@ -69,6 +69,22 @@ def _error(message, status_code=400, extra=None):
         body.update(extra)
     return Response(body, status=status_code)
 
+# Fixes EC-08: tracking_token never expired -- a link handed to a customer
+# (or forwarded, screenshotted, left in an old SMS/email) stayed a valid
+# bearer credential for that booking's live location/status forever. 180
+# days after booking creation is a deliberately generous default -- long
+# enough that no active or recently-rescheduled job is ever cut off, short
+# enough that a link from months-old bookings stops working. This is a
+# judgment call on the window, not a hard product requirement; adjust the
+# constant below if a different retention period is wanted.
+TRACKING_TOKEN_VALID_DAYS = 180
+
+
+def _tracking_token_is_expired(sr):
+    if not getattr(sr, "created_at", None):
+        return False
+    return (timezone.now() - sr.created_at).days > TRACKING_TOKEN_VALID_DAYS
+
 
 def _standard_response(success=True, data=None, error=None, meta=None, status_code=200):
     return Response(
@@ -637,7 +653,8 @@ class CustomerBookingCancelView(APIView):
         token_matches = bool(
             provided_token and
             sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+            not _tracking_token_is_expired(sr)  # Fixes EC-08
         )
         if request.user and request.user.is_authenticated:
             from accounts.permissions import is_super_admin, can
@@ -1006,7 +1023,8 @@ class CustomerBookingLiveLocationView(APIView):
         token_matches = bool(
             provided_token and
             sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+            not _tracking_token_is_expired(sr)  # Fixes EC-08
         )
         is_admin_user = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
         is_owner = bool(request.user and request.user.is_authenticated and sr.customer_id and sr.customer_id == request.user.id)
@@ -1047,6 +1065,9 @@ class CustomerPublicTrackingView(APIView):
         try:
             sr = ServiceRequest.objects.get(tracking_token=token_uuid)
         except ServiceRequest.DoesNotExist:
+            return _error("Tracking link not found or expired.", 404)
+
+        if _tracking_token_is_expired(sr):  # Fixes EC-08
             return _error("Tracking link not found or expired.", 404)
 
         payload = _build_tracking_payload(sr, has_full_access=True)
