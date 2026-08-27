@@ -101,6 +101,12 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             return
 
         if action == "verify_start_otp":
+            if not await self._can_verify_otp():
+                await self.send_json({
+                    "event": "otp_verification_error",
+                    "error": "You are not authorized to verify this booking's OTP.",
+                })
+                return
             otp = str(content.get("otp", "")).strip()
             result = await self._verify_start_otp(otp)
             if result.get("success"):
@@ -244,6 +250,42 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         # 4. Public customer live tracking: if client knows the specific booking ID / request_id, grant live tracking read stream
         if self.sr:
             return True
+
+        return False
+
+    @sync_to_async
+    def _can_verify_otp(self):
+        """
+        Fixes EC-02 (WebSocket path): _is_authorized()'s branch 4 grants read
+        access to anyone who can resolve a booking ID/request_id, by design,
+        for the public live-tracking stream. That is NOT an acceptable rule
+        for the verify_start_otp action, since it would let anyone who can
+        merely open this socket attempt to move a booking to "in_progress" —
+        the whole point of the OTP is to prove the *technician* is on site.
+        This mirrors branches 1-3 of _is_authorized() only: a valid tracking
+        token, or an authenticated super-admin/permitted-staff/assigned
+        technician. It deliberately excludes the "anyone who knows the
+        booking ID" branch.
+        """
+        if not self.sr:
+            return False
+
+        import urllib.parse
+        params = urllib.parse.parse_qs(self.query_string)
+        provided_token = (params.get("token") or [None])[0]
+
+        if provided_token and self.sr.tracking_token and str(self.sr.tracking_token).lower() == str(provided_token).strip().lower():
+            return True
+        if str(self.identifier).lower() == str(self.sr.tracking_token).lower():
+            return True
+
+        user = self.scope.get("user")
+        if user and user.is_authenticated:
+            from accounts.permissions import is_super_admin, can
+            if is_super_admin(user) or can(user, "live_tracking", "verify") or can(user, "dispatch", "manage"):
+                return True
+            if getattr(self.sr, "assigned_employee", None) and getattr(self.sr.assigned_employee, "user_id", None) == user.id:
+                return True
 
         return False
 

@@ -18,6 +18,7 @@ from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole, IsCustomer, is_admin_role
@@ -233,6 +234,11 @@ class BookingCreateView(APIView):
     """
     permission_classes = [permissions.AllowAny]
     parser_classes     = [MultiPartParser, FormParser, JSONParser]
+    # Fixes EC-06: booking creation only had the blanket 60/min anon rate —
+    # tight enough to fit real customer behaviour, loose enough to still let
+    # a bot script bookings for enumeration/spam. Scoped down separately.
+    throttle_classes  = [ScopedRateThrottle]
+    throttle_scope    = "booking_create"
 
     def post(self, request):
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
@@ -881,6 +887,11 @@ class CustomerBookingLiveLocationView(APIView):
     - If no token is provided and user is unauthenticated -> 401 Unauthorized.
     """
     permission_classes = [permissions.AllowAny]
+    # Fixes EC-06: scoped separately from the blanket anon/user rate so a
+    # live-tracking poll loop has room to work without opening the endpoint
+    # up to unbounded scraping.
+    throttle_classes  = [ScopedRateThrottle]
+    throttle_scope    = "tracking_lookup"
 
     def get(self, request, pk=None, identifier=None):
         sr_id = pk or identifier
@@ -924,6 +935,8 @@ class CustomerPublicTrackingView(APIView):
     tracking data. The token is the bearer authorization credential.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "tracking_lookup"
 
     def get(self, request, tracking_token):
         import uuid as _uuid
@@ -957,6 +970,8 @@ class CustomerQuoteDetailView(APIView):
 
 class FeedbackTokenView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "feedback"
 
     def get(self, request, token):
         try:
@@ -2182,6 +2197,8 @@ class CustomerCouponListView(APIView):
 
 class CustomerCouponValidateView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "coupon_validate"
 
     def post(self, request):
         code = str(request.data.get("code", "")).strip().upper()
@@ -2254,8 +2271,25 @@ class BookingVerifyStartOTPView(APIView):
     """
     POST /api/booking/<identifier>/verify-start-otp/
     Validates the 6-digit customer verification code entered by the technician during arrival.
+
+    Fixes EC-02: this endpoint used to be permissions.AllowAny with no
+    ownership or actor check at all — any unauthenticated POST carrying a
+    guessable booking id and a correct-looking code could flip the booking
+    straight to "in_progress" by writing sr.status directly, bypassing every
+    rule in state_machine.ALLOWED_TRANSITIONS (including the geofence-arrival
+    gate the vendor app enforces on its own equivalent endpoint).
+
+    The live technician-facing flow does NOT call this endpoint — the vendor
+    app's WorkforceJobVerifyOTPView (workforce_api/views.py) is what
+    technicians actually use; it is gated by IsApprovedTechnician plus an
+    explicit job.assigned_employee == request.user.employee_profile check,
+    and it writes to the same shared-database row via PreServiceVerification.
+    This Customer-app copy has no legitimate anonymous caller, so it is now
+    restricted to authenticated admin/staff (e.g. for manual support
+    overrides) and routes the status change through apply_transition() like
+    every other status write in this app.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk=None, identifier=None):
         sr_id = pk or identifier or request.data.get("booking_id")
@@ -2285,12 +2319,19 @@ class BookingVerifyStartOTPView(APIView):
         if str(entered_otp) == str(sr.start_otp):
             sr.otp_verified = True
             sr.otp_verified_at = timezone.now()
-            sr.status = "in_progress"
             try:
+                apply_transition(sr, ServiceRequest.Status.IN_PROGRESS, actor=request.user)
                 sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
+            except ValidationError as ve:
+                logger.warning(f"[OTP Verify] Transition to in_progress rejected for SR {sr.id}: {ve}")
+                sr.save(update_fields=["otp_verified", "otp_verified_at", "updated_at"])
+                return _error(
+                    f"Verification code accepted, but this booking cannot move to in-progress from its current "
+                    f"status ('{sr.status}'). Please review the booking status.", 409,
+                )
             except Exception as save_err:
                 logger.error(f"[OTP Verify] Error saving SR: {save_err}", exc_info=True)
-                sr.save()
+                return _error("Could not save verification. Please try again.", 500)
 
             try:
                 from .notifications import broadcast_tracking_event

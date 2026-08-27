@@ -6,16 +6,23 @@ Payment-specific API views:
   - Admin payment status overrides
   - Customer & Admin Invoice PDF generation
 """
+import hashlib
+import hmac
 import logging
 import uuid
+from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework import permissions, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import ServiceRequest
+from accounts.permissions import is_admin_role
+from .models import Payment, ServiceRequest
 from .serializers import ServiceRequestDetailSerializer
+from .state_machine import apply_transition
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +38,61 @@ def _error(message, status_code=400):
     return Response({"success": False, "message": message}, status=status_code)
 
 
+def _verify_booking_ownership(request, sr):
+    """
+    Same ownership rule CustomerBookingCancelView already uses: a matching
+    tracking_token, an authenticated owner (by id, email, or phone), or a
+    phone number matching the booking's own phone. Guest checkout still
+    works without login as long as the caller can prove they know the
+    booking's tracking token or phone number.
+    """
+    provided_token = (
+        request.data.get("token")
+        or request.query_params.get("token")
+        or request.data.get("tracking_token")
+    )
+    token_matches = bool(
+        provided_token and sr.tracking_token and
+        str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+    )
+    if request.user and request.user.is_authenticated:
+        is_owner = bool(
+            (sr.customer_id and sr.customer_id == request.user.id) or
+            (getattr(request.user, "email", None) and sr.email and
+             request.user.email.strip().lower() == sr.email.strip().lower()) or
+            (getattr(request.user, "phone", None) and sr.phone and
+             request.user.phone.strip()[-10:] == sr.phone.strip()[-10:])
+        )
+        if is_owner or token_matches:
+            return True
+        try:
+            from accounts.permissions import is_super_admin, can
+            if is_super_admin(request.user) or can(request.user, "bookings", "cancel"):
+                return True
+        except Exception:
+            pass
+        return False
+    provided_phone = (request.data.get("phone") or "").strip()
+    phone_matches = bool(provided_phone and sr.phone and provided_phone[-10:] == sr.phone.strip()[-10:])
+    return token_matches or phone_matches
+
+
 # ─── Payment Initiation & Verification ────────────────────────────────────────
 
 class PaymentInitiateView(APIView):
     """
     POST /api/payment/initiate/
     Creates a payment order for the given booking.
+
+    Fixes HS-C-01 (part 1 of 2, see PaymentVerifyView for part 2): the order
+    is now persisted server-side as a Payment row, so PaymentVerifyView can
+    check that the order_id it receives actually belongs to this booking
+    instead of trusting anything the client sends. Ownership of the booking
+    is also checked before an order is issued.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "payment"
 
     def post(self, request):
         booking_id = request.data.get("booking_id")
@@ -47,8 +101,11 @@ class PaymentInitiateView(APIView):
 
         try:
             sr = ServiceRequest.objects.get(pk=booking_id)
-        except ServiceRequest.DoesNotExist:
+        except (ServiceRequest.DoesNotExist, ValueError, TypeError):
             return _error("Booking not found.", 404)
+
+        if not _verify_booking_ownership(request, sr):
+            return _error("You are not authorized to pay for this booking.", 403)
 
         if sr.payment_method != ServiceRequest.PaymentMethod.ONLINE:
             return _error("This booking does not require online payment.")
@@ -56,11 +113,28 @@ class PaymentInitiateView(APIView):
         if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
             return _error("This booking is already paid.")
 
-        mock_order_id = f"order_cal_{uuid.uuid4().hex[:16]}"
+        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+        if gateway_configured:
+            order_id, gateway_error = self._create_razorpay_order(sr)
+            if gateway_error:
+                return _error(gateway_error, 502)
+        else:
+            order_id = f"order_sandbox_{uuid.uuid4().hex[:16]}"
+
+        Payment.objects.create(
+            customer=sr.customer,
+            service_request=sr,
+            razorpay_order_id=order_id,
+            amount=sr.total_amount,
+            currency="INR",
+            status=ServiceRequest.PaymentStatus.PENDING,
+            gateway="razorpay" if gateway_configured else "sandbox",
+        )
 
         return _success(
             data={
-                "order_id": mock_order_id,
+                "order_id": order_id,
                 "amount": float(sr.total_amount),
                 "currency": "INR",
                 "booking_id": sr.id,
@@ -69,9 +143,37 @@ class PaymentInitiateView(APIView):
                 "customer_email": sr.email or "",
                 "customer_phone": sr.phone or "",
                 "description": f"Payment for {sr.issue_title}",
+                "key_id": settings.RAZORPAY_KEY_ID if gateway_configured else "",
+                "sandbox": not gateway_configured,
             },
             message="Payment order created.",
         )
+
+    def _create_razorpay_order(self, sr):
+        """
+        Creates a real order via the Razorpay Orders API. Only reached when
+        RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are configured (i.e. once the
+        business supplies real gateway credentials). Returns
+        (order_id, error_message) — error_message is None on success.
+        """
+        try:
+            import razorpay
+        except ImportError:
+            logger.error("razorpay package not installed but RAZORPAY_KEY_ID/SECRET are configured.")
+            return None, "Payment gateway is misconfigured. Please contact support."
+
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            order = client.order.create({
+                "amount": int(float(sr.total_amount) * 100),  # paise
+                "currency": "INR",
+                "receipt": sr.request_id,
+                "notes": {"booking_id": str(sr.id), "request_id": sr.request_id},
+            })
+            return order["id"], None
+        except Exception as e:
+            logger.error(f"Razorpay order creation failed for booking {sr.id}: {e}")
+            return None, "Could not start payment. Please try again."
 
 
 class PaymentVerifyView(APIView):
@@ -79,35 +181,123 @@ class PaymentVerifyView(APIView):
     POST /api/payment/verify/
     Verifies payment completion.
     On success: updates booking status to Confirmed, payment_status to Paid.
+
+    Fixes HS-C-01: this endpoint used to trust a client-supplied
+    "mock_success" flag that DEFAULTED TO TRUE, with no signature check, no
+    amount check, no ownership check, and no idempotency check — a single
+    unauthenticated POST with any booking_id could mark that booking paid.
+    Now:
+      - order_id must match a Payment row this app itself issued via
+        PaymentInitiateView (an order_id can no longer be invented client-side);
+      - the requester must own the booking (tracking token, phone match, or
+        authenticated owner — the same rule CustomerBookingCancelView uses);
+      - when a live gateway is configured, the Razorpay HMAC-SHA256 signature
+        is verified server-side before anything is marked paid;
+      - the status change runs through apply_transition() instead of writing
+        fields directly, so the state machine's own rules still apply;
+      - a Payment row can only be consumed once (idempotent on repeat calls).
+    When no gateway is configured, this now REFUSES to mark bookings paid
+    (returns 503) unless PAYMENT_SANDBOX_MODE is explicitly enabled for local
+    development — it no longer defaults to "success".
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "payment"
 
     def post(self, request):
-        booking_id   = request.data.get("booking_id")
-        order_id     = request.data.get("order_id")
-        payment_id   = request.data.get("payment_id")
-        mock_success = request.data.get("mock_success", True)
+        booking_id = request.data.get("booking_id")
+        order_id   = request.data.get("order_id")
+        payment_id = request.data.get("payment_id")
+        signature  = request.data.get("signature") or request.data.get("razorpay_signature")
 
-        if not booking_id:
-            return _error("booking_id is required.")
+        if not booking_id or not order_id:
+            return _error("booking_id and order_id are required.")
 
         try:
             sr = ServiceRequest.objects.get(pk=booking_id)
-        except ServiceRequest.DoesNotExist:
+        except (ServiceRequest.DoesNotExist, ValueError, TypeError):
             return _error("Booking not found.", 404)
 
-        if not mock_success:
-            sr.payment_status = ServiceRequest.PaymentStatus.FAILED
-            sr.save(update_fields=["payment_status", "updated_at"])
-            return _error("Payment failed. Please try again.")
+        if not _verify_booking_ownership(request, sr):
+            return _error("You are not authorized to verify payment for this booking.", 403)
 
-        sr.status         = ServiceRequest.Status.CONFIRMED
-        sr.payment_status = ServiceRequest.PaymentStatus.PAID
-        sr.transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
-        sr.payment_gateway = "gateway"
+        payment = Payment.objects.filter(
+            service_request=sr, razorpay_order_id=order_id
+        ).order_by("-created_at").first()
+        if not payment:
+            logger.warning(f"Payment verify attempted for booking {sr.id} with unknown order_id={order_id!r}.")
+            return _error("Unknown payment order for this booking.", 404)
+
+        if payment.status == ServiceRequest.PaymentStatus.PAID:
+            # Already verified earlier — idempotent success, don't re-run the transition.
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Payment already confirmed.",
+            )
+
+        gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+        if gateway_configured:
+            if not (payment_id and signature):
+                return _error("payment_id and signature are required.")
+            expected_signature = hmac.new(
+                settings.RAZORPAY_KEY_SECRET.encode("utf-8"),
+                f"{order_id}|{payment_id}".encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(expected_signature, str(signature)):
+                payment.status = ServiceRequest.PaymentStatus.FAILED
+                payment.error_code = "signature_mismatch"
+                payment.save(update_fields=["status", "error_code", "updated_at"])
+                logger.warning(f"Payment signature mismatch for booking {sr.id}, order {order_id}.")
+                return _error("Payment verification failed.", 400)
+        elif not settings.PAYMENT_SANDBOX_MODE:
+            return _error(
+                "Online payment is not available right now. Please choose cash on service or contact support.",
+                503,
+            )
+        # else: PAYMENT_SANDBOX_MODE is on (local/dev only) — proceed without a
+        # real signature so the flow can be exercised without live credentials.
+
+        payment.razorpay_payment_id = payment_id or f"SANDBOX_{uuid.uuid4().hex[:12].upper()}"
+        payment.razorpay_signature = signature or ""
+        payment.status = ServiceRequest.PaymentStatus.PAID
+        payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "updated_at"])
+
+        sr.transaction_id = payment.razorpay_payment_id
+        sr.payment_gateway = payment.gateway
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
-        sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
+
+        try:
+            apply_transition(
+                sr, ServiceRequest.Status.CONFIRMED, ServiceRequest.PaymentStatus.PAID,
+                actor=request.user if request.user.is_authenticated else None,
+            )
+            sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
+        except ValidationError as e:
+            # The payment itself is captured and recorded either way — never
+            # lose the customer's money over a status-machine conflict.
+            # Flag it for manual review instead of silently failing.
+            logger.error(f"Payment captured for booking {sr.id} but status transition to CONFIRMED failed: {e}")
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Payment confirmed. Your booking status is being updated — please contact support if it does not update within a few minutes.",
+            )
 
         return _success(
             data={
@@ -167,8 +357,17 @@ class InvoiceDownloadView(APIView):
     """
     GET /api/booking/<id>/invoice/ or GET /api/settings/invoices/download/?request_id=<id>
     Generate and return a PDF invoice for a service booking request.
+
+    Fixes EC-09: this used to be permissions.AllowAny with no ownership check
+    at all, and booking IDs are sequential — anyone could enumerate them and
+    download every customer's invoice PDF (name, phone, email, home address,
+    transaction ID). Now requires the same ownership proof used elsewhere in
+    this app (tracking token, phone match, or authenticated owner), or admin
+    staff.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "invoice_download"
 
     def get(self, request, pk=None):
         req_id = request.query_params.get("request_id") or request.query_params.get("id") or pk
@@ -183,6 +382,10 @@ class InvoiceDownloadView(APIView):
 
         if not sr:
             return _error(f"Booking with ID '{req_id}' not found.", 404)
+
+        is_staff = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
+        if not is_staff and not _verify_booking_ownership(request, sr):
+            return _error("You are not authorized to view this invoice.", 403)
 
         if str(sr.status).lower() in ("cancelled", "rejected"):
             return _error("Invoice is not available for cancelled bookings.", 400)

@@ -77,6 +77,23 @@ def _generate_request_id(category_or_slug=None):
     return req_id
 
 
+def _generate_secure_start_otp():
+    """
+    Generates a cryptographically random 6-digit service-start OTP.
+
+    Fixes EC-01: the previous implementation derived this code
+    deterministically from sha256(request_id, phone, customer_name) — values
+    the assigned technician (and anyone else with API access to the job)
+    already knows, so they could compute the "proof the technician actually
+    reached the customer" code themselves instead of the customer reading it
+    out on arrival. A randomly generated code cannot be derived from
+    anything else stored on the booking, so it has to come from the
+    customer.
+    """
+    import secrets
+    return str(secrets.randbelow(900000) + 100000)
+
+
 # ── Service categories (static list) ─────────────────────────────────────────
 SERVICE_CATEGORIES = [
     ("plumbing", "Plumbing"),
@@ -340,9 +357,7 @@ class ServiceRequest(models.Model):
                 if not self.customer:
                     self.customer = u
         if not self.start_otp:
-            import hashlib
-            h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()
-            self.start_otp = str((int(h[:8], 16) % 900000) + 100000)
+            self.start_otp = _generate_secure_start_otp()
         if not self.tracking_token:
             import uuid
             self.tracking_token = uuid.uuid4()

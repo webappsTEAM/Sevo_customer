@@ -14,6 +14,7 @@ from .models import (
     RescheduleSuggestedSlot, RescheduleStatusHistory,
     RefundRequest, RefundEvidence,
     Coupon, CouponUsage,
+    _generate_secure_start_otp,
 )
 
 
@@ -418,10 +419,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if obj.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]:
             return None
         if not obj.start_otp:
-            import hashlib
-            raw = f"otp:{obj.id}:{obj.created_at}"
-            h = hashlib.sha256(raw.encode()).hexdigest()
-            obj.start_otp = str((int(h[:8], 16) % 900000) + 100000)
+            # Fixes EC-01: this used to derive the code deterministically from
+            # obj.id/obj.created_at (both knowable to anyone with API access to
+            # the job), which made it forgeable. Now uses the same
+            # cryptographically random generator as ServiceRequest.save().
+            obj.start_otp = _generate_secure_start_otp()
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
 
