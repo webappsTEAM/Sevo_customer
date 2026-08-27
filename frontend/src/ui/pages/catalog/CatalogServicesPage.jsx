@@ -11,6 +11,51 @@ import ImageUploader from "../../components/ImageUploader.jsx"
 import { resolveImageUrl } from "../../../utils/imageUrl.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
 
+const SERVICE_SUBTABS = {
+  "kitchen-cleaning": [
+    { id: "packages", label: "Full Kitchen Packages" },
+    { id: "appliance", label: "Single Appliance Cleaning" },
+    { id: "cabinet_tile", label: "Cabinet & Tile Care" },
+    { id: "addons", label: "Quick Extra Services" },
+  ],
+  "bathroom-cleaning": [
+    { id: "packages", label: "Full Clean" },
+    { id: "minis", label: "Quick Extra Services" },
+    { id: "subscription", label: "Weekly Bathroom Cleaning Subscription" },
+  ],
+  "sofa-cleaning": [
+    { id: "sofa", label: "Sofa Cleaning" },
+    { id: "mattress", label: "Mattress Cleaning" },
+    { id: "carpet", label: "Carpet Cleaning" },
+  ],
+  "full-house-cleaning": [
+    { id: "full_apartment", label: "Occupied Apartment" },
+    { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
+    { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
+    { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
+    { id: "partial_home", label: "Quick Extra Services / Partial Home" },
+  ],
+  "cleaning": [
+    { id: "full_apartment", label: "Occupied Apartment" },
+    { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
+    { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
+    { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
+    { id: "partial_home", label: "Quick Extra Services / Partial Home" },
+  ],
+  "ants-bed-bugs-control": [
+    { id: "bedbugs", label: "Bedbugs Control" },
+    { id: "ants", label: "Ants Control" },
+  ],
+  "cockroach-control": [
+    { id: "cockroach", label: "Cockroach Control" },
+    { id: "termite", label: "Termite Control" },
+  ],
+  "termite-control": [
+    { id: "cockroach", label: "Cockroach Control" },
+    { id: "termite", label: "Termite Control" },
+  ],
+}
+
 const EMPTY_SERVICE = {
   name: "",
   slug: "",
@@ -466,7 +511,7 @@ export function CatalogServicesPage() {
                             {/* Sub-Service Header Row */}
                             <div className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
                               <div
-                                onClick={() => hasPackages && toggleServicePackages(svc.slug)}
+                                onClick={() => setEditing(svc)}
                                 className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
                               >
                                 <div className="w-8 h-8 rounded-lg bg-indigo-50/80 text-indigo-700 flex items-center justify-center shrink-0 font-semibold text-xs border border-indigo-100/60">
@@ -679,38 +724,136 @@ export function CatalogServicesPage() {
                 onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
               />
             </div>
+            {!SERVICE_SUBTABS[editing.slug] && (
+              <>
+                <TextArea
+                  label="Short Description"
+                  placeholder="Brief summary of this service shown in catalog & customer booking..."
+                  value={editing.description || ""}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                />
 
-            <TextArea
-              label="Short Description"
-              placeholder="Brief summary of this service shown in catalog & customer booking..."
-              value={editing.description || ""}
-              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-            />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <Input
+                    label="Icon Name"
+                    placeholder="e.g. Truck, Wrench, Wind"
+                    value={editing.icon || ""}
+                    onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
+                  />
+                  <Input
+                    label="Display Sort Order"
+                    type="number"
+                    value={editing.sort_order ?? 0}
+                    onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
+                  />
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Input
-                label="Icon Name"
-                placeholder="e.g. Truck, Wrench, Wind"
-                value={editing.icon || ""}
-                onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
-              />
-              <Input
-                label="Display Sort Order"
-                type="number"
-                value={editing.sort_order ?? 0}
-                onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
-              />
-            </div>
+                {/* Service Image Section */}
+                <ImageUploader
+                  label="Service Image"
+                  description="Upload a custom service image or paste an image URL. Automatically compressed to WebP."
+                  value={editing.image || ""}
+                  assetType="services"
+                  aspectRatio="aspect-[16/9]"
+                  onChange={(url) => setEditing({ ...editing, image: url })}
+                />
+              </>
+            )}
 
-            {/* Service Image Section */}
-            <ImageUploader
-              label="Service Image"
-              description="Upload a custom service image or paste an image URL. Automatically compressed to WebP."
-              value={editing.image || ""}
-              assetType="services"
-              aspectRatio="aspect-[16/9]"
-              onChange={(url) => setEditing({ ...editing, image: url })}
-            />
+            {/* Sub-tab Banner Images Customizer Section */}
+            {editing.slug && SERVICE_SUBTABS[editing.slug] && (
+              <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-4 my-3 text-left">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">Sub-tab Banner Images</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Customize the top banner image for each sub-tab. You can also add or rename tabs.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
+                      const newId = `tab_${Date.now()}`;
+                      tabs.push({ id: newId, label: `New Tab (${tabs.length + 1})` });
+                      setEditing({
+                        ...editing,
+                        customization: {
+                          ...(editing.customization || {}),
+                          subtabs: tabs
+                        }
+                      });
+                    }}
+                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-755 text-white text-[11px] font-black rounded-lg border-none cursor-pointer"
+                  >
+                    + Add New Tab
+                  </button>
+                </div>
+                <div className="space-y-3.5">
+                  {(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || []).map((subtab, idx) => {
+                    const currentVal = editing.customization?.subtab_banners?.[subtab.id] || "";
+                    return (
+                      <div key={subtab.id || idx} className="p-3 bg-white rounded-xl border border-slate-100 shadow-2xs space-y-2">
+                        <div className="flex items-center gap-3 justify-start">
+                          <input
+                            type="checkbox"
+                            checked={subtab.enabled !== false}
+                            onChange={(e) => {
+                              const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
+                              tabs[idx] = { ...tabs[idx], enabled: e.target.checked };
+                              setEditing({
+                                ...editing,
+                                customization: {
+                                  ...(editing.customization || {}),
+                                  subtabs: tabs
+                                }
+                              });
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={subtab.label}
+                            onChange={(e) => {
+                              const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
+                              tabs[idx] = { ...tabs[idx], label: e.target.value };
+                              setEditing({
+                                ...editing,
+                                customization: {
+                                  ...(editing.customization || {}),
+                                  subtabs: tabs
+                                }
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1 text-xs font-bold border border-slate-200 rounded-lg outline-none focus:border-indigo-400 bg-slate-50 hover:bg-white focus:bg-white"
+                          />
+                        </div>
+                        <ImageUploader
+                          compact={true}
+                          label="Banner Image"
+                          assetType="banners"
+                          value={currentVal}
+                          onChange={(url) => {
+                            const updatedBanners = { ...(editing.customization?.subtab_banners || {}) };
+                            if (url) {
+                              updatedBanners[subtab.id] = url;
+                            } else {
+                              delete updatedBanners[subtab.id];
+                            }
+                            setEditing({
+                              ...editing,
+                              customization: {
+                                ...(editing.customization || {}),
+                                subtabs: editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [],
+                                subtab_banners: updatedBanners
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer pt-1">
               <input

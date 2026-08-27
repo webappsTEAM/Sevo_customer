@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react";
 import { apiRequest } from "../../api/client.js";
+import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
@@ -699,7 +700,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               minis: customB.minis || "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=1200&q=80&fit=crop",
               subscription: customB.subscription || "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=1200&q=80&fit=crop"
             };
-            const bannerUrl = banners[activeTab];
+            const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;
             return (
               <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">

@@ -2898,6 +2898,8 @@ export function CatalogPackagesPage() {
     try {
       const payload = {
         name: serviceCustomizing.name,
+        slug: serviceCustomizing.slug,
+        category: serviceCustomizing.category,
         description: serviceCustomizing.description || "",
         image: serviceCustomizing.image || "",
         is_active: serviceCustomizing.is_active,

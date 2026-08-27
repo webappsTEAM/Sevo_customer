@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
 import { apiRequest } from "../../api/client.js";
+import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 import { SOFA_DETAIL_DATA } from "./catalog/sofaDetailData.js";
 
@@ -443,12 +444,12 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   {isFirst && (
                     <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-4">
                       <img
-                        src={(() => {
+                        src={resolveImageUrl((() => {
                           const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
                           if (activeTab === "sofa") return customB.sofa || "/mockups/sofa_top_new.png";
                           if (activeTab === "mattress") return customB.mattress || "/mockups/mattress_header_new.png";
                           return customB.carpet || "/mockups/carpet_top_new.png";
-                        })()}
+                        })())}
                         alt={service.name}
                         className="w-full h-full object-cover object-top"
                       />
