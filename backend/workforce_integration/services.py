@@ -108,7 +108,7 @@ class WorkforceIntegrationService:
                 logger.warning(f"Workforce API responded with status {response.status_code}: {response.text}")
                 return {"success": False, "status": "workforce_unavailable", "message": f"Workforce API error ({response.status_code})", "retryable": True}
         except Exception as e:
-            logger.info(f"Workforce API dispatch failed: {e}")
+            logger.warning(f"Workforce API dispatch failed -- booking was NOT dispatched to a technician: {e}")
             return {"success": False, "status": "workforce_unavailable", "message": "Workforce service unreachable", "retryable": True}
 
     @classmethod
@@ -131,7 +131,7 @@ class WorkforceIntegrationService:
             if response.status_code in [200, 204]:
                 return {"success": True}
         except Exception as e:
-            logger.info(f"Workforce cancellation notification fallback: {e}")
+            logger.warning(f"Workforce cancellation notification failed -- vendor side was NOT told this booking was cancelled: {e}")
 
         return {"success": True, "fallback": True}
 
@@ -155,7 +155,7 @@ class WorkforceIntegrationService:
             if response.status_code in [200, 204]:
                 return {"success": True}
         except Exception as e:
-            logger.info(f"Workforce reschedule notification fallback: {e}")
+            logger.warning(f"Workforce reschedule notification failed -- vendor side was NOT told this booking was rescheduled: {e}")
 
         return {"success": True, "fallback": True}
 
@@ -257,7 +257,7 @@ class WorkforceIntegrationService:
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
         except Exception as e:
-            logger.info(f"Workforce extension decision notification fallback: {e}")
+            logger.warning(f"Workforce extension decision notification failed -- vendor side was NOT told: {e}")
 
         return {"success": True, "fallback": True}
 
@@ -285,7 +285,7 @@ class WorkforceIntegrationService:
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
         except Exception as e:
-            logger.info(f"Workforce feedback push fallback: {e}")
+            logger.warning(f"Workforce feedback push failed -- technician rating was NOT delivered to the vendor side: {e}")
 
         return {"success": True, "fallback": True}
 
