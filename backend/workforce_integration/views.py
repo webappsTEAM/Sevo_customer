@@ -459,14 +459,17 @@ class WorkforceWebhookView(APIView):
 
     @classmethod
     def _broadcast_event(cls, sr, event_type):
+        # Was followed by a second `except Exception as e:` clause that was
+        # unreachable (the first except already catches everything) and, even
+        # if it had been reachable, wrongly returned an HTTP Response from a
+        # transaction.on_commit() callback whose return value is discarded --
+        # looked like a copy-paste leftover from post()'s own exception
+        # handler. Removed; behaviour is unchanged since it never executed.
         try:
             from service_requests.notifications import broadcast_tracking_event
             broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
-        except Exception as e:
-            logger.error(f"Error processing workforce webhook event {event_type}: {e}", exc_info=True)
-            return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WorkforceSlotsView(APIView):
