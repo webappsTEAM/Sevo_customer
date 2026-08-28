@@ -39,6 +39,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='notificationoutbox',
-            index=models.Index(fields=['status', 'created_at'], name='sr_notif_outbox_status_created_idx'),
+            index=models.Index(fields=['status', 'created_at'], name='notif_outbox_status_crt_idx'),
         ),
     ]
