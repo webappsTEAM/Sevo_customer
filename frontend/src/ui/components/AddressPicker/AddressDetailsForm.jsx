@@ -467,7 +467,10 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
             <input
               id="adf-receiver-phone"
               value={state.receiver_phone}
-              onChange={field("receiver_phone")}
+              onChange={(e) => {
+                const digitsOnly = e.target.value.replace(/\D/g, "");
+                dispatch({ type: "FIELD", name: "receiver_phone", value: digitsOnly });
+              }}
               onBlur={touch("receiver_phone")}
               placeholder='10-digit mobile'
               inputMode="tel"

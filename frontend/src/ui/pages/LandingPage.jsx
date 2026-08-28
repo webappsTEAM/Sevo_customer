@@ -2358,6 +2358,10 @@ export function LandingPage() {
   }, [])
 
   useEffect(() => {
+    // If user already has a saved location, do not overwrite it with automatic geolocation
+    const storedLocation = localStorage.getItem("calservice_user_location")
+    if (storedLocation) return
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
@@ -3606,10 +3610,7 @@ export function LandingPage() {
                 image: "/mockups/category_home_repair_3d.jpg",
                 fallbackIcon: PaintRoller,
                 color: "bg-[#DCFCE7] text-[#16A34A]",
-                onClick: () => {
-                  setActiveCategory({ id: "paintings", name: "Paintings" })
-                  setIsPaintingModalOpen(true)
-                }
+                onClick: () => navigate("?category=painting")
               },
               {
                 name: "Appliance Repair",
