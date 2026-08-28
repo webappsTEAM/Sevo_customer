@@ -3363,10 +3363,7 @@ export function LandingPage() {
                 image: "/mockups/category_home_repair_3d.jpg",
                 fallbackIcon: PaintRoller,
                 color: "bg-[#DCFCE7] text-[#16A34A]",
-                onClick: () => {
-                  setActiveCategory({ id: "paintings", name: "Paintings" })
-                  setIsPaintingModalOpen(true)
-                }
+                onClick: () => navigate("?category=painting")
               },
               {
                 name: "Appliance Repair",
