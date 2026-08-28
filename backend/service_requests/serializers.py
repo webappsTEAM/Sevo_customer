@@ -17,6 +17,12 @@ from .models import (
     _generate_secure_start_otp,
 )
 
+# GT-A-03: declared_value at or above this (INR) requires a named,
+# accountable receiver on a logistics booking. Env-overridable like the
+# other threshold constants in this codebase.
+from django.conf import settings as _dj_settings
+HIGH_VALUE_CONSIGNMENT_THRESHOLD = int(getattr(_dj_settings, "HIGH_VALUE_CONSIGNMENT_THRESHOLD", 25000))
+
 
 class CatalogServiceSerializer(serializers.ModelSerializer):
     """v1 compat shape for the public /api/catalog/services/ endpoint."""
@@ -151,6 +157,11 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             # frontend is updated to actually ask for them. See
             # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md.
             "drop_contact_name", "drop_contact_phone", "drop_contact_email",
+            # Fixes GT-A-03 (partial): declared_value/consignee_relationship.
+            # Also optional at the field level -- validate() below enforces
+            # them together only once declared_value crosses the high-value
+            # threshold, so ordinary low-value bookings are unaffected.
+            "declared_value", "consignee_relationship",
         )
         extra_kwargs = {
             "description":         {"required": False, "allow_blank": True},
@@ -167,6 +178,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "drop_contact_name":   {"required": False, "allow_blank": True},
             "drop_contact_phone":  {"required": False, "allow_blank": True},
             "drop_contact_email":  {"required": False, "allow_blank": True},
+            "declared_value":        {"required": False, "allow_null": True},
+            "consignee_relationship": {"required": False, "allow_blank": True},
         }
 
     def validate_latitude(self, value):
@@ -247,6 +260,29 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 "description": "Please describe what you're moving (items, approximate weight, "
                                  "and any fragile/special-handling notes) so the driver knows what to expect."
             })
+
+        # Fixes GT-A-03 (partial): "identity requirement scaled to declared
+        # value". Below the threshold this is a no-op -- most bookings don't
+        # even set declared_value. Above it, require both a receiver contact
+        # (drop_contact_name/phone, already collected for GT-D-03) and an
+        # explicit relationship to the customer, so there's at least a named,
+        # accountable person the driver is handing high-value goods to.
+        declared_value = attrs.get("declared_value")
+        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= HIGH_VALUE_CONSIGNMENT_THRESHOLD:
+            missing = []
+            if not (attrs.get("drop_contact_name") or "").strip():
+                missing.append("drop_contact_name")
+            if not (attrs.get("drop_contact_phone") or "").strip():
+                missing.append("drop_contact_phone")
+            if not (attrs.get("consignee_relationship") or "").strip():
+                missing.append("consignee_relationship")
+            if missing:
+                raise serializers.ValidationError({
+                    "declared_value": (
+                        f"Consignments declared at ₹{HIGH_VALUE_CONSIGNMENT_THRESHOLD:,.0f} or more require a named "
+                        f"receiver: {', '.join(missing)}."
+                    )
+                })
         return attrs
 
 

@@ -236,6 +236,21 @@ class ServiceRequest(models.Model):
     # email is what actually lets notify_delivery_recipient() (added this
     # pass) reach them using the existing, already-proven send_mail path.
     drop_contact_email = models.EmailField(blank=True, default="")
+    # GT-A-03: "no sender or consignee identity for higher-value
+    # consignments" -- drop_contact_name/phone/email above already give the
+    # driver *someone* to hand goods to; declared_value and
+    # consignee_relationship are the two fields still missing to scale
+    # identity requirements to what's actually being moved. Serializer-level
+    # validation (see ServiceRequestPublicCreateSerializer.validate) requires
+    # both once declared_value crosses HIGH_VALUE_CONSIGNMENT_THRESHOLD.
+    # Verified sender identity + a receiver OTP at handover (the doc's full
+    # "how mature platforms do it") is a real feature -- OTP capture at
+    # drop-off, scaled by this threshold -- deliberately left as a follow-up
+    # rather than guessed at here; it touches the vendor app's handover flow,
+    # which needs its own careful pass like the Customer-side OTP hardening
+    # earlier this session, not a same-turn add-on.
+    declared_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    consignee_relationship = models.CharField(max_length=100, blank=True, default="")
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
