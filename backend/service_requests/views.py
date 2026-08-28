@@ -32,6 +32,7 @@ from .models import (
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
     Coupon, CouponUsage,
     BookingSeries,
+    BookingMessage,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -47,6 +48,7 @@ from .serializers import (
     InsuranceClaimSerializer,
     TripStopSerializer,
     BookingSeriesSerializer,
+    BookingMessageSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -2902,6 +2904,67 @@ class CustomerBookingTripStopsView(APIView):
         except ValueError as e:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
         return _standard_response(success=True, data=TripStopSerializer(created, many=True).data)
+
+
+class CustomerBookingMessagesView(APIView):
+    """
+    X-09: in-app chat between customer and technician for a booking.
+    GET  /api/bookings/<pk>/messages/  -- list the thread, marks unread
+         technician messages as read by the customer
+    POST /api/bookings/<pk>/messages/  -- send a message as the customer
+
+    Deliberately polling-based, not push -- the frontend re-fetches this
+    on an interval, same pattern as the tracking page. See BookingMessage's
+    docstring for why this doesn't attempt push/websockets or phone-number
+    masking (X-09's other half).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_booking(self, pk, identifier):
+        sr_id = pk or identifier
+        try:
+            if str(sr_id).isdigit():
+                return ServiceRequest.objects.get(pk=int(sr_id))
+            return ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return None
+
+    def _check_owner(self, sr, request):
+        return sr.customer_id == request.user.id or getattr(request.user, "role", "").upper() == "ADMIN"
+
+    def get(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not self._check_owner(sr, request):
+            return _error("You do not have permission to view this booking's messages.", 403)
+        messages = sr.chat_messages.all()
+        unread_ids = [m.id for m in messages if m.sender_persona != BookingMessage.SenderPersona.CUSTOMER and m.read_at_customer is None]
+        if unread_ids:
+            from django.utils import timezone
+            BookingMessage.objects.filter(id__in=unread_ids).update(read_at_customer=timezone.now())
+            messages = sr.chat_messages.all()
+        return _standard_response(success=True, data=BookingMessageSerializer(messages, many=True).data)
+
+    def post(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not self._check_owner(sr, request):
+            return _error("You do not have permission to message on this booking.", 403)
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message cannot be empty."}, status_code=400)
+        if len(body) > 2000:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message is too long (max 2000 characters)."}, status_code=400)
+        msg = BookingMessage.objects.create(
+            booking=sr,
+            sender_persona=BookingMessage.SenderPersona.CUSTOMER,
+            sender_name=sr.customer_name or request.user.get_full_name() or "Customer",
+            sender_user=request.user,
+            body=body,
+        )
+        return _standard_response(success=True, data=BookingMessageSerializer(msg).data, status_code=201)
 
 
 class CustomerBookingSeriesListCreateView(APIView):

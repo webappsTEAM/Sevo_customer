@@ -17,6 +17,7 @@ from .models import (
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
     BookingSeries,
+    BookingMessage,
     _generate_secure_start_otp,
 )
 
@@ -1103,3 +1104,17 @@ class BookingSeriesSerializer(serializers.ModelSerializer):
             "last_generated_booking_id", "created_at", "updated_at",
         )
         read_only_fields = fields
+
+class BookingMessageSerializer(serializers.ModelSerializer):
+    """X-09: read/write shape for one in-app chat message on a booking.
+    sender_persona/sender_name/sender_user are all server-assigned from
+    the requesting user in the view (see CustomerBookingMessagesView) --
+    read-only here even on input, so a client can never spoof who a
+    message is "from"."""
+    class Meta:
+        model = BookingMessage
+        fields = (
+            "id", "sender_persona", "sender_name", "body", "created_at",
+            "read_at_customer", "read_at_technician",
+        )
+        read_only_fields = ("id", "sender_persona", "sender_name", "created_at", "read_at_customer", "read_at_technician")

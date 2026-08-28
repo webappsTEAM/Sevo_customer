@@ -1304,6 +1304,64 @@ class ComplaintAttachment(models.Model):
         return f"Attachment for {self.complaint.complaint_number}"
 
 
+class BookingMessage(models.Model):
+    """
+    X-09: "no in-app chat between customer and technician" -- previously
+    the only communication path was phone calls (no masking/proxying --
+    real numbers exchanged directly, itself a separate privacy concern)
+    or the generic ComplaintMessage thread (only exists once a complaint
+    has been raised, not for ordinary day-of-service coordination like
+    "I'm running 10 min late" or "please use the side gate").
+
+    Deliberately simple and polling-based (frontend re-fetches on an
+    interval, matching the tracking page's existing polling pattern) --
+    NOT a websocket/push implementation, which would require adopting new
+    real-time infra (Django Channels + a channel layer backend) this
+    codebase doesn't currently have. See HS-D-01/02/03 for that larger,
+    infra-level piece, deliberately left for a reviewed follow-up.
+
+    Deliberately NOT phone-number masking/proxying (X-09's other half) --
+    that needs a telephony vendor account (Twilio Proxy or equivalent)
+    and a real per-minute cost commitment, not something to pick
+    unilaterally in an autonomous pass.
+    """
+
+    class SenderPersona(models.TextChoices):
+        CUSTOMER   = "customer",   "Customer"
+        TECHNICIAN = "technician", "Technician"
+        ADMIN      = "admin",      "Admin"
+
+    booking = models.ForeignKey(
+        "service_requests.ServiceRequest",
+        on_delete=models.CASCADE,
+        related_name="chat_messages",
+    )
+    sender_persona = models.CharField(max_length=15, choices=SenderPersona.choices)
+    sender_name = models.CharField(max_length=200, blank=True, default="")
+    # Nullable: the vendor app (a separate Django project, separate user
+    # table) writes technician-sent messages directly against the shared
+    # table without a matching row in this app's AUTH_USER_MODEL -- see
+    # vendor/backend/service_requests/models.py's unmanaged mirror.
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_booking_messages",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at_customer = models.DateTimeField(null=True, blank=True)
+    read_at_technician = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        db_table = "service_requests_booking_message"
+
+    def __str__(self):
+        return f"{self.sender_persona}: {self.body[:40]}"
+
+
 class ComplaintMessage(models.Model):
     """The shared conversation thread for complaints."""
 
