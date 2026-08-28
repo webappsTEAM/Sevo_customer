@@ -2607,6 +2607,42 @@ class AdminInsuranceClaimResolveView(APIView):
         return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data)
 
 
+class AdminNotificationOutboxView(APIView):
+    """
+    GET /api/admin/notifications/outbox/?recipient=<email>&status=<SENT|FAILED>
+    HS-D-04: lets support/admin actually answer "was the customer told?" --
+    read-only view over NotificationOutbox, filterable by recipient and/or
+    status. Capped at 100 rows per request; this is a support lookup tool,
+    not a bulk export.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        from .models import NotificationOutbox
+        qs = NotificationOutbox.objects.all()
+        recipient = request.query_params.get("recipient")
+        if recipient:
+            qs = qs.filter(recipient__iexact=recipient)
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter.upper())
+
+        rows = qs[:100]
+        return _standard_response(success=True, data=[
+            {
+                "id": r.id,
+                "recipient": r.recipient,
+                "subject": r.subject,
+                "status": r.status,
+                "error": r.error,
+                "attempt_count": r.attempt_count,
+                "created_at": r.created_at,
+                "last_attempt_at": r.last_attempt_at,
+            }
+            for r in rows
+        ])
+
+
 class TechnicianProfileView(APIView):
     """
     GET /api/technicians/<technician_id>/profile/

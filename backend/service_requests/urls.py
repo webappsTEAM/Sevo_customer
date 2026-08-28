@@ -78,7 +78,7 @@ from .views import (
     AdminRefundInternalNoteView,
     AdminRefundListView,
     AdminRefundActionView,
-    CustomerWalletView, AdminWalletCreditView, TechnicianProfileView,
+    CustomerWalletView, AdminWalletCreditView, TechnicianProfileView, AdminNotificationOutboxView,
     CustomerInsuranceClaimListCreateView, AdminInsuranceClaimListView, AdminInsuranceClaimResolveView,
 
     # Complaints
@@ -209,6 +209,7 @@ urlpatterns = [
     path('admin/refunds/<int:pk>/<str:action>/',         AdminRefundActionView.as_view(),              name='admin-refund-action'),
     path('wallet/',                                        CustomerWalletView.as_view(),                 name='customer-wallet'),
     path('technicians/<str:technician_id>/profile/',       TechnicianProfileView.as_view(),              name='technician-profile'),
+    path('admin/notifications/outbox/',                    AdminNotificationOutboxView.as_view(),        name='admin-notification-outbox'),
     path('insurance-claims/',                              CustomerInsuranceClaimListCreateView.as_view(), name='insurance-claims'),
     path('admin/insurance-claims/',                         AdminInsuranceClaimListView.as_view(),        name='admin-insurance-claims'),
     path('admin/insurance-claims/<int:pk>/resolve/',        AdminInsuranceClaimResolveView.as_view(),     name='admin-insurance-claim-resolve'),

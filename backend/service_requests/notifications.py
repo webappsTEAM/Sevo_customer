@@ -8,10 +8,67 @@ In prod: sends via the configured SMTP backend.
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import send_mail as _django_send_mail
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def send_mail(subject, message, from_email, recipient_list, fail_silently=False, html_message=None, **kwargs):
+    """
+    HS-D-04: transparent wrapper around django.core.mail.send_mail. Every one
+    of this file's ~19 existing send_mail(...) call sites picks this up
+    automatically -- same name, same signature -- with ZERO changes to those
+    call sites, so their existing fail_silently/return-value-checking logic
+    (added earlier this session for EC-05/X-07) is completely unchanged.
+    This adds exactly one thing: a persisted NotificationOutbox row per
+    recipient per attempt, whether it succeeded or failed, which is what
+    actually answers "was the customer told?" and what
+    retry_failed_notifications (management command) replays for FAILED rows.
+
+    Deliberately does NOT change delivery to be async/queued -- sending is
+    still inline in the request path, exactly as before. Queueing sending
+    itself would be a bigger, riskier change (a broker, a worker process)
+    than this session can safely stand up and verify without a live
+    environment; the outbox record is the safe, real half of "delivery
+    guarantee": every attempt is now provably recorded and retryable.
+    """
+    error = ""
+    result = 0
+    try:
+        result = _django_send_mail(subject, message, from_email, recipient_list, fail_silently=fail_silently, html_message=html_message, **kwargs)
+    except Exception as exc:
+        error = str(exc)
+        if not fail_silently:
+            _write_outbox(recipient_list, subject, message, html_message, from_email, error)
+            raise
+
+    status = "SENT" if result else "FAILED"
+    _write_outbox(recipient_list, subject, message, html_message, from_email, error, status=status)
+    return result
+
+
+def _write_outbox(recipient_list, subject, message, html_message, from_email, error, status=None):
+    from .models import NotificationOutbox
+    if status is None:
+        status = "FAILED" if error else "SENT"
+    try:
+        for recipient in (recipient_list or []):
+            NotificationOutbox.objects.create(
+                recipient=recipient,
+                subject=subject or "",
+                body_text=message or "",
+                body_html=html_message or "",
+                from_email=from_email or "",
+                status=status,
+                error=error,
+            )
+    except Exception as outbox_err:
+        # The outbox is a record of delivery, not the delivery itself -- a
+        # failure to WRITE the record must never be raised back into a
+        # notification call, or an outbox bug could start breaking the
+        # actual notifications it's meant to be observing.
+        logger.error("[NotificationOutbox] Failed to persist outbox record: %s", outbox_err)
 
 
 def _customer_wants(user, field_name) -> bool:
