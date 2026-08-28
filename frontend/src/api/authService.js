@@ -165,10 +165,15 @@ export async function apiFetchMe(customSignal = null) {
   try {
     const url = `${API_BASE_URL}/auth/me/`
     const headers = new Headers()
+    let token = null
     try {
-      const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+      token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
       if (token) headers.set("Authorization", `Bearer ${token}`)
     } catch (_) {}
+
+    const hasStoredSession = Boolean(token || (() => {
+      try { return !!localStorage.getItem("caltrack_user") } catch (_) { return false }
+    })())
 
     // Link caller signal if provided
     let effectiveSignal = controller.signal
@@ -186,14 +191,14 @@ export async function apiFetchMe(customSignal = null) {
       signal: effectiveSignal,
     })
 
-    // If access token is expired or forbidden (401 or 403), attempt a silent refresh using the refresh cookie
-    if (res.status === 401 || res.status === 403) {
+    // If access token is expired or forbidden (401 or 403), attempt a silent refresh ONLY if we had a prior session
+    if ((res.status === 401 || res.status === 403) && hasStoredSession && !_knownUnauthenticated) {
       const refreshed = await apiRefreshToken()
       if (refreshed) {
         const retryHeaders = new Headers()
         try {
-          const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
-          if (token) retryHeaders.set("Authorization", `Bearer ${token}`)
+          const retryToken = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+          if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`)
         } catch (_) {}
 
         res = await fetch(url, {
@@ -211,6 +216,11 @@ export async function apiFetchMe(customSignal = null) {
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
         _knownUnauthenticated = true
+        try {
+          localStorage.removeItem("caltrack_user")
+          localStorage.removeItem("caltrack_access_token")
+          localStorage.removeItem("qt_access")
+        } catch (_) {}
       } else {
         console.warn("apiFetchMe failed with status:", res.status, text)
       }
@@ -225,7 +235,6 @@ export async function apiFetchMe(customSignal = null) {
     if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
       return null
     }
-    console.error("apiFetchMe exception:", err)
     return null
   }
 }
@@ -236,6 +245,18 @@ export async function apiFetchMe(customSignal = null) {
  */
 export async function apiRefreshToken() {
   if (_knownUnauthenticated) return false
+  const hasStoredSession = (() => {
+    try {
+      return !!(localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("caltrack_user"))
+    } catch (_) {
+      return false
+    }
+  })()
+  if (!hasStoredSession) {
+    _knownUnauthenticated = true
+    return false
+  }
+
   if (_refreshInFlight) return _refreshInFlight
 
   _refreshInFlight = (async () => {

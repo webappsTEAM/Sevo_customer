@@ -591,7 +591,6 @@ class CustomerBookingCancelView(APIView):
 
         return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
 
-
 import math
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
@@ -607,41 +606,130 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
+def _resolve_customer_location(sr):
+    """
+    Authoritative customer location resolver in strict compliance with production hierarchy:
+    1. ServiceRequest latitude + longitude (if already stored & valid)
+    2. Customer's selected saved address coordinates (if available)
+    3. Server-side geocoding of the real booking address
+    4. Explicit location_unavailable (NEVER silently substitute fake or default coordinates)
+
+    Returns dict:
+    {
+        "available": bool,
+        "latitude": float | None,
+        "longitude": float | None,
+        "address": str,
+        "source": "booking" | "saved_address" | "geocoded" | None
+    }
+    """
+    # 1. Stored coordinates on ServiceRequest
+    if sr.latitude is not None and sr.longitude is not None:
+        try:
+            lat = float(sr.latitude)
+            lng = float(sr.longitude)
+            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
+                return {
+                    "available": True,
+                    "latitude": lat,
+                    "longitude": lng,
+                    "address": sr.address or "",
+                    "source": "booking",
+                }
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Coordinates from selected saved address
+    saved_addr = None
+    if getattr(sr, "saved_address_id", None):
+        try:
+            from accounts.models import SavedAddress
+            saved_addr = SavedAddress.objects.filter(id=sr.saved_address_id).first()
+        except Exception:
+            pass
+    elif sr.customer_id:
+        try:
+            from accounts.models import SavedAddress
+            saved_addr = SavedAddress.objects.filter(user_id=sr.customer_id).first()
+        except Exception:
+            pass
+
+    if saved_addr and saved_addr.latitude is not None and saved_addr.longitude is not None:
+        try:
+            lat = float(saved_addr.latitude)
+            lng = float(saved_addr.longitude)
+            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
+                try:
+                    from decimal import Decimal
+                    sr.latitude = Decimal(str(lat))
+                    sr.longitude = Decimal(str(lng))
+                    sr.save(update_fields=["latitude", "longitude"])
+                except Exception:
+                    pass
+                return {
+                    "available": True,
+                    "latitude": lat,
+                    "longitude": lng,
+                    "address": sr.address or saved_addr.formatted_address or "",
+                    "source": "saved_address",
+                }
+        except (ValueError, TypeError):
+            pass
+
+    # 3. Server-side forward geocoding of the real booking address
+    if sr.address and sr.address.strip():
+        try:
+            from .services.address_service import AddressService
+            coords = AddressService.forward_geocode(sr.address.strip())
+            if coords:
+                lat, lng = coords
+                try:
+                    from decimal import Decimal
+                    sr.latitude = Decimal(str(lat))
+                    sr.longitude = Decimal(str(lng))
+                    sr.save(update_fields=["latitude", "longitude"])
+                except Exception:
+                    pass
+                return {
+                    "available": True,
+                    "latitude": lat,
+                    "longitude": lng,
+                    "address": sr.address,
+                    "source": "geocoded",
+                }
+        except Exception as e:
+            logger.warning("_resolve_customer_location geocoding error: %s", e)
+
+    # 4. Explicitly unavailable (NEVER use fallback default coordinates)
+    return {
+        "available": False,
+        "latitude": None,
+        "longitude": None,
+        "address": sr.address or "",
+        "source": None,
+    }
+
+
 def _build_tracking_payload(sr, has_full_access):
     """
-    Constructs the canonical live tracking response payload for a booking.
-    Sensitive data (technician phone, Service Start OTP) is strictly omitted
-    unless has_full_access is True.
+    Constructs the canonical authoritative live tracking response payload for a booking.
+    Strictly adheres to production rules:
+    - Real customer coordinates or location_unavailable (NO fallback Hosur coords).
+    - Authoritative User FK relationship for assigned employee.
+    - Verified identity without inventing ratings, jobs, or placeholder photos.
+    - Strict validation: location.booking_id == sr.id AND location.technician_id == sr.technician_id.
+    - Status and GPS coordinates remain separate.
     """
-    dest_lat = float(sr.latitude) if sr.latitude is not None else None
-    dest_lng = float(sr.longitude) if sr.longitude is not None else None
+    # 1. Authoritative Customer Location
+    cust_loc = _resolve_customer_location(sr)
+    dest_lat = cust_loc["latitude"]
+    dest_lng = cust_loc["longitude"]
 
-    # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
-    db_heading = 0.0
-    db_speed = 0.0
-    db_accuracy = None
-
-    assigned_emp = getattr(sr, "assigned_employee", None)
-    if assigned_emp:
-        if not sr.technician_name:
-            sr.technician_name = getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else "")
-        if not sr.technician_phone and getattr(assigned_emp, "phone", None):
-            sr.technician_phone = assigned_emp.phone
-        if not sr.technician_photo and getattr(assigned_emp, "photo", None):
-            sr.technician_photo = assigned_emp.photo
-
-    # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
-    # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
-    tracking = None
-    active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
-    if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
-        tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
-
-    # Authoritative acceptance check:
-    # ASSIGNED != ACCEPTED.
-    # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
-    # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
-    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
+    # 2. Lifecycle & Acceptance flags
+    technician_assigned = bool(
+        sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+        or sr.technician_id or sr.workforce_job_id or sr.external_assignment_id
+    )
     technician_accepted = bool(
         sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
     )
@@ -649,6 +737,231 @@ def _build_tracking_payload(sr, has_full_access):
     tracking_available = bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
+    # 3. Authoritative Assigned Employee Profile
+    tech_user = getattr(sr, "technician", None)
+    emp_payload = None
+
+    if is_accepted and tech_user:
+        # Hierarchy: 1. Full Name, 2. First + Last Name, 3. Clean Username, 4. "Assigned Service Professional"
+        u_full = tech_user.get_full_name().strip()
+        if not u_full and tech_user.first_name:
+            u_full = f"{tech_user.first_name} {tech_user.last_name or ''}".strip()
+
+        slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
+        if not u_full and tech_user.username:
+            u_raw = tech_user.username.replace("_", " ").replace("-", " ").strip()
+            if u_raw.lower().replace(" ", "") != slug_match:
+                u_full = u_raw.title()
+
+        emp_name = u_full if u_full else "Assigned Service Professional"
+        emp_phone = None
+        if has_full_access:
+            emp_phone = getattr(tech_user, "phone", None) or getattr(tech_user, "mobile_number", None) or sr.technician_phone or None
+
+        emp_photo = None
+        if getattr(tech_user, "avatar", None):
+            try:
+                if bool(tech_user.avatar):
+                    emp_photo = tech_user.avatar.url
+            except Exception:
+                pass
+        if not emp_photo and sr.technician_photo:
+            emp_photo = sr.technician_photo
+
+        emp_rating = None
+        if sr.technician_rating is not None:
+            try:
+                emp_rating = float(sr.technician_rating)
+            except (ValueError, TypeError):
+                emp_rating = None
+
+        emp_jobs = None
+        if getattr(sr, "technician_jobs_completed", None) is not None:
+            try:
+                emp_jobs = int(sr.technician_jobs_completed)
+            except (ValueError, TypeError):
+                emp_jobs = None
+
+        emp_job_id = sr.workforce_job_id or sr.external_assignment_id or f"TECH-{tech_user.id:04d}"
+
+        emp_payload = {
+            "assigned": True,
+            "id": tech_user.id,
+            "job_id": emp_job_id,
+            "name": emp_name,
+            "photo": emp_photo,
+            "phone": emp_phone,
+            "rating": emp_rating,
+            "jobs_completed": emp_jobs,
+            "verified": bool(tech_user.is_active),
+            "service_category": sr.service_category or "",
+        }
+    elif is_accepted and sr.technician_name:
+        # Fallback if external workforce sync provided details without local User FK
+        emp_name = sr.technician_name
+        slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
+        if emp_name.lower().replace(" ", "").replace("_", "") == slug_match:
+            emp_name = "Assigned Service Professional"
+
+        emp_payload = {
+            "assigned": True,
+            "id": sr.external_assignment_id or None,
+            "job_id": sr.workforce_job_id or sr.external_assignment_id or None,
+            "name": emp_name,
+            "photo": sr.technician_photo or None,
+            "phone": sr.technician_phone if has_full_access else None,
+            "rating": float(sr.technician_rating) if sr.technician_rating is not None else None,
+            "jobs_completed": getattr(sr, "technician_jobs_completed", None),
+            "verified": True,
+            "service_category": sr.service_category or "",
+        }
+    elif is_accepted:
+        # Check BookingAssignment table if direct FK or denormalized name were empty
+        latest_assignment = sr.assignments.filter(status__in=["accepted", "completed"]).order_by("-id").first()
+        if latest_assignment and (latest_assignment.technician_name or latest_assignment.technician_id):
+            emp_name = latest_assignment.technician_name or "Assigned Service Professional"
+            slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
+            if emp_name.lower().replace(" ", "").replace("_", "") == slug_match:
+                emp_name = "Assigned Service Professional"
+
+            emp_payload = {
+                "assigned": True,
+                "id": latest_assignment.technician_id or None,
+                "job_id": latest_assignment.workforce_job_id or latest_assignment.assignment_id or None,
+                "name": emp_name,
+                "photo": latest_assignment.technician_photo or None,
+                "phone": latest_assignment.technician_phone if has_full_access else None,
+                "rating": float(latest_assignment.technician_rating) if latest_assignment.technician_rating is not None else None,
+                "jobs_completed": None,
+                "verified": bool(latest_assignment.technician_verified),
+                "service_category": sr.service_category or "",
+            }
+
+    if is_accepted and not emp_payload:
+        emp_payload = {
+            "assigned": True,
+            "id": sr.technician_id or sr.external_assignment_id or "PARTNER",
+            "job_id": sr.workforce_job_id or sr.external_assignment_id or f"SR-{sr.request_id}",
+            "name": "Assigned Service Professional",
+            "photo": sr.technician_photo or None,
+            "phone": sr.technician_phone if has_full_access else None,
+            "rating": float(sr.technician_rating) if sr.technician_rating is not None else None,
+            "jobs_completed": getattr(sr, "technician_jobs_completed", None),
+            "verified": True,
+            "service_category": sr.service_category or "",
+        }
+
+    # 4. Real Live GPS Coordinates (Validated: location.booking == sr AND location.technician == sr.technician)
+    tech_lat = None
+    tech_lng = None
+    resolved_heading = 0.0
+    resolved_speed = 0.0
+    resolved_accuracy = None
+    loc_updated_at = None
+    freshness = "UNAVAILABLE"
+
+    if is_accepted and not is_terminal:
+        from .models import TechnicianLocation
+        loc_qs = TechnicianLocation.objects.filter(booking=sr)
+        if sr.technician_id:
+            loc_qs = loc_qs.filter(technician_id=sr.technician_id)
+        latest_telemetry = loc_qs.order_by("-created_at").first()
+
+        if latest_telemetry:
+            tech_lat = float(latest_telemetry.latitude)
+            tech_lng = float(latest_telemetry.longitude)
+            resolved_heading = float(latest_telemetry.heading or 0.0)
+            resolved_speed = float(latest_telemetry.speed or 0.0)
+            resolved_accuracy = float(latest_telemetry.accuracy) if latest_telemetry.accuracy is not None else None
+            loc_updated_at = latest_telemetry.created_at.isoformat()
+            loc_time = latest_telemetry.created_at
+        elif sr.technician_latitude is not None and sr.technician_longitude is not None:
+            tech_lat = float(sr.technician_latitude)
+            tech_lng = float(sr.technician_longitude)
+            resolved_heading = float(getattr(sr, "technician_heading", 0.0) or 0.0)
+            resolved_speed = float(getattr(sr, "technician_speed", 0.0) or 0.0)
+            resolved_accuracy = float(sr.technician_accuracy) if getattr(sr, "technician_accuracy", None) is not None else None
+            loc_time = sr.technician_location_updated_at or timezone.now()
+            loc_updated_at = loc_time.isoformat()
+        elif sr.status == "arrived" and dest_lat is not None and dest_lng is not None:
+            tech_lat = float(dest_lat)
+            tech_lng = float(dest_lng)
+            resolved_speed = 0.0
+            loc_time = getattr(sr, "technician_arrived_at", None) or getattr(sr, "updated_at", None) or timezone.now()
+            loc_updated_at = loc_time.isoformat()
+        else:
+            loc_time = None
+
+        if tech_lat is not None and tech_lng is not None and loc_time:
+            age_seconds = max(0, (timezone.now() - loc_time).total_seconds())
+            if sr.status == "arrived":
+                freshness = "ARRIVED"
+            elif age_seconds <= 15:
+                freshness = "LIVE"
+            elif age_seconds <= 60:
+                freshness = "RECENT"
+            elif age_seconds <= 300:
+                freshness = "STALE"
+            else:
+                freshness = "LAST_KNOWN"
+        else:
+            freshness = "UNAVAILABLE"
+    elif is_terminal:
+        freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
+
+    # 5. Real Distance & ETA calculation (Separate from Status)
+    distance_m = None
+    distance_km = None
+    eta_seconds = None
+    eta_minutes = None
+
+    if sr.status == "arrived":
+        distance_m = 0
+        distance_km = 0.0
+        eta_seconds = 0
+        eta_minutes = 0
+    elif is_terminal or sr.status == "in_progress":
+        distance_m = 0
+        distance_km = 0.0
+        eta_seconds = 0
+        eta_minutes = 0
+    elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
+        raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
+        if raw_meters is not None:
+            distance_m = int(round(raw_meters))
+            distance_km = round(distance_m / 1000.0, 1)
+            eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
+            eta_minutes = eta_mins
+            eta_seconds = eta_mins * 60
+
+    # 6. Live Location block
+    live_loc_payload = None
+    if tech_lat is not None and tech_lng is not None and not is_terminal:
+        live_loc_payload = {
+            "available": True,
+            "employee_id": tech_user.id if tech_user else (emp_payload.get("id") if emp_payload else None),
+            "latitude": tech_lat,
+            "longitude": tech_lng,
+            "heading": resolved_heading,
+            "speed": resolved_speed,
+            "accuracy": resolved_accuracy,
+            "freshness": freshness,
+            "updated_at": loc_updated_at,
+        }
+    else:
+        live_loc_payload = {
+            "available": False,
+            "employee_id": tech_user.id if tech_user else None,
+            "latitude": None,
+            "longitude": None,
+            "heading": None,
+            "speed": None,
+            "accuracy": None,
+            "freshness": freshness,
+            "updated_at": loc_updated_at,
+        }
+
+    # 7. Vendor details
     vendor_data = None
     if is_accepted:
         comp_name = "Sevo"
@@ -668,162 +981,36 @@ def _build_tracking_payload(sr, has_full_access):
             "phone": None,
         }
 
-    technician_data = None
-    technician_loc_data = None
-    distance_m = None
-    distance_km = None
-    eta_seconds = None
-    eta_minutes = None
-    freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
-
-    if is_accepted:
-        tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
-
-        # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
-        tech_name = None
-        tech_phone = None
-        tech_photo = None
-        tech_rating = None
-        tech_jobs = None
-        tech_job_id = None
-
-        if tech_obj:
-            tech_name = tech_obj.get("name") or tech_obj.get("full_name") or None
-            tech_phone = tech_obj.get("phone") or None
-            tech_photo = tech_obj.get("photo") or None
-            tech_rating = float(tech_obj.get("rating")) if tech_obj.get("rating") is not None else None
-            tech_jobs = tech_obj.get("jobs_completed") or None
-            tech_job_id = tech_obj.get("id") or tech_obj.get("job_id") or None
-
-        if not tech_name and hasattr(sr, "assignments"):
-            assignment = sr.assignments.filter(
-                status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
-            ).order_by("-id").first()
-            if assignment:
-                tech_name = assignment.technician_name or None
-                tech_phone = assignment.technician_phone or tech_phone or None
-                tech_photo = assignment.technician_photo or tech_photo or None
-                tech_rating = float(assignment.technician_rating) if assignment.technician_rating is not None else tech_rating
-                tech_job_id = assignment.workforce_job_id or assignment.assignment_id or tech_job_id
-
-        if not tech_name:
-            tech_name = sr.technician_name or None
-            tech_phone = sr.technician_phone or tech_phone or None
-            tech_photo = sr.technician_photo or tech_photo or None
-            tech_rating = float(sr.technician_rating) if sr.technician_rating is not None else tech_rating
-            tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_jobs
-            tech_job_id = sr.workforce_job_id or sr.external_assignment_id or tech_job_id
-
-        if not tech_name and getattr(sr, "assigned_employee", None):
-            emp = sr.assigned_employee
-            tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
-            tech_phone = getattr(emp, "phone", None) or tech_phone
-            tech_photo = getattr(emp, "photo", None) or tech_photo
-            tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
-            tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
-
-        # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
-        loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
-        if is_terminal:
-            tech_lat = None
-            tech_lng = None
-        else:
-            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude") is not None) else None)
-            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude") is not None) else None)
-
-        current_loc_name = sr.technician_location_name or loc.get("location_name") or None
-
-        # Heading & speed
-        resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if (loc and loc.get("heading") is not None) else 0.0)
-        resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if (loc and loc.get("speed") is not None) else 0.0)
-
-        # 3. GPS Freshness calculation strictly based on real coordinates availability
-        if is_terminal:
-            freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
-        elif tech_lat is not None and tech_lng is not None:
-            freshness = "LIVE"
-        else:
-            freshness = "UNAVAILABLE"
-
-        # 4. Real Distance and ETA Calculation — only computed when real GPS exists
-        if sr.status == "arrived":
-            distance_m = 0
-            distance_km = 0.0
-            eta_seconds = 0
-            eta_minutes = 0
-        elif is_terminal or sr.status == "in_progress":
-            distance_m = 0
-            distance_km = 0.0
-            eta_seconds = 0
-            eta_minutes = 0
-        elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
-            raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
-            if raw_meters is not None:
-                distance_m = int(round(raw_meters))
-                distance_km = round(distance_m / 1000.0, 1)
-                eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
-                eta_minutes = eta_mins
-                eta_seconds = eta_mins * 60
-        else:
-            distance_m = None
-            distance_km = None
-            eta_seconds = None
-            eta_minutes = None
-
-        if tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None:
-            eta_minutes = tracking.get("eta_minutes")
-        if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
-            distance_km = tracking.get("distance_km")
-
-        technician_data = {
-            "id": tech_job_id,
-            "job_id": tech_job_id,
-            "name": tech_name,
-            "phone": tech_phone if has_full_access else None,
-            "rating": tech_rating,
-            "photo": tech_photo,
-            "latitude": tech_lat,
-            "longitude": tech_lng,
-            "heading": resolved_heading if tech_lat is not None else 0.0,
-            "speed": resolved_speed if tech_lat is not None else 0.0,
-            "status": sr.status,
-            "eta_minutes": eta_minutes,
-            "distance_km": distance_km,
-            "jobs_completed": tech_jobs,
-            "current_location_name": current_loc_name,
-            "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
-        }
-
-        if tech_lat is not None and tech_lng is not None and not is_terminal:
-            technician_loc_data = {
-                "latitude": tech_lat,
-                "longitude": tech_lng,
-                "heading": resolved_heading,
-                "speed": resolved_speed,
-                "accuracy": db_accuracy,
-                "freshness": freshness,
-            }
-
-    # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
+    # 8. Start OTP: Only exposed if accepted and active
     start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
 
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
-    if created_at_raw and hasattr(created_at_raw, 'isoformat'):
-        created_at_str = created_at_raw.isoformat()
-    elif created_at_raw:
-        created_at_str = str(created_at_raw)
-    else:
-        created_at_str = None
+    created_at_str = created_at_raw.isoformat() if created_at_raw and hasattr(created_at_raw, 'isoformat') else (str(created_at_raw) if created_at_raw else None)
 
     try:
         total_amt = float(sr.total_amount) if sr.total_amount is not None else 0.0
     except (ValueError, TypeError):
         total_amt = 0.0
 
+    service_title = sr.issue_title or (sr.service_category or "").replace("_", " ").title() or "Home Service"
+
     return {
         "booking_id": sr.id,
         "request_id": sr.request_id,
         "job_id": sr.id,
+        "booking": {
+            "id": sr.id,
+            "request_id": sr.request_id,
+            "booking_number": sr.request_id,
+            "status": sr.status,
+            "service_name": service_title,
+            "service_category": sr.service_category or "",
+            "issue_title": sr.issue_title or "",
+            "customer_location": cust_loc,
+        },
+        "assigned_employee": emp_payload,
+        "customer_location": cust_loc,
+        "live_location": live_loc_payload,
         "status": sr.status,
         "is_accepted": is_accepted,
         "tracking_available": tracking_available,
@@ -833,7 +1020,7 @@ def _build_tracking_payload(sr, has_full_access):
         "issue_title": sr.issue_title or "",
         "description": sr.description or "",
         "customer_name": sr.customer_name or "",
-        "phone": sr.phone or "",
+        "phone": sr.phone if has_full_access else "",
         "created_at": created_at_str,
         "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
         "preferred_time": sr.preferred_time or "",
@@ -842,22 +1029,27 @@ def _build_tracking_payload(sr, has_full_access):
         "payment_status": sr.payment_status or "pending",
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
-        "service_location": {
-            "address": sr.address or "",
-            "latitude": dest_lat,
-            "longitude": dest_lng,
-        },
-        "destination": {
-            "address": sr.address or "",
-            "latitude": dest_lat,
-            "longitude": dest_lng,
-        },
-        "technician": technician_data,
-        "technician_name": tech_name if is_accepted else "",
-        "technician_phone": tech_phone if (is_accepted and has_full_access) else "",
-        "technician_photo": tech_photo if is_accepted else "",
-        "technician_rating": tech_rating if is_accepted else None,
-        "technician_location": technician_loc_data,
+        "service_location": cust_loc,
+        "destination": cust_loc,
+        "assigned_employee": emp_payload,
+        "live_location": live_loc_payload,
+        "technician": {
+            **(emp_payload or {}),
+            "latitude": tech_lat,
+            "longitude": tech_lng,
+            "heading": resolved_heading,
+            "speed": resolved_speed,
+            "status": sr.status,
+            "eta_minutes": eta_minutes,
+            "distance_km": distance_km,
+            "freshness": freshness,
+            "updated_at": loc_updated_at,
+        } if is_accepted else None,
+        "technician_name": emp_payload["name"] if (is_accepted and emp_payload) else "",
+        "technician_phone": emp_payload["phone"] if (is_accepted and emp_payload and has_full_access) else "",
+        "technician_photo": emp_payload["photo"] if (is_accepted and emp_payload) else "",
+        "technician_rating": emp_payload["rating"] if (is_accepted and emp_payload) else None,
+        "technician_location": live_loc_payload if (live_loc_payload and live_loc_payload.get("available")) else None,
         "freshness": freshness,
         "distance_m": distance_m,
         "distance_km": distance_km,
@@ -866,6 +1058,8 @@ def _build_tracking_payload(sr, has_full_access):
         "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
+        "cancellation_grace_remaining_seconds": max(0, 300 - int((timezone.now() - sr.accepted_at).total_seconds())) if (is_accepted and getattr(sr, "accepted_at", None)) else (0 if is_accepted else 300),
+        "can_cancel": bool(sr.status not in ["completed", "closed", "cancelled", "rejected"]),
     }
 
 

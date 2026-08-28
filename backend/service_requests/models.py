@@ -247,6 +247,12 @@ class ServiceRequest(models.Model):
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
 
     # Workforce Dispatch / Real-time Technician Snapshot
+    technician              = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="assigned_service_requests",
+    )
     workforce_job_id        = models.CharField(max_length=100, blank=True, null=True, default=None, db_index=True)
     external_assignment_id  = models.CharField(max_length=100, blank=True, null=True, default=None)
     technician_name         = models.CharField(max_length=150, blank=True, default="")
@@ -255,7 +261,15 @@ class ServiceRequest(models.Model):
     technician_rating       = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
     technician_latitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     technician_longitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    technician_heading      = models.FloatField(default=0.0, blank=True)
+    technician_speed        = models.FloatField(default=0.0, blank=True)
+    technician_accuracy     = models.FloatField(null=True, blank=True)
     technician_location_name= models.CharField(max_length=255, blank=True, default="")
+    technician_location_updated_at = models.DateTimeField(null=True, blank=True)
+    accepted_at             = models.DateTimeField(null=True, blank=True)
+    technician_arrived_at   = models.DateTimeField(null=True, blank=True)
+    started_at              = models.DateTimeField(null=True, blank=True)
+    completed_at            = models.DateTimeField(null=True, blank=True)
     start_otp               = models.CharField(max_length=10, blank=True, default="")
     otp_hash                = models.CharField(max_length=128, blank=True, default="")
     otp_expires_at          = models.DateTimeField(null=True, blank=True)
@@ -1508,6 +1522,42 @@ class Payment(models.Model):
         cid = self.customer_id_snapshot or (self.customer.customer_id if self.customer else "N/A")
         srid = self.service_request_id_snapshot or (self.service_request.request_id if self.service_request else "N/A")
         return f"Payment #{self.id} — Customer: {cid} | SR: {srid} | {self.status} (₹{self.amount})"
+
+
+class TechnicianLocation(models.Model):
+    """
+    High-frequency GPS telemetry point emitted by the Technician App during active service lifecycle.
+    """
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="location_logs",
+        db_index=True,
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="technician_locations",
+    )
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy = models.FloatField(null=True, blank=True)
+    heading = models.FloatField(default=0.0, blank=True)
+    speed = models.FloatField(default=0.0, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["booking", "created_at"]),
+            models.Index(fields=["technician", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
+
 
 
 

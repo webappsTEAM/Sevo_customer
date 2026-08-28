@@ -104,6 +104,13 @@ from .payment_views import (
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
+from .technician_views import (
+    TechnicianAvailableBookingsView,
+    TechnicianAcceptBookingView,
+    TechnicianUpdateLocationView,
+    TechnicianStatusUpdateView,
+    TechnicianVerifyStartOTPView,
+)
 
 urlpatterns = [
     # ── Public & Customer ─────────────────────────────────────────────────────
@@ -116,6 +123,8 @@ urlpatterns = [
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("booking/<int:pk>/live-location/",  CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location"),
     path("booking/<str:identifier>/live-location/", CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location-identifier"),
+    path("customer/bookings/<int:pk>/tracking/", CustomerBookingLiveLocationView.as_view(), name="customer-booking-tracking"),
+    path("customer/bookings/<str:identifier>/tracking/", CustomerBookingLiveLocationView.as_view(), name="customer-booking-tracking-identifier"),
     path("workforce/jobs/<int:pk>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking"),
     path("workforce/jobs/<str:identifier>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking-str"),
     path("tracking/<str:tracking_token>/",   CustomerPublicTrackingView.as_view(), name="sr-public-tracking-token"),
@@ -225,7 +234,17 @@ urlpatterns = [
     path('admin/coupons/',                               CouponListCreateView.as_view(),               name='admin-coupon-list-create'),
     path('admin/coupons/analytics/',                     AdminCouponAnalyticsView.as_view(),           name='admin-coupon-analytics'),
     path('admin/coupons/<int:pk>/',                      CouponDetailView.as_view(),                   name='admin-coupon-detail'),
-    path('admin/coupons/<int:pk>/status/',               CouponDetailView.as_view(),                   name='admin-coupon-status'),
     path('customer/coupons/',                            CustomerCouponListView.as_view(),             name='customer-coupon-list'),
     path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
+
+    # ── Technician Portal / App Endpoints ─────────────────────────────────────
+    path('technician/bookings/',                         TechnicianAvailableBookingsView.as_view(),    name='technician-bookings-list'),
+    path('technician/bookings/<int:pk>/accept/',         TechnicianAcceptBookingView.as_view(),        name='technician-booking-accept'),
+    path('technician/bookings/<str:identifier>/accept/', TechnicianAcceptBookingView.as_view(),        name='technician-booking-accept-str'),
+    path('technician/bookings/<int:pk>/location/',       TechnicianUpdateLocationView.as_view(),       name='technician-booking-location'),
+    path('technician/bookings/<str:identifier>/location/', TechnicianUpdateLocationView.as_view(),     name='technician-booking-location-str'),
+    path('technician/bookings/<int:pk>/status/',         TechnicianStatusUpdateView.as_view(),         name='technician-booking-status'),
+    path('technician/bookings/<str:identifier>/status/', TechnicianStatusUpdateView.as_view(),         name='technician-booking-status-str'),
+    path('technician/bookings/<int:pk>/verify-otp/',     TechnicianVerifyStartOTPView.as_view(),       name='technician-booking-verify-otp'),
+    path('technician/bookings/<str:identifier>/verify-otp/', TechnicianVerifyStartOTPView.as_view(),   name='technician-booking-verify-otp-str'),
 ]

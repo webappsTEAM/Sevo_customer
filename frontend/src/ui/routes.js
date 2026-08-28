@@ -69,5 +69,7 @@ export const routes = {
   contact_us: "/contact-us",
   help: "/help",
   help_and_support: "/help-and-support",
+  technician_app: "/technician/app",
+  technician_jobs: "/technician/jobs",
 }
 

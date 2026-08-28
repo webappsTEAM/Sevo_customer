@@ -100,15 +100,24 @@ async function _executeRequest(path, init = {}, attemptRefresh = true) {
       body,
     })
 
-    // 401 — try a silent token refresh then replay the original request once
+    // 401 — try a silent token refresh then replay the original request once (only if a session existed)
     if (res.status === 401 && attemptRefresh) {
-      const refreshed = await _silentRefresh()
-      if (refreshed) {
-        return _executeRequest(path, init, false)   // replay, no second refresh
+      const hasStoredToken = (() => {
+        try {
+          return !!(localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("caltrack_user"))
+        } catch (_) {
+          return false
+        }
+      })()
+
+      if (hasStoredToken) {
+        const refreshed = await _silentRefresh()
+        if (refreshed) {
+          return _executeRequest(path, init, false)   // replay, no second refresh
+        }
+        window.dispatchEvent(new CustomEvent("quicktims:session-expired"))
       }
-      // Refresh also failed — force logout
-      window.dispatchEvent(new CustomEvent("quicktims:session-expired"))
-      throw { status: 401, body: { detail: "Session expired. Please log in again." } }
+      throw { status: 401, body: { detail: "Session expired or unauthorized." } }
     }
 
     if (!res.ok) {

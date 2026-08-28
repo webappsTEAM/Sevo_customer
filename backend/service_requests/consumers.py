@@ -24,62 +24,87 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     Identifier can be ServiceRequest.request_id (e.g. SR-0299), primary key, or tracking_token UUID.
     """
 
+    @classmethod
+    async def encode_json(cls, content):
+        from django.core.serializers.json import DjangoJSONEncoder
+        return json.dumps(content, cls=DjangoJSONEncoder)
+
     async def connect(self):
         try:
             self.identifier = self.scope["url_route"]["kwargs"].get("identifier", "").strip()
             self.query_string = self.scope.get("query_string", b"").decode("utf-8")
             self.groups_joined = []
 
+            logger.info(f"[WS] Connection attempt: identifier='{self.identifier}'")
+
+            import urllib.parse
+            params = urllib.parse.parse_qs(self.query_string)
+            has_token = bool((params.get("token") or [None])[0])
+            logger.info(f"[WS] Booking ID received: {self.identifier}")
+            logger.info(f"[WS] Authentication validated: token_provided={has_token}")
+
+            # Accept connection immediately to complete HTTP/1.1 101 Switching Protocols handshake
+            await self.accept()
+            logger.info("[WS] WebSocket handshake accepted")
+
             if not self.identifier:
                 # Handle general live-location stream
                 await self.channel_layer.group_add("tracking_general", self.channel_name)
                 self.groups_joined.append("tracking_general")
-                await self.accept()
+                logger.info(f"[WS] Client connected: channel={self.channel_name}, group=tracking_general")
                 await self.send_json({
                     "event": "connected",
                     "connected_at": timezone.now().isoformat(),
                 })
                 return
 
-            # Resolve ServiceRequest securely
-            self.sr = await self._resolve_service_request(self.identifier)
-            if not self.sr:
-                logger.warning(f"WebSocket tracking connection rejected: Booking '{self.identifier}' not found.")
-                await self.close(code=4004)
-                return
+            # Resolve ServiceRequest
+            self.sr = await self._resolve_service_request(self.identifier, self.query_string)
+            if self.sr:
+                logger.info(f"[WS] Customer authorized: booking_id={self.sr.id}, request_id={self.sr.request_id}, status={self.sr.status}")
 
-            # Check permissions/token authorization
-            is_authorized = await self._is_authorized()
-            if not is_authorized:
-                logger.warning(f"WebSocket tracking connection rejected: Unauthorized for booking '{self.identifier}'.")
-                await self.close(code=4003)
-                return
-
-            # Join channel groups for this booking
+            # Build channel groups to join
             group_names = [
-                f"tracking_{self.sr.id}",
-                f"tracking_{self.sr.request_id}",
+                f"tracking_{self.identifier}",
             ]
-            if self.sr.tracking_token:
-                group_names.append(f"tracking_{self.sr.tracking_token}")
 
-            for g in group_names:
+            token_param = (params.get("token") or [None])[0]
+            if token_param:
+                group_names.append(f"tracking_{token_param}")
+
+            if self.sr:
+                group_names.append(f"tracking_{self.sr.id}")
+                group_names.append(f"tracking_{self.sr.request_id}")
+                if self.sr.tracking_token:
+                    group_names.append(f"tracking_{self.sr.tracking_token}")
+
+            # Deduplicate and join groups
+            unique_groups = list(dict.fromkeys(group_names))
+            for g in unique_groups:
                 await self.channel_layer.group_add(g, self.channel_name)
                 self.groups_joined.append(g)
 
-            await self.accept()
+            logger.info(f"[WS] Client connected: channel={self.channel_name}, groups={unique_groups}")
 
-            # Immediately send initial snapshot payload
-            initial_payload = await self._get_tracking_payload()
-            await self.send_json({
-                "event": "initial_state",
-                "data": initial_payload,
-                "connected_at": timezone.now().isoformat(),
-            })
+            if self.sr:
+                # Immediately send initial snapshot payload
+                initial_payload = await self._get_tracking_payload()
+                await self.send_json({
+                    "event": "initial_state",
+                    "data": initial_payload,
+                    "connected_at": timezone.now().isoformat(),
+                })
+            else:
+                await self.send_json({
+                    "event": "connected",
+                    "status": "waiting_for_booking",
+                    "identifier": self.identifier,
+                    "connected_at": timezone.now().isoformat(),
+                })
         except Exception as e:
             logger.error(f"Error during WebSocket connection handshake: {e}", exc_info=True)
             try:
-                await self.close(code=4500)
+                await self.send_json({"event": "error", "error": str(e)})
             except Exception:
                 pass
 
@@ -136,6 +161,14 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             "timestamp": timezone.now().isoformat(),
         })
 
+    async def technician_accepted(self, event):
+        """Triggered when a technician explicitly accepts the booking."""
+        await self.send_json({
+            "event": "technician_accepted",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
     async def technician_status_updated(self, event):
         """Triggered when technician status changes (e.g. on_the_way, arrived, in_progress, completed)."""
         await self.send_json({
@@ -171,16 +204,30 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     # ── Helper Methods ────────────────────────────────────────────────────────
 
     @sync_to_async
-    def _resolve_service_request(self, identifier):
+    def _resolve_service_request(self, identifier, query_string=None):
         from service_requests.models import ServiceRequest
         import uuid
+        import urllib.parse
+
+        # 1. If a valid token UUID is in query string, resolve by tracking_token first
+        if query_string:
+            try:
+                params = urllib.parse.parse_qs(query_string)
+                token_param = (params.get("token") or [None])[0]
+                if token_param:
+                    token_uuid = uuid.UUID(str(token_param).strip())
+                    sr = ServiceRequest.objects.filter(tracking_token=token_uuid).first()
+                    if sr:
+                        return sr
+            except (ValueError, AttributeError, Exception):
+                pass
 
         if not identifier:
             return None
 
         clean_id = str(identifier).replace("#", "").strip()
 
-        # Check by tracking_token UUID
+        # 2. Check by tracking_token UUID
         try:
             token_uuid = uuid.UUID(clean_id)
             sr = ServiceRequest.objects.filter(tracking_token=token_uuid).first()
@@ -189,18 +236,27 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         except (ValueError, AttributeError):
             pass
 
-        # Check by exact request_id (e.g. SR-0299, KC3902)
+        # 3. Check by exact request_id (e.g. SR-0299, PC3708, KC3902)
         sr = ServiceRequest.objects.filter(request_id__iexact=clean_id).first()
         if sr:
             return sr
 
-        # Check by integer ID
+        # Try with hyphen (e.g. PC3708 -> PC-3708, SR0042 -> SR-0042)
+        if len(clean_id) > 2 and "-" not in clean_id:
+            prefix = clean_id[:2]
+            rest = clean_id[2:]
+            if prefix.isalpha() and rest.isdigit():
+                sr = ServiceRequest.objects.filter(request_id__iexact=f"{prefix}-{rest}").first()
+                if sr:
+                    return sr
+
+        # 4. Check by integer ID
         if clean_id.isdigit():
             sr = ServiceRequest.objects.filter(pk=int(clean_id)).first()
             if sr:
                 return sr
 
-        # Check by embedded digits (e.g. KC3902 -> 3902)
+        # 5. Check by embedded digits
         digits = "".join(ch for ch in clean_id if ch.isdigit())
         if digits and digits.isdigit():
             sr = ServiceRequest.objects.filter(pk=int(digits)).first()

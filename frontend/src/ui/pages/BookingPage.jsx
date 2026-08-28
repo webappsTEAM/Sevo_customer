@@ -33,7 +33,9 @@ import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
+import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { createTrackingWebSocket } from "../../api/websocketService.js"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -2301,6 +2303,27 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(false)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [wsState, setWsState] = useState("connecting")
+
+  const handleManualRefresh = async () => {
+    if (isRefreshing || !rid) return
+    setIsRefreshing(true)
+    try {
+      const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+      const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
+      if (res?.data) {
+        setLiveData(res.data)
+        try {
+          sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
+        } catch (_) { }
+      }
+    } catch (e) {
+      console.warn("Manual refresh warning:", e)
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400)
+    }
+  }
 
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
@@ -2331,12 +2354,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }
 
-  // Real-Time status polling — single authoritative poller
-  // In-flight guard: skips a cycle if previous request is still running
-  // Terminal guard: stops polling when booking reaches a final state
+  // Real-Time Auto-Refresh & WebSocket Status Synchronization
   useEffect(() => {
     if (!rid) return
     let pollTimer = null
+    let ws = null
     let isMounted = true
     let isFetching = false
     const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
@@ -2349,9 +2371,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
+          try {
+            sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
+          } catch (_) { }
           // Stop polling once booking reaches a terminal state
           if (res.data.status && TERMINAL.has(res.data.status.toLowerCase())) {
-            clearInterval(pollTimer)
+            if (pollTimer) clearInterval(pollTimer)
           }
         }
       } catch (e) { }
@@ -2360,12 +2385,56 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       }
     }
 
+    // 1. Immediate fetch
     fetchStatus()
-    pollTimer = setInterval(fetchStatus, 4000)
+
+    // 2. High-frequency auto-refresh polling (every 2.5s)
+    pollTimer = setInterval(fetchStatus, 2500)
+
+    // 3. Connect real-time WebSocket channel for instant push notifications
+    try {
+      ws = createTrackingWebSocket(
+        rid,
+        successData?.tracking_token,
+        (eventType, eventData) => {
+          if (!isMounted || !eventData) return
+          setLiveData(prev => {
+            const merged = {
+              ...(prev || {}),
+              ...(eventData?.booking || eventData || {}),
+            }
+            if (eventData?.status || eventData?.booking?.status) {
+              merged.status = eventData.status || eventData.booking.status
+            }
+            if (eventData?.technician || eventData?.booking?.technician) {
+              merged.technician = {
+                ...(prev?.technician || {}),
+                ...(eventData.technician || eventData.booking?.technician || {})
+              }
+            }
+            if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
+              merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
+            }
+            try {
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
+            } catch (_) { }
+            return merged
+          })
+        },
+        (state) => {
+          if (isMounted) setWsState(state)
+        }
+      )
+    } catch (err) {
+      console.warn("[LiveTrackingPage] WS init error:", err)
+    }
 
     return () => {
       isMounted = false
       if (pollTimer) clearInterval(pollTimer)
+      if (ws) {
+        try { ws.close() } catch (_) { }
+      }
     }
   }, [rid, successData?.tracking_token])
 
@@ -2463,8 +2532,19 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
   )
 
-  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee || null
-  const techName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
+  const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
+  const rawTechName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
+
+  const techName = useMemo(() => {
+    if (!rawTechName) return liveData?.is_accepted ? "Assigned Service Professional" : ""
+    const trimmed = rawTechName.trim()
+    const slugMatch = (liveData?.service_category || successData?.service_category || "").toLowerCase().replace(/[\s_-]+/g, "")
+    const nameSlug = trimmed.toLowerCase().replace(/[\s_-]+/g, "")
+    if (nameSlug === slugMatch) {
+      return "Assigned Service Professional"
+    }
+    return trimmed
+  }, [rawTechName, liveData?.is_accepted, liveData?.service_category, successData?.service_category])
   const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
   const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
   const techRating = empInfo?.rating != null ? empInfo.rating : (liveData?.technician_rating != null ? liveData.technician_rating : successData?.technician_rating ?? null)
@@ -2491,6 +2571,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     ? `${window.location.origin}/track/${encodeURIComponent(rid)}?token=${encodeURIComponent(trackingToken)}`
     : null
 
+  const rawDestLat = liveData?.customer_location?.latitude ?? liveData?.destination?.latitude ?? successData?.latitude ?? formData?.latitude ?? null
+  const rawDestLng = liveData?.customer_location?.longitude ?? liveData?.destination?.longitude ?? successData?.longitude ?? formData?.longitude ?? null
+  const destLat = rawDestLat != null && !isNaN(parseFloat(rawDestLat)) ? parseFloat(rawDestLat) : null
+  const destLng = rawDestLng != null && !isNaN(parseFloat(rawDestLng)) ? parseFloat(rawDestLng) : null
+  const currentStatus = (liveData?.status || successData?.status || "confirmed").toLowerCase()
+
+  const rawTechLat = liveData?.technician_location?.latitude ?? liveData?.technician?.latitude ?? successData?.technician_latitude ?? null
+  const rawTechLng = liveData?.technician_location?.longitude ?? liveData?.technician?.longitude ?? successData?.technician_longitude ?? null
+  const hasValidTechnicianGPS = Boolean(
+    rawTechLat != null && !isNaN(parseFloat(rawTechLat)) &&
+    rawTechLng != null && !isNaN(parseFloat(rawTechLng))
+  )
+  const isArrived = currentStatus === "arrived"
+  const isInProgress = currentStatus === "in_progress"
+  const isOnTheWay = currentStatus === "on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
+
   const trackingBookingObj = {
     id: liveData?.booking_id || successData?.id,
     request_id: rid,
@@ -2499,11 +2595,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       phone: techPhone,
       photo: techPhoto,
     },
-    latitude: liveData?.destination?.latitude || formData?.latitude,
-    longitude: liveData?.destination?.longitude || formData?.longitude,
+    latitude: destLat,
+    longitude: destLng,
     address: liveData?.destination?.address || formData?.address,
     start_otp: startOtp,
-    status: liveData?.status || (isCompleted ? "completed" : isAccepted ? "assigned" : "confirmed"),
+    status: currentStatus,
     can_cancel: canCancel,
     cancellation_grace_remaining_seconds: graceSecs,
   }
@@ -2709,9 +2805,31 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
               : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
           </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
             <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
+            <span style={{ color: '#cbd5e1' }}>•</span>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#7C3AED',
+                fontWeight: 800,
+                fontSize: '0.74rem',
+                padding: '2px 6px',
+                borderRadius: 6,
+              }}
+              title="Click to refresh live status"
+            >
+              <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+              {isRefreshing ? "Syncing..." : "Auto-Sync Active"}
+            </button>
           </div>
         </div>
       ) : (
@@ -2726,11 +2844,37 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
             Finding your service professional...
           </h2>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Clock size={14} color="#7C3AED" />
             <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>{formatTimer(searchSeconds)}</strong></span>
             <span style={{ color: '#94a3b8' }}>•</span>
-            <span style={{ color: '#10b981' }}>⚡ Verified partner pool notified</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#10b981' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} className="animate-ping" />
+              ⚡ Auto-refreshing live
+            </span>
+            <span style={{ color: '#94a3b8' }}>•</span>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              style={{
+                background: isRefreshing ? '#ede9fe' : '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                borderRadius: 8,
+                padding: '3px 8px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#6d28d9',
+                fontWeight: 800,
+                fontSize: '0.74rem',
+                transition: 'all 0.15s ease',
+              }}
+              title="Click to refresh status immediately"
+            >
+              <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+              {isRefreshing ? "Checking..." : "Refresh"}
+            </button>
           </div>
 
           {/* Anytime Cancellation Button (Pre-Acceptance) */}
@@ -2760,6 +2904,36 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           </div>
         </div>
       )}
+
+      {/* ─────────────────── EMBEDDED REAL LIVE MAP (SWIGGY / RAPIDO STYLE) ─────────────────── */}
+      <div
+        style={{
+          width: '100%',
+          height: 380,
+          borderRadius: 22,
+          overflow: 'hidden',
+          marginBottom: '1.25rem',
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.12)',
+          border: '1px solid #e2e8f0',
+          position: 'relative',
+          background: '#f8fafc',
+        }}
+      >
+        <CustomerTrackingMap
+          technician={liveData?.technician || { name: techName, photo: techPhoto, rating: techRating }}
+          technicianLocation={liveData?.technician_location || liveData?.technician}
+          destination={liveData?.destination || { latitude: destLat, longitude: destLng }}
+          serviceCategory={liveData?.service_category || successData?.service_category || ""}
+          issueTitle={liveData?.issue_title || successData?.issue_title || ""}
+          status={currentStatus}
+          freshness={wsState === "connected" ? "LIVE" : wsState === "reconnecting" ? "UPDATING" : "OFFLINE"}
+          etaMinutes={etaMinutes}
+          distanceKm={distKm}
+          startOtp={startOtp}
+          vendorName={liveData?.vendor?.name || ""}
+          requestId={rid}
+        />
+      </div>
 
       {/* ─────────────────── REAL ASSIGNED EMPLOYEE CARD (ONLY IF ACCEPTED) ─────────────────── */}
       {isAccepted && (
@@ -2819,13 +2993,16 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Service Partner"}</span>
-                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName}</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '2px 7px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                   ✓ Verified
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
+                Service: <span style={{ color: '#0f172a' }}>{(liveData?.service_category || successData?.service_category || 'Home Service').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 {techRating != null ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
                     <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
@@ -2833,9 +3010,13 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 ) : (
                   <span style={{ fontSize: '0.76rem', color: '#64748b' }}>New partner</span>
                 )}
-                {techJobs != null && (
+                {techJobs != null ? (
                   <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
                     • {techJobs}+ jobs completed
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                    • Background Verified
                   </span>
                 )}
               </div>
@@ -2894,30 +3075,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
           )}
 
-          {/* Action Buttons: Track on Map + Call + WhatsApp */}
+          {/* Action Buttons: Call + WhatsApp */}
           <div style={{ display: 'flex', gap: 8, marginTop: '1rem', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setShowMapModal(true)}
-              style={{
-                flex: 1.3,
-                padding: '0.75rem',
-                background: 'linear-gradient(135deg, #FC8019, #f97316)',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '0.85rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 4px 12px rgba(251, 146, 60, 0.3)',
-              }}
-            >
-              <MapPin size={15} /> Track on Live Map
-            </button>
-
             {techPhone ? (
               <>
                 <a
@@ -2925,21 +3084,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   style={{
                     flex: 1,
                     padding: '0.75rem',
-                    background: '#f1f5f9',
-                    color: '#0f172a',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
                     fontWeight: 800,
-                    fontSize: '0.82rem',
+                    fontSize: '0.85rem',
                     border: 'none',
                     borderRadius: 12,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 5,
+                    gap: 6,
                     textDecoration: 'none',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
                   }}
                 >
-                  <Phone size={14} color="#0f172a" /> Call Pro
+                  <Phone size={15} color="white" /> Call Pro
                 </a>
                 <button
                   onClick={() => {
@@ -2947,22 +3107,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                     window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
                   }}
                   style={{
-                    padding: '0.75rem 0.9rem',
+                    padding: '0.75rem 1.2rem',
                     background: '#ecfdf5',
                     color: '#059669',
                     fontWeight: 800,
-                    fontSize: '0.82rem',
+                    fontSize: '0.85rem',
                     border: '1px solid #a7f3d0',
                     borderRadius: 12,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 4,
+                    gap: 6,
                   }}
                   title="WhatsApp Partner"
                 >
-                  <MessageSquare size={14} color="#059669" />
+                  <MessageSquare size={15} color="#059669" /> WhatsApp
                 </button>
               </>
             ) : (
@@ -3587,7 +3747,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </div>
       </motion.div>
 
-      {/* ─────────────────── REAL-TIME 4-STAGE TIMELINE ─────────────────── */}
+      {/* ─────────────────── REAL-TIME 6-STAGE DISPATCH TIMELINE ─────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -3600,18 +3760,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           border: '1px solid #e2e8f0',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
-            🗺️ Live Dispatch Status
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🗺️</span> Live Service Tracking
           </div>
           {isAccepted && (
-            <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
-              Open Fullscreen Map →
+            <button onClick={() => rid ? window.open(`/track/${encodeURIComponent(rid)}`, '_blank') : setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
+              Fullscreen Map →
             </button>
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Step 1: Booking Confirmed */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ecfdf5', border: '1.5px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3623,41 +3783,69 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981' }}>Done</span>
           </div>
 
-          {/* Step 2: Partner Acceptance */}
+          {/* Step 2: Technician Assigned */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#ecfdf5' : '#fff7ed', border: `1.5px solid ${isAccepted ? '#10b981' : '#f59e0b'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isAccepted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <Radio size={14} color="#f59e0b" className="animate-pulse" />}
             </div>
             <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
-              {isAccepted ? `${techName} Accepted Job` : 'Waiting for Partner to Accept'}
+              {isAccepted ? `${techName || 'Professional'} Assigned` : 'Finding your professional...'}
             </div>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isAccepted ? '#10b981' : '#f59e0b' }}>
-              {isAccepted ? 'Accepted' : 'Searching...'}
+              {isAccepted ? 'Assigned' : 'Searching...'}
             </span>
           </div>
 
-          {/* Step 3: Partner En Route */}
+          {/* Step 3: Technician On The Way */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${isAccepted ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>🛵</span>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
             </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isAccepted ? '#0f172a' : '#94a3b8' }}>
-              Partner On The Way
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
+              Technician On The Way
             </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isAccepted ? '#FC8019' : '#94a3b8' }}>
-              {isAccepted ? `~${etaMinutes} mins` : 'Pending'}
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+              {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
             </span>
           </div>
 
-          {/* Step 4: Service Execution */}
+          {/* Step 4: Technician Arrived */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f8fafc', border: '1.5px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>⚙️</span>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
             </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#94a3b8' }}>
-              Service Execution &amp; Completion
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+              Technician Arrived at Location
             </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Next</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
+              {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
+            </span>
+          </div>
+
+          {/* Step 5: Service In Progress */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+              Service In Progress
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
+              {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
+            </span>
+          </div>
+
+          {/* Step 6: Service Completed */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🎉</span>}
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isCompleted ? '#0f172a' : '#94a3b8' }}>
+              Service Completed &amp; Verified
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : '#94a3b8' }}>
+              {isCompleted ? 'Completed' : 'Final'}
+            </span>
           </div>
         </div>
       </motion.div>
@@ -4022,25 +4210,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
       }
-    }
-
-    // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
-    apiRequest('/auth/customer/profile/')
-      .then(res => {
-        const data = res?.data || res
-        if (data?.customer_id) {
-          setProfileCustomerId(data.customer_id)
-        }
-        if (data?.first_name || data?.name || data?.full_name) {
-          const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
-          if (fetchedName && fetchedName !== 'Customer') {
-            setProfileName(prev => prev || fetchedName)
+      // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
+      apiRequest('/auth/customer/profile/')
+        .then(res => {
+          const data = res?.data || res
+          if (data?.customer_id) {
+            setProfileCustomerId(data.customer_id)
           }
-        }
-      })
-      .catch(() => {
-        if (typeof refreshMe === 'function') refreshMe()
-      })
+          if (data?.first_name || data?.name || data?.full_name) {
+            const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
+            if (fetchedName && fetchedName !== 'Customer') {
+              setProfileName(prev => prev || fetchedName)
+            }
+          }
+        })
+        .catch(() => {
+          if (typeof refreshMe === 'function') refreshMe()
+        })
+    }
   }, [user])
 
   const handleAvatarUpload = async (e) => {
@@ -4310,7 +4497,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
   useEffect(() => {
-    if (activeTab === 'Saved Addresses') {
+    if (activeTab === 'Saved Addresses' && user) {
       fetchAddresses()
     }
   }, [activeTab, user])
@@ -4342,7 +4529,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }, [activeTab, user])
 
   useEffect(() => {
-    if (rescheduleBookingId && rescheduleDate) {
+    if (rescheduleBookingId && rescheduleDate && user) {
       setSlotsLoading(true)
       apiRequest(`/customer/bookings/${rescheduleBookingId}/slots/?date=${rescheduleDate}`)
         .then(r => {
@@ -4354,9 +4541,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         .catch(() => setAvailableSlots([]))
         .finally(() => setSlotsLoading(false))
     }
-  }, [rescheduleBookingId, rescheduleDate])
+  }, [rescheduleBookingId, rescheduleDate, user])
 
   const fetchCustomerRefundData = () => {
+    if (!user) return
     setRefundsLoading(true)
     apiRequest('/customer/refunds/')
       .then(r => setRefunds(r.data || []))
@@ -5183,7 +5371,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
                                 if (!isAcceptedJob) return null
                                 return (
-                                  <button key={act} onClick={() => setTrackingBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
+                                  <button
+                                    key={act}
+                                    onClick={() => setTrackingBooking(b)}
+                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}
+                                  >
                                     <MapPin size={14} /> Track Live
                                   </button>
                                 )
@@ -8806,14 +8998,41 @@ export function BookingPage() {
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  const isExplicitTracking = Boolean(searchParams.get("track") || searchParams.get("booking_id") || routerLocation.state?.isTracking)
   const hasIncomingOrder = Boolean((incomingCart && incomingCart.length > 0) || incomingCategory)
-  const trackParam = !hasIncomingOrder && (searchParams.get("track") || searchParams.get("booking_id") || (isExplicitTracking ? sessionStorage.getItem("calservice_active_tracking_id") : null))
+
+  // Retrieve stored active booking from session
+  const storedBookingData = useMemo(() => {
+    if (hasIncomingOrder) return null
+    try {
+      const saved = sessionStorage.getItem("calservice_last_booking")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.status !== "cancelled") return parsed
+      }
+    } catch (e) { }
+    return null
+  }, [hasIncomingOrder])
+
+  const storedTrackingId = useMemo(() => {
+    if (hasIncomingOrder) return null
+    try {
+      return sessionStorage.getItem("calservice_active_tracking_id") || storedBookingData?.request_id || (storedBookingData?.id ? `SR-${storedBookingData.id}` : null)
+    } catch (e) {
+      return null
+    }
+  }, [hasIncomingOrder, storedBookingData])
+
+  const queryTrack = searchParams.get("track") || searchParams.get("booking_id")
+  const trackParam = !hasIncomingOrder && (queryTrack || storedTrackingId || (storedBookingData ? (storedBookingData.request_id || storedBookingData.id) : null))
+  const isTrackingActive = Boolean(!hasIncomingOrder && (trackParam || storedBookingData || routerLocation.state?.isTracking))
 
   const [cart, setCart] = useState(() => {
     if (incomingCart && incomingCart.length > 0) {
       try { localStorage.setItem("calservices_customer_cart", JSON.stringify(incomingCart)) } catch (e) { }
       return incomingCart
+    }
+    if (isTrackingActive) {
+      return []
     }
     try {
       const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart")
@@ -8839,7 +9058,7 @@ export function BookingPage() {
 
   const [step, setStep] = useState(() => {
     if (hasIncomingOrder) return 3
-    if (trackParam || isExplicitTracking) return 0
+    if (isTrackingActive) return 0
     return 3
   })
   const [loading, setLoading] = useState(false)
@@ -8849,13 +9068,8 @@ export function BookingPage() {
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(() => {
     if (hasIncomingOrder) return null
-    const saved = sessionStorage.getItem("calservice_last_booking")
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed?.status !== "cancelled") return parsed
-      } catch (e) { }
-    }
+    if (routerLocation.state?.successData) return routerLocation.state.successData
+    if (storedBookingData) return storedBookingData
     return null
   })
 
@@ -8881,36 +9095,31 @@ export function BookingPage() {
     }
   }, [cart, step, trackParam, incomingCategory, navigate]);
 
-  // Synchronize step and successData when active tracking ID changes
+  // Synchronize step and successData when active tracking ID changes or on page refresh
   useEffect(() => {
     if (hasIncomingOrder) {
       setStep(3);
       return;
     }
-    if (trackParam || routerLocation.state?.isTracking) {
+    if (isTrackingActive) {
       if (routerLocation.state?.successData) {
         setSuccessData(routerLocation.state.successData);
         setStep(0);
-      } else {
-        const saved = sessionStorage.getItem("calservice_last_booking");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed?.status === "cancelled") {
-              sessionStorage.removeItem("calservice_active_tracking_id");
-              sessionStorage.removeItem("calservice_last_booking");
-              setStep(3);
-            } else {
-              setSuccessData(parsed);
+      } else if (storedBookingData) {
+        setSuccessData(storedBookingData);
+        setStep(0);
+      } else if (trackParam) {
+        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
+          .then(res => {
+            if (res?.data) {
+              setSuccessData(res.data);
               setStep(0);
             }
-          } catch (e) {
-            setStep(3);
-          }
-        }
+          })
+          .catch(() => { });
       }
     }
-  }, [trackParam, routerLocation.state, hasIncomingOrder]);
+  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -9299,10 +9508,17 @@ export function BookingPage() {
           }))
         }
         setSuccessData(savedData)
+        const bookingTrackingId = String(res.data?.request_id || res.data?.id || "")
         try {
           sessionStorage.setItem("calservice_last_booking", JSON.stringify(savedData))
-          sessionStorage.setItem("calservice_active_tracking_id", String(res.data?.id || res.data?.request_id || ""))
+          sessionStorage.setItem("calservice_active_tracking_id", bookingTrackingId)
+          localStorage.removeItem("calservices_customer_cart")
+          sessionStorage.removeItem("calservices_customer_cart")
+          const newUrl = new URL(window.location.href)
+          newUrl.searchParams.set("track", bookingTrackingId)
+          window.history.replaceState({}, "", newUrl.pathname + newUrl.search)
         } catch (e) { }
+        setCart([])
         setShowPostFlow(true)  // Show animated post-booking flow
       } else setError(res?.message || "Something went wrong. Please try again.")
     } catch (err) {
@@ -9319,16 +9535,19 @@ export function BookingPage() {
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
-    sessionStorage.removeItem("calservice_last_booking")
-    sessionStorage.removeItem("calservice_active_tracking_id")
+    try {
+      sessionStorage.removeItem("calservice_last_booking")
+      sessionStorage.removeItem("calservice_active_tracking_id")
+      localStorage.removeItem("calservices_customer_cart")
+      sessionStorage.removeItem("calservices_customer_cart")
+    } catch (e) { }
     // Return to public home services catalog page (/home)
     navigate(routes.landing, { replace: true })
   }
 
-  const isTrackingActive = Boolean(trackParam || routerLocation.state?.isTracking || step === 0)
-
   const isQuickCommerce =
     !isTrackingActive &&
+    step !== 0 &&
     (category?.isQuickCommerce ||
       incomingCategory?.isQuickCommerce ||
       routerLocation.state?.isQuickCommerce ||
@@ -14288,12 +14507,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "/assets/icon_3d_appliance.jpg" },
-      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/gas_stove_clean.png" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "/assets/icon_3d_electrical.jpg" }
+      { name: "Refrigerator Service & Repair", image: "/mockups/refrigerator/icon_ref_service.jpg" },
+      { name: "Refrigerator Installation", image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+      { name: "Refrigerator Cooling", image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+      { name: "Refrigerator Gas & Compressor", image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "/mockups/refrigerator/icon_ref_parts.jpg" }
     ],
     microwave: [
       { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
@@ -14955,52 +15174,52 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     refrigerator: {
       "Refrigerator Service & Repair": [
-        { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-3", name: "Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Thermostat check, relay replace, gas pressure audit & fan motor testing.", includes: ["Relay & OLP audit", "Thermostat test", "Gas pressure scan"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-srv-4", name: "Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Power plug wire test, thermal fuse check & main PCB power supply repair.", includes: ["Power cord continuity", "Thermal fuse check", "PCB power check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-5", name: "Excessive Noise", price: 399, duration: "45 mins", badge: "Noise Reduction", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor mounting pad dampening, fan blade lubrication & leveling fit.", includes: ["Fan blade realignment", "Vibration pad insertion", "Compressor mount check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-6", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Unclog drain pipe tube, empty rear water collection tray & seal gasket leaks.", includes: ["Drain line vacuuming", "Tray cleanout", "Gasket seal alignment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "/mockups/refrigerator/icon_ref_service.jpg" },
+        { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "/mockups/refrigerator/refrigerator_service_hero.jpg" },
+        { id: "ref-srv-3", name: "Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Thermostat check, relay replace, gas pressure audit & fan motor testing.", includes: ["Relay & OLP audit", "Thermostat test", "Gas pressure scan"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-srv-4", name: "Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Power plug wire test, thermal fuse check & main PCB power supply repair.", includes: ["Power cord continuity", "Thermal fuse check", "PCB power check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-srv-5", name: "Excessive Noise", price: 399, duration: "45 mins", badge: "Noise Reduction", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor mounting pad dampening, fan blade lubrication & leveling fit.", includes: ["Fan blade realignment", "Vibration pad insertion", "Compressor mount check"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-srv-6", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Unclog drain pipe tube, empty rear water collection tray & seal gasket leaks.", includes: ["Drain line vacuuming", "Tray cleanout", "Gasket seal alignment"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" }
       ],
       "Refrigerator Installation": [
-        { id: "ref-inst-1", name: "Refrigerator Installation", price: 399, duration: "45 mins", badge: "Standard", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Unboxing, positioning, leveling feet adjustment & safe power socket setup.", includes: ["Unboxing & positioning", "Leveling alignment", "Stabilizer setup check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-2", name: "Refrigerator Reinstallation", price: 599, duration: "1 hr", badge: "Relocation", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dismounting from old location, safe transfer & setup at new kitchen spot.", includes: ["Safe dismounting", "New location placement", "Cooling cycle verification"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-inst-3", name: "Refrigerator Uninstallation", price: 249, duration: "30 mins", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Disconnecting power & water line connection, draining water tray & packaging prep.", includes: ["Power disconnect", "Water line detachment", "Drain tray emptying"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-4", name: "New Refrigerator Setup", price: 349, duration: "30 mins", badge: "New Appliance", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unpacking tape removal, glass shelf insertion, ice tray alignment & initial run check.", includes: ["Internal tape removal", "Glass shelf alignment", "Initial run check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-inst-5", name: "Leveling & Positioning", price: 199, duration: "20 mins", badge: "Balance", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Adjusting front leg screws to eliminate fridge wobbling & ensure proper door closure.", includes: ["Spirit level check", "Leg screw adjustment", "Door swing test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-6", name: "Water Line Connection", price: 299, duration: "30 mins", badge: "Dispenser Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Connecting external RO / tap water line to fridge ice maker & water dispenser.", includes: ["Food-grade tubing fit", "Push-fit connector check", "Dispenser flow test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "ref-inst-1", name: "Refrigerator Installation", price: 399, duration: "45 mins", badge: "Standard", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Unboxing, positioning, leveling feet adjustment & safe power socket setup.", includes: ["Unboxing & positioning", "Leveling alignment", "Stabilizer setup check"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-2", name: "Refrigerator Reinstallation", price: 599, duration: "1 hr", badge: "Relocation", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dismounting from old location, safe transfer & setup at new kitchen spot.", includes: ["Safe dismounting", "New location placement", "Cooling cycle verification"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-3", name: "Refrigerator Uninstallation", price: 249, duration: "30 mins", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Disconnecting power & water line connection, draining water tray & packaging prep.", includes: ["Power disconnect", "Water line detachment", "Drain tray emptying"], image: "/mockups/refrigerator/icon_ref_service.jpg" },
+        { id: "ref-inst-4", name: "New Refrigerator Setup", price: 349, duration: "30 mins", badge: "New Appliance", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unpacking tape removal, glass shelf insertion, ice tray alignment & initial run check.", includes: ["Internal tape removal", "Glass shelf alignment", "Initial run check"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-5", name: "Leveling & Positioning", price: 199, duration: "20 mins", badge: "Balance", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Adjusting front leg screws to eliminate fridge wobbling & ensure proper door closure.", includes: ["Spirit level check", "Leg screw adjustment", "Door swing test"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-6", name: "Water Line Connection", price: 299, duration: "30 mins", badge: "Dispenser Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Connecting external RO / tap water line to fridge ice maker & water dispenser.", includes: ["Food-grade tubing fit", "Push-fit connector check", "Dispenser flow test"], image: "/mockups/refrigerator/icon_ref_service.jpg" }
       ],
       "Refrigerator Cooling": [
-        { id: "ref-cool-1", name: "Cooling Problem", price: 499, duration: "45 mins", badge: "Cooling Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Thermostat sensor audit, airflow duct check, compressor relay & capacitor test.", includes: ["Airflow duct scan", "Thermostat audit", "Capacitor check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-2", name: "Freezer Not Cooling", price: 599, duration: "1 hr", badge: "Freezer Restore", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater check, evaporator fan motor repair & expansion valve audit.", includes: ["Evaporator fan check", "Defrost heater test", "Freezer temp check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cool-3", name: "Uneven Cooling", price: 449, duration: "45 mins", badge: "Flow Balance", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Air damper flap motor adjustment, return air vent de-clogging & multi-flow tuning.", includes: ["Air damper check", "Return vent clearing", "Temperature sync"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-4", name: "Over Cooling", price: 449, duration: "45 mins", badge: "Temp Regulation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fixing food freezing in fresh food compartment, thermostat calibration & sensor swap.", includes: ["Thermostat calibration", "NTC sensor check", "Damper motor test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-5", name: "Temperature Problem", price: 399, duration: "45 mins", badge: "Sensor Calibration", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Digital panel temperature display error fix, sensor probe replacement & PCB sync.", includes: ["Digital panel test", "Sensor probe replace", "PCB signal check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cool-6", name: "Ice Formation Problem", price: 499, duration: "45 mins", badge: "Defrost Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing excessive ice buildup on evaporator coils, bi-metal thermostat & timer repair.", includes: ["Bi-metal fuse check", "Defrost timer test", "Drain tube heater check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "ref-cool-1", name: "Cooling Problem", price: 499, duration: "45 mins", badge: "Cooling Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Thermostat sensor audit, airflow duct check, compressor relay & capacitor test.", includes: ["Airflow duct scan", "Thermostat audit", "Capacitor check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-2", name: "Freezer Not Cooling", price: 599, duration: "1 hr", badge: "Freezer Restore", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater check, evaporator fan motor repair & expansion valve audit.", includes: ["Evaporator fan check", "Defrost heater test", "Freezer temp check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-3", name: "Uneven Cooling", price: 449, duration: "45 mins", badge: "Flow Balance", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Air damper flap motor adjustment, return air vent de-clogging & multi-flow tuning.", includes: ["Air damper check", "Return vent clearing", "Temperature sync"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-4", name: "Over Cooling", price: 449, duration: "45 mins", badge: "Temp Regulation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fixing food freezing in fresh food compartment, thermostat calibration & sensor swap.", includes: ["Thermostat calibration", "NTC sensor check", "Damper motor test"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-5", name: "Temperature Problem", price: 399, duration: "45 mins", badge: "Sensor Calibration", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Digital panel temperature display error fix, sensor probe replacement & PCB sync.", includes: ["Digital panel test", "Sensor probe replace", "PCB signal check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-cool-6", name: "Ice Formation Problem", price: 499, duration: "45 mins", badge: "Defrost Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing excessive ice buildup on evaporator coils, bi-metal thermostat & timer repair.", includes: ["Bi-metal fuse check", "Defrost timer test", "Drain tube heater check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" }
       ],
       "Refrigerator Gas & Compressor": [
-        { id: "ref-gas-1", name: "Gas Refill", price: 1299, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "R134a / R600a eco refrigerant gas charging with vacuum evacuation & leak testing.", includes: ["System vacuuming", "Eco refrigerant fill", "Cooling performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-2", name: "Gas Leak Detection", price: 399, duration: "45 mins", badge: "Leak Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Nitrogen pressure testing & electronic gas sniffer scan to locate microscopic leaks.", includes: ["Nitrogen pressure test", "Electronic sniffer scan", "Leak location report"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-3", name: "Gas Leak Repair", price: 1199, duration: "1.5 hrs", badge: "Copper Braze", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Copper brazing silver solder fix, filter dryer filter replacement & pressure holding test.", includes: ["Silver solder brazing", "Filter dryer replace", "Pressure hold test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-4", name: "Compressor Repair", price: 999, duration: "1.5 hrs", badge: "Compressor Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor terminal wire repair, overload protector swap, relay & start capacitor replace.", includes: ["Terminal wire resolder", "OLP protector swap", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-5", name: "Compressor Replacement", price: 1499, duration: "2 hrs", badge: "New Unit Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Installing brand new inverter / non-inverter compressor unit with gas charge.", includes: ["Old compressor dismount", "Brand new unit fit", "Full gas recharge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-6", name: "Refrigerant Pressure Check", price: 299, duration: "30 mins", badge: "PSI Audit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Connecting manifold pressure gauge to check suction/discharge PSI levels.", includes: ["Manifold gauge check", "Suction PSI report", "Compressor current test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "ref-gas-1", name: "Gas Refill", price: 1299, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "R134a / R600a eco refrigerant gas charging with vacuum evacuation & leak testing.", includes: ["System vacuuming", "Eco refrigerant fill", "Cooling performance test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-2", name: "Gas Leak Detection", price: 399, duration: "45 mins", badge: "Leak Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Nitrogen pressure testing & electronic gas sniffer scan to locate microscopic leaks.", includes: ["Nitrogen pressure test", "Electronic sniffer scan", "Leak location report"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-3", name: "Gas Leak Repair", price: 1199, duration: "1.5 hrs", badge: "Copper Braze", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Copper brazing silver solder fix, filter dryer filter replacement & pressure holding test.", includes: ["Silver solder brazing", "Filter dryer replace", "Pressure hold test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-4", name: "Compressor Repair", price: 999, duration: "1.5 hrs", badge: "Compressor Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor terminal wire repair, overload protector swap, relay & start capacitor replace.", includes: ["Terminal wire resolder", "OLP protector swap", "Start capacitor check"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-5", name: "Compressor Replacement", price: 1499, duration: "2 hrs", badge: "New Unit Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Installing brand new inverter / non-inverter compressor unit with gas charge.", includes: ["Old compressor dismount", "Brand new unit fit", "Full gas recharge"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-6", name: "Refrigerant Pressure Check", price: 299, duration: "30 mins", badge: "PSI Audit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Connecting manifold pressure gauge to check suction/discharge PSI levels.", includes: ["Manifold gauge check", "Suction PSI report", "Compressor current test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" }
       ],
       "Refrigerator Cleaning & Maintenance": [
-        { id: "ref-cln-1", name: "Refrigerator Deep Cleaning", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Deodorizing spray"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cln-2", name: "Freezer Cleaning", price: 349, duration: "45 mins", badge: "Ice Cleanout", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Steam defrosting of heavy ice buildup, internal wall sanitizing & anti-bacterial wash.", includes: ["Steam ice melt", "Wall anti-bacterial wipe", "Odour removal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cln-3", name: "Condenser Coil Cleaning", price: 299, duration: "30 mins", badge: "Coil Wash", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Vacuuming and brushing rear/bottom condenser coils to improve heat dissipation.", includes: ["Coil dust vacuuming", "Fin brush cleaning", "Heat dissipation test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cln-4", name: "Drain Cleaning", price: 249, duration: "30 mins", badge: "Drain Flush", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Pressure flushing rear condensate drain hole & cleaning drip pan tray.", includes: ["Drain hole pressure flush", "Drip tray wash", "Algae treatment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "ref-cln-5", name: "Defrost System Check", price: 349, duration: "30 mins", badge: "Defrost Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Testing defrost heating element resistance, bimetal thermostat & timer sequence.", includes: ["Heater resistance test", "Bi-metal continuity check", "Timer cycle verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cln-6", name: "Preventive Maintenance", price: 599, duration: "1 hr", badge: "Annual Care", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Full annual tune-up: gas check, coil wash, electrical terminal tight & gasket lubricate.", includes: ["Full gas pressure check", "Terminal screw tightening", "Gasket lubrication"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "ref-cln-1", name: "Refrigerator Deep Cleaning", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Deodorizing spray"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-2", name: "Freezer Cleaning", price: 349, duration: "45 mins", badge: "Ice Cleanout", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Steam defrosting of heavy ice buildup, internal wall sanitizing & anti-bacterial wash.", includes: ["Steam ice melt", "Wall anti-bacterial wipe", "Odour removal"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-3", name: "Condenser Coil Cleaning", price: 299, duration: "30 mins", badge: "Coil Wash", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Vacuuming and brushing rear/bottom condenser coils to improve heat dissipation.", includes: ["Coil dust vacuuming", "Fin brush cleaning", "Heat dissipation test"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-4", name: "Drain Cleaning", price: 249, duration: "30 mins", badge: "Drain Flush", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Pressure flushing rear condensate drain hole & cleaning drip pan tray.", includes: ["Drain hole pressure flush", "Drip tray wash", "Algae treatment"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-5", name: "Defrost System Check", price: 349, duration: "30 mins", badge: "Defrost Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Testing defrost heating element resistance, bimetal thermostat & timer sequence.", includes: ["Heater resistance test", "Bi-metal continuity check", "Timer cycle verification"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-6", name: "Preventive Maintenance", price: 599, duration: "1 hr", badge: "Annual Care", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Full annual tune-up: gas check, coil wash, electrical terminal tight & gasket lubricate.", includes: ["Full gas pressure check", "Terminal screw tightening", "Gasket lubrication"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" }
       ],
       "Refrigerator Parts & Electrical Repair": [
-        { id: "ref-prt-1", name: "Thermostat Replacement", price: 499, duration: "45 mins", badge: "Thermostat Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing mechanical / digital temperature control thermostat capillary unit.", includes: ["Capillary tube replace", "Temperature calibration", "Cut-off cycle test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-2", name: "Fan Motor Repair", price: 599, duration: "1 hr", badge: "Fan Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Evaporator / condenser fan motor winding check, bushing greasing or motor replacement.", includes: ["Motor winding check", "Blade balance fit", "Airflow test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-3", name: "Door Seal/Gasket Replacement", price: 449, duration: "45 mins", badge: "Gasket Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing worn magnetic door gasket & fitting brand-new food grade rubber seal.", includes: ["Worn gasket removal", "Magnetic strip insert", "Air tight seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-prt-4", name: "PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair & relay swap.", includes: ["PCB diagnostic test", "Micro-controller repair", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-5", name: "Temperature Sensor Replacement", price: 399, duration: "45 mins", badge: "NTC Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing faulty NTC thermistor temperature sensor probe.", includes: ["NTC resistance check", "Probe replacement", "Display error code clear"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-6", name: "Relay & Capacitor Replacement", price: 349, duration: "30 mins", badge: "Relay Swap", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing PTC starter relay, overload protector (OLP) & start capacitor.", includes: ["PTC relay swap", "OLP protector replace", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "ref-prt-1", name: "Thermostat Replacement", price: 499, duration: "45 mins", badge: "Thermostat Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing mechanical / digital temperature control thermostat capillary unit.", includes: ["Capillary tube replace", "Temperature calibration", "Cut-off cycle test"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-2", name: "Fan Motor Repair", price: 599, duration: "1 hr", badge: "Fan Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Evaporator / condenser fan motor winding check, bushing greasing or motor replacement.", includes: ["Motor winding check", "Blade balance fit", "Airflow test"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-3", name: "Door Seal/Gasket Replacement", price: 449, duration: "45 mins", badge: "Gasket Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing worn magnetic door gasket & fitting brand-new food grade rubber seal.", includes: ["Worn gasket removal", "Magnetic strip insert", "Air tight seal check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-4", name: "PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair & relay swap.", includes: ["PCB diagnostic test", "Micro-controller repair", "60-day PCB warranty"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-5", name: "Temperature Sensor Replacement", price: 399, duration: "45 mins", badge: "NTC Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing faulty NTC thermistor temperature sensor probe.", includes: ["NTC resistance check", "Probe replacement", "Display error code clear"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-6", name: "Relay & Capacitor Replacement", price: 349, duration: "30 mins", badge: "Relay Swap", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing PTC starter relay, overload protector (OLP) & start capacitor.", includes: ["PTC relay swap", "OLP protector replace", "Start capacitor check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" }
       ]
     },
     microwave: {
@@ -15977,12 +16196,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       {isFirst && (
                         <div className="w-full aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
-                            src={normalizedKey === "hvac" ? acServiceImg : p.image}
+                            src={
+                              normalizedKey === "hvac"
+                                ? acServiceImg
+                                : (normalizedKey === "refrigerator" || isRefTab)
+                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                : p.image
+                            }
                             alt={p.name}
                             className="w-full h-full object-cover object-center"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
+                              e.target.src = (normalizedKey === "refrigerator" || isRefTab)
+                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                : "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
                             }}
                           />
                         </div>

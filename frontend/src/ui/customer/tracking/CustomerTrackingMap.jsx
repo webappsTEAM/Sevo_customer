@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react"
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
+import { Plus, Minus } from "lucide-react"
 import {
   createServiceVehicleMarker,
   createCustomerDestinationIcon,
@@ -107,9 +108,9 @@ function CameraController({
     if (!initialFitRef.current && destinationPos) {
       if (technicianPos) {
         const bounds = L.latLngBounds([technicianPos, destinationPos])
-        map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true, duration: 0.9 })
+        map.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true, duration: 0.9 })
       } else {
-        map.flyTo(destinationPos, 16, { animate: true, duration: 0.8 })
+        map.flyTo(destinationPos, 17, { animate: true, duration: 0.8 })
       }
       initialFitRef.current = true
     }
@@ -127,7 +128,7 @@ function CameraController({
     // Forward lead offset when moving
     if (speed > 1.5 && bearing != null) {
       const rad = (bearing * Math.PI) / 180
-      const leadDist = 0.0004 // Approx 40 meters forward offset
+      const leadDist = 0.0004
       targetCenter = [
         technicianPos[0] + Math.cos(rad) * leadDist,
         technicianPos[1] + Math.sin(rad) * leadDist,
@@ -137,38 +138,150 @@ function CameraController({
     map.panTo(targetCenter, { animate: true, duration: 0.5, easeLinearity: 0.35 })
   }, [technicianPos, speed, bearing, followMode, map])
 
-  // 3. Recenter trigger: smooth flyTo current technician location
+  // 3. Recenter: fit bounds to show technician + customer destination together
   useEffect(() => {
-    if (recenterTrigger > 0 && technicianPos) {
-      map.flyTo(technicianPos, Math.max(map.getZoom(), 16), { animate: true, duration: 0.6 })
+    if (recenterTrigger <= 0) return
+    const points = []
+    if (technicianPos) points.push(technicianPos)
+    if (destinationPos) points.push(destinationPos)
+    if (points.length === 0) return
+    if (points.length === 1) {
+      map.flyTo(points[0], Math.max(map.getZoom(), 17), { animate: true, duration: 0.6 })
+    } else {
+      const bounds = L.latLngBounds(points)
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17, animate: true, duration: 0.7 })
     }
-  }, [recenterTrigger, technicianPos, map])
+  }, [recenterTrigger, technicianPos, destinationPos, map])
 
   return null
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Custom Compact Zoom Controls
+   Custom Compact Zoom Controls — Modern, Tactile & User-Friendly
 ───────────────────────────────────────────────────────────────────────────── */
 function CompactZoomControls() {
   const map = useMap()
+  const controlRef = useRef(null)
+
+  useEffect(() => {
+    if (controlRef.current) {
+      L.DomEvent.disableClickPropagation(controlRef.current)
+      L.DomEvent.disableScrollPropagation(controlRef.current)
+    }
+  }, [])
+
+  const handleZoomIn = (e) => {
+    if (e) {
+      e.stopPropagation()
+      e.preventDefault()
+    }
+    if (map) {
+      map.zoomIn(1, { animate: true })
+    }
+  }
+
+  const handleZoomOut = (e) => {
+    if (e) {
+      e.stopPropagation()
+      e.preventDefault()
+    }
+    if (map) {
+      map.zoomOut(1, { animate: true })
+    }
+  }
+
   return (
-    <div className="ltp-compact-zoom-group">
+    <div
+      ref={controlRef}
+      className="leaflet-control ltp-compact-zoom-group"
+      style={{
+        position: "absolute",
+        bottom: 22,
+        right: 14,
+        zIndex: 1000,
+        display: "flex",
+        flexDirection: "column",
+        background: "rgba(255, 255, 255, 0.96)",
+        backdropFilter: "blur(10px)",
+        borderRadius: 10,
+        boxShadow: "0 4px 18px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.1)",
+        border: "1px solid rgba(226, 232, 240, 0.9)",
+        overflow: "hidden",
+        pointerEvents: "auto",
+      }}
+    >
       <button
+        type="button"
         className="ltp-compact-zoom-btn"
-        onClick={() => map.zoomIn()}
+        onClick={handleZoomIn}
         aria-label="Zoom in"
-        title="Zoom In"
+        title="Zoom In (+)"
+        style={{
+          width: 38,
+          height: 38,
+          border: "none",
+          background: "transparent",
+          color: "#0f172a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          transition: "background 0.15s, color 0.15s, transform 0.1s",
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "#f1f5f9"
+          e.currentTarget.style.color = "#0284c7"
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "transparent"
+          e.currentTarget.style.color = "#0f172a"
+        }}
+        onMouseDown={(e) => {
+          e.currentTarget.style.transform = "scale(0.92)"
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.transform = "none"
+        }}
       >
-        +
+        <Plus size={18} strokeWidth={2.4} />
       </button>
+
+      <div style={{ height: 1, background: "#e2e8f0", width: "100%" }} />
+
       <button
+        type="button"
         className="ltp-compact-zoom-btn"
-        onClick={() => map.zoomOut()}
+        onClick={handleZoomOut}
         aria-label="Zoom out"
-        title="Zoom Out"
+        title="Zoom Out (−)"
+        style={{
+          width: 38,
+          height: 38,
+          border: "none",
+          background: "transparent",
+          color: "#0f172a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          transition: "background 0.15s, color 0.15s, transform 0.1s",
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "#f1f5f9"
+          e.currentTarget.style.color = "#0284c7"
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "transparent"
+          e.currentTarget.style.color = "#0f172a"
+        }}
+        onMouseDown={(e) => {
+          e.currentTarget.style.transform = "scale(0.92)"
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.transform = "none"
+        }}
       >
-        −
+        <Minus size={18} strokeWidth={2.4} />
       </button>
     </div>
   )
@@ -191,7 +304,7 @@ export function CustomerTrackingMap({
   vendorName = "",
   requestId = "",
 }) {
-  const [mapLayer, setMapLayer] = useState("osm_streets") // 'osm_streets' | 'satellite' | 'dark'
+  const [mapLayer, setMapLayer] = useState("osm_streets")
   const [roadRoute, setRoadRoute] = useState([])
   const [hasRoadGeometry, setHasRoadGeometry] = useState(false)
   const [currentStreetName, setCurrentStreetName] = useState("")
@@ -200,11 +313,16 @@ export function CustomerTrackingMap({
   const [recenterTrigger, setRecenterTrigger] = useState(0)
   const [copiedOtp, setCopiedOtp] = useState(false)
 
-  // Real technician identity
-  const techName = technician?.name || technician?.full_name || technicianLocation?.technician_name || ""
+  // Real technician identity — never fake names or ratings
+  const rawTechName = technician?.name || technician?.full_name || technicianLocation?.technician_name || ""
+  const techName = rawTechName && rawTechName !== "pest_control" && rawTechName !== "home_cleaning"
+    ? rawTechName
+    : ["assigned", "accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+    ? "Assigned Service Professional"
+    : ""
   const techPhone = technician?.phone || technicianLocation?.technician_phone || ""
   const techPhoto = technician?.photo || technicianLocation?.technician_photo || null
-  const techRating = technician?.rating || technicianLocation?.technician_rating || null
+  const techRating = technician?.rating ?? technicianLocation?.technician_rating ?? null
 
   const handleCopyOtp = () => {
     if (!startOtp || !navigator.clipboard) return
@@ -342,10 +460,8 @@ export function CustomerTrackingMap({
       return
     }
 
-    // Road snapping safeguard: project point on road route if within 30m
-    const targetGps = hasRoadGeometry && roadRoute.length > 1
-      ? projectPointOnPolyline(rawTechnicianPos, roadRoute, 30)
-      : rawTechnicianPos
+    // Exact database coordinates
+    const targetGps = rawTechnicianPos
 
     // First position hydration
     if (!visualPosRef.current) {
@@ -484,58 +600,58 @@ export function CustomerTrackingMap({
     setFollowMode(false)
   }, [])
 
-  const handleRecenter = () => {
+  // Recenter: fit map to show both technician and customer destination
+  const handleRecenter = useCallback(() => {
     setFollowMode(true)
     setRecenterTrigger(prev => prev + 1)
-  }
+  }, [])
 
-  // Toggle Street Level Zoom (Zoom 17 vs normal overview)
+  // Toggle Street Level Zoom
   const toggleStreetZoom = () => {
     setIsStreetZoom(prev => !prev)
     setFollowMode(true)
     setRecenterTrigger(prev => prev + 1)
   }
 
-  // Initial center default
+  // Initial center default — prefer destination (customer's booking address)
   const defaultCenter = destinationPos || rawTechnicianPos || [12.9716, 77.5946]
 
   return (
-    <div className="ltp-map-wrapper ltp-map-container-wrap" style={{ position: "relative", width: "100%", height: "100%", minHeight: "100%" }}>
-      {/* ── Floating Control Bar (Top Right): Tile Switcher, Street View Toggle & Recenter ── */}
+    <div
+      className="ltp-map-wrapper ltp-map-container-wrap"
+      style={{ position: "relative", width: "100%", height: "100%", minHeight: "100%" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* ── Floating Control Bar ── */}
       <div className="ltp-compact-layer-switcher ltp-layer-switcher" style={{ position: "absolute", top: 14, right: 14, zIndex: 1000, display: "flex", alignItems: "center", gap: 6 }}>
-        {rawTechnicianPos && (
-          <button
-            className={`ltp-layer-pill ${isStreetZoom ? "active" : ""}`}
-            onClick={toggleStreetZoom}
-            title={isStreetZoom ? "Switch to Overview Map" : "Zoom into Street Level View"}
-            style={{
-              padding: "4px 10px",
-              borderRadius: 16,
-              background: isStreetZoom ? "linear-gradient(135deg, #0284c7, #2563eb)" : "rgba(15, 23, 42, 0.88)",
-              color: "#ffffff",
-              border: "1px solid rgba(56, 189, 248, 0.4)",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 4
-            }}
-          >
-            {isStreetZoom ? "🌐 Overview" : "🔍 Street View"}
-          </button>
-        )}
 
-        {!followMode && rawTechnicianPos && (
-          <button
-            className="ltp-recenter-btn pulse-glow"
-            onClick={handleRecenter}
-            title="Recenter camera on technician"
-            style={{ padding: "4px 10px", borderRadius: 16, background: "rgba(15, 23, 42, 0.88)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer" }}
-          >
-            🎯 Recenter
-          </button>
-        )}
+        {/* Recenter button — fits technician + customer destination */}
+        <button
+          id="ltp-recenter-btn"
+          onClick={handleRecenter}
+          title="Show technician & your location"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: followMode ? "linear-gradient(135deg,#2563eb,#0284c7)" : "rgba(15,23,42,0.88)",
+            color: "#fff",
+            border: followMode ? "none" : "1.5px solid rgba(56,189,248,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            boxShadow: followMode ? "0 2px 12px rgba(37,99,235,0.45)" : "0 2px 8px rgba(0,0,0,0.3)",
+            transition: "all 0.2s",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            <circle cx="12" cy="12" r="9" strokeOpacity="0.35"/>
+          </svg>
+        </button>
 
         {[
           { id: "osm_streets", label: "Street" },
@@ -554,35 +670,38 @@ export function CustomerTrackingMap({
 
       <MapContainer
         center={defaultCenter}
-        zoom={isStreetZoom ? 17 : 15}
+        zoom={17}
+        minZoom={4}
+        maxZoom={19}
         scrollWheelZoom={true}
+        doubleClickZoom={true}
+        touchZoom={true}
         zoomControl={false}
+        attributionControl={false}
         className="ltp-leaflet-container ltp-leaflet-map"
         style={{ width: "100%", height: "100%", minHeight: "100%", zIndex: 1 }}
       >
         <MapEventsHandler onUserInteract={handleUserInteract} />
         <MapResizeListener />
 
-        {/* ── Tile Layers: High-Detail OpenStreetMap & Esri Street View ── */}
+        {/* ── Tile Layers: High-Detail Streets / Satellite / Dark ── */}
         {mapLayer === "osm_streets" && (
           <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            subdomains={["a", "b", "c"]}
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             maxZoom={19}
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
         )}
 
         {mapLayer === "satellite" && (
           <>
             <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               maxZoom={19}
-              attribution='Tiles &copy; Esri'
             />
             <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{x}/{y}"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
               maxZoom={19}
+              opacity={0.85}
             />
           </>
         )}
@@ -592,7 +711,6 @@ export function CustomerTrackingMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             subdomains={["a", "b", "c", "d"]}
             maxZoom={19}
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           />
         )}
 
@@ -730,110 +848,11 @@ export function CustomerTrackingMap({
             zIndexOffset={1000}
           />
         )}
+
       </MapContainer>
-
-      {/* ── 4. Map-Side Floating Identification & Detail Drawer ── */}
-      {techName && !isTerminal && (
-        <div className="ltp-map-floating-drawer">
-          <div className="ltp-map-drawer-header">
-            <div className="ltp-map-drawer-avatar-wrap">
-              {techPhoto ? (
-                <img src={techPhoto} alt={techName} className="ltp-map-drawer-avatar" />
-              ) : (
-                <div className="ltp-map-drawer-avatar-fallback">
-                  {techName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <span className="ltp-map-drawer-online-dot" />
-            </div>
-
-            <div className="ltp-map-drawer-info">
-              <div className="ltp-map-drawer-name-row">
-                <span className="ltp-map-drawer-name">{techName}</span>
-                <span className="ltp-map-drawer-verified-badge">✓ Pro Partner</span>
-              </div>
-              <div className="ltp-map-drawer-sub-meta">
-                {techRating ? (
-                  <span className="ltp-map-drawer-rating">★ {Number(techRating).toFixed(1)}</span>
-                ) : (
-                  <span className="ltp-map-drawer-rating">★ 4.9</span>
-                )}
-                <span>• {vendorName || "Sevo"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Arrived State: Work Start OTP Card */}
-          {isArrived && startOtp && (
-            <div className="ltp-map-drawer-otp-card">
-              <div>
-                <div className="ltp-map-drawer-otp-label">🔑 Work Start OTP</div>
-                <div className="ltp-map-drawer-otp-sub">Share code with partner at site</div>
-              </div>
-              <button
-                className="ltp-map-drawer-otp-btn"
-                onClick={handleCopyOtp}
-                title="Click to copy OTP"
-              >
-                <span>{startOtp}</span>
-                {copiedOtp ? <span style={{ fontSize: "0.8rem", color: "#059669" }}>✓</span> : <span style={{ fontSize: "0.8rem" }}>📋</span>}
-              </button>
-            </div>
-          )}
-
-          {/* Street Navigation & Movement Status */}
-          <div className="ltp-map-drawer-street-row">
-            <div className="ltp-map-drawer-street-txt">
-              <span>{isArrived ? "📍" : "🛣️"}</span>
-              <span>
-                {isArrived
-                  ? "Arrived at your site entrance"
-                  : currentStreetName
-                  ? `On ${currentStreetName}`
-                  : distText
-                  ? `${distText} away (${etaText || ""})`
-                  : "En route to service location"}
-              </span>
-            </div>
-            {!isArrived && speed && speed > 2 && (
-              <span className="ltp-map-drawer-speed-badge">
-                ⚡ {Math.round(speed * 3.6 > 100 ? speed : speed * 3.6)} km/h
-              </span>
-            )}
-          </div>
-
-          {/* Map Actions (Call, WhatsApp, Street Zoom) */}
-          <div className="ltp-map-drawer-actions">
-            {techPhone && (
-              <a
-                href={`tel:${techPhone}`}
-                className="ltp-map-drawer-btn call"
-                title="Call partner"
-              >
-                📞 Call
-              </a>
-            )}
-            {techPhone && (
-              <button
-                className="ltp-map-drawer-btn whatsapp"
-                onClick={handleWhatsApp}
-                title="WhatsApp partner"
-              >
-                💬 Chat
-              </button>
-            )}
-            <button
-              className="ltp-map-drawer-btn zoom"
-              onClick={toggleStreetZoom}
-              title={isStreetZoom ? "Switch to Overview" : "Zoom into Street Level"}
-            >
-              {isStreetZoom ? "🌐 Overview" : "🔍 Street View"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
 export default CustomerTrackingMap
+

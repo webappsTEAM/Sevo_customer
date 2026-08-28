@@ -124,10 +124,10 @@ elif USE_POSTGRES:
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": _db_host,
-            "PORT": os.getenv("DB_PORT", "5432"),
+            "PORT": os.getenv("DB_PORT", "6543" if "pooler.supabase.com" in _db_host else "5432"),
             "OPTIONS": _db_options,
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
-            "CONN_HEALTH_CHECKS": True,
+            "CONN_HEALTH_CHECKS": False if os.getenv("DB_CONN_MAX_AGE", "0") == "0" else True,
         }
     }
 else:
