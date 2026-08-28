@@ -222,6 +222,23 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Enter a valid phone number.")
         return value
 
+    def validate(self, attrs):
+        # Fixes GT-B-04: nothing captured what's actually being moved for a
+        # Goods & Transport booking -- `description` already exists as a
+        # generic free-text field on ServiceRequest and was optional for
+        # every category, so a truck/mover booking could be submitted with
+        # zero information about the cargo (item count, fragility, weight).
+        # Require it specifically for logistics categories rather than add
+        # a new field/migration for what a TextField already covers.
+        from .services.logistics_pricing import LOGISTICS_CATEGORIES
+        category = attrs.get("service_category", "")
+        if category in LOGISTICS_CATEGORIES and not (attrs.get("description") or "").strip():
+            raise serializers.ValidationError({
+                "description": "Please describe what you're moving (items, approximate weight, "
+                                 "and any fragile/special-handling notes) so the driver knows what to expect."
+            })
+        return attrs
+
 
 class FeedbackTokenSummarySerializer(serializers.ModelSerializer):
     """Read-only summary shown to customer when they open the feedback link."""
