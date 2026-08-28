@@ -179,6 +179,15 @@ class ServiceRequest(models.Model):
         CANCELLED          = "cancelled",          "Cancelled"
         REFUNDED           = "refunded",           "Refunded"
         PARTIALLY_REFUNDED = "partially_refunded", "Partially Refunded"
+        # HS-C-03/HS-C-06: the vendor app writes this directly onto this
+        # shared column (workforce_api/views.py, when a technician reports
+        # cash collected but the customer has not yet confirmed it) -- it
+        # was never a formally recognized value here, so get_payment_status_display()
+        # returned the raw string "cash_pending" instead of a real label, and it
+        # leaked into the customer-facing UI verbatim. See the payment
+        # reconciliation audit command for the broader three-way status
+        # divergence this is one instance of.
+        CASH_PENDING       = "cash_pending",       "Cash Collection Pending"
 
     class CancellationReason(models.TextChoices):
         CHANGE_OF_PLANS   = "CHANGE_OF_PLANS",   "Change of plans / Booked by mistake"
