@@ -456,6 +456,52 @@ def notify_technician_on_the_way(service_request, technician_name="") -> None:
         logger.error("[ServiceRequests] Failed to send on-the-way email for %s: %s", service_request.request_id, exc)
 
 
+def notify_delivery_recipient(service_request, technician_name="") -> None:
+    """
+    Fixes GT-D-03: the person receiving a Goods & Transport delivery had no
+    way to be notified -- no contact info was even captured for them
+    before this pass. Now that ServiceRequest.drop_contact_email exists
+    (see migration 0053), tell them a delivery is on the way once we have
+    it. No-ops quietly if the booking has no recipient contact info yet
+    (frontend hasn't been updated to collect it, or the customer left it
+    blank) -- this is additive, not a hard requirement.
+    """
+    recipient = (getattr(service_request, "drop_contact_email", "") or "").strip()
+    if not recipient:
+        return
+
+    tech_display = technician_name or service_request.technician_name or "Our delivery partner"
+    subject = f"A delivery is on the way to you [{service_request.request_id}]"
+    details = {
+        "Reference"        : service_request.request_id,
+        "Delivery Address" : service_request.drop_address or "N/A",
+        "Delivery Partner" : tech_display,
+    }
+    html_body = _render_html_template(
+        title="Delivery On The Way",
+        greeting=f"Hello {service_request.drop_contact_name or ''},".strip() or "Hello,",
+        intro_text=f"{service_request.customer_name} has a delivery on the way to you, handled by {tech_display}.",
+        details_dict=details,
+        footer_note="This is an automated notice -- please have someone available to receive the delivery."
+    )
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"A delivery ({service_request.request_id}) is on the way to {service_request.drop_address or 'your address'}, handled by {tech_display}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Delivery-recipient notice sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (delivery recipient) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send delivery-recipient email for %s: %s", service_request.request_id, exc)
+
+
 def send_work_completion_email(service_request) -> None:
     """DEPRECATED no-op. Use send_completion_and_feedback_email() instead."""
     pass

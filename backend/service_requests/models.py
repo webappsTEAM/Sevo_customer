@@ -225,6 +225,17 @@ class ServiceRequest(models.Model):
     # own rule warns against. Revisit if Packers & Movers ever needs
     # multi-stop routing.
     drop_address     = models.TextField(blank=True, default="")
+    # Fixes GT-D-03: nothing captured who's actually receiving the goods at
+    # the drop address, so they could never be notified. See
+    # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md for the full write-up; this is
+    # the migration that note called for.
+    drop_contact_name  = models.CharField(max_length=200, blank=True, default="")
+    drop_contact_phone = models.CharField(max_length=20, blank=True, default="")
+    # Optional alongside phone -- there is no general-purpose outbound SMS
+    # sender in this codebase (Twilio is wired only for login OTPs), so an
+    # email is what actually lets notify_delivery_recipient() (added this
+    # pass) reach them using the existing, already-proven send_mail path.
+    drop_contact_email = models.EmailField(blank=True, default="")
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
@@ -640,6 +651,17 @@ class ServiceFeedback(models.Model):
 
     # Token generated when admin verifies — used as public URL key
     feedback_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    # Fixes HS-E-01: a rating had no durable link to which technician it was
+    # about -- reading it off the booking's *current* assignment breaks the
+    # moment a job is reassigned after the fact. Snapshot fields (not an FK),
+    # matching BookingAssignment's own technician_id pattern -- same reason:
+    # no local FK to the vendor app's Employee table across the two Django
+    # projects. Populated at whichever point in the job lifecycle first makes
+    # the technician who did the work known (see notes below on where to set
+    # these); left blank for any ServiceFeedback rows that already exist.
+    technician_id            = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    technician_name_snapshot = models.CharField(max_length=200, blank=True, default="")
 
     # Populated only on submission
     rating              = models.PositiveSmallIntegerField(null=True, blank=True)

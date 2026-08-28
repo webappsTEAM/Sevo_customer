@@ -144,19 +144,29 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "preferred_date", "preferred_time", "photo",
             "payment_method", "total_amount", "cart_data",
             "drop_address", "logistics_tier", "logistics_lane",
+            # Fixes GT-D-03: accept the recipient's contact info if the
+            # frontend sends it. Deliberately NOT required yet -- the
+            # booking wizard doesn't collect these fields today, so
+            # requiring them would break every logistics booking until the
+            # frontend is updated to actually ask for them. See
+            # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md.
+            "drop_contact_name", "drop_contact_phone", "drop_contact_email",
         )
         extra_kwargs = {
-            "description":    {"required": False, "allow_blank": True},
-            "email":          {"required": False, "allow_blank": True, "allow_null": True},
-            "latitude":       {"required": False, "allow_null": True},
-            "longitude":      {"required": False, "allow_null": True},
-            "photo":          {"required": False, "allow_null": True},
-            "payment_method": {"required": False, "allow_null": True, "allow_blank": True},
-            "preferred_time": {"required": False, "allow_blank": True, "allow_null": True},
-            "cart_data":      {"required": False},
-            "drop_address":   {"required": False, "allow_blank": True},
-            "logistics_tier": {"required": False, "allow_null": True},
-            "logistics_lane": {"required": False, "allow_null": True},
+            "description":         {"required": False, "allow_blank": True},
+            "email":               {"required": False, "allow_blank": True, "allow_null": True},
+            "latitude":            {"required": False, "allow_null": True},
+            "longitude":           {"required": False, "allow_null": True},
+            "photo":               {"required": False, "allow_null": True},
+            "payment_method":      {"required": False, "allow_null": True, "allow_blank": True},
+            "preferred_time":      {"required": False, "allow_blank": True, "allow_null": True},
+            "cart_data":           {"required": False},
+            "drop_address":        {"required": False, "allow_blank": True},
+            "logistics_tier":      {"required": False, "allow_null": True},
+            "logistics_lane":      {"required": False, "allow_null": True},
+            "drop_contact_name":   {"required": False, "allow_blank": True},
+            "drop_contact_phone":  {"required": False, "allow_blank": True},
+            "drop_contact_email":  {"required": False, "allow_blank": True},
         }
 
     def validate_latitude(self, value):

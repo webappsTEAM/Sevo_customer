@@ -1424,6 +1424,8 @@ class AdminSRVerifyView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
+        from service_requests.models import BookingAssignment
+
         try:
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
@@ -1433,6 +1435,30 @@ class AdminSRVerifyView(APIView):
             apply_transition(sr, ServiceRequest.Status.VERIFIED, actor=request.user)
             sr.save(update_fields=["status", "updated_at"])
             fb, _fb_created = ServiceFeedback.objects.get_or_create(service_request=sr)
+
+            # Fixes HS-E-01: snapshot which technician this feedback is about
+            # at the moment feedback becomes requestable (verification), not
+            # read lazily later off whatever the booking's *current*
+            # assignment happens to be -- a reassignment after this point must
+            # not retroactively change who an already-issued rating is about.
+            # Prefer a COMPLETED assignment (the one who actually did the
+            # work); fall back to the most recent ACCEPTED one if the
+            # completion event hasn't landed a BookingAssignment update yet.
+            if not fb.technician_id:
+                assignment = (
+                    BookingAssignment.objects.filter(
+                        booking=sr,
+                        status__in=[BookingAssignment.Status.COMPLETED, BookingAssignment.Status.ACCEPTED],
+                    )
+                    .order_by("-id")
+                    .first()
+                )
+                tech_id = (assignment.technician_id if assignment else "") or ""
+                tech_name = (assignment.technician_name if assignment else "") or sr.technician_name or ""
+                if tech_id or tech_name:
+                    fb.technician_id = tech_id
+                    fb.technician_name_snapshot = tech_name
+                    fb.save(update_fields=["technician_id", "technician_name_snapshot"])
 
         # Fixes HS-E-02: this created the feedback token but never actually
         # sent it anywhere -- send_completion_and_feedback_email() exists

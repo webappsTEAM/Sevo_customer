@@ -87,7 +87,8 @@ class WorkforceWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way
+        from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way, notify_delivery_recipient
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
 
         if not _verify_webhook_signature(request):
             logger.warning("Unauthorized workforce webhook attempt (invalid signature/secret)")
@@ -311,6 +312,10 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_on_the_way"))
                     # Fixes HS-D-06 (partial)
                     transaction.on_commit(lambda: self._notify(notify_technician_on_the_way, sr))
+                    # Fixes GT-D-03: also tell the delivery recipient, if this
+                    # is a logistics booking and we have their contact info.
+                    if sr.service_category in LOGISTICS_CATEGORIES:
+                        transaction.on_commit(lambda: self._notify(notify_delivery_recipient, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
                 elif event_type in ["employee_arrived", "job.arrived"]:
