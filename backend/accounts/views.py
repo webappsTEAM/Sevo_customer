@@ -615,6 +615,28 @@ class NotificationPreferenceView(APIView):
         return Response(self._serialize(pref))
 
 
+class MyReferralCodeView(APIView):
+    """
+    GET /api/accounts/referral-code/
+    HS-A-06: a customer's own shareable referral code, generated lazily on
+    first request, plus a simple summary of referrals they've made.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import ReferralCode, Referral, _generate_referral_code
+        ref_code, _ = ReferralCode.objects.get_or_create(
+            user=request.user,
+            defaults={"code": _generate_referral_code(request.user)},
+        )
+        referrals = Referral.objects.filter(referrer=request.user)
+        return Response({
+            "code": ref_code.code,
+            "referrals_made": referrals.count(),
+            "referrals_rewarded": referrals.filter(status=Referral.Status.REWARDED).count(),
+        })
+
+
 class ProfileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

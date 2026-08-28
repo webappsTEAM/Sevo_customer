@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .views import (
-    LoginView, MeView, RefreshView, LogoutView, NotificationPreferenceView,
+    LoginView, MeView, RefreshView, LogoutView, NotificationPreferenceView, MyReferralCodeView,
     GoogleLoginView, RegisterView, AdminRegistrationView,
     ProfileUpdateView, PasswordChangeView, EmailChangeView, TwoFactorSetupView,
     TwoFAChallengeView,
@@ -32,6 +32,7 @@ urlpatterns = [
     path("me/",             MeView.as_view(),                     name="me"),
     path("profile/",        ProfileUpdateView.as_view(),          name="profile-update"),
     path("notification-preferences/", NotificationPreferenceView.as_view(), name="notification-preferences"),
+    path("referral-code/", MyReferralCodeView.as_view(), name="my-referral-code"),
     path("password/change/",PasswordChangeView.as_view(),         name="password-change"),
     path("email/change/",   EmailChangeView.as_view(),            name="email-change"),
     path("2fa/",            TwoFactorSetupView.as_view(),         name="2fa-setup"),

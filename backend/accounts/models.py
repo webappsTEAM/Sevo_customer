@@ -303,3 +303,73 @@ class CustomerNotificationPreference(models.Model):
 
     def __str__(self):
         return f"Notification Preferences for {self.user.username}"
+
+
+def _generate_referral_code(user):
+    """8-char uppercase alphanumeric, derived from the user id so it's stable
+    and collision-free without a retry loop -- same spirit as this codebase's
+    existing deterministic-but-unguessable ID generators (request_id etc.),
+    but referral codes are meant to be shared, so they don't need the
+    cryptographic-randomness requirement OTPs do."""
+    import hashlib
+    digest = hashlib.sha256(f"referral-{user.pk}-{user.username}".encode()).hexdigest()
+    return digest[:8].upper()
+
+
+class ReferralCode(models.Model):
+    """
+    HS-A-06: every customer's own shareable referral code. Generated lazily
+    (get_or_create) rather than at signup for every user, so this is a no-op
+    for the vast majority of existing users who will never use it.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_code_obj",
+    )
+    code = models.CharField(max_length=16, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_referral_code"
+
+    def __str__(self):
+        return self.code
+
+
+class Referral(models.Model):
+    """
+    HS-A-06: referrals and loyalty existed only as an empty admin screen with
+    no backend and no customer-facing loop. This is the tracking record: one
+    row per referee (a person can only be referred once, by whoever's code
+    they used at signup), reward paid out once the referee's first booking
+    completes (see service_requests.services.process_referral_completion,
+    called from the completion webhook path).
+    """
+    class Status(models.TextChoices):
+        PENDING   = "PENDING",   "Pending (referee has not completed a booking yet)"
+        REWARDED  = "REWARDED",  "Rewarded"
+        EXPIRED   = "EXPIRED",   "Expired (unused)"
+
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referrals_made",
+    )
+    referee = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referred_by",
+    )
+    code_used = models.CharField(max_length=16, blank=True, default="")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    referrer_reward_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    referee_reward_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rewarded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_referral"
+
+    def __str__(self):
+        return f"Referral {self.referrer_id} -> {self.referee_id} ({self.status})"

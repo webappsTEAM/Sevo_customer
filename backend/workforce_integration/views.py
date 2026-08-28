@@ -345,6 +345,11 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_completed"))
+                    # HS-A-06: reward a pending referral once the referee's
+                    # first booking actually completes. Fire-and-forget, same
+                    # pattern as _notify -- a referral-processing failure must
+                    # never affect the booking completion itself.
+                    transaction.on_commit(lambda: self._process_referral(sr))
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
@@ -492,6 +497,17 @@ class WorkforceWebhookView(APIView):
             notify_fn(sr)
         except Exception as n_err:
             logger.warning(f"Error sending {getattr(notify_fn, '__name__', notify_fn)} notification: {n_err}")
+
+    @classmethod
+    def _process_referral(cls, sr):
+        # HS-A-06: same fire-and-forget-but-logged shape as _notify -- a
+        # referral reward failing to process must never affect the booking
+        # completion webhook's own success response.
+        try:
+            from service_requests.services import process_referral_completion
+            process_referral_completion(sr)
+        except Exception as ref_err:
+            logger.warning(f"Error processing referral completion for booking {sr.id}: {ref_err}")
 
 
 class WorkforceSlotsView(APIView):

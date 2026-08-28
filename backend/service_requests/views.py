@@ -438,6 +438,17 @@ class BookingCreateView(APIView):
                         role=getattr(User.Role, 'CUSTOMER', 'CUSTOMER')
                     )
                     _new_account_created = True
+                    # HS-A-06: link a referral if the booking request carried
+                    # a referral code (e.g. from a shared link). Best-effort
+                    # -- link_referral() already swallows unknown codes and
+                    # self-referrals, and this must never block booking
+                    # creation over a referral problem.
+                    referral_code = str(request.data.get("referral_code") or "").strip()
+                    if referral_code:
+                        try:
+                            sr_services.link_referral(customer_user, referral_code)
+                        except Exception as ref_err:
+                            logger.warning(f"Could not link referral code for new customer {customer_user.id}: {ref_err}")
                 except Exception:
                     if phone_clean:
                         customer_user = User.objects.filter(phone=phone_clean).first()

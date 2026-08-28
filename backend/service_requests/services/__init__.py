@@ -668,6 +668,99 @@ def list_wallet_transactions(user, limit=50):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# REFERRAL SERVICE FUNCTIONS (HS-A-06)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+REFERRAL_REFERRER_REWARD = Decimal(str(getattr(settings, "REFERRAL_REFERRER_REWARD", "100.00")))
+REFERRAL_REFEREE_REWARD = Decimal(str(getattr(settings, "REFERRAL_REFEREE_REWARD", "50.00")))
+
+
+def link_referral(referee_user, code):
+    """
+    Called once, right after a new customer account is created, if a
+    referral code was supplied. Idempotent by construction: referee has a
+    OneToOneField, so a second call for the same referee simply fails the
+    uniqueness check, which we swallow -- a referee can only ever be
+    referred once, by whoever's code they used first.
+    """
+    from accounts.models import ReferralCode, Referral
+    code = (code or "").strip().upper()
+    if not code:
+        return None
+
+    ref_code = ReferralCode.objects.filter(code=code).select_related("user").first()
+    if not ref_code:
+        logger.info("[Referral] Unknown referral code '%s' -- ignored.", code)
+        return None
+    if ref_code.user_id == referee_user.id:
+        logger.info("[Referral] User %s tried to refer themselves -- ignored.", referee_user.id)
+        return None
+
+    try:
+        return Referral.objects.create(referrer=ref_code.user, referee=referee_user, code_used=code)
+    except Exception as exc:
+        # Most likely: referee already has a Referral row (OneToOne
+        # uniqueness). Not an error worth surfacing to the booking flow.
+        logger.info("[Referral] Could not link referral for user %s: %s", referee_user.id, exc)
+        return None
+
+
+def process_referral_completion(booking):
+    """
+    Called (best-effort, from the booking-completion webhook path) whenever
+    a booking transitions to completed. Rewards both referrer and referee
+    the first time the REFEREE's own booking count reaches exactly 1
+    completed booking -- this is what "qualifies" a referral, so a referee
+    who books, cancels, and rebooks doesn't trigger multiple payouts, and a
+    referrer isn't rewarded for a referee's 5th booking.
+    """
+    from accounts.models import Referral
+
+    customer = booking.customer
+    if not customer:
+        return
+
+    referral = Referral.objects.filter(referee=customer, status=Referral.Status.PENDING).select_related("referrer").first()
+    if not referral:
+        return
+
+    completed_count = ServiceRequest.objects.filter(customer=customer, status="completed").count()
+    if completed_count != 1:
+        # Either this isn't the referee's first completed booking (reward
+        # already should have fired earlier and referral is no longer
+        # PENDING -- so this branch is really just "not yet 1"), or something
+        # unusual -- either way, only qualify on exactly the first.
+        return
+
+    with transaction.atomic():
+        referral.refresh_from_db()
+        if referral.status != Referral.Status.PENDING:
+            return  # Already processed by a concurrent call.
+
+        try:
+            credit_wallet(
+                user=referral.referrer, amount=REFERRAL_REFERRER_REWARD, reason="REFERRAL",
+                note=f"Referral reward: {customer.get_full_name() or customer.username} completed their first booking.",
+                reference_type="Referral", reference_id=referral.pk,
+            )
+            credit_wallet(
+                user=referral.referee, amount=REFERRAL_REFEREE_REWARD, reason="REFERRAL",
+                note="Welcome reward for completing your first booking via a referral.",
+                reference_type="Referral", reference_id=referral.pk,
+            )
+        except Exception as exc:
+            logger.error("[Referral] Failed to credit reward for referral %s: %s", referral.pk, exc)
+            return
+
+        referral.status = Referral.Status.REWARDED
+        referral.referrer_reward_amount = REFERRAL_REFERRER_REWARD
+        referral.referee_reward_amount = REFERRAL_REFEREE_REWARD
+        referral.rewarded_at = timezone.now()
+        referral.save(update_fields=["status", "referrer_reward_amount", "referee_reward_amount", "rewarded_at"])
+        logger.info("[Referral] Rewarded referral %s (referrer=%s, referee=%s).", referral.pk, referral.referrer_id, referral.referee_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # COMPLAINT SERVICE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
