@@ -199,6 +199,54 @@ def get_real_technician_availability(company, target_date):
 # RESCHEDULE SERVICE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# HS-B-08: self-serve reschedule policy. A customer request landing at least
+# this many hours before their *current* scheduled slot, for a new slot that
+# still has capacity, is auto-approved instantly instead of waiting on an
+# admin. Anything closer to the appointment, or a slot at/over capacity,
+# still goes through the existing manual admin queue unchanged -- this is
+# additive, it never removes the manual path.
+RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS = int(getattr(settings, "RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS", 48))
+RESCHEDULE_MAX_BOOKINGS_PER_SLOT = int(getattr(settings, "RESCHEDULE_MAX_BOOKINGS_PER_SLOT", 20))
+
+
+def _slot_start_hour(time_slot):
+    """'09-10' -> 9. Falls back to None for anything unparseable."""
+    try:
+        return int(str(time_slot).split("-")[0])
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def _current_slot_datetime(booking):
+    """Best-effort datetime for the booking's *current* scheduled slot, used
+    only to measure how much notice a reschedule request gives. Returns None
+    if the booking has no usable preferred_date/preferred_time -- callers
+    must treat that as "can't confirm enough notice" and fall back to manual
+    review rather than guessing."""
+    if not booking.preferred_date:
+        return None
+    hour = _slot_start_hour(booking.preferred_time)
+    if hour is None:
+        return None
+    naive = timezone.datetime.combine(booking.preferred_date, timezone.datetime.min.time()).replace(hour=hour)
+    return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
+
+
+def _slot_has_capacity(new_date, new_time_slot, exclude_booking_id=None):
+    """Live capacity check against existing bookings in the same slot, across
+    active (non-cancelled/rejected/completed) service requests. There is no
+    dedicated slot-capacity model in this codebase -- this counts real rows,
+    which is the same shape of check the booking-create path would need if
+    slot capacity were enforced there too."""
+    qs = ServiceRequest.objects.filter(
+        preferred_date=new_date,
+        preferred_time=new_time_slot,
+    ).exclude(status__in=["cancelled", "rejected", "completed", "closed"])
+    if exclude_booking_id:
+        qs = qs.exclude(pk=exclude_booking_id)
+    return qs.count() < RESCHEDULE_MAX_BOOKINGS_PER_SLOT
+
+
 def create_reschedule_request(booking, requested_by, persona, new_date, new_time_slot, reason, additional_notes="", attachment=None):
     if booking.status in ["completed", "closed", "cancelled", "rejected"]:
         raise ValidationError({"detail": f"Cannot reschedule a booking in '{booking.get_status_display()}' status."})
@@ -225,6 +273,36 @@ def create_reschedule_request(booking, requested_by, persona, new_date, new_time
             changed_by=requested_by,
             note="Reschedule request created."
         )
+
+        # HS-B-08: attempt self-serve auto-approval for customer-initiated
+        # requests only (admin/system reschedules already bypass this queue
+        # via their own dedicated actions, and auto-approving an admin's own
+        # request would be meaningless).
+        if persona == "CUSTOMER":
+            current_dt = _current_slot_datetime(booking)
+            notice_ok = bool(
+                current_dt and
+                current_dt - timezone.now() >= timezone.timedelta(hours=RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS)
+            )
+            if notice_ok and _slot_has_capacity(new_date, new_time_slot, exclude_booking_id=booking.id):
+                try:
+                    apply_reschedule_transition(
+                        reschedule_request=rr,
+                        new_status=RescheduleStatus.RESCHEDULED,
+                        actor=requested_by,
+                        note=(
+                            f"Auto-approved: requested {RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS}+ hours "
+                            f"ahead of the current slot, with capacity available in the new slot."
+                        ),
+                    )
+                    rr.refresh_from_db()
+                except ValidationError:
+                    # If the state machine ever rejects this transition for a
+                    # reason we haven't accounted for, fail safe: leave the
+                    # request PENDING for manual review rather than raising
+                    # and losing the reschedule request the customer just
+                    # submitted.
+                    logger.warning("HS-B-08 auto-approve transition failed for RescheduleRequest %s; leaving PENDING for manual review.", rr.pk)
 
     return rr
 
