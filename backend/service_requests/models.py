@@ -1812,3 +1812,77 @@ class TripStop(models.Model):
 
     def __str__(self):
         return f"Stop {self.sequence} ({self.stop_type}) for booking #{self.booking_id}"
+
+
+class BookingSeries(models.Model):
+    """
+    HS-B-07: "no support for recurring bookings / AMC subscriptions" --
+    customers could only book a single one-off service; there was no way
+    to set up e.g. "service my AC every 3 months" and have future bookings
+    generated automatically.
+
+    A BookingSeries is a template + schedule, not a booking itself. Each
+    due date, generate_due_bookings() (services/__init__.py) creates a real
+    ServiceRequest row from the template -- the vendor app's existing
+    dispatch_pending_workforce_jobs polling loop then picks that row up
+    exactly like any manually-created booking (see the X-02 comment on
+    BookingCreateView: the "dispatch" happens by the vendor side polling
+    this same shared table, not by anything the creator calls). No new
+    dispatch path was needed for that reason.
+
+    Deliberately COD-only: there is no stored payment method/card-on-file
+    anywhere in this codebase, so an AMC booking cannot be auto-charged
+    online without building that (out of scope here) -- every generated
+    booking is created exactly like a COD booking today (status=CONFIRMED,
+    payment collected on service).
+    """
+    class Frequency(models.TextChoices):
+        MONTHLY     = "MONTHLY",     "Every Month"
+        QUARTERLY   = "QUARTERLY",   "Every 3 Months"
+        HALF_YEARLY = "HALF_YEARLY", "Every 6 Months"
+        YEARLY      = "YEARLY",      "Every 12 Months"
+
+    class Status(models.TextChoices):
+        ACTIVE    = "ACTIVE",    "Active"
+        PAUSED    = "PAUSED",    "Paused"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="booking_series")
+    # Snapshotted at series creation, same rationale as every other
+    # *_snapshot pattern in this file -- generation must not silently break
+    # or silently change if the user later edits their profile.
+    customer_name = models.CharField(max_length=200)
+    phone         = models.CharField(max_length=30)
+    email         = models.EmailField(blank=True, default="")
+
+    service_category = models.CharField(max_length=150)
+    issue_title       = models.CharField(max_length=300)
+    description       = models.TextField(blank=True, default="")
+    address           = models.TextField()
+    latitude          = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude         = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    preferred_time    = models.CharField(max_length=50, blank=True, default="")
+    # Snapshotted from the series-creation booking's price -- no live fare
+    # recomputation per generated occurrence in this pass (fares can change
+    # between occurrences; that reconciliation is a deliberate follow-up,
+    # not silently assumed away).
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    frequency     = models.CharField(max_length=12, choices=Frequency.choices)
+    next_run_date = models.DateField()
+    status        = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+
+    occurrences_generated = models.PositiveIntegerField(default=0)
+    last_generated_booking = models.ForeignKey(
+        "ServiceRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_booking_series"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"AMC series #{self.id} ({self.service_category}, {self.frequency}) for {self.customer_name}"

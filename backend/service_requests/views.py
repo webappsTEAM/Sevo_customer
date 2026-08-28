@@ -31,6 +31,7 @@ from .models import (
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
     Coupon, CouponUsage,
+    BookingSeries,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -45,6 +46,7 @@ from .serializers import (
     CustomerRefundRequestSerializer, AdminRefundRequestSerializer,
     InsuranceClaimSerializer,
     TripStopSerializer,
+    BookingSeriesSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -2882,3 +2884,43 @@ class CustomerBookingTripStopsView(APIView):
         except ValueError as e:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
         return _standard_response(success=True, data=TripStopSerializer(created, many=True).data)
+
+
+class CustomerBookingSeriesListCreateView(APIView):
+    """
+    GET  /api/booking-series/  -- list the logged-in customer's AMC series
+    POST /api/booking-series/  -- create a new one
+    HS-B-07: recurring bookings. create_booking_series() already validates
+    required fields and snapshots customer_name/phone/email.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        series = sr_services.list_booking_series(request.user)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series, many=True).data)
+
+    def post(self, request):
+        try:
+            series = sr_services.create_booking_series(request.user, request.data)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series).data, status_code=201)
+
+
+class CustomerBookingSeriesStatusView(APIView):
+    """PATCH /api/booking-series/<int:pk>/status/ -- pause/resume/cancel.
+    {"status": "PAUSED" | "ACTIVE" | "CANCELLED"}"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        series = BookingSeries.objects.filter(pk=pk).first()
+        if not series:
+            return _error("AMC series not found.", 404)
+        new_status = request.data.get("status")
+        try:
+            series = sr_services.set_booking_series_status(series, request.user, new_status)
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series).data)

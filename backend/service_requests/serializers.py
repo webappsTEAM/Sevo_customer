@@ -16,6 +16,7 @@ from .models import (
     Coupon, CouponUsage,
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
+    BookingSeries,
     _generate_secure_start_otp,
 )
 
@@ -1070,3 +1071,18 @@ class TripStopSerializer(serializers.ModelSerializer):
             "contact_phone", "latitude", "longitude", "notes", "created_at",
         )
         read_only_fields = ("id", "sequence", "created_at")
+
+
+class BookingSeriesSerializer(serializers.ModelSerializer):
+    """HS-B-07: read shape for a customer's AMC series (list/detail).
+    Creation goes through create_booking_series() (services/__init__.py),
+    not this serializer's .save() -- see CustomerBookingSeriesListCreateView."""
+    class Meta:
+        model = BookingSeries
+        fields = (
+            "id", "service_category", "issue_title", "description", "address",
+            "latitude", "longitude", "preferred_time", "total_amount",
+            "frequency", "next_run_date", "status", "occurrences_generated",
+            "last_generated_booking_id", "created_at", "updated_at",
+        )
+        read_only_fields = fields

@@ -31,6 +31,7 @@ from service_requests.models import (
     CustomerWallet, WalletTransaction,
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
+    BookingSeries,
 )
 
 logger = logging.getLogger(__name__)
@@ -1049,3 +1050,125 @@ def set_trip_stops(booking, customer, stops):
 
 def list_trip_stops(booking):
     return list(booking.trip_stops.all())
+
+
+# HS-B-07: recurring bookings / AMC subscriptions. See BookingSeries'
+# docstring in models.py for the full design rationale (COD-only, snapshot
+# fields, no dispatch-path change needed).
+_AMC_FREQUENCY_DAYS = {
+    BookingSeries.Frequency.MONTHLY: 30,
+    BookingSeries.Frequency.QUARTERLY: 91,
+    BookingSeries.Frequency.HALF_YEARLY: 182,
+    BookingSeries.Frequency.YEARLY: 365,
+}
+
+
+def create_booking_series(customer, data):
+    """
+    `data` is a plain dict: service_category, issue_title, address,
+    first_service_date (the initial next_run_date), frequency, plus the
+    optional description/latitude/longitude/preferred_time/total_amount.
+    customer_name/phone/email are snapshotted from the customer user
+    object at creation, not taken from `data`.
+    """
+    frequency = data.get("frequency")
+    if frequency not in BookingSeries.Frequency.values:
+        raise ValueError(f"Invalid frequency. Choose one of: {', '.join(BookingSeries.Frequency.values)}")
+    if not (data.get("service_category") or "").strip():
+        raise ValueError("service_category is required.")
+    if not (data.get("issue_title") or "").strip():
+        raise ValueError("issue_title is required.")
+    if not (data.get("address") or "").strip():
+        raise ValueError("address is required.")
+    first_service_date = data.get("first_service_date")
+    if not first_service_date:
+        raise ValueError("first_service_date is required.")
+
+    return BookingSeries.objects.create(
+        customer=customer,
+        customer_name=getattr(customer, "get_full_name", lambda: "")() or getattr(customer, "username", "") or getattr(customer, "email", ""),
+        phone=getattr(customer, "phone", "") or getattr(customer, "phone_number", "") or "",
+        email=getattr(customer, "email", "") or "",
+        service_category=data["service_category"].strip(),
+        issue_title=data["issue_title"].strip(),
+        description=(data.get("description") or "").strip(),
+        address=data["address"].strip(),
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
+        preferred_time=(data.get("preferred_time") or "").strip(),
+        total_amount=data.get("total_amount") or 0,
+        frequency=frequency,
+        next_run_date=first_service_date,
+    )
+
+
+def set_booking_series_status(series, customer, new_status):
+    if series.customer_id != customer.id and getattr(customer, "role", "").upper() != "ADMIN":
+        raise PermissionError("You do not have permission to modify this AMC series.")
+    if new_status not in BookingSeries.Status.values:
+        raise ValueError("Invalid status.")
+    if series.status == BookingSeries.Status.CANCELLED:
+        raise ValueError("This series has already been cancelled and cannot be reactivated -- create a new one.")
+    series.status = new_status
+    series.save(update_fields=["status", "updated_at"])
+    return series
+
+
+def list_booking_series(customer):
+    return list(BookingSeries.objects.filter(customer=customer).order_by("-created_at"))
+
+
+def generate_due_bookings(as_of=None):
+    """
+    Intended to run once daily (see service_requests/tasks.py -- registered
+    as a Celery shared_task; wiring the actual periodic schedule is a
+    django_celery_beat PeriodicTask, deliberately left as an admin/ops
+    setup step rather than a data migration touching another app's tables
+    -- see the HS-B-07 commit message).
+
+    Every due series generates exactly one ServiceRequest per call, even if
+    next_run_date has drifted more than one period into the past (e.g. the
+    task didn't run for two weeks) -- this intentionally does not "catch up"
+    with multiple backdated bookings, it just advances to the next future
+    due date from today. Silently generating a backlog of past-dated
+    bookings would be more surprising to a customer than losing missed
+    occurrences.
+
+    Each series is processed in its own try/except so one bad series (e.g.
+    a service_category that no longer exists) never blocks the rest of the
+    batch; failures are logged, not raised.
+    """
+    as_of = as_of or timezone.localdate()
+    due = BookingSeries.objects.filter(status=BookingSeries.Status.ACTIVE, next_run_date__lte=as_of)
+    created, failed = [], []
+    for series in due:
+        try:
+            with transaction.atomic():
+                sr = ServiceRequest.objects.create(
+                    customer=series.customer,
+                    customer_name=series.customer_name,
+                    phone=series.phone,
+                    email=series.email or None,
+                    service_category=series.service_category,
+                    issue_title=series.issue_title,
+                    description=series.description,
+                    address=series.address,
+                    latitude=series.latitude,
+                    longitude=series.longitude,
+                    preferred_date=as_of,
+                    preferred_time=series.preferred_time,
+                    total_amount=series.total_amount,
+                    payment_method=ServiceRequest.PaymentMethod.COD,
+                    payment_status=ServiceRequest.PaymentStatus.PENDING,
+                    status=ServiceRequest.Status.CONFIRMED,
+                )
+                interval_days = _AMC_FREQUENCY_DAYS[series.frequency]
+                series.next_run_date = as_of + timezone.timedelta(days=interval_days)
+                series.occurrences_generated += 1
+                series.last_generated_booking = sr
+                series.save(update_fields=["next_run_date", "occurrences_generated", "last_generated_booking", "updated_at"])
+            created.append(sr)
+        except Exception:
+            logger.exception(f"AMC generation failed for BookingSeries #{series.id}")
+            failed.append(series.id)
+    return created, failed

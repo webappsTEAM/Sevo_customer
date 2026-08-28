@@ -11,6 +11,8 @@ from .views import (
     CustomerPublicTrackingView,
     CustomerBookingCancelView,
     CustomerBookingTripStopsView,
+    CustomerBookingSeriesListCreateView,
+    CustomerBookingSeriesStatusView,
     FeedbackTokenView,
     PublicFeedbackListView,
     CustomerReverseGeocodeView,
@@ -131,6 +133,8 @@ urlpatterns = [
     path("customer/bookings/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(), name="customer-booking-cancel-identifier"),
     path("booking/<int:pk>/stops/",         CustomerBookingTripStopsView.as_view(), name="sr-booking-stops"),
     path("booking/<str:identifier>/stops/", CustomerBookingTripStopsView.as_view(), name="sr-booking-stops-identifier"),
+    path("booking-series/", CustomerBookingSeriesListCreateView.as_view(), name="sr-booking-series"),
+    path("booking-series/<int:pk>/status/", CustomerBookingSeriesStatusView.as_view(), name="sr-booking-series-status"),
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
 
