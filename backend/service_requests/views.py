@@ -1177,11 +1177,36 @@ class FeedbackTokenView(APIView):
         return _success(message="Thank you! Your feedback has been recorded.")
 
 
+def _public_display_name(full_name):
+    """
+    HS-E-03: PublicFeedbackListView exposed the full customer name (first +
+    last) to anyone, unauthenticated, alongside their free-text comment --
+    identifying real customers on a public review widget with no consent or
+    moderation step. This mirrors the display convention used by most public
+    review platforms: first name plus the last name's initial (e.g.
+    "Priya S."), which still reads as a real testimonial without publishing
+    a full name to anonymous visitors.
+    """
+    name = (full_name or "").strip()
+    if not name:
+        return "Customer"
+    parts = name.split()
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
+
 class PublicFeedbackListView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         category = request.query_params.get("category")
+        # NOTE (HS-E-03): ideally this would also filter on an explicit
+        # publish-consent flag, but ServiceFeedback has no such field yet and
+        # the feedback flow never asks for that consent -- adding one needs a
+        # migration plus a frontend consent checkbox, which is a real product
+        # decision, not a safe drive-by fix. Left as a follow-up; this pass
+        # only removes the full-name exposure (see _public_display_name).
         feedbacks = ServiceFeedback.objects.filter(is_submitted=True).select_related("service_request")
         if category:
             feedbacks = feedbacks.filter(
@@ -1192,8 +1217,8 @@ class PublicFeedbackListView(APIView):
         data = [
             {
                 "id": f.id,
-                "name": getattr(f.service_request, "customer_name", "Customer"),
-                "customer_name": getattr(f.service_request, "customer_name", "Customer"),
+                "name": _public_display_name(getattr(f.service_request, "customer_name", "")),
+                "customer_name": _public_display_name(getattr(f.service_request, "customer_name", "")),
                 "category": getattr(f.service_request, "service_category", ""),
                 "service_category": getattr(f.service_request, "service_category", ""),
                 "rating": f.rating or 5,
