@@ -116,6 +116,9 @@ const TwoWheelerBookingHosurPage = lazy(() =>
 const PackersMoversBookingHosurPage = lazy(() =>
   import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage || m.default }))
 )
+const LogisticsBookingPage = lazy(() =>
+  import("./pages/LogisticsBookingPage.jsx").then(m => ({ default: m.LogisticsBookingPage || m.default }))
+)
 const FeedbackPage = lazy(() =>
   import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage || m.default }))
 )
@@ -301,6 +304,7 @@ export function App() {
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
+          <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />

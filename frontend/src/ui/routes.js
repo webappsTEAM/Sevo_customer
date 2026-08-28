@@ -81,5 +81,8 @@ export const routes = {
   account_insurance: "/account/insurance-claims",
   account_notifications: "/account/notifications",
   account_help: "/account/help",
+  // GT-B-06: generic logistics booking entry point, parameterized by
+  // category + city (replaces the idea of a new hardcoded page per city).
+  logistics_booking: "/logistics/:category/:city",
 }
 
