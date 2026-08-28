@@ -633,6 +633,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "payment_collected_by_name", "collection_method", "collection_reference", "payment_collected_at", "invoice_id",
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
+            "logistics_leg", "logistics_leg_updated_at",
             "start_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "created_at", "updated_at",

@@ -149,6 +149,23 @@ class ServiceRequest(models.Model):
         HIGH   = "high",   "High"
         URGENT = "urgent", "Urgent"
 
+    # GT-B-03: "trip states don't reflect a multi-leg goods-transport job"
+    # -- Status above is shared by every service category and drives
+    # ALLOWED_TRANSITIONS/webhook/gating logic in state_machine.py; adding
+    # new top-level statuses for logistics-only sub-phases would mean
+    # updating that transition table, the Customer<->vendor webhook event
+    # map, AND the vendor app's own mirrored status conditionals. LogisticsLeg
+    # is deliberately a separate, additive field (logistics_leg below)
+    # instead -- it can never conflict with an existing transition rule,
+    # gate check, or webhook mapping. Only meaningful when service_category
+    # is a logistics category; every other booking leaves it blank.
+    class LogisticsLeg(models.TextChoices):
+        EN_ROUTE_PICKUP = "EN_ROUTE_PICKUP", "En Route to Pickup"
+        LOADING         = "LOADING",         "Loading"
+        EN_ROUTE_DROP   = "EN_ROUTE_DROP",   "En Route to Drop"
+        UNLOADING       = "UNLOADING",       "Unloading"
+        DELIVERED       = "DELIVERED",       "Delivered"
+
     class PaymentMethod(models.TextChoices):
         COD    = "COD",    "Cash on Service"
         ONLINE = "ONLINE", "Online Payment"
@@ -261,6 +278,12 @@ class ServiceRequest(models.Model):
     insurance_opted_in = models.BooleanField(default=False)
     insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # GT-B-03: logistics-only sub-phase, independent of Status -- see the
+    # LogisticsLeg docstring above. History is append-only, one entry per
+    # set_logistics_leg() call: {"leg": ..., "at": iso8601, "by": user_id}.
+    logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
+    logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
+    logistics_leg_history = models.JSONField(default=list, blank=True)
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
