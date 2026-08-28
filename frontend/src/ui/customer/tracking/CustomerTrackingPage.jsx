@@ -3,14 +3,15 @@
  * Canonical, Rapido-Style Customer Live Tracking Page for CalTrack.
  */
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield, Home
+  Wrench, WifiOff, Shield, Home, Send
 } from "lucide-react"
+import { apiRequest } from "../../../api/client.js"
 import { useCustomerTracking } from "./useCustomerTracking.js"
 import { CustomerTrackingMap } from "./CustomerTrackingMap.jsx"
 import { CustomerTrackingHeader } from "./CustomerTrackingHeader.jsx"
@@ -78,6 +79,17 @@ export function CustomerTrackingPage() {
 
   const [copiedOtp, setCopiedOtp] = useState(false)
 
+  // X-09: in-app chat. Polling-based (see BookingMessage's docstring on
+  // the backend for why) -- only attempted once technician assignment is
+  // known (isAccepted below), and silently disabled if the viewer isn't
+  // authenticated as the booking's owner (e.g. an anonymous tracking-link
+  // visitor) rather than showing a broken/erroring panel.
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState("")
+  const [chatSending, setChatSending] = useState(false)
+  const [chatUnavailable, setChatUnavailable] = useState(false)
+  const chatEndRef = useRef(null)
+
   const status = (data?.status || "").toLowerCase()
   const isAccepted = Boolean(data?.is_accepted)
   const isCancelled = status === "cancelled" || status === "rejected"
@@ -85,6 +97,57 @@ export function CustomerTrackingPage() {
   const isArrived = status === "arrived"
   const isInProgress = status === "in_progress"
   const isCompleted = ["completed", "closed", "feedback_pending", "feedback_received"].includes(status)
+
+  // X-09: chat is meaningful once there's a technician to talk to, and
+  // stays available through completion (e.g. "thanks, forgot my umbrella")
+  // but not once the booking is cancelled/rejected.
+  const chatAllowed = isAccepted && !isCancelled
+  const chatBookingId = data?.booking_id
+
+  useEffect(() => {
+    if (!chatAllowed || !chatBookingId || chatUnavailable) return
+    let cancelled = false
+    const fetchMessages = () => {
+      apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+        .then((res) => {
+          if (cancelled) return
+          const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
+          setChatMessages(list)
+        })
+        .catch((err) => {
+          // 401/403 -> viewer isn't authenticated as this booking's owner
+          // (e.g. an anonymous tracking-link visitor). Hide the panel
+          // rather than show a permanently-erroring one.
+          if (!cancelled && (err?.status === 401 || err?.status === 403)) {
+            setChatUnavailable(true)
+          }
+        })
+    }
+    fetchMessages()
+    const interval = setInterval(fetchMessages, 10000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [chatAllowed, chatBookingId, chatUnavailable])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [chatMessages.length])
+
+  const handleSendChat = async () => {
+    const body = chatInput.trim()
+    if (!body || chatSending || !chatBookingId) return
+    setChatSending(true)
+    try {
+      await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "POST", json: { body } })
+      setChatInput("")
+      const res = await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
+      setChatMessages(list)
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) setChatUnavailable(true)
+    } finally {
+      setChatSending(false)
+    }
+  }
 
   const vendorName = data?.vendor?.name || ""
   const techName = data?.technician?.name || ""
@@ -409,6 +472,79 @@ export function CustomerTrackingPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* X-09: in-app chat. Only rendered once we know the viewer is
+              authenticated as the booking's owner (chatUnavailable stays
+              false), and once there's a technician to talk to. */}
+          {chatAllowed && !chatUnavailable && (
+            <div className="ltp-card">
+              <div className="ltp-sec-title">
+                <MessageSquare size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                Chat with {techName || "Your Technician"}
+              </div>
+              <div style={{
+                display: "flex", flexDirection: "column", gap: 8,
+                maxHeight: 220, overflowY: "auto", padding: "4px 2px", marginBottom: 10,
+              }}>
+                {chatMessages.length === 0 ? (
+                  <div style={{ fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", padding: "12px 0" }}>
+                    No messages yet. Say hello!
+                  </div>
+                ) : (
+                  chatMessages.map((m) => {
+                    const mine = m.sender_persona === "customer"
+                    return (
+                      <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+                        <div style={{
+                          maxWidth: "78%", padding: "7px 11px", borderRadius: 12,
+                          background: mine ? "#5d5fef" : "#f1f5f9",
+                          color: mine ? "#fff" : "#1e293b",
+                          fontSize: "0.82rem", lineHeight: 1.4,
+                        }}>
+                          {!mine && (
+                            <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.7, marginBottom: 2 }}>
+                              {m.sender_name || "Technician"}
+                            </div>
+                          )}
+                          <div>{m.body}</div>
+                          <div style={{ fontSize: "0.62rem", opacity: 0.65, marginTop: 3, textAlign: "right" }}>
+                            {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !chatSending) handleSendChat() }}
+                  placeholder="Type a message..."
+                  maxLength={2000}
+                  style={{
+                    flex: 1, padding: "9px 12px", borderRadius: 10,
+                    border: "1px solid #e2e8f0", fontSize: "0.82rem", outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={chatSending || !chatInput.trim()}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 38, height: 38, borderRadius: 10, border: "none",
+                    background: chatSending || !chatInput.trim() ? "#cbd5e1" : "#5d5fef",
+                    color: "#fff", cursor: chatSending || !chatInput.trim() ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Send size={15} />
+                </button>
               </div>
             </div>
           )}
