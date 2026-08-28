@@ -13,7 +13,8 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench,
+  Gift, Repeat, PauseCircle, PlayCircle, XCircle
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
@@ -4001,6 +4002,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
+  // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
+  // each fetches only when its tab is activated, matching the existing
+  // My Bookings fetch-on-activate pattern immediately above.
+  const [walletData, setWalletData] = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [referralData, setReferralData] = useState(null)
+  const [referralLoading, setReferralLoading] = useState(false)
+  const [amcSeries, setAmcSeries] = useState([])
+  const [amcLoading, setAmcLoading] = useState(false)
+  const [amcActionError, setAmcActionError] = useState("")
 
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
@@ -4106,6 +4117,53 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         .finally(() => setBookingsLoading(false))
     }
   }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Wallet" && user) {
+      setWalletLoading(true)
+      apiRequest("/wallet/", { method: "GET" })
+        .then(res => { if (res?.data) setWalletData(res.data) })
+        .catch(console.error)
+        .finally(() => setWalletLoading(false))
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Referral Code" && user) {
+      setReferralLoading(true)
+      apiRequest("/referral-code/", { method: "GET" })
+        .then(res => { if (res?.data) setReferralData(res.data) })
+        .catch(console.error)
+        .finally(() => setReferralLoading(false))
+    }
+  }, [activeTab, user])
+
+  const loadAmcSeries = () => {
+    setAmcLoading(true)
+    apiRequest("/booking-series/", { method: "GET" })
+      .then(res => { if (res?.data) setAmcSeries(res.data) })
+      .catch(console.error)
+      .finally(() => setAmcLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "AMC Bookings" && user) {
+      loadAmcSeries()
+    }
+  }, [activeTab, user])
+
+  const handleAmcStatusChange = (seriesId, newStatus) => {
+    setAmcActionError("")
+    apiRequest(`/booking-series/${seriesId}/status/`, { method: "PATCH", json: { status: newStatus } })
+      .then(res => {
+        if (res?.success === false) {
+          setAmcActionError(res?.error?.message || "Could not update this AMC series.")
+          return
+        }
+        loadAmcSeries()
+      })
+      .catch(() => setAmcActionError("Could not update this AMC series."))
+  }
 
   // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
   // ── Reschedule State ────────────────────────────────────────────────────────
@@ -4653,6 +4711,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "My Profile", icon: User },
     { id: "Saved Addresses", icon: MapPin },
     { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
+    { id: "Wallet", icon: Wallet },
+    { id: "Referral Code", icon: Gift },
+    { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -5778,6 +5839,126 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 </div>
               </div>
             </div>
+          </motion.div>
+        )
+      case "Wallet":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {walletLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading wallet...</div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Wallet Balance</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: 6 }}>
+                    {BOOKING_CURRENCY_SYMBOL}{Number(walletData?.balance || 0).toFixed(2)}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Transaction History</div>
+                {!walletData?.transactions || walletData.transactions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                    <Wallet size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                    <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No wallet transactions yet.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {walletData.transactions.map((tx) => (
+                      <div key={tx.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{tx.reason}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>{tx.note || ''}</div>
+                        </div>
+                        <div style={{ fontWeight: 800, color: tx.tx_type === 'CREDIT' ? '#16a34a' : '#dc2626', fontSize: '0.95rem' }}>
+                          {tx.tx_type === 'CREDIT' ? '+' : '-'}{BOOKING_CURRENCY_SYMBOL}{Number(tx.amount).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
+        )
+      case "Referral Code":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {referralLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading referral code...</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', textAlign: 'center' }}>
+                <Gift size={32} style={{ color: '#5d5fef', marginBottom: 10 }} />
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Share your code, earn rewards</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.1em', margin: '10px 0' }}>
+                  {referralData?.code || '—'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+                  {referralData?.total_referrals ?? referralData?.referral_count ?? 0} friend(s) referred so far
+                </div>
+                <button
+                  onClick={() => { if (referralData?.code) navigator.clipboard?.writeText(referralData.code) }}
+                  style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Copy size={16} /> Copy Code
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      case "AMC Bookings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {amcActionError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                {amcActionError}
+              </div>
+            )}
+            {amcLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading recurring bookings...</div>
+            ) : !amcSeries || amcSeries.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <Repeat size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No recurring (AMC) bookings set up yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {amcSeries.map((s) => (
+                  <div key={s.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{s.issue_title}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 4 }}>{s.address}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          {s.frequency} · Next: {s.next_run_date} · {s.occurrences_generated} generated
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: s.status === 'ACTIVE' ? '#dcfce7' : s.status === 'PAUSED' ? '#fef9c3' : '#fee2e2',
+                        color: s.status === 'ACTIVE' ? '#16a34a' : s.status === 'PAUSED' ? '#a16207' : '#dc2626',
+                      }}>
+                        {s.status}
+                      </span>
+                    </div>
+                    {s.status !== 'CANCELLED' && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        {s.status === 'ACTIVE' ? (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'PAUSED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PauseCircle size={14} /> Pause
+                          </button>
+                        ) : (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'ACTIVE')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PlayCircle size={14} /> Resume
+                          </button>
+                        )}
+                        <button onClick={() => handleAmcStatusChange(s.id, 'CANCELLED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>
+                          <XCircle size={14} /> Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         )
       case "Help & Support":
