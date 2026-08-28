@@ -4012,6 +4012,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [amcSeries, setAmcSeries] = useState([])
   const [amcLoading, setAmcLoading] = useState(false)
   const [amcActionError, setAmcActionError] = useState("")
+  // GT-C-03: Insurance Claims tab.
+  const [insuranceClaims, setInsuranceClaims] = useState([])
+  const [claimsLoading, setClaimsLoading] = useState(false)
+  const [claimBookingId, setClaimBookingId] = useState("")
+  const [claimDescription, setClaimDescription] = useState("")
+  const [claimAmount, setClaimAmount] = useState("")
+  const [claimSubmitting, setClaimSubmitting] = useState(false)
+  const [claimError, setClaimError] = useState("")
 
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
@@ -4163,6 +4171,49 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         loadAmcSeries()
       })
       .catch(() => setAmcActionError("Could not update this AMC series."))
+  }
+
+  const loadInsuranceClaims = () => {
+    setClaimsLoading(true)
+    apiRequest("/insurance-claims/", { method: "GET" })
+      .then(res => { if (res?.data) setInsuranceClaims(res.data) })
+      .catch(console.error)
+      .finally(() => setClaimsLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "Insurance Claims" && user) {
+      loadInsuranceClaims()
+    }
+  }, [activeTab, user])
+
+  const eligibleInsuranceBookings = (realBookings || []).filter(b => b.insurance_opted_in && b.status === "completed")
+
+  const handleFileInsuranceClaim = async (e) => {
+    e.preventDefault()
+    setClaimError("")
+    if (!claimBookingId || !claimDescription.trim() || !claimAmount) {
+      setClaimError("Please choose a booking, describe the damage, and enter a claimed amount.")
+      return
+    }
+    setClaimSubmitting(true)
+    try {
+      const form = new FormData()
+      form.append("booking_id", claimBookingId)
+      form.append("description", claimDescription)
+      form.append("claimed_amount", claimAmount)
+      const res = await apiRequest("/insurance-claims/", { method: "POST", body: form })
+      if (res?.success === false) {
+        setClaimError(res?.error?.message || "Could not file this claim.")
+        return
+      }
+      setClaimBookingId(""); setClaimDescription(""); setClaimAmount("")
+      loadInsuranceClaims()
+    } catch (err) {
+      setClaimError(err?.body?.error?.message || "Could not file this claim.")
+    } finally {
+      setClaimSubmitting(false)
+    }
   }
 
   // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -4714,6 +4765,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "Wallet", icon: Wallet },
     { id: "Referral Code", icon: Gift },
     { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
+    { id: "Insurance Claims", icon: ShieldCheck },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -5955,6 +6007,73 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         </button>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Insurance Claims":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>File a New Claim</div>
+              {eligibleInsuranceBookings.length === 0 ? (
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                  No completed, insurance-opted-in bookings are eligible for a claim right now.
+                </div>
+              ) : (
+                <form onSubmit={handleFileInsuranceClaim}>
+                  {claimError && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                      {claimError}
+                    </div>
+                  )}
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Booking</label>
+                  <select value={claimBookingId} onChange={e => setClaimBookingId(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }}>
+                    <option value="">Select a booking...</option>
+                    {eligibleInsuranceBookings.map(b => (
+                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}</option>
+                    ))}
+                  </select>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>What happened?</label>
+                  <textarea value={claimDescription} onChange={e => setClaimDescription(e.target.value)} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="Describe the damage or loss..." />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Claimed Amount ({BOOKING_CURRENCY_SYMBOL})</label>
+                  <input type="number" min="0" step="0.01" value={claimAmount} onChange={e => setClaimAmount(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="0.00" />
+                  <button type="submit" disabled={claimSubmitting} style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: claimSubmitting ? 'not-allowed' : 'pointer', opacity: claimSubmitting ? 0.6 : 1 }}>
+                    {claimSubmitting ? 'Submitting...' : 'File Claim'}
+                  </button>
+                </form>
+              )}
+            </div>
+            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Your Claims</div>
+            {claimsLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading claims...</div>
+            ) : !insuranceClaims || insuranceClaims.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <ShieldCheck size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No claims filed yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {insuranceClaims.map(c => (
+                  <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{c.description}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          Claimed {BOOKING_CURRENCY_SYMBOL}{Number(c.claimed_amount).toFixed(2)}
+                          {c.approved_amount != null ? ` · Approved ${BOOKING_CURRENCY_SYMBOL}${Number(c.approved_amount).toFixed(2)}` : ''}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: c.status === 'PAID' ? '#dcfce7' : c.status === 'REJECTED' ? '#fee2e2' : '#e0e7ff',
+                        color: c.status === 'PAID' ? '#16a34a' : c.status === 'REJECTED' ? '#dc2626' : '#4338ca',
+                      }}>
+                        {c.status}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
