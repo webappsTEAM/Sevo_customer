@@ -71,28 +71,40 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        if not ret.get('rating'):
-            from django.db import models
-            avg = ServiceFeedback.objects.filter(
-                service_request__service_category=str(instance.id),
-                is_submitted=True,
-                rating__isnull=False
-            ).aggregate(models.Avg("rating"))["rating__avg"]
-            ret['rating'] = str(round(avg, 1)) if avg else "4.8"
+        # HS-A-05: "No trust signals anywhere before the technician is
+        # assigned" -- rating/jobs_count_str were seeded once as literal
+        # placeholder strings ("4.8"/"10K+") and this aggregation code
+        # already existed to replace them with real numbers, but was gated
+        # on `if not ret.get('rating')` -- since the stored default is the
+        # non-empty string "4.8", that check was always False, so the real
+        # query below never ran. Fixed by always computing the real
+        # aggregate and only falling back to the placeholder when there is
+        # genuinely no feedback/booking data yet for this category.
+        from django.db import models
+        feedback_qs = ServiceFeedback.objects.filter(
+            service_request__service_category=str(instance.id),
+            is_submitted=True,
+            rating__isnull=False
+        )
+        agg = feedback_qs.aggregate(avg=models.Avg("rating"), count=models.Count("id"))
+        avg = agg["avg"]
+        ret['rating'] = str(round(avg, 1)) if avg else (ret.get('rating') or "4.8")
+        # New: real review count alongside the rating -- the finding
+        # explicitly calls out "no real service rating/review count".
+        ret['reviews_count'] = agg["count"] or 0
 
-        if not ret.get('jobs_count_str'):
-            cnt = ServiceRequest.objects.filter(
-                service_category=str(instance.id),
-                status__in=["completed", "closed", "verified", "awaiting_verification"]
-            ).count()
-            if cnt == 0:
-                ret['jobs_count_str'] = "10K+"
-            elif cnt < 100:
-                ret['jobs_count_str'] = f"{cnt} bookings"
-            elif cnt < 1000:
-                ret['jobs_count_str'] = f"{cnt//100 * 100}+ bookings"
-            else:
-                ret['jobs_count_str'] = f"{round(cnt/1000, 1)}K+ bookings"
+        cnt = ServiceRequest.objects.filter(
+            service_category=str(instance.id),
+            status__in=["completed", "closed", "verified", "awaiting_verification"]
+        ).count()
+        if cnt == 0:
+            ret['jobs_count_str'] = ret.get('jobs_count_str') or "10K+"
+        elif cnt < 100:
+            ret['jobs_count_str'] = f"{cnt} bookings"
+        elif cnt < 1000:
+            ret['jobs_count_str'] = f"{cnt//100 * 100}+ bookings"
+        else:
+            ret['jobs_count_str'] = f"{round(cnt/1000, 1)}K+ bookings"
 
         ret['desc'] = instance.description or ""
         ret['jobs'] = ret['jobs_count_str']
