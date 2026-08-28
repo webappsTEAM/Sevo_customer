@@ -576,6 +576,45 @@ class MeView(APIView):
 
 
 
+class NotificationPreferenceView(APIView):
+    """
+    HS-D-05: lets a customer actually see/change the preferences
+    CustomerNotificationPreference and notifications.py's _customer_wants()
+    now check. Without this endpoint the model would be write-only from the
+    customer's side -- an admin/DB-only toggle nobody can reach.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    _EDITABLE_FIELDS = [
+        "booking_confirmations", "reschedule_updates", "technician_updates",
+        "completion_feedback", "payment_receipts", "refund_updates",
+        "complaint_updates", "promotional_offers", "channel_email", "channel_sms",
+    ]
+
+    def _serialize(self, pref):
+        return {f: getattr(pref, f) for f in self._EDITABLE_FIELDS}
+
+    def get(self, request):
+        from .models import CustomerNotificationPreference
+        pref, _ = CustomerNotificationPreference.objects.get_or_create(user=request.user)
+        return Response(self._serialize(pref))
+
+    def patch(self, request):
+        from .models import CustomerNotificationPreference
+        pref, _ = CustomerNotificationPreference.objects.get_or_create(user=request.user)
+        updated_fields = []
+        for field in self._EDITABLE_FIELDS:
+            if field in request.data:
+                value = request.data[field]
+                if not isinstance(value, bool):
+                    return Response({"detail": f"'{field}' must be a boolean."}, status=400)
+                setattr(pref, field, value)
+                updated_fields.append(field)
+        if updated_fields:
+            pref.save(update_fields=updated_fields + ["updated_at"])
+        return Response(self._serialize(pref))
+
+
 class ProfileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

@@ -1,5 +1,6 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -257,3 +258,48 @@ class SavedAddress(models.Model):
     def __str__(self):
         return f"{self.user.get_full_name()} — {self.get_label_display()} ({self.city})"
 
+
+class CustomerNotificationPreference(models.Model):
+    """
+    HS-D-05: the vendor app has WorkforceNotificationPreference per employee;
+    the customer app had no equivalent -- no opt-out, no channel choice, no
+    consent record for any of the ~12 notification types
+    service_requests/notifications.py sends. Mirrors the vendor model's shape
+    so both sides follow the same convention.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_preference",
+    )
+
+    # Booking lifecycle
+    booking_confirmations = models.BooleanField(default=True)
+    reschedule_updates    = models.BooleanField(default=True)
+    technician_updates    = models.BooleanField(default=True)
+    completion_feedback   = models.BooleanField(default=True)
+
+    # Money
+    payment_receipts  = models.BooleanField(default=True)
+    refund_updates    = models.BooleanField(default=True)
+
+    # Support
+    complaint_updates = models.BooleanField(default=True)
+
+    # Marketing / non-essential
+    promotional_offers = models.BooleanField(default=False)
+
+    # Channels -- account-created/security-relevant mail always sends
+    # regardless of these preferences (see notifications.py); these govern
+    # everything else.
+    channel_email = models.BooleanField(default=True)
+    channel_sms   = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "accounts_customer_notification_preference"
+
+    def __str__(self):
+        return f"Notification Preferences for {self.user.username}"

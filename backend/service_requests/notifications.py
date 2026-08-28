@@ -14,6 +14,29 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+def _customer_wants(user, field_name) -> bool:
+    """
+    HS-D-05: gate customer-facing notifications on CustomerNotificationPreference.
+    Fails open (returns True) whenever there's no user (guest booking with no
+    account -- there's nothing to gate on), no preference row yet (default is
+    "send", matching the model field defaults), or any lookup error --
+    consistent with this file's existing fail_silently-but-logged philosophy:
+    a broken preference check should never be the reason a real customer
+    misses a notification they'd actually want.
+    """
+    if not user:
+        return True
+    try:
+        from accounts.models import CustomerNotificationPreference
+        pref = CustomerNotificationPreference.objects.filter(user=user).only(field_name).first()
+        if pref is None:
+            return True
+        return bool(getattr(pref, field_name, True))
+    except Exception as exc:
+        logger.warning("[NotificationPreference] Lookup failed for user %s field %s: %s -- defaulting to send.", getattr(user, "id", None), field_name, exc)
+        return True
+
+
 def _get_category_display_name(service_request) -> str:
     """
     Resolve the human-readable category name from the service request.
@@ -395,6 +418,9 @@ def notify_technician_assigned(service_request, technician_name="") -> None:
     if not recipient:
         logger.info("[ServiceRequests] No email for %s -- technician-assigned notification skipped.", service_request.request_id)
         return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping technician-assigned notification for %s.", service_request.request_id)
+        return
 
     try:
         _sent = send_mail(
@@ -437,6 +463,9 @@ def notify_technician_on_the_way(service_request, technician_name="") -> None:
     recipient = service_request.email
     if not recipient:
         logger.info("[ServiceRequests] No email for %s -- on-the-way notification skipped.", service_request.request_id)
+        return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping on-the-way notification for %s.", service_request.request_id)
         return
 
     try:
@@ -563,6 +592,9 @@ def notify_reschedule_decision(reschedule_request) -> None:
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
         return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping decision notification for booking %s.", booking.request_id)
+        return
 
     decision = reschedule_request.status  # APPROVED or REJECTED
     subject = f"[CalTrack] Reschedule {decision.title()} — {booking.request_id}"
@@ -669,6 +701,9 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
         return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping slot suggestion notification for booking %s.", reschedule_request.booking.request_id)
+        return
 
     booking = reschedule_request.booking
     subject = f"[CalTrack] Admin Suggested a New Slot — {booking.request_id}"
@@ -700,6 +735,9 @@ def notify_customer_rescheduled(reschedule_request) -> None:
     """Notify customer that their booking has been successfully rescheduled (terminal success)."""
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
+        return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping rescheduled notification for booking %s.", reschedule_request.booking.request_id)
         return
 
     booking = reschedule_request.booking
@@ -734,6 +772,9 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
         return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping rejection notification for booking %s.", reschedule_request.booking.request_id)
+        return
 
     booking = reschedule_request.booking
     subject = f"[CalTrack] Reschedule Request Rejected — {booking.request_id}"
@@ -761,6 +802,9 @@ def notify_refund_status_change(refund_request) -> None:
     """Notify customer on APPROVED, REJECTED, PROCESSED, FAILED."""
     customer = refund_request.requested_by
     if not customer.email:
+        return
+    if not _customer_wants(customer, "refund_updates"):
+        logger.info("[Refund] Customer opted out of refund_updates -- skipping status notification for booking %s.", refund_request.booking.request_id)
         return
 
     status = refund_request.status
@@ -830,6 +874,9 @@ def notify_complaint_status_change(complaint) -> None:
     customer_email = complaint.raised_by.email
     if not customer_email:
         return
+    if not _customer_wants(complaint.raised_by, "complaint_updates"):
+        logger.info("[Complaint] Customer opted out of complaint_updates -- skipping status change notification.")
+        return
 
     subject = f"[CalTrack] Complaint Update — {complaint.get_status_display()}"
     body = (
@@ -852,7 +899,11 @@ def notify_complaint_response(complaint, response) -> None:
 
     # Notify customer unless the responder IS the customer
     customer_email = complaint.raised_by.email
-    if customer_email and response.responder_id != complaint.raised_by_id:
+    if (
+        customer_email
+        and response.responder_id != complaint.raised_by_id
+        and _customer_wants(complaint.raised_by, "complaint_updates")
+    ):
         recipients.add(customer_email)
 
     # If response is from admin/customer, notify assigned employee
