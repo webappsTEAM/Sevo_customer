@@ -20,7 +20,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ServiceZone, ServiceZoneService
+from .models import ServiceZone, ServiceZoneService, City
 from .service_zone_engine import check_booking_eligibility, validate_coordinates
 
 
@@ -387,3 +387,28 @@ class ServiceZoneCheckView(APIView):
             "message": result.message,
             "open_access": result.open_access,
         }, status=200 if result.allowed else 200)  # Always 200; caller checks in_zone
+class CityListView(APIView):
+    """
+    GET /api/settings/cities/
+    Public endpoint (no auth required).
+
+    GT-B-06: lets the frontend build a city picker / render a
+    "coming soon" state for a booking category instead of every city
+    being hardcoded into a separate page. Returns only active cities,
+    ordered the way admins configured (display_order, then name).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        cities = City.objects.filter(is_active=True).order_by("display_order", "name")
+        data = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "slug": c.slug,
+                "state": c.state,
+                "is_launched": c.is_launched,
+            }
+            for c in cities
+        ]
+        return Response({"results": data, "count": len(data)})

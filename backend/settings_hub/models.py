@@ -279,6 +279,18 @@ class ServiceZone(models.Model):
         on_delete=models.CASCADE,
         related_name="service_zones",
     )
+    # GT-B-06: optional link to a City so zones (and, by extension, the
+    # services/categories available in them) can be grouped and queried by
+    # city instead of only by raw lat/lng -- lets the frontend ask "what
+    # cities are launched" and "what's available in city X" generically,
+    # rather than each city needing its own hardcoded page.
+    city = models.ForeignKey(
+        "City",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="service_zones",
+    )
     created_by = models.ForeignKey(
         AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -391,3 +403,43 @@ class ServiceZoneService(models.Model):
     def __str__(self):
         status = "✓" if self.is_available else "✗"
         return f"{self.zone.name} — {self.service_slug} {status}"
+class City(models.Model):
+    """
+    GT-B-06: registry of cities the platform operates in (or plans to).
+    Previously "which cities are we live in" existed nowhere in the data
+    model -- it was implicit in three separate hardcoded frontend pages
+    (MiniTruckBookingHosurPage, TwoWheelerBookingHosurPage,
+    PackersMoversBookingHosurPage) that only ever said "Hosur". This model
+    makes city launch status explicit and queryable, and ServiceZone.city
+    (above) lets zones be tagged by city for future per-city zone lookups.
+
+    Deliberately NOT built here: automatic zone/category assignment for a
+    newly-launched city, or migrating the three existing Hosur pages' deep
+    booking-flow logic to be city-parameterized internally -- see
+    LogisticsBookingPage.jsx on the frontend for how a new city is exposed
+    today (a "coming soon" state, not a working booking flow, until an
+    admin defines real ServiceZones for it).
+    """
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True)
+    state = models.CharField(max_length=100, blank=True)
+    is_launched = models.BooleanField(
+        default=False,
+        help_text="Whether this city has real service zones / technicians and can accept bookings.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this city is shown at all (e.g. in a city picker), launched or not.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+        verbose_name = "City"
+        verbose_name_plural = "Cities"
+
+    def __str__(self):
+        return f"{self.name} ({'live' if self.is_launched else 'coming soon'})"
