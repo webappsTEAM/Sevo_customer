@@ -380,6 +380,33 @@ export function CustomerTrackingPage() {
             </div>
           </div>
 
+          {/* HS-D-07: real, timestamped status history -- distinct from
+              the generic progress bar above, which only shows current
+              position among fixed steps. This is the actual event log
+              from BookingStatusEvent, the cheapest dispute-resolution tool
+              ("arrived 10:42, started 10:51, completed 12:20"). */}
+          {Array.isArray(data?.status_history) && data.status_history.length > 0 && (
+            <div className="ltp-card">
+              <div className="ltp-sec-title">Booking History</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {data.status_history.map((ev, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <Clock size={13} color="#94a3b8" style={{ flexShrink: 0, marginTop: 3 }} />
+                    <div>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
+                        {STATUS_LABEL_MAP[ev.to_status] || ev.to_status}
+                      </div>
+                      <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                        {ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : ""}
+                        {ev.reason_note ? ` — ${ev.reason_note}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Service Location Card */}
           {(data?.destination?.address || data?.service_location?.address) && (
             <div className="ltp-card">
