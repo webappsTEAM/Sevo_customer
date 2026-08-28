@@ -78,6 +78,7 @@ from .views import (
     AdminRefundInternalNoteView,
     AdminRefundListView,
     AdminRefundActionView,
+    CustomerWalletView, AdminWalletCreditView,
 
     # Complaints
     CustomerComplaintListView,
@@ -205,6 +206,8 @@ urlpatterns = [
     path('booking/refunds/',                             CustomerRefundView.as_view(),                 name='customer-refund'),
     path('admin/refunds/',                               AdminRefundListView.as_view(),                name='admin-refund-list'),
     path('admin/refunds/<int:pk>/<str:action>/',         AdminRefundActionView.as_view(),              name='admin-refund-action'),
+    path('wallet/',                                        CustomerWalletView.as_view(),                 name='customer-wallet'),
+    path('admin/customers/<int:user_id>/wallet/credit/',   AdminWalletCreditView.as_view(),              name='admin-wallet-credit'),
     path('customer/refunds/eligible-bookings/',          CustomerEligibleBookingsListView.as_view(),   name='customer-refund-eligible-bookings'),
     path('customer/refunds/bookings/<int:booking_id>/summary/', CustomerBookingRefundSummaryView.as_view(), name='customer-refund-summary'),
     path('customer/refunds/create/',                     CustomerRefundRequestCreateView.as_view(),    name='customer-refund-create'),

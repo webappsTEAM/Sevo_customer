@@ -2534,6 +2534,72 @@ class AdminRefundActionView(APIView):
         )
 
 
+class CustomerWalletView(APIView):
+    """
+    GET /api/wallet/
+    HS-C-07: read-only balance + recent transaction history for the logged-in
+    customer's wallet.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        wallet = sr_services.get_or_create_wallet(request.user)
+        txs = sr_services.list_wallet_transactions(request.user, limit=50)
+        return _standard_response(success=True, data={
+            "balance": str(wallet.balance),
+            "transactions": [
+                {
+                    "id": tx.id,
+                    "type": tx.tx_type,
+                    "reason": tx.reason,
+                    "amount": str(tx.amount),
+                    "balance_after": str(tx.balance_after),
+                    "note": tx.note,
+                    "created_at": tx.created_at,
+                }
+                for tx in txs
+            ],
+        })
+
+
+class AdminWalletCreditView(APIView):
+    """
+    POST /api/admin/customers/<user_id>/wallet/credit/
+    HS-C-07: lets an admin add a goodwill/manual credit to a customer's
+    wallet with a required reason and note, fully logged in
+    WalletTransaction. Debits are intentionally NOT exposed here -- an admin
+    removing a customer's own money needs a stronger, separate justification
+    flow than this endpoint's scope; this is credit-only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, user_id):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        target_user = User.objects.filter(pk=user_id).first()
+        if not target_user:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Customer not found."}, status_code=404)
+
+        amount = request.data.get("amount")
+        reason = request.data.get("reason", "GOODWILL")
+        note = request.data.get("note", "")
+        if not amount:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "amount is required."}, status_code=400)
+
+        try:
+            tx = sr_services.credit_wallet(
+                user=target_user, amount=amount, reason=reason, note=note, actor=request.user,
+            )
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "CREDIT_FAILED", "message": str(e)}, status_code=400)
+
+        return _standard_response(success=True, data={
+            "balance_after": str(tx.balance_after),
+            "amount": str(tx.amount),
+            "reason": tx.reason,
+        }, status_code=201)
+
+
 class BookingVerifyStartOTPView(APIView):
     """
     POST /api/booking/<identifier>/verify-start-otp/

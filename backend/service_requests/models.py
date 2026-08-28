@@ -1568,5 +1568,72 @@ class Payment(models.Model):
         return f"Payment #{self.id} — Customer: {cid} | SR: {srid} | {self.status} (₹{self.amount})"
 
 
+class CustomerWallet(models.Model):
+    """
+    HS-C-07: payment was previously all-or-nothing on a single amount -- no
+    wallet, no credit balance from a goodwill gesture or referral reward, no
+    partial payment. This is the ledger-backed wallet: CustomerWallet holds
+    the current balance, WalletTransaction is the immutable append-only
+    ledger every balance change is derived from -- balance on the wallet
+    row is a cached total for fast reads, but the transaction log is the
+    source of truth and is never edited or deleted.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wallet",
+    )
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_customer_wallet"
+
+    def __str__(self):
+        return f"Wallet({self.user_id}) = {self.balance}"
 
 
+class WalletTransaction(models.Model):
+    class TxType(models.TextChoices):
+        CREDIT = "CREDIT", "Credit"
+        DEBIT  = "DEBIT",  "Debit"
+
+    class Reason(models.TextChoices):
+        REFUND        = "REFUND",        "Refund Credited to Wallet"
+        GOODWILL      = "GOODWILL",      "Goodwill Credit"
+        REFERRAL      = "REFERRAL",      "Referral Reward"
+        BOOKING_DEBIT = "BOOKING_DEBIT", "Applied to Booking Payment"
+        ADJUSTMENT    = "ADJUSTMENT",    "Manual Adjustment"
+        REVERSAL      = "REVERSAL",      "Reversal"
+
+    wallet = models.ForeignKey(
+        CustomerWallet,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    tx_type = models.CharField(max_length=10, choices=TxType.choices)
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, default="")
+
+    # Loose references -- avoids a hard FK to every possible source (refund,
+    # booking, referral) while still making the transaction traceable.
+    reference_type = models.CharField(max_length=50, blank=True, default="")
+    reference_id = models.CharField(max_length=50, blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="wallet_transactions_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_wallet_transaction"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.tx_type} {self.amount} ({self.reason}) -> wallet {self.wallet_id}"

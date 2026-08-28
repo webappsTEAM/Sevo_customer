@@ -28,6 +28,7 @@ from service_requests.models import (
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundInfoTarget, RefundEvidence,
     Complaint, ComplaintAttachment, ComplaintMessage, ComplaintStatusHistory,
     ServiceRequest, Payment,
+    CustomerWallet, WalletTransaction,
 )
 
 logger = logging.getLogger(__name__)
@@ -585,6 +586,85 @@ def list_refund_requests(actor, persona, filters=None):
     if filters and filters.get("status"):
         qs = qs.filter(status=filters["status"].upper())
     return qs.order_by("-created_at")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WALLET SERVICE FUNCTIONS (HS-C-07)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Deliberately NOT wired into checkout/booking-create yet: applying a wallet
+# debit at payment time means touching the same code path this session
+# already hardened carefully for payment integrity (PaymentInitiateView/
+# PaymentVerifyView), and doing that without a live environment to test the
+# debit-then-gateway-fails-then-must-reverse edge case would be exactly the
+# kind of money-movement change this remediation pass has been cautious
+# about elsewhere (see the refund-gateway wiring). What's here is the
+# complete, safe half: a real ledger customers and admins can already use
+# for goodwill credits and referral rewards -- "apply wallet balance at
+# checkout" is a natural, self-contained follow-up on top of this ledger.
+
+def get_or_create_wallet(user):
+    wallet, _ = CustomerWallet.objects.get_or_create(user=user)
+    return wallet
+
+
+def credit_wallet(user, amount, reason, note="", actor=None, reference_type="", reference_id=""):
+    """Adds funds to a customer's wallet. amount must be > 0."""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise ValidationError({"detail": "Credit amount must be greater than zero."})
+
+    with transaction.atomic():
+        wallet = CustomerWallet.objects.select_for_update().get_or_create(user=user)[0]
+        wallet.balance = wallet.balance + amount
+        wallet.save(update_fields=["balance", "updated_at"])
+
+        tx = WalletTransaction.objects.create(
+            wallet=wallet,
+            tx_type=WalletTransaction.TxType.CREDIT,
+            reason=reason,
+            amount=amount,
+            balance_after=wallet.balance,
+            note=note,
+            reference_type=reference_type,
+            reference_id=str(reference_id) if reference_id else "",
+            created_by=actor,
+        )
+    return tx
+
+
+def debit_wallet(user, amount, reason, note="", actor=None, reference_type="", reference_id=""):
+    """Removes funds from a customer's wallet. Fails closed on insufficient
+    balance -- never lets a wallet go negative."""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise ValidationError({"detail": "Debit amount must be greater than zero."})
+
+    with transaction.atomic():
+        wallet = CustomerWallet.objects.select_for_update().get_or_create(user=user)[0]
+        if wallet.balance < amount:
+            raise ValidationError({"detail": f"Insufficient wallet balance: have {wallet.balance}, need {amount}."})
+
+        wallet.balance = wallet.balance - amount
+        wallet.save(update_fields=["balance", "updated_at"])
+
+        tx = WalletTransaction.objects.create(
+            wallet=wallet,
+            tx_type=WalletTransaction.TxType.DEBIT,
+            reason=reason,
+            amount=amount,
+            balance_after=wallet.balance,
+            note=note,
+            reference_type=reference_type,
+            reference_id=str(reference_id) if reference_id else "",
+            created_by=actor,
+        )
+    return tx
+
+
+def list_wallet_transactions(user, limit=50):
+    wallet = get_or_create_wallet(user)
+    return wallet.transactions.all()[:limit]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
