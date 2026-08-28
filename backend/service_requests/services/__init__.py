@@ -19,13 +19,18 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 
 from workforce_integration.services import WorkforceIntegrationService
+from django.conf import settings
+import logging
+
 from service_requests.models import (
     RescheduleRequest, RescheduleStatus, RescheduleReason, TimeSlotChoices, RescheduleAttachment,
     RescheduleRejectionReason,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundInfoTarget, RefundEvidence,
     Complaint, ComplaintAttachment, ComplaintMessage, ComplaintStatusHistory,
-    ServiceRequest,
+    ServiceRequest, Payment,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -392,17 +397,106 @@ def admin_send_to_finance(admin_user, refund_id):
     )
 
 
+def _execute_gateway_refund(rr):
+    """
+    Fixes HS-C-04/HS-C-05: previously admin_complete_refund() just flipped
+    the status to COMPLETED with no gateway call at all -- and wasn't even
+    reachable from any view (see HS_C_04_05_REFUND_GATEWAY_NOTE.md for the
+    original diagnosis). This actually calls Razorpay's refund API against
+    the original payment before allowing completion.
+
+    Returns the gateway's refund id (str) on success. Raises ValidationError
+    on any failure -- the caller must NOT transition to COMPLETED if this
+    raises, so a refund that didn't actually happen can never be recorded
+    as if it had.
+    """
+    payment = (
+        Payment.objects.filter(
+            service_request=rr.booking,
+            status=ServiceRequest.PaymentStatus.PAID,
+        )
+        .exclude(razorpay_payment_id__isnull=True)
+        .exclude(razorpay_payment_id="")
+        .order_by("-created_at")
+        .first()
+    )
+    if not payment:
+        raise ValidationError({
+            "detail": "No paid, gateway-verified Payment record found for this booking -- "
+                      "cannot issue a gateway refund without knowing what to refund. If this "
+                      "booking was paid by cash (COD), settle it outside the payment gateway "
+                      "instead of completing it here."
+        })
+
+    refund_amount = rr.approved_amount if rr.approved_amount else rr.requested_amount
+    if not refund_amount or refund_amount <= 0:
+        raise ValidationError({"detail": "Refund amount must be greater than zero."})
+    if refund_amount > payment.amount:
+        raise ValidationError({
+            "detail": f"Refund amount (Rs. {refund_amount}) exceeds the original payment "
+                      f"(Rs. {payment.amount}) -- cannot refund more than was paid."
+        })
+
+    gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+    if not gateway_configured:
+        # Same fail-closed rule as PaymentVerifyView (HS-C-01/EC-06): never
+        # silently pretend a refund happened. Sandbox mode exists only for
+        # local/dev testing where there is no real gateway to call.
+        if getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+            return f"sandbox_refund_{payment.razorpay_payment_id}"
+        raise ValidationError({
+            "detail": "Payment gateway is not configured -- cannot issue a real refund. "
+                      "Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET, or process this refund "
+                      "manually outside the system and record the reference separately."
+        })
+
+    try:
+        import razorpay
+    except ImportError:
+        logger.error("razorpay package not installed but RAZORPAY_KEY_ID/SECRET are configured.")
+        raise ValidationError({"detail": "Payment gateway is misconfigured. Please contact support."})
+
+    try:
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        response = client.payment.refund(payment.razorpay_payment_id, {
+            "amount": int(Decimal(refund_amount) * 100),  # paise
+            "notes": {
+                "refund_id": rr.refund_id or "",
+                "booking_id": str(rr.booking_id),
+                "request_id": rr.booking.request_id if rr.booking else "",
+            },
+        })
+    except Exception as e:
+        logger.error(f"Razorpay refund failed for RefundRequest {rr.id} (payment {payment.razorpay_payment_id}): {e}")
+        raise ValidationError({"detail": f"Gateway refund failed: {e}"})
+
+    gateway_refund_id = response.get("id") if isinstance(response, dict) else None
+    if not gateway_refund_id:
+        logger.error(f"Razorpay refund for RefundRequest {rr.id} returned no id: {response}")
+        raise ValidationError({"detail": "Gateway refund did not return a reference id -- treat as failed and check the Razorpay dashboard before retrying."})
+
+    return gateway_refund_id
+
+
 def admin_complete_refund(admin_user, refund_id):
     try:
         rr = RefundRequest.objects.get(pk=refund_id)
     except RefundRequest.DoesNotExist:
         raise ValidationError({"detail": "RefundRequest not found."})
 
+    if rr.status != RefundStatus.SENT_TO_FINANCE:
+        raise ValidationError({"detail": f"Refund must be in '{RefundStatus.SENT_TO_FINANCE}' status before it can be completed (currently '{rr.status}')."})
+
+    gateway_refund_id = _execute_gateway_refund(rr)
+    rr.gateway_reference = gateway_refund_id
+    rr.save(update_fields=["gateway_reference"])
+
     return apply_refund_transition(
         refund_request=rr,
         new_status=RefundStatus.COMPLETED,
         actor=admin_user,
-        note="Refund transaction completed."
+        note=f"Refund transaction completed via gateway (ref: {gateway_refund_id})."
     )
 
 

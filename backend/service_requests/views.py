@@ -730,6 +730,26 @@ class CustomerBookingCancelView(APIView):
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
+            # Fixes HS-C-04: cancelling an already-paid booking used to charge
+            # and refund nothing automatically -- the customer or an admin had
+            # to separately go create a refund request through a different
+            # flow. This only creates the RefundRequest (status PENDING) --
+            # it does NOT move any money by itself. An admin still has to
+            # approve -> send to finance -> complete (which now actually
+            # calls the gateway, see HS-C-05/admin_complete_refund) before
+            # anything is refunded.
+            if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+                try:
+                    sr_services.create_refund_request(
+                        booking=sr,
+                        customer=sr.customer,
+                        amount=sr.total_amount,
+                        reason=RefundReason.OTHER,
+                        additional_notes=f"Auto-created on booking cancellation. Cancellation reason: {reason}",
+                    )
+                except Exception as refund_err:
+                    logger.warning(f"Could not auto-create refund request for cancelled+paid booking {sr.id}: {refund_err}")
+
         return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
 
 
@@ -2461,9 +2481,32 @@ class AdminRefundListView(AdminRefundRequestListView):
     pass
 
 class AdminRefundActionView(APIView):
+    """
+    POST /api/admin/refunds/<pk>/<action>/
+
+    Was a no-op stub that ignored `action` entirely and forwarded to the
+    detail GET regardless of what action was requested -- meaning a
+    'complete' action here silently did nothing (no refund, no status
+    change) while looking like it succeeded. Now actually handles
+    'complete', which is the one this route exists for -- see
+    HS_C_04_05_REFUND_GATEWAY_NOTE.md. Other actions already have their
+    own dedicated endpoints (AdminRefundApproveView, AdminRefundRejectView,
+    etc.) and are intentionally not duplicated here.
+    """
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
     def post(self, request, pk, action):
-        return AdminRefundRequestDetailView().get(request, pk)
+        if action == "complete":
+            try:
+                rr = sr_services.admin_complete_refund(request.user, pk)
+                return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+            except Exception as e:
+                return _standard_response(success=False, error={"code": "COMPLETE_FAILED", "message": str(e)}, status_code=400)
+        return _standard_response(
+            success=False,
+            error={"code": "UNKNOWN_ACTION", "message": f"Unsupported action '{action}'. Use the dedicated approve/reject/send-to-finance endpoints, or 'complete'."},
+            status_code=400,
+        )
 
 
 class BookingVerifyStartOTPView(APIView):
