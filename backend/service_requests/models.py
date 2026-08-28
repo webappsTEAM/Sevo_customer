@@ -251,6 +251,16 @@ class ServiceRequest(models.Model):
     # earlier this session, not a same-turn add-on.
     declared_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     consignee_relationship = models.CharField(max_length=100, blank=True, default="")
+    # GT-C-03: "no goods insurance and no damage-claim path". Premium is
+    # always computed server-side from declared_value (see
+    # ServiceRequestPublicCreateSerializer) -- never trust a client-supplied
+    # premium, same principle as the HS-B-01 total_amount hardening.
+    # liability_cap is the actual payable ceiling: min(declared_value,
+    # INSURANCE_MAX_LIABILITY) -- what "a stated liability cap" in the
+    # finding refers to.
+    insurance_opted_in = models.BooleanField(default=False)
+    insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
@@ -1652,3 +1662,71 @@ class WalletTransaction(models.Model):
 
     def __str__(self):
         return f"{self.tx_type} {self.amount} ({self.reason}) -> wallet {self.wallet_id}"
+
+
+class InsuranceClaimAttachment(models.Model):
+    """Condition/damage evidence photo for an InsuranceClaim. Same shape as
+    RescheduleAttachment -- deliberately not reusing that model directly
+    since it's semantically a reschedule concept, not a claims one."""
+    file          = models.FileField(upload_to="insurance_claims/attachments/")
+    original_name = models.CharField(max_length=255, blank=True)
+    uploaded_by   = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="insurance_claim_attachments",
+    )
+    uploaded_at   = models.DateTimeField(auto_now_add=True)
+
+
+class InsuranceClaim(models.Model):
+    """
+    GT-C-03: the damage-claim path. Only filable on a booking that actually
+    opted into insurance (insurance_opted_in=True) -- an uninsured booking
+    still goes through the generic Complaint flow exactly as before, this
+    doesn't change that path at all.
+    """
+    class Status(models.TextChoices):
+        OPEN     = "OPEN",     "Open"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        PAID     = "PAID",     "Paid"
+
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="insurance_claims",
+    )
+    filed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="insurance_claims_filed",
+    )
+    description = models.TextField()
+    claimed_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # Never trust claimed_amount directly for payout -- approved_amount is
+    # separately set by whoever resolves the claim, and is clamped to
+    # booking.insurance_liability_cap at resolution time (see
+    # resolve_insurance_claim in services/__init__.py). This is the
+    # "stated liability cap... protects the platform when something breaks"
+    # the finding calls out.
+    approved_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    attachments = models.ManyToManyField(InsuranceClaimAttachment, blank=True, related_name="claims")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    resolution_notes = models.TextField(blank=True, default="")
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="insurance_claims_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_insurance_claim"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Claim #{self.pk} on booking {self.booking_id} ({self.status})"

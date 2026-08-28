@@ -14,6 +14,7 @@ from .models import (
     RescheduleSuggestedSlot, RescheduleStatusHistory,
     RefundRequest, RefundEvidence,
     Coupon, CouponUsage,
+    InsuranceClaim, InsuranceClaimAttachment,
     _generate_secure_start_otp,
 )
 
@@ -162,6 +163,9 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             # them together only once declared_value crosses the high-value
             # threshold, so ordinary low-value bookings are unaffected.
             "declared_value", "consignee_relationship",
+            # GT-C-03: opt-in only; premium/liability_cap are never accepted
+            # from the client -- see validate() below.
+            "insurance_opted_in",
         )
         extra_kwargs = {
             "description":         {"required": False, "allow_blank": True},
@@ -180,6 +184,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "drop_contact_email":  {"required": False, "allow_blank": True},
             "declared_value":        {"required": False, "allow_null": True},
             "consignee_relationship": {"required": False, "allow_blank": True},
+            "insurance_opted_in":    {"required": False},
         }
 
     def validate_latitude(self, value):
@@ -283,6 +288,22 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                         f"receiver: {', '.join(missing)}."
                     )
                 })
+
+        # GT-C-03: insurance requires a declared value to price off of, and
+        # premium/liability_cap are always computed here server-side --
+        # never accepted from the client. INSURANCE_RATE and
+        # INSURANCE_MAX_LIABILITY are env-overridable like the other
+        # threshold constants in this file.
+        if attrs.get("insurance_opted_in"):
+            if declared_value is None or declared_value <= 0:
+                raise serializers.ValidationError({
+                    "insurance_opted_in": "declared_value is required to purchase insurance coverage."
+                })
+            from decimal import Decimal
+            rate = Decimal(str(getattr(_dj_settings, "INSURANCE_RATE", "0.02")))
+            max_liability = Decimal(str(getattr(_dj_settings, "INSURANCE_MAX_LIABILITY", "500000")))
+            attrs["insurance_premium"] = (Decimal(str(declared_value)) * rate).quantize(Decimal("0.01"))
+            attrs["insurance_liability_cap"] = min(Decimal(str(declared_value)), max_liability)
         return attrs
 
 
@@ -993,6 +1014,27 @@ class CustomerRefundRequestSerializer(serializers.ModelSerializer):
             "paid_amount", "refund_type", "requested_amount", "approved_amount",
             "reason", "additional_notes", "status", "status_display",
             "info_requested_from", "evidence", "created_at", "updated_at"
+        )
+
+
+class InsuranceClaimAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InsuranceClaimAttachment
+        fields = ("id", "file", "original_name", "uploaded_at")
+
+
+class InsuranceClaimSerializer(serializers.ModelSerializer):
+    booking_request_id = serializers.CharField(source="booking.request_id", read_only=True)
+    liability_cap = serializers.DecimalField(source="booking.insurance_liability_cap", max_digits=10, decimal_places=2, read_only=True)
+    attachments = InsuranceClaimAttachmentSerializer(many=True, read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = InsuranceClaim
+        fields = (
+            "id", "booking_request_id", "description", "claimed_amount",
+            "approved_amount", "liability_cap", "attachments", "status",
+            "status_display", "resolution_notes", "created_at", "resolved_at",
         )
 
 

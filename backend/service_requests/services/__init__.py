@@ -29,6 +29,7 @@ from service_requests.models import (
     Complaint, ComplaintAttachment, ComplaintMessage, ComplaintStatusHistory,
     ServiceRequest, Payment,
     CustomerWallet, WalletTransaction,
+    InsuranceClaim, InsuranceClaimAttachment,
 )
 
 logger = logging.getLogger(__name__)
@@ -758,6 +759,92 @@ def process_referral_completion(booking):
         referral.rewarded_at = timezone.now()
         referral.save(update_fields=["status", "referrer_reward_amount", "referee_reward_amount", "rewarded_at"])
         logger.info("[Referral] Rewarded referral %s (referrer=%s, referee=%s).", referral.pk, referral.referrer_id, referral.referee_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INSURANCE CLAIM SERVICE FUNCTIONS (GT-C-03)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def file_insurance_claim(booking, customer, description, claimed_amount, attachment_files=None):
+    if not booking.insurance_opted_in:
+        raise ValidationError({"detail": "This booking does not have insurance coverage."})
+    if booking.customer_id != customer.id:
+        raise PermissionDenied("You can only file a claim on your own booking.")
+    if booking.status != "completed":
+        raise ValidationError({"detail": "A claim can only be filed once the booking is completed."})
+
+    claimed_amount = Decimal(str(claimed_amount))
+    if claimed_amount <= 0:
+        raise ValidationError({"detail": "Claimed amount must be greater than zero."})
+
+    with transaction.atomic():
+        claim = InsuranceClaim.objects.create(
+            booking=booking,
+            filed_by=customer,
+            description=description,
+            claimed_amount=claimed_amount,
+        )
+        for f in (attachment_files or []):
+            att = InsuranceClaimAttachment.objects.create(file=f, original_name=f.name, uploaded_by=customer)
+            claim.attachments.add(att)
+    return claim
+
+
+def resolve_insurance_claim(admin_user, claim_id, decision, approved_amount=None, notes=""):
+    """decision: 'APPROVED', 'REJECTED', or 'PAID' (PAID is a separate step
+    after APPROVED, matching the refund workflow's approve-then-complete
+    shape elsewhere in this file)."""
+    try:
+        claim = InsuranceClaim.objects.select_related("booking").get(pk=claim_id)
+    except InsuranceClaim.DoesNotExist:
+        raise ValidationError({"detail": "Claim not found."})
+
+    if decision == InsuranceClaim.Status.APPROVED:
+        if claim.status != InsuranceClaim.Status.OPEN:
+            raise ValidationError({"detail": f"Claim must be OPEN to approve (currently {claim.status})."})
+        cap = claim.booking.insurance_liability_cap
+        amount = Decimal(str(approved_amount)) if approved_amount is not None else claim.claimed_amount
+        if cap is not None:
+            amount = min(amount, cap)  # GT-C-03: never approve above the stated liability cap
+        claim.approved_amount = amount
+        claim.status = InsuranceClaim.Status.APPROVED
+
+    elif decision == InsuranceClaim.Status.REJECTED:
+        if claim.status != InsuranceClaim.Status.OPEN:
+            raise ValidationError({"detail": f"Claim must be OPEN to reject (currently {claim.status})."})
+        claim.status = InsuranceClaim.Status.REJECTED
+
+    elif decision == InsuranceClaim.Status.PAID:
+        if claim.status != InsuranceClaim.Status.APPROVED:
+            raise ValidationError({"detail": f"Claim must be APPROVED before it can be paid (currently {claim.status})."})
+        # Pay out via the wallet ledger -- consistent with how referral
+        # rewards and goodwill credits move money in this codebase, and
+        # avoids re-touching the Razorpay refund-gateway code for a claim
+        # payout, which is a materially different transaction type.
+        credit_wallet(
+            user=claim.filed_by, amount=claim.approved_amount, reason="ADJUSTMENT",
+            note=f"Insurance claim #{claim.pk} payout for booking {claim.booking.request_id}.",
+            actor=admin_user, reference_type="InsuranceClaim", reference_id=claim.pk,
+        )
+        claim.status = InsuranceClaim.Status.PAID
+
+    else:
+        raise ValidationError({"detail": f"Unknown decision '{decision}'."})
+
+    claim.resolution_notes = notes
+    claim.resolved_by = admin_user
+    claim.resolved_at = timezone.now()
+    claim.save(update_fields=["status", "approved_amount", "resolution_notes", "resolved_by", "resolved_at", "updated_at"])
+    return claim
+
+
+def list_insurance_claims(actor, persona, filters=None):
+    qs = InsuranceClaim.objects.select_related("booking", "filed_by")
+    if persona == "CUSTOMER":
+        qs = qs.filter(filed_by=actor)
+    if filters and filters.get("status"):
+        qs = qs.filter(status=filters["status"].upper())
+    return qs.order_by("-created_at")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

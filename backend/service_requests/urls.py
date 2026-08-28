@@ -79,6 +79,7 @@ from .views import (
     AdminRefundListView,
     AdminRefundActionView,
     CustomerWalletView, AdminWalletCreditView, TechnicianProfileView,
+    CustomerInsuranceClaimListCreateView, AdminInsuranceClaimListView, AdminInsuranceClaimResolveView,
 
     # Complaints
     CustomerComplaintListView,
@@ -208,6 +209,9 @@ urlpatterns = [
     path('admin/refunds/<int:pk>/<str:action>/',         AdminRefundActionView.as_view(),              name='admin-refund-action'),
     path('wallet/',                                        CustomerWalletView.as_view(),                 name='customer-wallet'),
     path('technicians/<str:technician_id>/profile/',       TechnicianProfileView.as_view(),              name='technician-profile'),
+    path('insurance-claims/',                              CustomerInsuranceClaimListCreateView.as_view(), name='insurance-claims'),
+    path('admin/insurance-claims/',                         AdminInsuranceClaimListView.as_view(),        name='admin-insurance-claims'),
+    path('admin/insurance-claims/<int:pk>/resolve/',        AdminInsuranceClaimResolveView.as_view(),     name='admin-insurance-claim-resolve'),
     path('admin/customers/<int:user_id>/wallet/credit/',   AdminWalletCreditView.as_view(),              name='admin-wallet-credit'),
     path('customer/refunds/eligible-bookings/',          CustomerEligibleBookingsListView.as_view(),   name='customer-refund-eligible-bookings'),
     path('customer/refunds/bookings/<int:booking_id>/summary/', CustomerBookingRefundSummaryView.as_view(), name='customer-refund-summary'),

@@ -43,6 +43,7 @@ from .serializers import (
     RescheduleRequestSerializer, AdminRescheduleListSerializer,
     RefundEvidenceSerializer,
     CustomerRefundRequestSerializer, AdminRefundRequestSerializer,
+    InsuranceClaimSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -2543,6 +2544,67 @@ class AdminRefundActionView(APIView):
             error={"code": "UNKNOWN_ACTION", "message": f"Unsupported action '{action}'. Use the dedicated approve/reject/send-to-finance endpoints, or 'complete'."},
             status_code=400,
         )
+
+
+class CustomerInsuranceClaimListCreateView(APIView):
+    """
+    GET  /api/insurance-claims/       -- list the logged-in customer's claims
+    POST /api/insurance-claims/       -- file a new claim
+    GT-C-03: the damage-claim path. file_insurance_claim() already enforces
+    booking.insurance_opted_in, ownership, and booking.status == completed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        claims = sr_services.list_insurance_claims(request.user, "CUSTOMER")
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claims, many=True).data)
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        description = request.data.get("description", "")
+        claimed_amount = request.data.get("claimed_amount")
+        if not booking_id or not description or not claimed_amount:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "booking_id, description and claimed_amount are required."}, status_code=400)
+
+        booking = ServiceRequest.objects.filter(Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)).first()
+        if not booking:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+
+        attachment_files = request.FILES.getlist("attachments") if hasattr(request.FILES, "getlist") else []
+
+        try:
+            claim = sr_services.file_insurance_claim(
+                booking=booking, customer=request.user, description=description,
+                claimed_amount=claimed_amount, attachment_files=attachment_files,
+            )
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
+
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
+
+
+class AdminInsuranceClaimListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        claims = sr_services.list_insurance_claims(request.user, "ADMIN", filters=request.query_params)
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claims, many=True).data)
+
+
+class AdminInsuranceClaimResolveView(APIView):
+    """POST /api/admin/insurance-claims/<pk>/resolve/  body: {decision, approved_amount?, notes?}"""
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        decision = str(request.data.get("decision", "")).upper()
+        approved_amount = request.data.get("approved_amount")
+        notes = request.data.get("notes", "")
+        try:
+            claim = sr_services.resolve_insurance_claim(request.user, pk, decision, approved_amount, notes)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "RESOLVE_FAILED", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data)
 
 
 class TechnicianProfileView(APIView):
