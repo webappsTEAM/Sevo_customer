@@ -386,6 +386,10 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "workforce_job_id", "external_assignment_id",
             "start_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
             "parent_request", "request_kind", "quote_number", "child_requests",
+            # GT-C-03: so the customer-facing bookings list can tell which
+            # completed bookings are eligible to file an insurance claim
+            # against, without a second per-booking API call.
+            "insurance_opted_in", "insurance_liability_cap",
         )
 
     def get_child_requests(self, obj):
