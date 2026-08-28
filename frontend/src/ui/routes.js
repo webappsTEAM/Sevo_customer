@@ -69,5 +69,17 @@ export const routes = {
   contact_us: "/contact-us",
   help: "/help",
   help_and_support: "/help-and-support",
+  // HS-A-03: logged-in customer account area -- real, bookmarkable/shareable
+  // routes for a customer's own bookings/addresses/wallet/etc, instead of only
+  // being reachable through the account button opening a modal on /home.
+  account: "/account",
+  account_bookings: "/account/bookings",
+  account_addresses: "/account/addresses",
+  account_wallet: "/account/wallet",
+  account_referral: "/account/referral",
+  account_amc: "/account/amc",
+  account_insurance: "/account/insurance-claims",
+  account_notifications: "/account/notifications",
+  account_help: "/account/help",
 }
 

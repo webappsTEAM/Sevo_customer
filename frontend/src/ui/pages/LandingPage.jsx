@@ -2300,6 +2300,14 @@ export function LandingPage() {
     } else if (location.state?.openGoodsModal) {
       setIsGoodsModalOpen(true)
       navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openAccountTab) {
+      // HS-A-03: deep-linkable customer account area. Routes like /account/bookings
+      // redirect here with state={{ openAccountTab: "My Bookings" }} so a customer
+      // can be sent a real, bookmarkable/shareable URL that lands them on a specific
+      // account tab instead of only being reachable via the header account button.
+      setActiveAccountTab(location.state.openAccountTab)
+      setShowAccountPortal(true)
+      navigate(".", { replace: true, state: {} })
     }
   }, [location.state, navigate])
 
