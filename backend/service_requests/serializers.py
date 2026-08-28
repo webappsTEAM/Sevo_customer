@@ -21,6 +21,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     """v1 compat shape for the public /api/catalog/services/ endpoint."""
     category = serializers.SerializerMethodField()
     price = serializers.DecimalField(source="base_price", max_digits=10, decimal_places=2)
+    offer_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     service_id = serializers.IntegerField(source="service.id", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
@@ -33,7 +34,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Package
         fields = [
-            "id", "category", "category_slug", "name", "slug", "description", "price", "duration",
+            "id", "category", "category_slug", "name", "slug", "description", "price", "offer_price", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
             "faqs", "sort_order", "tools", "ready",
             "service_id", "service_name", "service_slug", "service_description",

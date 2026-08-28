@@ -716,57 +716,69 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
 
   // 100% Accurate Verified Photographic Matches for Tamil & English Vegetable Names
   if (n.includes("basket") || n.includes("essential")) return "/mockups/vegetables_realistic.png"
-  if (n.includes("exotic") || n.includes("gourds pack")) return "/mockups/category_food_health.png"
-  if (n.includes("leafy & salad") || n.includes("leafy box") || n.includes("leafy & salad box")) return "/mockups/veg_coriander.png"
-
-  if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
-  if (n.includes("curry") || n.includes("karuveppilai") || n.includes("kadi patta")) return "/mockups/veg/curry_leaves.jpg"
-  if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
-  if (n.includes("ginger") || n.includes("inji") || n.includes("adrak")) return "/mockups/veg_ginger.png"
-  if (n.includes("mushroom") || n.includes("kaalan")) return "/mockups/veg_mushroom.png"
-  if (n.includes("bottle gourd") || n.includes("suraikkai") || n.includes("lauki")) return "/mockups/veg_lauki.png"
-  if (n.includes("french beans") || n.includes("beans")) return "/mockups/veg_french_beans.png"
   if (n.includes("tomato") || n.includes("thakkali") || n.includes("tamatar") || n.includes("cherry")) return "/mockups/veg_tomato.png"
-  if (n.includes("lady finger") || n.includes("vendakkai") || n.includes("bhindi") || n.includes("okra")) return "/mockups/veg_bhindi.png"
-  if (n.includes("brinjal") || n.includes("kathirikai") || n.includes("baingan")) return "/mockups/veg_brinjal.png"
-  if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg/karela.jpg"
-  if (n.includes("drumstick") || n.includes("murungakkai") || n.includes("sahjan")) return "/mockups/veg/drumstick.jpg"
-  if (n.includes("peas") || n.includes("pattani") || n.includes("matar")) return "/mockups/veg/peas.jpg"
+  
+  // Spring Onion MUST precede general onion
+  if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
+  if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
 
   if (n.includes("peeled garlic") || n.includes("uricha poondu")) return "/mockups/veg/peeled_garlic.jpg"
   if (n.includes("garlic") || n.includes("poondu") || n.includes("lehsun")) return "/mockups/veg/garlic.jpg"
-  if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
-  if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
 
-  // Spring Onion MUST be checked before general onion
-  if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
-  if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
-  if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
+  if (n.includes("ginger") || n.includes("inji") || n.includes("adrak")) return "/mockups/veg_ginger.png"
 
-  // Specific Bell Peppers & Capsicum MUST be checked before general chilli
+  if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("chakkara") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
+  if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("urulaikizhangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
+
   if (n.includes("red bell pepper") || n.includes("sigappu")) return "/mockups/veg/red_bell_pepper.jpg"
-  if (n.includes("yellow bell pepper") || n.includes("manjal")) return "/mockups/veg/yellow_bell_pepper.jpg"
-  if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
-  if (n.includes("chilli") || n.includes("milagai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
+  if (n.includes("yellow bell pepper") || n.includes("manjal kuda")) return "/mockups/veg/yellow_bell_pepper.jpg"
+  if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("kudai milagaai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
+  if (n.includes("chilli") || n.includes("milagai") || n.includes("milagaai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
 
-  if (n.includes("cauliflower") || n.includes("kooliflower") || n.includes("phool gobhi")) return "/mockups/veg/cauliflower.jpg"
-  if (n.includes("cabbage") || n.includes("muttakose") || n.includes("patta gobhi")) return "/mockups/veg/cabbage.jpg"
-  if (n.includes("corn") || n.includes("solam") || n.includes("bhutta")) return "/mockups/veg/corn.jpg"
-  if (n.includes("radish") || n.includes("mullangi") || n.includes("mooli")) return "/mockups/veg/radish.jpg"
-  if (n.includes("lettuce") || n.includes("keerai") || n.includes("palak") || n.includes("spinach")) return "/mockups/veg/lettuce.jpg"
+  if (n.includes("curry") || n.includes("karuveppilai") || n.includes("karuvepillai") || n.includes("kadi patta")) return "/mockups/veg_curry_leaves.png"
+  if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
+  if (n.includes("lady finger") || n.includes("vendakkai") || n.includes("vendaikkai") || n.includes("bhindi") || n.includes("okra")) return "/mockups/veg_bhindi.png"
+  if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
+
+  if (n.includes("spinach") || n.includes("palak") || n.includes("keerai") || n.includes("amaranthus")) return "/mockups/veg/spinach.jpg"
+  if (n.includes("carrot")) return "/mockups/veg/carrot.jpg"
+  if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("vellarikai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
+  if (n.includes("mushroom") || n.includes("kaalan")) return "/mockups/veg_mushroom.png"
+  if (n.includes("brinjal") || n.includes("kathirikai") || n.includes("kathirikkai") || n.includes("baingan")) return "/mockups/veg_brinjal.png"
+  if (n.includes("cauliflower") || n.includes("pookosu")) return "/mockups/veg/cauliflower.jpg"
+  if (n.includes("cabbage") || n.includes("muttaikose")) return "/mockups/veg/cabbage.jpg"
+  if (n.includes("baby corn")) return "/mockups/veg/baby_corn.jpg"
+  if (n.includes("corn") || n.includes("cholam") || n.includes("solam")) return "/mockups/veg/corn.jpg"
+  if (n.includes("broad beans") || n.includes("avarakkai") || n.includes("sem fali")) return "/mockups/veg_broad_beans.png"
+  if (n.includes("cluster beans") || n.includes("kothavarangai") || n.includes("guar")) return "/mockups/veg_cluster_beans.png"
+  if (n.includes("french beans") || n.includes("beans")) return "/mockups/veg_french_beans.png"
+  if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg_bitter_gourd.png"
+  if (n.includes("bottle gourd") || n.includes("surakkai") || n.includes("lauki")) return "/mockups/veg_lauki.png"
+  if (n.includes("snake gourd") || n.includes("pudalangai")) return "/mockups/veg_snake_gourd.png"
+  if (n.includes("ridge gourd") || n.includes("peerangai") || n.includes("peerkangai")) return "/mockups/veg/ridge_gourd.jpg"
   if (n.includes("beetroot")) return "/mockups/veg/beetroot.jpg"
-  if (n.includes("pumpkin") || n.includes("parangikkai") || n.includes("kaddu")) return "/mockups/veg/pumpkin.jpg"
-  if (n.includes("mint") || n.includes("pudhina")) return "/mockups/veg/mint.jpg"
-  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/rosemary.png"
-  if (n.includes("turmeric") || n.includes("manjal") || n.includes("haldi")) return "/mockups/veg/turmeric.jpg"
-  if (n.includes("amla") || n.includes("nellikai")) return "/mockups/veg/amla.jpg"
-  if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
-  if (n.includes("papaya") || n.includes("pappalikkai")) return "/mockups/veg/raw_papaya.jpg"
-  if (n.includes("zucchini")) return "/mockups/veg/zucchini.jpg"
-  if (n.includes("ridge gourd") || n.includes("peerkangai") || n.includes("torai")) return "/mockups/veg/ridge_gourd.jpg"
+  if (n.includes("radish") || n.includes("mullangi")) return "/mockups/veg/radish.jpg"
+  if (n.includes("mint") || n.includes("pudina")) return "/mockups/veg/mint.jpg"
+  if (n.includes("drumstick leaves") || n.includes("moringa") || n.includes("murungai keerai")) return "/mockups/veg_moringa_leaves.png"
+  if (n.includes("drumstick") || n.includes("murungakkai")) return "/mockups/veg_drumstick.png"
+  if (n.includes("fenugreek") || n.includes("methi") || n.includes("vendhaya keerai")) return "/mockups/veg_methi.png"
+  if (n.includes("peas") || n.includes("pattani")) return "/mockups/veg/peas.jpg"
+  if (n.includes("lettuce")) return "/mockups/veg/lettuce.jpg"
+  if (n.includes("sprouts")) return "/mockups/veg/sprouts.jpg"
   if (n.includes("broccoli")) return "/mockups/veg/broccoli.jpg"
+  if (n.includes("ash gourd") || n.includes("sambal pusanikkai") || n.includes("winter melon") || n.includes("petha")) return "/mockups/veg_ash_gourd.png"
+  if (n.includes("pumpkin") || n.includes("parangikkai")) return "/mockups/veg/pumpkin.jpg"
+  if (n.includes("chow chow") || n.includes("chayote")) return "/mockups/veg_chow_chow.png"
+  if (n.includes("ivy gourd") || n.includes("kovakkai") || n.includes("tindora") || n.includes("dondakaya")) return "/mockups/veg_ivy_gourd.png"
+  if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
+  if (n.includes("turmeric") || n.includes("manjal")) return "/mockups/veg/turmeric.jpg"
+  if (n.includes("amla") || n.includes("nellikai") || n.includes("nellikaai")) return "/mockups/veg/amla.jpg"
+  if (n.includes("zucchini")) return "/mockups/veg/zucchini.jpg"
+  if (n.includes("papaya") || n.includes("pappalikkai")) return "/mockups/veg/raw_papaya.jpg"
+  if (n.includes("banana") || n.includes("vazhai") || n.includes("vazhakkai") || n.includes("thandu")) return "/mockups/veg_lauki.png"
+  if (n.includes("rosemary") || n.includes("basil") || n.includes("neem") || n.includes("veppilai")) return "/mockups/veg/rosemary.png"
 
-  return "/mockups/veg_coriander.png"
+  return "/mockups/vegetables_realistic.png"
 }
 
 function HomeCombinedGraphic({ className = "w-16 h-16" }) {
@@ -821,53 +833,213 @@ const MAIN_CATEGORIES = [
   },
 ]
 
+// ── Curated Multi-Pack & Weight Variants for Top High-Demand Vegetables ──
+const VEGETABLE_VARIANTS_MAP = {
+  onion: [
+    { unit: "2 x 1 kg", price: 103, mrp: 121, discount: "14% OFF", badge: ".2" },
+    { unit: "1 kg", price: 52, mrp: 60, discount: "13% OFF" },
+  ],
+  tomato: [
+    { unit: "2 x 500 g", price: 27, mrp: 36, discount: "25% OFF", badge: ".2" },
+    { unit: "500 g", price: 14, mrp: 18, discount: "22% OFF" },
+  ],
+  potato: [
+    { unit: "2 x 1 kg", price: 52, mrp: 62, discount: "16% OFF", badge: ".2" },
+    { unit: "1 kg", price: 27, mrp: 31, discount: "12% OFF" },
+  ],
+  ooty_potato: [
+    { unit: "2 x 1 kg", price: 87, mrp: 114, discount: "24% OFF", badge: ".2" },
+    { unit: "1 kg", price: 45, mrp: 57, discount: "21% OFF" },
+  ],
+  "lady finger": [
+    { unit: "2 x 250 g", price: 27, mrp: 34, discount: "20% OFF", badge: ".2" },
+    { unit: "250 g", price: 14, mrp: 17, discount: "17% OFF" },
+  ],
+  spinach: [
+    { unit: "2 x 200 g", price: 39, mrp: 50, discount: "22% OFF", badge: "Pack of 2" },
+    { unit: "200 g", price: 20, mrp: 25, discount: "20% OFF" },
+  ],
+  garlic: [
+    { unit: "2 x 100 g", price: 72, mrp: 88, discount: "18% OFF", badge: ".2" },
+    { unit: "100 g", price: 38, mrp: 44, discount: "13% OFF" },
+  ],
+}
+
+const getVegetableOptions = (name) => {
+  const lower = (name || "").toLowerCase()
+  if (lower.includes("spring onion") || lower.includes("sambhar onion")) return null
+  if (lower.includes("sweet potato")) return null
+
+  if (lower.includes("onion") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.onion
+  if (lower.includes("tomato") && !lower.includes("hybrid") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.tomato
+  if (lower.includes("ooty potato")) return VEGETABLE_VARIANTS_MAP.ooty_potato
+  if (lower.includes("potato") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.potato
+  if (lower.includes("lady finger") || lower.includes("vendaikkai") || lower.includes("vendakkai") || lower.includes("ladies finger")) {
+    if (!lower.includes("organic")) return VEGETABLE_VARIANTS_MAP["lady finger"]
+  }
+  if (lower.includes("spinach") || lower.includes("palak")) return VEGETABLE_VARIANTS_MAP.spinach
+  if (lower.includes("garlic") && !lower.includes("peeled")) return VEGETABLE_VARIANTS_MAP.garlic
+  return null
+}
+
+const getProducePriority = (name = "") => {
+  const lower = name.toLowerCase()
+  if (lower.includes("spring onion") || lower.includes("sambhar onion")) return 80
+  if (lower.includes("sweet potato") || lower.includes("baby potato")) return 80
+
+  if (lower.includes("tomato") && !lower.includes("organic")) return 1
+  if (lower.includes("onion") && !lower.includes("organic")) return 2
+  if (lower.includes("garlic") && !lower.includes("peeled")) return 3
+  if (lower.includes("ginger") && !lower.includes("organic")) return 4
+  if (lower.includes("potato") && !lower.includes("organic") && !lower.includes("ooty")) return 5
+  if (lower.includes("green chilli") || lower.includes("pachai milagaai")) return 6
+  if (lower.includes("curry leaves") || lower.includes("karuveppilai") || lower.includes("karuvepillai")) return 7
+  if (lower.includes("coriander") || lower.includes("kothamalli")) return 8
+  if (lower.includes("lady finger") || lower.includes("vendaikkai") || lower.includes("vendakkai")) return 9
+  if (lower.includes("lemon") || lower.includes("elumichai")) return 10
+  if (lower.includes("spinach") || lower.includes("palak")) return 11
+  if (lower.includes("carrot")) return 12
+  if (lower.includes("cucumber")) return 13
+
+  return 50
+}
+
 // ── Curated Vegetables & Groceries Data with Tamil Names ────────
 const VEGETABLE_ITEMS = [
-  // Daily Essentials
-  { name: "Coriander Leaves (Kothamalli)", unit: "100 g", price: 25, mrp: 31, discount: "19% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Onion (Vengayam)", unit: "1 kg", price: 41, mrp: 50, discount: "18% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Tomato (Thakkali)", unit: "1 kg", price: 58, mrp: 70, discount: "17% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Potato (Urulaikilangu)", unit: "1 kg", price: 22, mrp: 25, discount: "12% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Lady Finger (Vendakkai)", unit: "1 kg", price: 54, mrp: 70, discount: "23% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Ginger (Inji)", unit: "200 g", price: 75, mrp: 88, discount: "15% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Garlic (Poondu)", unit: "200 g", price: 68, mrp: 85, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Peeled Garlic (Uricha Poondu)", unit: "100 g", price: 54, mrp: 65, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Lemon (Elumichai)", unit: "200 g", price: 41, mrp: 48, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Cucumber (Vellarikkai)", unit: "500 g", price: 52, mrp: 61, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  // Herbs & Leafy
-  { name: "Curry Leaves (Karuveppilai)", unit: "50 g", price: 15, mrp: 18, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Mint Leaves (Pudhina)", unit: "100 g", price: 26, mrp: 32, discount: "19% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Spring Onion (Vengaya Thaal)", unit: "150 g", price: 36, mrp: 42, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Green Lettuce (Salad Keerai)", unit: "100 g", price: 56, mrp: 64, discount: "13% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Fresh Rosemary & Herbs", unit: "10 g", price: 20, mrp: 25, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Drumstick (Murungakkai)", unit: "250 g", price: 35, mrp: 42, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  // Gourds & Roots
-  { name: "Bitter Gourd (Pavakkai)", unit: "250 g", price: 17, mrp: 19, discount: "11% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Bottle Gourd (Suraikkai)", unit: "400 g", price: 21, mrp: 24, discount: "13% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Ridge Gourd (Peerkangai)", unit: "500 g", price: 38, mrp: 48, discount: "21% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Radish (Mullangi)", unit: "500 g", price: 52, mrp: 63, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Beetroot (Beetroot)", unit: "500 g", price: 37, mrp: 44, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Sweet Potato (Sakkaraivalli Kizhangu)", unit: "500 g", price: 69, mrp: 84, discount: "18% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Raw Turmeric (Manjal Kizhangu)", unit: "200 g", price: 38, mrp: 43, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Colocasia (Seppankizhangu)", unit: "250 g", price: 19, mrp: 21, discount: "10% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  // Organic & Exotic
-  { name: "Brinjal (Kathirikai)", unit: "500 g", price: 25, mrp: 29, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Chilli (Pachai Milagai)", unit: "100 g", price: 18, mrp: 22, discount: "18% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Capsicum (Kuda Milagai)", unit: "250 g", price: 28, mrp: 35, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Red Bell Pepper (Sigappu Kuda Milagai)", unit: "125 g", price: 45, mrp: 58, discount: "22% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Yellow Bell Pepper (Manjal Kuda Milagai)", unit: "125 g", price: 61, mrp: 70, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  // ── Top Daily Essentials (Priority Top) ──
+  {
+    name: "Tomato (Thakkali)",
+    unit: "500 g",
+    price: 14,
+    mrp: 18,
+    discount: "22% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.tomato,
+  },
+  {
+    name: "Onion (Vengayam)",
+    unit: "1 kg",
+    price: 52,
+    mrp: 60,
+    discount: "13% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.onion,
+  },
+  {
+    name: "Garlic (Poondu)",
+    unit: "100 g",
+    price: 38,
+    mrp: 44,
+    discount: "13% OFF",
+    delivery: "8 MINS",
+    category: "Herbs & Seasoning",
+    options: VEGETABLE_VARIANTS_MAP.garlic,
+  },
+  { name: "Ginger", unit: "100 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  {
+    name: "Potato (Urulaikizhangu)",
+    unit: "1 kg",
+    price: 27,
+    mrp: 31,
+    discount: "12% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.potato,
+  },
+  { name: "Green Chilli (Pachai Milagaai)", unit: "100 g", price: 10, mrp: 11, discount: "9% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Curry Leaves (Karuvepillai)", unit: "50 g", price: 7, mrp: 9, discount: "22% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Coriander Bunch (Kothamalli)", unit: "100 g", price: 12, mrp: 15, discount: "20% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Lady Finger (Vendaikkai)",
+    unit: "250 g",
+    price: 14,
+    mrp: 17,
+    discount: "17% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP["lady finger"],
+  },
+  { name: "Lemon (Elumichai Pazham)", unit: "200 g", price: 44, mrp: 53, discount: "16% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Spinach (Palak Keerai)",
+    unit: "200 g",
+    price: 20,
+    mrp: 25,
+    discount: "20% OFF",
+    delivery: "8 MINS",
+    category: "Herbs & Leafy",
+    options: VEGETABLE_VARIANTS_MAP.spinach,
+  },
+  { name: "Orange Carrot (Local Carrot)", unit: "500 g", price: 41, mrp: 49, discount: "18% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Green Cucumber (Vellarikai)", unit: "500 g", price: 21, mrp: 26, discount: "19% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+
+  // ── High Demand Kitchen Produce ──
+  { name: "Brinjal (Vari Kathirikkai)", unit: "250 g", price: 18, mrp: 23, discount: "21% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Button Mushroom (Kaalan)", unit: "180 g", price: 65, mrp: 78, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Capsicum (Kudai Milagaai)", unit: "250 g", price: 17, mrp: 19, discount: "10% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cauliflower (Pookosu)", unit: "300 g", price: 29, mrp: 37, discount: "21% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cabbage (Muttaikose)", unit: "400 g", price: 19, mrp: 23, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Sweet Corn Cob (Cholam)", unit: "1 pc", price: 20, mrp: 24, discount: "18% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "French Beans (Beans)", unit: "250 g", price: 31, mrp: 36, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Cauliflower (Kooliflower)", unit: "1 pc (500g)", price: 38, mrp: 45, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Cabbage (Muttakose)", unit: "400 g", price: 37, mrp: 44, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Broccoli", unit: "300 g", price: 133, mrp: 167, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Button Mushroom (Kaalan)", unit: "180 g", price: 47, mrp: 56, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Pumpkin (Parangikkai)", unit: "500 g", price: 46, mrp: 50, discount: "8% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Peas (Pattani)", unit: "250 g", price: 67, mrp: 81, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Amla (Nellikai)", unit: "250 g", price: 64, mrp: 73, discount: "12% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Bitter Gourd (Pavakkai)", unit: "500 g", price: 24, mrp: 28, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Bottle Gourd (Surakkai)", unit: "400 g", price: 20, mrp: 24, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Snake Gourd (Pudalangai)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Ridge Gourd (Peerangai)", unit: "500 g", price: 21, mrp: 25, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Beetroot", unit: "500 g", price: 31, mrp: 37, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Radish (Mullangi)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Mint Leaves (Pudina)", unit: "100 g", price: 12, mrp: 15, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Drumstick (Murungakkai)", unit: "2 pcs", price: 16, mrp: 18, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Drumstick Leaves (Moringa)", unit: "100 g", price: 15, mrp: 17, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Baby Potato (Urulaikizhangu)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Ooty Potato",
+    unit: "1 kg",
+    price: 45,
+    mrp: 57,
+    discount: "21% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.ooty_potato,
+  },
+  { name: "Sambhar Onion (Vengayam)", unit: "250 g", price: 27, mrp: 31, discount: "13% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Spring Onion (Vengaya Thaal)", unit: "250 g", price: 17, mrp: 20, discount: "15% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Sweet Potato (Chakkara Valli)", unit: "450 g", price: 34, mrp: 39, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Peeled Garlic (Uricha Poondu)", unit: "100 g", price: 54, mrp: 65, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Fenugreek (Methi)", unit: "250 g", price: 25, mrp: 30, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Peas (Pachai Pattani)", unit: "250 g", price: 63, mrp: 76, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Lettuce", unit: "100 g", price: 24, mrp: 27, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Broccoli", unit: "200 g", price: 33, mrp: 40, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Ash Gourd (Sambal Pusanikkai)", unit: "1.5 kg", price: 46, mrp: 55, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Chow Chow", unit: "400 g", price: 29, mrp: 35, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Ivy Gourd (Kovakkai)", unit: "250 g", price: 9, mrp: 11, discount: "18% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Broad Beans (Avarakkai)", unit: "250 g", price: 16, mrp: 19, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cluster Beans (Kothavarangai)", unit: "250 g", price: 14, mrp: 16, discount: "12% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cowpea Beans (Karamani)", unit: "250 g", price: 24, mrp: 28, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Colocasia (Seppankizhangu)", unit: "250 g", price: 19, mrp: 22, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Raw Banana (Vazhakkai)", unit: "3 pcs", price: 42, mrp: 49, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Banana Stem (Vazhai Thandu)", unit: "800 g", price: 15, mrp: 18, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Green Zucchini", unit: "200 g", price: 30, mrp: 35, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Yellow Bell Pepper (Manjal Kuda Milagai)", unit: "125 g", price: 61, mrp: 70, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Red Bell Pepper", unit: "125 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Baby Corn - Packet", unit: "200 g", price: 30, mrp: 35, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Amaranthus Leaves", unit: "250 g", price: 18, mrp: 22, discount: "18% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Red Amaranthus Leaves", unit: "250 g", price: 19, mrp: 24, discount: "21% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Moong Sprouts", unit: "150 g", price: 45, mrp: 58, discount: "22% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Raw Turmeric (Manjal)", unit: "250 g", price: 67, mrp: 78, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Amla (Nellikaai)", unit: "250 g", price: 31, mrp: 36, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Raw Papaya (Pappalikkai)", unit: "400 g", price: 39, mrp: 45, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Sweet Corn (Solam)", unit: "1 pc", price: 24, mrp: 30, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  // Gourds & Roots (continued)
-  { name: "Green Zucchini", unit: "200 g", price: 30, mrp: 38, discount: "21% OFF", delivery: "8 MINS", category: "Gourds & Roots" }
+  { name: "Knol Khol (Nookal)", unit: "500 g", price: 22, mrp: 26, discount: "15% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Neem Leaves (Veppilai)", unit: "1 pack", price: 19, mrp: 22, discount: "13% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Fresh Rosemary", unit: "10 g", price: 16, mrp: 18, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Italian Basil Leaves", unit: "50 g", price: 35, mrp: 43, discount: "18% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Pumpkin (Pusanikkai)", unit: "400 g", price: 40, mrp: 48, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pumpkin Yellow (Cut)", unit: "200 g", price: 42, mrp: 50, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Disco Pumpkin", unit: "500 g", price: 48, mrp: 58, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Brinjal - Bharta", unit: "500 g", price: 26, mrp: 31, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Assorted Capsicum (R/Y/G)", unit: "3 pcs", price: 59, mrp: 70, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
 ]
 
 const GROCERY_ITEMS = [
@@ -1891,6 +2063,7 @@ export function LandingPage() {
     return {}
   })
   const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
+  const [variantModalItem, setVariantModalItem] = useState(null)
 
   // Persist vegetable cart state so items remain visible when closing/reopening
   useEffect(() => {
@@ -1910,7 +2083,6 @@ export function LandingPage() {
       navigate(".", { replace: true, state: {} })
     }
   }, [location.state, navigate])
-  const [variantModalItem, setVariantModalItem] = useState(null)
   const [vegCategoryFilter, setVegCategoryFilter] = useState("All")
   const [vegSearchQuery, setVegSearchQuery] = useState("")
   const [vegApiItems, setVegApiItems] = useState(VEGETABLE_ITEMS)
@@ -2108,12 +2280,21 @@ export function LandingPage() {
       "truck": ["truck"],
       "mini-truck-transport": ["truck"],
       "mini-truck-(hosur)": ["truck"],
+      "goods-transport-truck": ["truck"],
       "two-wheeler": ["two-wheeler"],
       "instant-bike-courier": ["two-wheeler"],
+      "goods-transport-bike": ["two-wheeler"],
       "2-wheeler-(hosur)": ["two-wheeler"],
       "packers-and-movers": ["packers-movers"],
+      "packers-movers": ["packers-movers"],
+      "goods-transport-packers": ["packers-movers"],
       "packers-and-movers-(hosur)": ["packers-movers"],
-      "vegetables": ["vegetables"],
+      "vegetables": ["vegetables", "farm-fresh-vegetable"],
+      "vegetable": ["vegetables", "farm-fresh-vegetable"],
+      "vegetables-quick-delivery": ["vegetables", "farm-fresh-vegetable"],
+      "fresh-vegetables": ["vegetables", "farm-fresh-vegetable"],
+      "farm-fresh-vegetable": ["vegetables", "farm-fresh-vegetable"],
+      "farm-fresh-vegetables": ["vegetables", "farm-fresh-vegetable"],
       "groceries": ["groceries"],
     }
 
@@ -2126,11 +2307,11 @@ export function LandingPage() {
     )
     if (directMatch) return true
 
-    // Fallback: general alphanumeric substring check between normalized slug & allowed slugs
-    const cleanSlug = slug.replace(/[^a-z0-9]/g, "")
+    // Safe token matching with minimum token length 4 (prevents 'ac' matching inside 'packers')
+    const rTokens = slug.split("-").filter(t => t.length >= 4)
     return allowed.some(allowedSlug => {
-      const cleanAllowed = allowedSlug.toLowerCase().replace(/[^a-z0-9]/g, "")
-      return cleanAllowed && cleanSlug && (cleanAllowed.includes(cleanSlug) || cleanSlug.includes(cleanAllowed))
+      const aTokens = allowedSlug.toLowerCase().replace(/_/g, "-").split("-").filter(t => t.length >= 4)
+      return rTokens.some(rt => aTokens.includes(rt))
     })
   }, [zoneCheckResult])
 
@@ -2205,50 +2386,105 @@ export function LandingPage() {
     if (
       lowerName.includes("coriander") ||
       lowerName.includes("curry leaves") ||
+      lowerName.includes("karuvepillai") ||
       lowerName.includes("mint") ||
+      lowerName.includes("pudina") ||
+      lowerName.includes("pudhina") ||
       lowerName.includes("lettuce") ||
       lowerName.includes("rosemary") ||
-      lowerName.includes("drumstick")
+      lowerName.includes("drumstick") ||
+      lowerName.includes("spinach") ||
+      lowerName.includes("keerai") ||
+      lowerName.includes("palak") ||
+      lowerName.includes("amaranthus") ||
+      lowerName.includes("methi") ||
+      lowerName.includes("fenugreek") ||
+      lowerName.includes("neem") ||
+      lowerName.includes("veppilai") ||
+      lowerName.includes("basil") ||
+      lowerName.includes("sprouts") ||
+      lowerName.includes("moringa") ||
+      lowerName.includes("spring onion")
     ) {
-      return "Herbs & Leafy"
-    }
-    if (lowerName.includes("spring onion")) {
       return "Herbs & Leafy"
     }
     if (
       lowerName.includes("ginger") ||
+      lowerName.includes("inji") ||
       lowerName.includes("garlic") ||
-      lowerName.includes("turmeric")
+      lowerName.includes("poondu") ||
+      lowerName.includes("turmeric") ||
+      lowerName.includes("manjal") ||
+      lowerName.includes("green chilli") ||
+      lowerName.includes("pachai milaga")
     ) {
       return "Herbs & Seasoning"
     }
     if (
       lowerName.includes("bitter gourd") ||
+      lowerName.includes("pavakkai") ||
       lowerName.includes("bottle gourd") ||
+      lowerName.includes("surakkai") ||
+      lowerName.includes("suraikkai") ||
       lowerName.includes("ridge gourd") ||
+      lowerName.includes("peerangai") ||
+      lowerName.includes("snake gourd") ||
+      lowerName.includes("pudalangai") ||
+      lowerName.includes("ash gourd") ||
+      lowerName.includes("pusanikkai") ||
+      lowerName.includes("pointed gourd") ||
+      lowerName.includes("ivy gourd") ||
+      lowerName.includes("kovakkai") ||
       lowerName.includes("radish") ||
+      lowerName.includes("mullangi") ||
       lowerName.includes("beetroot") ||
       lowerName.includes("sweet potato") ||
+      lowerName.includes("chakkara") ||
+      lowerName.includes("sakkaraivalli") ||
       lowerName.includes("colocasia") ||
-      lowerName.includes("zucchini")
+      lowerName.includes("seppankizhangu") ||
+      lowerName.includes("zucchini") ||
+      lowerName.includes("chow chow") ||
+      lowerName.includes("knol khol") ||
+      lowerName.includes("nookal") ||
+      lowerName.includes("banana stem") ||
+      lowerName.includes("vazhai") ||
+      lowerName.includes("vazhakkai")
     ) {
       return "Gourds & Roots"
     }
     if (
+      lowerName.includes("organic") ||
       lowerName.includes("brinjal") ||
+      lowerName.includes("kathirikkai") ||
+      lowerName.includes("kathirikai") ||
       lowerName.includes("chilli") ||
       lowerName.includes("capsicum") ||
+      lowerName.includes("milagai") ||
+      lowerName.includes("milagaai") ||
       lowerName.includes("bell pepper") ||
       lowerName.includes("beans") ||
+      lowerName.includes("avarakkai") ||
+      lowerName.includes("kothavarangai") ||
+      lowerName.includes("karamani") ||
       lowerName.includes("cauliflower") ||
+      lowerName.includes("pookosu") ||
       lowerName.includes("cabbage") ||
+      lowerName.includes("muttaikose") ||
+      lowerName.includes("muttakose") ||
       lowerName.includes("broccoli") ||
       lowerName.includes("mushroom") ||
+      lowerName.includes("kaalan") ||
       lowerName.includes("pumpkin") ||
+      lowerName.includes("disco") ||
       lowerName.includes("peas") ||
+      lowerName.includes("pattani") ||
       lowerName.includes("amla") ||
+      lowerName.includes("nellika") ||
       lowerName.includes("papaya") ||
-      lowerName.includes("sweet corn")
+      lowerName.includes("sweet corn") ||
+      lowerName.includes("baby corn") ||
+      lowerName.includes("cholam")
     ) {
       return "Organic & Exotic"
     }
@@ -2275,17 +2511,24 @@ export function LandingPage() {
           apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
             .then((pkgRes) => {
               if (pkgRes.success && Array.isArray(pkgRes.data) && pkgRes.data.length > 0) {
-                const apiVegs = pkgRes.data.map((pkg) => ({
-                  id: pkg.id,
-                  name: pkg.name,
-                  unit: pkg.duration || "1 unit",
-                  price: Math.round(Number(pkg.price || pkg.base_price) || 0),
-                  mrp: pkg.offer_price ? Math.round(Number(pkg.price || pkg.base_price) || 0) : null,
-                  discount: pkg.tag || "",
-                  delivery: pkg.duration || "8 MINS",
-                  category: getVegetableCategory(pkg.name),
-                  image: pkg.image || null,
-                }))
+                const apiVegs = pkgRes.data.map((pkg) => {
+                  const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
+                  const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price) || 0) : null
+                  const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
+                  const opts = getVegetableOptions(pkg.name)
+                  return {
+                    id: pkg.id,
+                    name: pkg.name,
+                    unit: pkg.duration || "1 unit",
+                    price: price,
+                    mrp: mrp,
+                    discount: discount,
+                    delivery: "8 MINS",
+                    category: getVegetableCategory(pkg.name),
+                    image: pkg.image || null,
+                    options: opts || undefined,
+                  }
+                })
                 setVegApiItems(apiVegs)
                 setFoodHealthSub(
                   apiServices.map((sub) =>
@@ -4530,16 +4773,18 @@ export function LandingPage() {
                           )}
 
                           {/* Products Grid matching Quick Commerce Layout */}
-                          {(selectedFoodSubModule?.items || []).filter((item) => {
-                            const q = vegSearchQuery.toLowerCase()
-                            const matchesSearch =
-                              !vegSearchQuery ||
-                              item.name.toLowerCase().includes(q) ||
-                              (item.category && item.category.toLowerCase().includes(q))
-                            const matchesCat =
-                              vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                            return matchesSearch && matchesCat
-                          }).length === 0 ? (
+                          {([...(selectedFoodSubModule?.items || [])])
+                            .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
+                            .filter((item) => {
+                              const q = vegSearchQuery.toLowerCase()
+                              const matchesSearch =
+                                !vegSearchQuery ||
+                                item.name.toLowerCase().includes(q) ||
+                                (item.category && item.category.toLowerCase().includes(q))
+                              const matchesCat =
+                                vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                              return matchesSearch && matchesCat
+                            }).length === 0 ? (
                             <div className="py-12 text-center">
                               <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                               <button
@@ -4555,7 +4800,8 @@ export function LandingPage() {
                             </div>
                           ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
-                              {selectedFoodSubModule.items
+                              {([...(selectedFoodSubModule.items || [])])
+                                .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
                                 .filter((item) => {
                                   const q = vegSearchQuery.toLowerCase()
                                   const matchesSearch =
@@ -6136,8 +6382,34 @@ export function LandingPage() {
                       </div>
                     ) : (
                       <>
+                        {/* Out of Zone Notice Banner for Fresh Vegetables */}
+                        {selectedFoodSubModule?.id === "vegetables" && !isServiceAvailableInZone("vegetables") && (
+                          <div className="mb-4 p-3.5 sm:p-4 bg-rose-50 border border-rose-200 text-rose-950 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-rose-100 border border-rose-300 text-rose-700 flex items-center justify-center shrink-0 font-black text-base">
+                                🚫
+                              </div>
+                              <div className="text-xs">
+                                <div className="font-black text-rose-900 text-xs sm:text-sm mb-0.5">
+                                  Farm-Fresh Vegetables Delivery Unavailable in Your Area
+                                </div>
+                                <p className="font-medium text-rose-800 leading-snug">
+                                  Doorstep delivery for fresh produce is only available inside marked service zones (e.g. Vassuthaa Garden, KCC Nagar).
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowLocationPickerModal(true)}
+                              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shrink-0 cursor-pointer shadow-xs transition-all"
+                            >
+                              Change Address
+                            </button>
+                          </div>
+                        )}
+
                         {/* Booking Notice Banner for Fresh Vegetables (After 12 PM / Outside 6 AM - 12 PM Window) */}
-                        {selectedFoodSubModule?.id === "vegetables" && vegTiming.afterTwelveNotice && (
+                        {selectedFoodSubModule?.id === "vegetables" && isServiceAvailableInZone("vegetables") && vegTiming.afterTwelveNotice && (
                           <div className="mb-4 p-3.5 sm:p-4 bg-amber-50 border border-amber-300/80 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
                             <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
                               <Clock className="w-4 h-4 text-amber-700" />
@@ -6155,16 +6427,18 @@ export function LandingPage() {
                         )}
 
                         {/* Products Grid matching Quick Commerce Layout */}
-                        {(selectedFoodSubModule?.items || []).filter((item) => {
-                          const q = vegSearchQuery.toLowerCase()
-                          const matchesSearch =
-                            !vegSearchQuery ||
-                            item.name.toLowerCase().includes(q) ||
-                            (item.category && item.category.toLowerCase().includes(q))
-                          const matchesCat =
-                            vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                          return matchesSearch && matchesCat
-                        }).length === 0 ? (
+                        {([...(selectedFoodSubModule?.items || [])])
+                          .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
+                          .filter((item) => {
+                            const q = vegSearchQuery.toLowerCase()
+                            const matchesSearch =
+                              !vegSearchQuery ||
+                              item.name.toLowerCase().includes(q) ||
+                              (item.category && item.category.toLowerCase().includes(q))
+                            const matchesCat =
+                              vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                            return matchesSearch && matchesCat
+                          }).length === 0 ? (
                           <div className="py-12 text-center">
                             <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                             <button
@@ -6180,7 +6454,8 @@ export function LandingPage() {
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
-                            {selectedFoodSubModule.items
+                            {([...(selectedFoodSubModule.items || [])])
+                              .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
                               .filter((item) => {
                                 const q = vegSearchQuery.toLowerCase()
                                 const matchesSearch =
@@ -6192,9 +6467,10 @@ export function LandingPage() {
                                 return matchesSearch && matchesCat
                               })
                               .map((item, idx) => {
-                                const hasOptions = item.options && item.options.length > 0
+                                const opts = item.options || getVegetableOptions(item.name)
+                                const hasOptions = opts && opts.length > 0
                                 const count = hasOptions
-                                  ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                  ? opts.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
                                   : (foodCart[item.name] || 0)
                                 return (
                                   <div
@@ -6268,8 +6544,8 @@ export function LandingPage() {
                                         count > 0 ? (
                                           <button
                                             type="button"
-                                            onClick={() => setVariantModalItem(item)}
-                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                                            onClick={() => setVariantModalItem({ ...item, options: opts })}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer hover:bg-emerald-700 transition-all active:scale-95"
                                           >
                                             <span>{count} in Cart</span>
                                             <ChevronDown className="w-2.5 h-2.5" />
@@ -6277,8 +6553,8 @@ export function LandingPage() {
                                         ) : (
                                           <button
                                             type="button"
-                                            onClick={() => setVariantModalItem(item)}
-                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                            onClick={() => setVariantModalItem({ ...item, options: opts })}
+                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1 shadow-2xs"
                                           >
                                             <span>ADD</span>
                                             <ChevronDown className="w-2.5 h-2.5" />
@@ -6575,6 +6851,11 @@ export function LandingPage() {
 
                         if (itemsList.length === 0) return
 
+                        if (selectedFoodSubModule?.id === "vegetables" && !isServiceAvailableInZone("vegetables")) {
+                          showUnavailableServiceAlert("Farm-Fresh Vegetables")
+                          return
+                        }
+
                         document.body.style.overflow = ""
                         setIsFoodHealthModalOpen(false)
                         setSelectedFoodSubModuleId(null)
@@ -6596,14 +6877,19 @@ export function LandingPage() {
                           }
                         })
                       }}
-                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                          ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
+                            ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <span>
                         {selectedFoodSubModule.id === "vegetables"
-                          ? vegTiming.cartButtonText
+                          ? !isServiceAvailableInZone("vegetables")
+                            ? "Unavailable in Your Area"
+                            : vegTiming.cartButtonText
                           : `Confirm & Schedule ${selectedFoodSubModule.name} Delivery`}
                       </span>
                       <ArrowRight className="w-4 h-4" />
@@ -6611,6 +6897,143 @@ export function LandingPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── Vegetable Multi-Pack Variant Selection Modal matching Image 1 & 2 ── */}
+              <AnimatePresence>
+                {variantModalItem && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) setVariantModalItem(null)
+                    }}
+                  >
+                    <div className="relative w-full max-w-sm bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-150">
+                      {/* Floating Close Button matching circle with X */}
+                      <button
+                        type="button"
+                        onClick={() => setVariantModalItem(null)}
+                        className="absolute -top-12 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-black cursor-pointer shadow-xl transition-transform active:scale-95"
+                      >
+                        <X className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+
+                      {/* Title */}
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 mb-3 px-1">
+                        {variantModalItem.name?.toLowerCase().includes("spinach")
+                          ? "Spinach Pack"
+                          : variantModalItem.name?.split("(")[0].trim() || variantModalItem.name}
+                      </h3>
+
+                      {/* Options List */}
+                      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-0.5">
+                        {variantModalItem.options?.map((opt, oIdx) => {
+                          const optCartKey = `${variantModalItem.name} (${opt.unit})`
+                          const optCount = foodCart[optCartKey] || 0
+                          return (
+                            <div
+                              key={oIdx}
+                              className="p-3 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 flex items-center justify-between gap-3 shadow-2xs transition-all"
+                            >
+                              {/* Left: Thumbnail with blue discount badges */}
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-xl overflow-hidden bg-[#f5f1eb] shrink-0 border border-slate-100">
+                                  <img
+                                    src={variantModalItem.image || getFoodItemPhoto(variantModalItem.name)}
+                                    alt={variantModalItem.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {opt.discount && (
+                                    <span className="absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-xs leading-none">
+                                      {opt.discount.replace(" OFF", "")} OFF
+                                    </span>
+                                  )}
+                                  {opt.badge && (
+                                    <span className="absolute top-1 right-1 bg-blue-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-2xs">
+                                      {opt.badge}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Unit & Pricing */}
+                                <div className="min-w-0">
+                                  <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                                    {opt.unit}
+                                  </p>
+                                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                                    <span className="text-sm sm:text-base font-black text-slate-900">
+                                      ₹{opt.price}
+                                    </span>
+                                    {opt.mrp && (
+                                      <span className="text-xs text-slate-400 line-through">
+                                        ₹{opt.mrp}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right: ADD CTA or Quantity Controller */}
+                              <div className="shrink-0">
+                                {optCount > 0 ? (
+                                  <div className="flex items-center bg-emerald-600 text-white rounded-xl px-2 py-1 shadow-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFoodCart((prev) => {
+                                          const cur = prev[optCartKey] || 0
+                                          if (cur <= 1) {
+                                            const copy = { ...prev }
+                                            delete copy[optCartKey]
+                                            return copy
+                                          }
+                                          return { ...prev, [optCartKey]: cur - 1 }
+                                        })
+                                      }
+                                      className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1.5"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="text-xs font-extrabold min-w-[16px] text-center px-1">
+                                      {optCount}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFoodCart((prev) => ({
+                                          ...prev,
+                                          [optCartKey]: (prev[optCartKey] || 0) + 1,
+                                        }))
+                                      }
+                                      className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1.5"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFoodCart((prev) => ({
+                                        ...prev,
+                                        [optCartKey]: 1,
+                                      }))
+                                    }
+                                    className="px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs sm:text-sm transition-all cursor-pointer active:scale-95 bg-white shadow-2xs"
+                                  >
+                                    ADD
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </AnimatePresence>
             </div>
           </div>,
           document.body
@@ -6910,6 +7333,7 @@ export function LandingPage() {
             getFoodItemPhoto={getFoodItemPhoto}
             deliveryAddress={activeLocationLabel || "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu"}
             onChangeAddress={() => setShowLocationPickerModal(true)}
+            isServiceAvailable={isServiceAvailableInZone("vegetables")}
           />
         )}
       </AnimatePresence>
