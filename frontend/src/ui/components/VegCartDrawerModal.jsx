@@ -20,6 +20,7 @@ export function VegCartDrawerModal({
   getFoodItemPhoto,
   deliveryAddress = "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu",
   onChangeAddress,
+  isServiceAvailable = true,
 }) {
   const navigate = useNavigate()
   const [selectedTip, setSelectedTip] = useState(0)
@@ -414,6 +415,22 @@ export function VegCartDrawerModal({
               )}
             </div>
 
+            {/* Out-of-zone warning if vegetables not allowed in current area */}
+            {!isServiceAvailable && (
+              <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200 text-rose-800 flex items-center justify-between gap-2 text-xs font-bold animate-in fade-in">
+                <span>🚫 Vegetables delivery is unavailable at this address.</span>
+                {onChangeAddress && (
+                  <button
+                    type="button"
+                    onClick={onChangeAddress}
+                    className="text-rose-900 underline font-black hover:text-rose-950 cursor-pointer shrink-0"
+                  >
+                    Change Area
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Pay Button Bar */}
             <div className="p-3.5 flex items-center justify-between gap-3">
               <div>
@@ -423,11 +440,20 @@ export function VegCartDrawerModal({
 
               <button
                 type="button"
+                disabled={!isServiceAvailable}
                 onClick={handleProceedToPay}
-                className="flex-1 py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+                className={`flex-1 py-3 px-4 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all ${
+                  isServiceAvailable
+                    ? "bg-emerald-700 hover:bg-emerald-800 shadow-emerald-700/20 cursor-pointer active:scale-98"
+                    : "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                }`}
               >
-                <span>Proceed To Pay • {vegTiming.deliveryDay} (6-8 PM)</span>
-                <ChevronRight className="w-4 h-4" />
+                <span>
+                  {isServiceAvailable
+                    ? `Proceed To Pay • ${vegTiming.deliveryDay} (6-8 PM)`
+                    : "Unavailable at This Location"}
+                </span>
+                {isServiceAvailable && <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>
