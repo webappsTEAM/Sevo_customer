@@ -33,6 +33,12 @@ const STATUS_LABEL_MAP = {
   feedback_received: "Feedback Received",
   cancelled: "Booking Cancelled",
   rejected: "Booking Declined",
+  // X-03: the vendor app writes "redispatching" directly into this booking's
+  // shared status column when a technician cancels/is reassigned off the
+  // job -- without this entry it fell through to the ev.to_status || raw
+  // string fallback and customers briefly saw the literal word
+  // "redispatching" in their booking history instead of a real label.
+  redispatching: "Finding You a New Technician",
 }
 
 const TIMELINE_STEPS = [
