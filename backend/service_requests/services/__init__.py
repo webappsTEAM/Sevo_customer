@@ -30,6 +30,7 @@ from service_requests.models import (
     ServiceRequest, Payment,
     CustomerWallet, WalletTransaction,
     InsuranceClaim, InsuranceClaimAttachment,
+    TripStop,
 )
 
 logger = logging.getLogger(__name__)
@@ -997,3 +998,54 @@ def list_admin_complaints(admin_actor, filters=None, company=None):
         if filters.get("category"):
             qs = qs.filter(category=filters["category"].upper())
     return list(qs.order_by("-created_at"))
+
+
+# GT-D-02: multi-stop trips (extra pickups/drops beyond ServiceRequest's
+# built-in address/drop_address pair). See TripStop's docstring for why
+# this is additive rather than a replacement of those two fields.
+LOGISTICS_STOP_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler", "goods_transport", "packers_movers"}
+
+
+def set_trip_stops(booking, customer, stops):
+    """
+    Replaces the full ordered list of extra stops for a booking in one
+    transaction (delete-then-recreate, never a partial update) -- so a
+    client always PUTs the complete route rather than PATCHing individual
+    stops, avoiding sequence-gap/duplicate bugs entirely.
+
+    `stops` is a list of dicts: address (required), stop_type (optional,
+    default WAYPOINT), contact_name, contact_phone, latitude, longitude,
+    notes. Sequence is assigned from list order (1-based), not client-
+    supplied, so the ordering a customer submits is always exactly what
+    gets stored.
+    """
+    if booking.customer_id != customer.id and getattr(customer, "role", "").upper() != "ADMIN":
+        raise PermissionError("You do not have permission to edit stops for this booking.")
+    if booking.service_category not in LOGISTICS_STOP_CATEGORIES:
+        raise ValueError("Multi-stop routing is only available for goods transport and packers & movers bookings.")
+    if len(stops) > 20:
+        raise ValueError("A single trip cannot have more than 20 stops.")
+    for s in stops:
+        if not (s.get("address") or "").strip():
+            raise ValueError("Every stop requires an address.")
+
+    with transaction.atomic():
+        TripStop.objects.filter(booking=booking).delete()
+        created = []
+        for i, s in enumerate(stops, start=1):
+            created.append(TripStop.objects.create(
+                booking=booking,
+                sequence=i,
+                stop_type=(s.get("stop_type") or TripStop.StopType.WAYPOINT).upper(),
+                address=s["address"].strip(),
+                contact_name=(s.get("contact_name") or "").strip(),
+                contact_phone=(s.get("contact_phone") or "").strip(),
+                latitude=s.get("latitude"),
+                longitude=s.get("longitude"),
+                notes=(s.get("notes") or "").strip(),
+            ))
+    return created
+
+
+def list_trip_stops(booking):
+    return list(booking.trip_stops.all())

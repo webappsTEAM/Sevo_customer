@@ -44,6 +44,7 @@ from .serializers import (
     RefundEvidenceSerializer,
     CustomerRefundRequestSerializer, AdminRefundRequestSerializer,
     InsuranceClaimSerializer,
+    TripStopSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -2838,3 +2839,46 @@ class BookingVerifyStartOTPView(APIView):
             sr.otp_attempt_count = getattr(sr, "otp_attempt_count", 0) + 1
             sr.save(update_fields=["otp_attempt_count"])
             return _error("Invalid verification code. Please check the code displayed on customer screen.", 400)
+
+
+class CustomerBookingTripStopsView(APIView):
+    """
+    GT-D-02: extra stops on a multi-stop goods-transport/packers & movers
+    booking. GET lists the current stops; PUT replaces the whole ordered
+    list (see set_trip_stops -- always a full replace, never a partial
+    patch, so ordering/sequence can never drift into a partially-updated
+    state).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_booking(self, pk, identifier):
+        sr_id = pk or identifier
+        try:
+            if str(sr_id).isdigit():
+                return ServiceRequest.objects.get(pk=int(sr_id))
+            return ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return None
+
+    def get(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if sr.customer_id != request.user.id and getattr(request.user, "role", "").upper() != "ADMIN":
+            return _error("You do not have permission to view this booking's stops.", 403)
+        return _standard_response(success=True, data=TripStopSerializer(sr_services.list_trip_stops(sr), many=True).data)
+
+    def put(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        stops = request.data.get("stops")
+        if not isinstance(stops, list):
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "\'stops\' must be a list."}, status_code=400)
+        try:
+            created = sr_services.set_trip_stops(sr, request.user, stops)
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=TripStopSerializer(created, many=True).data)

@@ -1773,3 +1773,42 @@ class NotificationOutbox(models.Model):
 
     def __str__(self):
         return f"[{self.status}] {self.subject} -> {self.recipient}"
+
+
+class TripStop(models.Model):
+    """
+    GT-D-02: "goods-transport/packers & movers jobs with more than one
+    pickup or drop point have nowhere to record the extra stops" -- the
+    ServiceRequest model only ever had one pickup (`address`) and one drop
+    (`drop_address`), documented there as a deliberate 2-address-only
+    decision (see the comment above `drop_address`). This model is the
+    "revisit if Packers & Movers ever needs multi-stop routing" case that
+    comment called for -- added additively: `address`/`drop_address` on
+    ServiceRequest are untouched and remain the source of truth for the
+    common single-pickup/single-drop case. TripStop only exists, and is
+    only ever created, for bookings that opt into extra stops; a booking
+    with zero TripStop rows behaves exactly as it always has.
+    """
+    class StopType(models.TextChoices):
+        PICKUP   = "PICKUP",   "Pickup"
+        WAYPOINT = "WAYPOINT", "Intermediate Stop"
+        DROP     = "DROP",     "Drop"
+
+    booking       = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name="trip_stops")
+    sequence      = models.PositiveSmallIntegerField(help_text="Visit order, 1-based.")
+    stop_type     = models.CharField(max_length=10, choices=StopType.choices, default=StopType.WAYPOINT)
+    address       = models.TextField()
+    contact_name  = models.CharField(max_length=200, blank=True, default="")
+    contact_phone = models.CharField(max_length=20, blank=True, default="")
+    latitude      = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    notes         = models.CharField(max_length=500, blank=True, default="")
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_trip_stop"
+        ordering = ["booking", "sequence"]
+        unique_together = ("booking", "sequence")
+
+    def __str__(self):
+        return f"Stop {self.sequence} ({self.stop_type}) for booking #{self.booking_id}"

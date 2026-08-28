@@ -15,6 +15,7 @@ from .models import (
     RefundRequest, RefundEvidence,
     Coupon, CouponUsage,
     InsuranceClaim, InsuranceClaimAttachment,
+    TripStop,
     _generate_secure_start_otp,
 )
 
@@ -1055,3 +1056,17 @@ class AdminRefundRequestSerializer(serializers.ModelSerializer):
             "internal_notes", "status", "status_display", "info_requested_from",
             "gateway_reference", "evidence", "created_at", "updated_at"
         )
+
+
+class TripStopSerializer(serializers.ModelSerializer):
+    """GT-D-02: read/write shape for one extra stop on a multi-stop
+    logistics booking. Sequence is server-assigned (see set_trip_stops in
+    services/__init__.py) so it's read-only here even on input -- clients
+    submit ordering via list order, not this field."""
+    class Meta:
+        model = TripStop
+        fields = (
+            "id", "sequence", "stop_type", "address", "contact_name",
+            "contact_phone", "latitude", "longitude", "notes", "created_at",
+        )
+        read_only_fields = ("id", "sequence", "created_at")
