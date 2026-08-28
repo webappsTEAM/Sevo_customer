@@ -78,7 +78,7 @@ from .views import (
     AdminRefundInternalNoteView,
     AdminRefundListView,
     AdminRefundActionView,
-    CustomerWalletView, AdminWalletCreditView,
+    CustomerWalletView, AdminWalletCreditView, TechnicianProfileView,
 
     # Complaints
     CustomerComplaintListView,
@@ -207,6 +207,7 @@ urlpatterns = [
     path('admin/refunds/',                               AdminRefundListView.as_view(),                name='admin-refund-list'),
     path('admin/refunds/<int:pk>/<str:action>/',         AdminRefundActionView.as_view(),              name='admin-refund-action'),
     path('wallet/',                                        CustomerWalletView.as_view(),                 name='customer-wallet'),
+    path('technicians/<str:technician_id>/profile/',       TechnicianProfileView.as_view(),              name='technician-profile'),
     path('admin/customers/<int:user_id>/wallet/credit/',   AdminWalletCreditView.as_view(),              name='admin-wallet-credit'),
     path('customer/refunds/eligible-bookings/',          CustomerEligibleBookingsListView.as_view(),   name='customer-refund-eligible-bookings'),
     path('customer/refunds/bookings/<int:booking_id>/summary/', CustomerBookingRefundSummaryView.as_view(), name='customer-refund-summary'),

@@ -2545,6 +2545,49 @@ class AdminRefundActionView(APIView):
         )
 
 
+class TechnicianProfileView(APIView):
+    """
+    GET /api/technicians/<technician_id>/profile/
+    HS-E-04: "the customer never sees a technician profile" -- the tracking
+    payload already carries name/photo/phone/rating, assembled defensively,
+    but there was no dedicated profile: no jobs completed, no rating with
+    review count, no recent reviews. Built entirely from ServiceFeedback,
+    using the technician_id/technician_name_snapshot fields added for
+    HS-E-01 -- deliberately does NOT reach into the vendor app's Employee
+    model (tenure, verification badges, specialisations) since there's no
+    local FK across the two Django projects; those fields are a reasonable
+    follow-up once there's a cross-app read path for technician metadata,
+    same reasoning as the *_snapshot fields already in this codebase.
+
+    AllowAny: this is a public professional profile (name + aggregate
+    rating), the same trust signal a tracking link already exposes to
+    anyone holding it -- no more sensitive than that.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, technician_id):
+        from django.db.models import Avg, Count
+        feedback_qs = ServiceFeedback.objects.filter(technician_id=technician_id, is_submitted=True)
+        if not feedback_qs.exists():
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "No profile data available for this technician yet."}, status_code=404)
+
+        agg = feedback_qs.aggregate(avg_rating=Avg("rating"), review_count=Count("id"))
+        name = feedback_qs.order_by("-submitted_at").values_list("technician_name_snapshot", flat=True).first()
+        recent_reviews = list(
+            feedback_qs.exclude(comment="").order_by("-submitted_at")[:5]
+            .values("rating", "comment", "submitted_at")
+        )
+
+        return _standard_response(success=True, data={
+            "technician_id": technician_id,
+            "name": name or "Technician",
+            "average_rating": round(agg["avg_rating"], 2) if agg["avg_rating"] is not None else None,
+            "review_count": agg["review_count"],
+            "jobs_completed": feedback_qs.count(),
+            "recent_reviews": recent_reviews,
+        })
+
+
 class CustomerWalletView(APIView):
     """
     GET /api/wallet/
