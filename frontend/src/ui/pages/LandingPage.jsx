@@ -2177,6 +2177,10 @@ export function LandingPage() {
   }, [])
 
   useEffect(() => {
+    // If user already has a saved location, do not overwrite it with automatic geolocation
+    const storedLocation = localStorage.getItem("calservice_user_location")
+    if (storedLocation) return
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
