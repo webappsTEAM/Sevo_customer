@@ -996,8 +996,26 @@ def _build_tracking_payload(sr, has_full_access):
     except (ValueError, TypeError):
         total_amt = 0.0
 
+    # HS-D-07: "no job timeline the customer can see after the fact" --
+    # BookingStatusEvent is already populated on every real transition
+    # (see state_machine.py record_transition(), called from apply_transition()
+    # across ~20 call sites) but nothing ever exposed it to the customer;
+    # the tracking payload only ever carried current-state fields. This is a
+    # read-only addition -- no new writes, just serializing what already exists.
+    status_history = [
+        {
+            "from_status": ev.from_status,
+            "to_status": ev.to_status,
+            "actor_persona": ev.actor_persona,
+            "reason_note": ev.reason_note,
+            "occurred_at": ev.occurred_at.isoformat() if ev.occurred_at else None,
+        }
+        for ev in sr.status_events.all().order_by("occurred_at")
+    ] if hasattr(sr, "status_events") else []
+
     return {
         "booking_id": sr.id,
+        "status_history": status_history,
         "request_id": sr.request_id,
         "job_id": sr.id,
         "status": sr.status,
