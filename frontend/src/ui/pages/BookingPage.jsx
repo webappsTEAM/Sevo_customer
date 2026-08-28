@@ -4020,6 +4020,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [claimAmount, setClaimAmount] = useState("")
   const [claimSubmitting, setClaimSubmitting] = useState(false)
   const [claimError, setClaimError] = useState("")
+  // HS-D-05: Notification Preferences tab.
+  const [notifPrefs, setNotifPrefs] = useState(null)
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifSaving, setNotifSaving] = useState(false)
 
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
@@ -4214,6 +4218,26 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     } finally {
       setClaimSubmitting(false)
     }
+  }
+
+  useEffect(() => {
+    if (activeTab === "Notification Settings" && user) {
+      setNotifLoading(true)
+      apiRequest("/notification-preferences/", { method: "GET" })
+        .then(res => { if (res?.data) setNotifPrefs(res.data) })
+        .catch(console.error)
+        .finally(() => setNotifLoading(false))
+    }
+  }, [activeTab, user])
+
+  const toggleNotifPref = (field) => {
+    if (!notifPrefs) return
+    const next = { ...notifPrefs, [field]: !notifPrefs[field] }
+    setNotifPrefs(next)
+    setNotifSaving(true)
+    apiRequest("/notification-preferences/", { method: "PATCH", json: { [field]: next[field] } })
+      .catch(console.error)
+      .finally(() => setNotifSaving(false))
   }
 
   // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -4766,6 +4790,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "Referral Code", icon: Gift },
     { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
     { id: "Insurance Claims", icon: ShieldCheck },
+    { id: "Notification Settings", icon: Settings },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -6076,6 +6101,139 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Notification Settings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {notifLoading || !notifPrefs ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>{notifLoading ? 'Loading preferences...' : 'No preferences found.'}</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 4 }}>Notification Preferences</div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 12 }}>Choose which updates you want to receive.{notifSaving ? ' Saving...' : ''}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Booking Confirmations</span>
+                  <button
+                    onClick={() => toggleNotifPref("booking_confirmations")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.booking_confirmations ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.booking_confirmations ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Reschedule Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("reschedule_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.reschedule_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.reschedule_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Technician Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("technician_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.technician_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.technician_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Completion & Feedback</span>
+                  <button
+                    onClick={() => toggleNotifPref("completion_feedback")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.completion_feedback ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.completion_feedback ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Payment Receipts</span>
+                  <button
+                    onClick={() => toggleNotifPref("payment_receipts")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.payment_receipts ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.payment_receipts ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Refund Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("refund_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.refund_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.refund_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Complaint Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("complaint_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.complaint_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.complaint_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Promotional Offers</span>
+                  <button
+                    onClick={() => toggleNotifPref("promotional_offers")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.promotional_offers ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.promotional_offers ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
               </div>
             )}
           </motion.div>
