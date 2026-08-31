@@ -335,9 +335,10 @@ export function MapOverview() {
           style={{ width: "100%", height: "100%", zIndex: 1 }}
         >
           <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            maxZoom={19}
+            url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+            subdomains={["mt0", "mt1", "mt2", "mt3"]}
+            attribution="&copy; Google Maps"
+            maxZoom={20}
           />
 
           <MapBoundsUpdater bounds={mapBounds} center={defaultCenter} />

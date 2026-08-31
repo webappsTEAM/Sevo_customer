@@ -92,8 +92,76 @@ class AddressService:
         cache.set(cache_key, result, timeout=REVERSE_GEOCODE_CACHE_TTL)
         return result
 
+    @classmethod
+    def forward_geocode(cls, address: str) -> tuple[float, float] | None:
+        """
+        Forward geocode an address string to (latitude, longitude).
+        Returns (lat, lng) as floats, or None if geocoding fails.
+        Cached for 24 hours.
+        """
+        if not address or not address.strip():
+            return None
+
+        clean_addr = address.strip()
+        import hashlib
+        addr_hash = hashlib.md5(clean_addr.lower().encode("utf-8")).hexdigest()
+        cache_key = f"addr_fwdgeo:{addr_hash}"
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("forward_geocode cache HIT (%s)", clean_addr[:30])
+            return cached
+
+        logger.debug("forward_geocode cache MISS (%s) — resolving coordinates", clean_addr[:30])
+
+        import os
+        import json
+        import urllib.parse
+        import urllib.request
+        from accounts.customer_services import USER_AGENT
+
+        # 1. Try Google Maps Geocoding API if key configured
+        google_api_key = os.environ.get("VITE_GOOGLE_MAPS_KEY") or os.environ.get("GOOGLE_MAPS_API_KEY") or os.environ.get("VITE_GOOGLE_MAPS_API_KEY")
+        if google_api_key:
+            try:
+                encoded = urllib.parse.urlencode({"address": clean_addr, "key": google_api_key})
+                g_url = f"https://maps.googleapis.com/maps/api/geocode/json?{encoded}"
+                req = urllib.request.Request(g_url, headers={"User-Agent": USER_AGENT})
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    g_data = json.loads(resp.read().decode("utf-8"))
+                if g_data.get("status") == "OK" and g_data.get("results"):
+                    loc = g_data["results"][0]["geometry"]["location"]
+                    lat, lng = float(loc["lat"]), float(loc["lng"])
+                    cache.set(cache_key, (lat, lng), timeout=86400)
+                    return (lat, lng)
+            except Exception as e:
+                logger.warning("forward_geocode: Google geocoding failed: %s", e)
+
+        # 2. Try Nominatim (OpenStreetMap)
+        try:
+            encoded = urllib.parse.urlencode({
+                "q": clean_addr,
+                "format": "json",
+                "limit": "1",
+                "countrycodes": "in",
+            })
+            n_url = f"https://nominatim.openstreetmap.org/search?{encoded}"
+            req = urllib.request.Request(n_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                n_data = json.loads(resp.read().decode("utf-8"))
+            if n_data and isinstance(n_data, list) and len(n_data) > 0:
+                lat = float(n_data[0]["lat"])
+                lng = float(n_data[0]["lon"])
+                cache.set(cache_key, (lat, lng), timeout=86400)
+                return (lat, lng)
+        except Exception as e:
+            logger.warning("forward_geocode: Nominatim geocoding failed: %s", e)
+
+        return None
+
     # ── Private helpers ────────────────────────────────────────────────────────
 
     @staticmethod
     def _cache_key(lat: float, lng: float) -> str:
         return f"addr_revgeo:{lat:.4f}:{lng:.4f}"
+

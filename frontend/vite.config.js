@@ -47,9 +47,16 @@ export default defineConfig({
         changeOrigin: true,
       },
       "/ws": {
-        target: process.env.VITE_WS_BACKEND_URL || "ws://127.0.0.1:8000",
+        target: process.env.VITE_WS_BACKEND_URL || process.env.VITE_BACKEND_URL || "http://127.0.0.1:8000",
         ws: true,
         changeOrigin: true,
+        rewriteWsOrigin: true,
+        configure: (proxy) => {
+          proxy.on("proxyReqWs", (proxyReqWs) => {
+            const tenant = process.env.VITE_DEV_TENANT ?? "demo.localhost";
+            proxyReqWs.setHeader("Host", tenant);
+          });
+        },
       },
     },
     watch: {

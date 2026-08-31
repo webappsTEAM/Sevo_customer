@@ -230,7 +230,7 @@ def request_otp(identifier: str, channel: str = OTPChannel.PHONE) -> dict:
         "resend_after_seconds": 60,
     }
     import sys
-    if getattr(settings, "DEBUG", False) or getattr(settings, "TESTING", False) or 'test' in sys.argv:
+    if getattr(settings, "DEBUG", False) or getattr(settings, "TESTING", False) or getattr(settings, "AUTO_GENERATE_OTP", False) or 'test' in sys.argv:
         response_data["dev_otp"] = otp_code
 
     return {

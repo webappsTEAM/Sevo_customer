@@ -1111,7 +1111,7 @@ class SendOTPView(APIView):
             "message": "OTP sent successfully.",
             "delivery_channel": delivery_channel
         }
-        if settings.DEBUG:
+        if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
             response_data["code"] = code
 
         return Response(response_data)
@@ -1443,7 +1443,7 @@ class SendEmailOTPView(APIView):
             "success": True,
             "message": "Verification code sent to your email successfully."
         }
-        if settings.DEBUG:
+        if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
             response_data["code"] = code
 
         return Response(response_data)
@@ -1676,29 +1676,42 @@ class CustomerAddressListCreateView(APIView):
         return _cs([_serialize_address(a) for a in addresses])
 
     def post(self, request):
-        flat_house_no = str(request.data.get("flat_house_no", "")).strip()
-        address_line1 = str(request.data.get("address_line1", "")).strip() or flat_house_no
-        if not address_line1 and not flat_house_no:
-            return _ce("'flat_house_no' or 'address_line1' is required.", 400)
+        flat_house_no = str(request.data.get("flat_house_no") or "").strip()
+        formatted_address = str(request.data.get("formatted_address") or "").strip()
+        address_line1 = str(request.data.get("address_line1") or "").strip() or flat_house_no or formatted_address or "Address"
+        flat_house_no = flat_house_no or address_line1
 
-        city = str(request.data.get("city", "")).strip() or str(request.data.get("locality", "")).strip() or "Hosur"
-        state = str(request.data.get("state", "")).strip() or "Tamil Nadu"
+        city = str(request.data.get("city") or "").strip() or str(request.data.get("locality") or "").strip() or "Hosur"
+        state = str(request.data.get("state") or "").strip() or "Tamil Nadu"
 
         import re
-        pincode = str(request.data.get("pincode", "")).strip()
+        pincode = str(request.data.get("pincode") or "").strip()
         clean_pincode = re.sub(r"\D", "", pincode)
         if len(clean_pincode) == 6:
             pincode = clean_pincode
         elif not pincode or not re.match(r"^\d{6}$", pincode):
-            pincode = "635109"
+            pincode = clean_pincode if (clean_pincode and len(clean_pincode) >= 4) else "635109"
 
-        receiver_phone = str(request.data.get("receiver_phone", "")).strip() or str(request.data.get("phone_number", "")).strip()
+        receiver_phone = str(request.data.get("receiver_phone") or request.data.get("phone_number") or "").strip()
         if receiver_phone:
             clean_phone = re.sub(r"[\s\-\(\)]+", "", receiver_phone)
             clean_phone = re.sub(r"^(\+91|91|0)", "", clean_phone)
-            if not re.match(r"^[6-9]\d{9}$", clean_phone):
-                return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
-            receiver_phone = clean_phone
+            if len(clean_phone) >= 10:
+                receiver_phone = clean_phone[-10:]
+            else:
+                receiver_phone = clean_phone
+        if not receiver_phone:
+            receiver_phone = str(getattr(request.user, "phone", "") or getattr(request.user, "mobile_number", "") or "")
+
+        receiver_name = str(request.data.get("receiver_name") or "").strip() or request.user.get_full_name() or request.user.username or "Customer"
+
+        raw_label = str(request.data.get("label") or "").strip().lower()
+        if raw_label in ["home", "work", "other"]:
+            label = raw_label
+        elif raw_label:
+            label = "other"
+        else:
+            label = "home"
 
         def _clean_coord(val):
             if val is None or val == "":
@@ -1709,22 +1722,22 @@ class CustomerAddressListCreateView(APIView):
                 return None
 
         data = {
-            "label":             request.data.get("label", "home"),
+            "label":             label,
             "address_line1":     address_line1,
-            "address_line2":     request.data.get("address_line2", ""),
-            "formatted_address": request.data.get("formatted_address", ""),
-            "flat_house_no":     flat_house_no or address_line1,
-            "landmark":          request.data.get("landmark", ""),
-            "locality":          request.data.get("locality", ""),
-            "city":              request.data.get("city", ""),
-            "state":             request.data.get("state", ""),
+            "address_line2":     str(request.data.get("address_line2") or ""),
+            "formatted_address": formatted_address,
+            "flat_house_no":     flat_house_no,
+            "landmark":          str(request.data.get("landmark") or ""),
+            "locality":          str(request.data.get("locality") or ""),
+            "city":              city,
+            "state":             state,
             "pincode":           pincode,
             "phone_number":      receiver_phone,
-            "receiver_name":     request.data.get("receiver_name", ""),
+            "receiver_name":     receiver_name,
             "receiver_phone":    receiver_phone,
             "latitude":          _clean_coord(request.data.get("latitude")),
             "longitude":         _clean_coord(request.data.get("longitude")),
-            "is_default":        request.data.get("is_default", False),
+            "is_default":        bool(request.data.get("is_default", False)),
         }
 
         try:

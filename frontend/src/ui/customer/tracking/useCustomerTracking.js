@@ -211,18 +211,25 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
         }
 
         if (eventType === "technician_location_updated" && eventData) {
-          const lat = parseFloat(eventData.latitude ?? eventData.lat)
-          const lng = parseFloat(eventData.longitude ?? eventData.lng)
-          
+          // The broadcast carries the full tracking snapshot (same shape as the
+          // REST payload), not a flat {latitude, longitude, ...} packet — read
+          // coordinates from technician_location / technician, with a flat-shape
+          // fallback for callers that do send a bare location packet.
+          const locSource = eventData.technician_location || eventData.technician || eventData
+          const lat = parseFloat(locSource.latitude ?? eventData.latitude ?? eventData.lat)
+          const lng = parseFloat(locSource.longitude ?? eventData.longitude ?? eventData.lng)
+
           if (!isValidLatLng(lat, lng)) return
 
           // Accuracy & Jump Filter: Ignore accuracy > 150m
-          const accuracy = eventData.accuracy ? parseFloat(eventData.accuracy) : null
+          const rawAccuracy = locSource.accuracy ?? eventData.accuracy
+          const accuracy = rawAccuracy != null ? parseFloat(rawAccuracy) : null
           if (accuracy != null && accuracy > 150) return
 
           // Out-of-order check
-          const capturedTime = eventData.captured_at
-            ? new Date(eventData.captured_at).getTime()
+          const rawCapturedAt = eventData.captured_at || eventData.technician?.updated_at || eventData.technician_location_updated_at
+          const capturedTime = rawCapturedAt
+            ? new Date(rawCapturedAt).getTime()
             : Date.now()
 
           if (capturedTime < lastCapturedAtRef.current) {
@@ -245,8 +252,12 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
 
           lastCapturedAtRef.current = capturedTime
 
+          const rawHeading = locSource.heading ?? eventData.heading
+          const rawSpeed = locSource.speed ?? eventData.speed
+          const rawLocationName = eventData.technician?.current_location_name ?? eventData.location_name
+
           // Calculate missing bearing fallback
-          let heading = eventData.heading != null ? parseFloat(eventData.heading) : null
+          let heading = rawHeading != null ? parseFloat(rawHeading) : null
           if ((heading == null || heading === 0) && lastKnownGpsRef.current) {
             heading = calculateBearing(
               lastKnownGpsRef.current[0], lastKnownGpsRef.current[1],
@@ -267,18 +278,18 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
                 latitude: lat,
                 longitude: lng,
                 heading: heading ?? prev.technician?.heading ?? 0,
-                speed: eventData.speed ?? prev.technician?.speed ?? 0,
-                last_seen_at: eventData.captured_at || new Date().toISOString(),
+                speed: rawSpeed ?? prev.technician?.speed ?? 0,
+                last_seen_at: rawCapturedAt || new Date().toISOString(),
                 current_location_name:
-                  eventData.location_name ?? prev.technician?.current_location_name,
+                  rawLocationName ?? prev.technician?.current_location_name,
               },
               technician_location: {
                 latitude: lat,
                 longitude: lng,
                 heading: heading ?? 0,
-                speed: eventData.speed ?? 0,
+                speed: rawSpeed ?? 0,
                 accuracy: accuracy,
-                captured_at: eventData.captured_at || new Date().toISOString(),
+                captured_at: rawCapturedAt || new Date().toISOString(),
                 freshness: eventData.freshness || "LIVE",
               },
             }

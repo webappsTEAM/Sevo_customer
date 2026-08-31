@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom"
 import { createPortal } from "react-dom"
-import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search, MapPin, Phone, Mail, User, Shield, CheckCircle2, Star,
@@ -16,7 +15,7 @@ import {
   ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
 } from "lucide-react"
 import {
-  apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
+  apiFetchCustomerBookings, apiLogout, extractAuthError,
   apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -34,7 +33,9 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
+import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { createTrackingWebSocket } from "../../api/websocketService.js"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -1410,38 +1411,6 @@ function StepLogin({ category, onVerified, onBack }) {
     return () => clearTimeout(t)
   }, [cooldown])
 
-  const googleLoginHandler = useGoogleLogin({
-    flow: "implicit",
-    onSuccess: async (tr) => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await apiCustomerGoogleLogin(tr.access_token);
-        if (res?.success) {
-          await refreshMe();
-          const data = {
-            verified: true,
-            name: res.user?.name || "",
-            phone: res.user?.phone || "",
-            email: res.user?.email || ""
-          };
-          sessionStorage.setItem(OTP_SESSION_KEY, JSON.stringify(data));
-          onVerified(data);
-        } else {
-          setError(res?.detail || "Google login failed");
-        }
-      } catch (err) {
-        setError(extractAuthError(err, "Google login failed"));
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: (err) => {
-      console.error("Google OAuth error:", err);
-      setError(err?.error_description || err?.error || "Google login failed");
-    }
-  });
-
   const nameOk = name.trim().length >= 2
   const phoneOk = phone.replace(/[\s\-\(\)\+]/g, "").length >= 7
 
@@ -1542,43 +1511,6 @@ function StepLogin({ category, onVerified, onBack }) {
 
           <button className="uc-btn-primary uc-btn-full" onClick={sendOtp} disabled={!nameOk || !phoneOk || loading}>
             {loading ? <><RefreshCw size={15} className="spin-icon" /> Sending•¦</> : <><MessageSquare size={15} /> Send OTP</>}
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-            <span style={{ padding: '0 10px' }}>or</span>
-            <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => googleLoginHandler()}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: 'white',
-              color: '#1e293b',
-              border: '1px solid #cbd5e1',
-              borderRadius: 12,
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.8 2.17c1.64-1.51 2.59-3.74 2.59-6.5z" />
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.8-2.17c-.78.52-1.78.83-2.8.83-2.34 0-4.32-1.58-5.03-3.7L1.47 13.07C2.95 16 6.01 18 9 18z" />
-              <path fill="#FBBC05" d="M3.97 10.78c-.18-.52-.28-1.09-.28-1.68s.1-1.16.28-1.68L1.47 5.12C.53 7 0 9.08 0 11.2s.53 4.2 1.47 6.08l2.5-1.9c-.71-2.12-.71-4.4 0-6.5z" />
-              <path fill="#EA4335" d="M9 3.58c1.32-.03 2.59.48 3.51 1.4l2.63-2.63C13.48.88 11.3.02 9 0 6.01 0 2.95 2 1.47 4.93l2.5 1.9C4.68 5.16 6.66 3.58 9 3.58z" />
-            </svg>
-            Continue with Google
           </button>
         </motion.div>
       )}
@@ -2303,6 +2235,27 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(false)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [wsState, setWsState] = useState("connecting")
+
+  const handleManualRefresh = async () => {
+    if (isRefreshing || !rid) return
+    setIsRefreshing(true)
+    try {
+      const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+      const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
+      if (res?.data) {
+        setLiveData(res.data)
+        try {
+          sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
+        } catch (_) { }
+      }
+    } catch (e) {
+      console.warn("Manual refresh warning:", e)
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400)
+    }
+  }
 
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentTargetBookingId, setPaymentTargetBookingId] = useState(null)
@@ -2337,12 +2290,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }
 
-  // Real-Time status polling — single authoritative poller
-  // In-flight guard: skips a cycle if previous request is still running
-  // Terminal guard: stops polling when booking reaches a final state
+  // Real-Time Auto-Refresh & WebSocket Status Synchronization
   useEffect(() => {
     if (!rid) return
     let pollTimer = null
+    let ws = null
     let isMounted = true
     let isFetching = false
     const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
@@ -2355,9 +2307,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
+          try {
+            sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
+          } catch (_) { }
           // Stop polling once booking reaches a terminal state
           if (res.data.status && TERMINAL.has(res.data.status.toLowerCase())) {
-            clearInterval(pollTimer)
+            if (pollTimer) clearInterval(pollTimer)
           }
         }
       } catch (e) { }
@@ -2366,12 +2321,56 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       }
     }
 
+    // 1. Immediate fetch
     fetchStatus()
-    pollTimer = setInterval(fetchStatus, 4000)
+
+    // 2. High-frequency auto-refresh polling (every 2.5s)
+    pollTimer = setInterval(fetchStatus, 2500)
+
+    // 3. Connect real-time WebSocket channel for instant push notifications
+    try {
+      ws = createTrackingWebSocket(
+        rid,
+        successData?.tracking_token,
+        (eventType, eventData) => {
+          if (!isMounted || !eventData) return
+          setLiveData(prev => {
+            const merged = {
+              ...(prev || {}),
+              ...(eventData?.booking || eventData || {}),
+            }
+            if (eventData?.status || eventData?.booking?.status) {
+              merged.status = eventData.status || eventData.booking.status
+            }
+            if (eventData?.technician || eventData?.booking?.technician) {
+              merged.technician = {
+                ...(prev?.technician || {}),
+                ...(eventData.technician || eventData.booking?.technician || {})
+              }
+            }
+            if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
+              merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
+            }
+            try {
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
+            } catch (_) { }
+            return merged
+          })
+        },
+        (state) => {
+          if (isMounted) setWsState(state)
+        }
+      )
+    } catch (err) {
+      console.warn("[LiveTrackingPage] WS init error:", err)
+    }
 
     return () => {
       isMounted = false
       if (pollTimer) clearInterval(pollTimer)
+      if (ws) {
+        try { ws.close() } catch (_) { }
+      }
     }
   }, [rid, successData?.tracking_token])
 
@@ -2469,8 +2468,19 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
   )
 
-  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee || null
-  const techName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
+  const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
+  const rawTechName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
+
+  const techName = useMemo(() => {
+    if (!rawTechName) return liveData?.is_accepted ? "Assigned Service Professional" : ""
+    const trimmed = rawTechName.trim()
+    const slugMatch = (liveData?.service_category || successData?.service_category || "").toLowerCase().replace(/[\s_-]+/g, "")
+    const nameSlug = trimmed.toLowerCase().replace(/[\s_-]+/g, "")
+    if (nameSlug === slugMatch) {
+      return "Assigned Service Professional"
+    }
+    return trimmed
+  }, [rawTechName, liveData?.is_accepted, liveData?.service_category, successData?.service_category])
   const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
   const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
   const techRating = empInfo?.rating != null ? empInfo.rating : (liveData?.technician_rating != null ? liveData.technician_rating : successData?.technician_rating ?? null)
@@ -2497,6 +2507,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     ? `${window.location.origin}/track/${encodeURIComponent(rid)}?token=${encodeURIComponent(trackingToken)}`
     : null
 
+  const rawDestLat = liveData?.customer_location?.latitude ?? liveData?.destination?.latitude ?? successData?.latitude ?? formData?.latitude ?? null
+  const rawDestLng = liveData?.customer_location?.longitude ?? liveData?.destination?.longitude ?? successData?.longitude ?? formData?.longitude ?? null
+  const destLat = rawDestLat != null && !isNaN(parseFloat(rawDestLat)) ? parseFloat(rawDestLat) : null
+  const destLng = rawDestLng != null && !isNaN(parseFloat(rawDestLng)) ? parseFloat(rawDestLng) : null
+  const currentStatus = (liveData?.status || successData?.status || "confirmed").toLowerCase()
+
+  const rawTechLat = liveData?.technician_location?.latitude ?? liveData?.technician?.latitude ?? successData?.technician_latitude ?? null
+  const rawTechLng = liveData?.technician_location?.longitude ?? liveData?.technician?.longitude ?? successData?.technician_longitude ?? null
+  const hasValidTechnicianGPS = Boolean(
+    rawTechLat != null && !isNaN(parseFloat(rawTechLat)) &&
+    rawTechLng != null && !isNaN(parseFloat(rawTechLng))
+  )
+  const isArrived = currentStatus === "arrived"
+  const isInProgress = currentStatus === "in_progress"
+  const isOnTheWay = currentStatus === "on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
+
   const trackingBookingObj = {
     id: liveData?.booking_id || successData?.id,
     request_id: rid,
@@ -2505,11 +2531,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       phone: techPhone,
       photo: techPhoto,
     },
-    latitude: liveData?.destination?.latitude || formData?.latitude,
-    longitude: liveData?.destination?.longitude || formData?.longitude,
+    latitude: destLat,
+    longitude: destLng,
     address: liveData?.destination?.address || formData?.address,
     start_otp: startOtp,
-    status: liveData?.status || (isCompleted ? "completed" : isAccepted ? "assigned" : "confirmed"),
+    status: currentStatus,
     can_cancel: canCancel,
     cancellation_grace_remaining_seconds: graceSecs,
   }
@@ -2715,9 +2741,31 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
               : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
           </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
             <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
+            <span style={{ color: '#cbd5e1' }}>•</span>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#7C3AED',
+                fontWeight: 800,
+                fontSize: '0.74rem',
+                padding: '2px 6px',
+                borderRadius: 6,
+              }}
+              title="Click to refresh live status"
+            >
+              <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+              {isRefreshing ? "Syncing..." : "Auto-Sync Active"}
+            </button>
           </div>
         </div>
       ) : (
@@ -2732,11 +2780,37 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
             Finding your service professional...
           </h2>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Clock size={14} color="#7C3AED" />
             <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>{formatTimer(searchSeconds)}</strong></span>
             <span style={{ color: '#94a3b8' }}>•</span>
-            <span style={{ color: '#10b981' }}>⚡ Verified partner pool notified</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#10b981' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} className="animate-ping" />
+              ⚡ Auto-refreshing live
+            </span>
+            <span style={{ color: '#94a3b8' }}>•</span>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              style={{
+                background: isRefreshing ? '#ede9fe' : '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                borderRadius: 8,
+                padding: '3px 8px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#6d28d9',
+                fontWeight: 800,
+                fontSize: '0.74rem',
+                transition: 'all 0.15s ease',
+              }}
+              title="Click to refresh status immediately"
+            >
+              <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+              {isRefreshing ? "Checking..." : "Refresh"}
+            </button>
           </div>
 
           {/* Anytime Cancellation Button (Pre-Acceptance) */}
@@ -2766,6 +2840,36 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           </div>
         </div>
       )}
+
+      {/* ─────────────────── EMBEDDED REAL LIVE MAP (SWIGGY / RAPIDO STYLE) ─────────────────── */}
+      <div
+        style={{
+          width: '100%',
+          height: 380,
+          borderRadius: 22,
+          overflow: 'hidden',
+          marginBottom: '1.25rem',
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.12)',
+          border: '1px solid #e2e8f0',
+          position: 'relative',
+          background: '#f8fafc',
+        }}
+      >
+        <CustomerTrackingMap
+          technician={liveData?.technician || { name: techName, photo: techPhoto, rating: techRating }}
+          technicianLocation={liveData?.technician_location || liveData?.technician}
+          destination={liveData?.destination || { latitude: destLat, longitude: destLng }}
+          serviceCategory={liveData?.service_category || successData?.service_category || ""}
+          issueTitle={liveData?.issue_title || successData?.issue_title || ""}
+          status={currentStatus}
+          freshness={wsState === "connected" ? "LIVE" : wsState === "reconnecting" ? "UPDATING" : "OFFLINE"}
+          etaMinutes={etaMinutes}
+          distanceKm={distKm}
+          startOtp={startOtp}
+          vendorName={liveData?.vendor?.name || ""}
+          requestId={rid}
+        />
+      </div>
 
       {/* ─────────────────── REAL ASSIGNED EMPLOYEE CARD (ONLY IF ACCEPTED) ─────────────────── */}
       {isAccepted && (
@@ -2825,13 +2929,16 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Service Partner"}</span>
-                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName}</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '2px 7px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                   ✓ Verified
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
+                Service: <span style={{ color: '#0f172a' }}>{(liveData?.service_category || successData?.service_category || 'Home Service').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 {techRating != null ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
                     <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
@@ -2839,9 +2946,13 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 ) : (
                   <span style={{ fontSize: '0.76rem', color: '#64748b' }}>New partner</span>
                 )}
-                {techJobs != null && (
+                {techJobs != null ? (
                   <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
                     • {techJobs}+ jobs completed
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                    • Background Verified
                   </span>
                 )}
               </div>
@@ -2900,30 +3011,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
           )}
 
-          {/* Action Buttons: Track on Map + Call + WhatsApp */}
+          {/* Action Buttons: Call + WhatsApp */}
           <div style={{ display: 'flex', gap: 8, marginTop: '1rem', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setShowMapModal(true)}
-              style={{
-                flex: 1.3,
-                padding: '0.75rem',
-                background: 'linear-gradient(135deg, #FC8019, #f97316)',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '0.85rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 4px 12px rgba(251, 146, 60, 0.3)',
-              }}
-            >
-              <MapPin size={15} /> Track on Live Map
-            </button>
-
             {techPhone ? (
               <>
                 <a
@@ -2931,21 +3020,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   style={{
                     flex: 1,
                     padding: '0.75rem',
-                    background: '#f1f5f9',
-                    color: '#0f172a',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
                     fontWeight: 800,
-                    fontSize: '0.82rem',
+                    fontSize: '0.85rem',
                     border: 'none',
                     borderRadius: 12,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 5,
+                    gap: 6,
                     textDecoration: 'none',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
                   }}
                 >
-                  <Phone size={14} color="#0f172a" /> Call Pro
+                  <Phone size={15} color="white" /> Call Pro
                 </a>
                 <button
                   onClick={() => {
@@ -2953,22 +3043,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                     window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
                   }}
                   style={{
-                    padding: '0.75rem 0.9rem',
+                    padding: '0.75rem 1.2rem',
                     background: '#ecfdf5',
                     color: '#059669',
                     fontWeight: 800,
-                    fontSize: '0.82rem',
+                    fontSize: '0.85rem',
                     border: '1px solid #a7f3d0',
                     borderRadius: 12,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 4,
+                    gap: 6,
                   }}
                   title="WhatsApp Partner"
                 >
-                  <MessageSquare size={14} color="#059669" />
+                  <MessageSquare size={15} color="#059669" /> WhatsApp
                 </button>
               </>
             ) : (
@@ -3776,18 +3866,18 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           border: '1px solid #e2e8f0',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
-            🗺️ Live Dispatch Status
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🗺️</span> Live Service Tracking
           </div>
           {isAccepted && (
-            <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
-              Open Fullscreen Map →
+            <button onClick={() => rid ? window.open(`/track/${encodeURIComponent(rid)}`, '_blank') : setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
+              Fullscreen Map →
             </button>
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Step 1: Booking Confirmed */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ecfdf5', border: '1.5px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3799,41 +3889,69 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981' }}>Done</span>
           </div>
 
-          {/* Step 2: Partner Acceptance */}
+          {/* Step 2: Technician Assigned */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#ecfdf5' : '#fff7ed', border: `1.5px solid ${isAccepted ? '#10b981' : '#f59e0b'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isAccepted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <Radio size={14} color="#f59e0b" className="animate-pulse" />}
             </div>
             <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
-              {isAccepted ? `${techName} Accepted Job` : 'Waiting for Partner to Accept'}
+              {isAccepted ? `${techName || 'Professional'} Assigned` : 'Finding your professional...'}
             </div>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isAccepted ? '#10b981' : '#f59e0b' }}>
-              {isAccepted ? 'Accepted' : 'Searching...'}
+              {isAccepted ? 'Assigned' : 'Searching...'}
             </span>
           </div>
 
-          {/* Step 3: Partner En Route */}
+          {/* Step 3: Technician On The Way */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${isAccepted ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>🛵</span>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
             </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isAccepted ? '#0f172a' : '#94a3b8' }}>
-              Partner On The Way
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
+              Technician On The Way
             </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isAccepted ? '#FC8019' : '#94a3b8' }}>
-              {isAccepted ? `~${etaMinutes} mins` : 'Pending'}
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+              {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
             </span>
           </div>
 
-          {/* Step 4: Service Execution */}
+          {/* Step 4: Technician Arrived */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f8fafc', border: '1.5px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>⚙️</span>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
             </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#94a3b8' }}>
-              Service Execution &amp; Completion
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+              Technician Arrived at Location
             </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Next</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
+              {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
+            </span>
+          </div>
+
+          {/* Step 5: Service In Progress */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+              Service In Progress
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
+              {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
+            </span>
+          </div>
+
+          {/* Step 6: Service Completed */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🎉</span>}
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isCompleted ? '#0f172a' : '#94a3b8' }}>
+              Service Completed &amp; Verified
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : '#94a3b8' }}>
+              {isCompleted ? 'Completed' : 'Final'}
+            </span>
           </div>
         </div>
       </motion.div>
@@ -4163,32 +4281,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }
 
-  const googleLoginHandler = useGoogleLogin({
-    flow: "implicit",
-    onSuccess: async (tr) => {
-      setLoginLoading(true);
-      setLoginError("");
-      try {
-        if (typeof loginWithCustomerGoogle === 'function') {
-          await loginWithCustomerGoogle(tr.access_token);
-        } else {
-          await apiCustomerGoogleLogin(tr.access_token);
-        }
-        await refreshMe();
-        if (onClose) onClose();
-      } catch (err) {
-        setLoginError(extractAuthError(err, "Google login failed"));
-      } finally {
-        setLoginLoading(false);
-      }
-    },
-    onError: (err) => {
-      console.error("Google OAuth error:", err);
-      setLoginLoading(false);
-      setLoginError(err?.error_description || err?.error || "Google sign-in was cancelled or failed.");
-    }
-  });
-
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
   const [trackingBooking, setTrackingBooking] = useState(null)
 
@@ -4215,25 +4307,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
       }
-    }
-
-    // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
-    apiRequest('/auth/customer/profile/')
-      .then(res => {
-        const data = res?.data || res
-        if (data?.customer_id) {
-          setProfileCustomerId(data.customer_id)
-        }
-        if (data?.first_name || data?.name || data?.full_name) {
-          const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
-          if (fetchedName && fetchedName !== 'Customer') {
-            setProfileName(prev => prev || fetchedName)
+      // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
+      apiRequest('/auth/customer/profile/')
+        .then(res => {
+          const data = res?.data || res
+          if (data?.customer_id) {
+            setProfileCustomerId(data.customer_id)
           }
-        }
-      })
-      .catch(() => {
-        if (typeof refreshMe === 'function') refreshMe()
-      })
+          if (data?.first_name || data?.name || data?.full_name) {
+            const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
+            if (fetchedName && fetchedName !== 'Customer') {
+              setProfileName(prev => prev || fetchedName)
+            }
+          }
+        })
+        .catch(() => {
+          if (typeof refreshMe === 'function') refreshMe()
+        })
+    }
   }, [user])
 
   const handleAvatarUpload = async (e) => {
@@ -4574,7 +4665,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
   useEffect(() => {
-    if (activeTab === 'Saved Addresses') {
+    if (activeTab === 'Saved Addresses' && user) {
       fetchAddresses()
     }
   }, [activeTab, user])
@@ -4606,7 +4697,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }, [activeTab, user])
 
   useEffect(() => {
-    if (rescheduleBookingId && rescheduleDate) {
+    if (rescheduleBookingId && rescheduleDate && user) {
       setSlotsLoading(true)
       apiRequest(`/customer/bookings/${rescheduleBookingId}/slots/?date=${rescheduleDate}`)
         .then(r => {
@@ -4618,9 +4709,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         .catch(() => setAvailableSlots([]))
         .finally(() => setSlotsLoading(false))
     }
-  }, [rescheduleBookingId, rescheduleDate])
+  }, [rescheduleBookingId, rescheduleDate, user])
 
   const fetchCustomerRefundData = () => {
+    if (!user) return
     setRefundsLoading(true)
     apiRequest('/customer/refunds/')
       .then(r => setRefunds(r.data || []))
@@ -5453,7 +5545,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
                                 if (!isAcceptedJob) return null
                                 return (
-                                  <button key={act} onClick={() => setTrackingBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
+                                  <button
+                                    key={act}
+                                    onClick={() => setTrackingBooking(b)}
+                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}
+                                  >
                                     <MapPin size={14} /> Track Live
                                   </button>
                                 )
@@ -9572,14 +9668,41 @@ export function BookingPage() {
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  const isExplicitTracking = Boolean(searchParams.get("track") || searchParams.get("booking_id") || routerLocation.state?.isTracking)
   const hasIncomingOrder = Boolean((incomingCart && incomingCart.length > 0) || incomingCategory)
-  const trackParam = !hasIncomingOrder && (searchParams.get("track") || searchParams.get("booking_id") || (isExplicitTracking ? sessionStorage.getItem("calservice_active_tracking_id") : null))
+
+  // Retrieve stored active booking from session
+  const storedBookingData = useMemo(() => {
+    if (hasIncomingOrder) return null
+    try {
+      const saved = sessionStorage.getItem("calservice_last_booking")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.status !== "cancelled") return parsed
+      }
+    } catch (e) { }
+    return null
+  }, [hasIncomingOrder])
+
+  const storedTrackingId = useMemo(() => {
+    if (hasIncomingOrder) return null
+    try {
+      return sessionStorage.getItem("calservice_active_tracking_id") || storedBookingData?.request_id || (storedBookingData?.id ? `SR-${storedBookingData.id}` : null)
+    } catch (e) {
+      return null
+    }
+  }, [hasIncomingOrder, storedBookingData])
+
+  const queryTrack = searchParams.get("track") || searchParams.get("booking_id")
+  const trackParam = !hasIncomingOrder && (queryTrack || storedTrackingId || (storedBookingData ? (storedBookingData.request_id || storedBookingData.id) : null))
+  const isTrackingActive = Boolean(!hasIncomingOrder && (trackParam || storedBookingData || routerLocation.state?.isTracking))
 
   const [cart, setCart] = useState(() => {
     if (incomingCart && incomingCart.length > 0) {
       try { localStorage.setItem("calservices_customer_cart", JSON.stringify(incomingCart)) } catch (e) { }
       return incomingCart
+    }
+    if (isTrackingActive) {
+      return []
     }
     try {
       const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart")
@@ -9605,7 +9728,7 @@ export function BookingPage() {
 
   const [step, setStep] = useState(() => {
     if (hasIncomingOrder) return 3
-    if (trackParam || isExplicitTracking) return 0
+    if (isTrackingActive) return 0
     return 3
   })
   const [loading, setLoading] = useState(false)
@@ -9615,13 +9738,8 @@ export function BookingPage() {
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(() => {
     if (hasIncomingOrder) return null
-    const saved = sessionStorage.getItem("calservice_last_booking")
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed?.status !== "cancelled") return parsed
-      } catch (e) { }
-    }
+    if (routerLocation.state?.successData) return routerLocation.state.successData
+    if (storedBookingData) return storedBookingData
     return null
   })
 
@@ -9642,36 +9760,31 @@ export function BookingPage() {
     // Left empty intentionally to disable redirect
   }, [cart, step, trackParam, incomingCategory, navigate]);
 
-  // Synchronize step and successData when active tracking ID changes
+  // Synchronize step and successData when active tracking ID changes or on page refresh
   useEffect(() => {
     if (hasIncomingOrder) {
       setStep(3);
       return;
     }
-    if (trackParam || routerLocation.state?.isTracking) {
+    if (isTrackingActive) {
       if (routerLocation.state?.successData) {
         setSuccessData(routerLocation.state.successData);
         setStep(0);
-      } else {
-        const saved = sessionStorage.getItem("calservice_last_booking");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed?.status === "cancelled") {
-              sessionStorage.removeItem("calservice_active_tracking_id");
-              sessionStorage.removeItem("calservice_last_booking");
-              setStep(3);
-            } else {
-              setSuccessData(parsed);
+      } else if (storedBookingData) {
+        setSuccessData(storedBookingData);
+        setStep(0);
+      } else if (trackParam) {
+        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
+          .then(res => {
+            if (res?.data) {
+              setSuccessData(res.data);
               setStep(0);
             }
-          } catch (e) {
-            setStep(3);
-          }
-        }
+          })
+          .catch(() => { });
       }
     }
-  }, [trackParam, routerLocation.state, hasIncomingOrder]);
+  }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -9799,18 +9912,6 @@ export function BookingPage() {
   }, [user, step, trackParam])
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
-
-  // Inject Google GSI client library dynamically
-  useEffect(() => {
-    if (!document.getElementById("google-gsi-script")) {
-      const script = document.createElement("script");
-      script.id = "google-gsi-script";
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-  }, []);
 
   const handleChange = e => {
     const { name, value } = e.target
@@ -10098,10 +10199,17 @@ export function BookingPage() {
           }))
         }
         setSuccessData(savedData)
+        const bookingTrackingId = String(res.data?.request_id || res.data?.id || "")
         try {
           sessionStorage.setItem("calservice_last_booking", JSON.stringify(savedData))
-          sessionStorage.setItem("calservice_active_tracking_id", String(res.data?.id || res.data?.request_id || ""))
+          sessionStorage.setItem("calservice_active_tracking_id", bookingTrackingId)
+          localStorage.removeItem("calservices_customer_cart")
+          sessionStorage.removeItem("calservices_customer_cart")
+          const newUrl = new URL(window.location.href)
+          newUrl.searchParams.set("track", bookingTrackingId)
+          window.history.replaceState({}, "", newUrl.pathname + newUrl.search)
         } catch (e) { }
+        setCart([])
         setShowPostFlow(true)  // Show animated post-booking flow
       } else setError(res?.message || "Something went wrong. Please try again.")
     } catch (err) {
@@ -10118,16 +10226,19 @@ export function BookingPage() {
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
-    sessionStorage.removeItem("calservice_last_booking")
-    sessionStorage.removeItem("calservice_active_tracking_id")
+    try {
+      sessionStorage.removeItem("calservice_last_booking")
+      sessionStorage.removeItem("calservice_active_tracking_id")
+      localStorage.removeItem("calservices_customer_cart")
+      sessionStorage.removeItem("calservices_customer_cart")
+    } catch (e) { }
     // Return to public home services catalog page (/home)
     navigate(routes.landing, { replace: true })
   }
 
-  const isTrackingActive = Boolean(trackParam || routerLocation.state?.isTracking || step === 0)
-
   const isQuickCommerce =
     !isTrackingActive &&
+    step !== 0 &&
     (category?.isQuickCommerce ||
       incomingCategory?.isQuickCommerce ||
       routerLocation.state?.isQuickCommerce ||
@@ -15335,22 +15446,32 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "/assets/icon_3d_appliance.jpg" },
-      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/gas_stove_clean.png" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "/assets/icon_3d_electrical.jpg" }
+      { name: "Refrigerator Service & Repair", image: "/mockups/refrigerator/icon_ref_service.jpg" },
+      { name: "Refrigerator Installation", image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+      { name: "Refrigerator Cooling", image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+      { name: "Refrigerator Gas & Compressor", image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "/mockups/refrigerator/icon_ref_parts.jpg" }
     ],
     microwave: [
       { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
-      { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Microwave & Purifier", image: "/mockups/otg_clean.png" }
+      { name: "Microwave Check-up", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Keypad & Display Fix", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Cavity Deep Cleaning", image: "/mockups/otg_clean.png" }
+    ],
+    water_purifier: [
+      { name: "RO Water Purifier Servicing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Filter Replacement & TDS Check", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "RO Installation & Uninstallation", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Purifier Repair & Pump Fix", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
     ],
     appliance_repair: [
-      { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
-      { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Microwave & Purifier", image: "/mockups/otg_clean.png" }
+      { name: "Microwave Oven", catId: "microwave", image: "/mockups/microwave_clean.png" },
+      { name: "Washing Machine", catId: "washing_machine", image: "/assets/icon_3d_appliance.jpg" },
+      { name: "Refrigerator & Fridge", catId: "refrigerator", image: "/mockups/refrigerator/icon_ref_service.jpg" },
+      { name: "Water Purifier & RO", catId: "water_purifier", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "TV & Display", catId: "tv_display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "AC & Heating", catId: "hvac", image: "/assets/icon_3d_ac.jpg" }
     ],
     tv_display: [
       { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
@@ -15463,6 +15584,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Refrigerator Cleaning & Maintenance",
     "Refrigerator Parts & Electrical Repair"
   ];
+  const microwaveSubtabs = [
+    "Microwave Repair",
+    "Microwave Check-up",
+    "Keypad & Display Fix",
+    "Cavity Deep Cleaning"
+  ];
+  const waterPurifierSubtabs = [
+    "RO Water Purifier Servicing",
+    "Filter Replacement & TDS Check",
+    "RO Installation & Uninstallation",
+    "Purifier Repair & Pump Fix"
+  ];
   const electricalSubtabs = [
     "Switches & Sockets",
     "Fan & Lighting",
@@ -15499,7 +15632,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Minor Masonry / Small Construction Work",
     "Bathroom Tile Fixing"
   ];
-  const applianceSubtabs = ["Microwave Repair", "Water Purifier & RO", "Refrigerator & Fridge", "Microwave & Purifier"];
+  const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
   const hvacSubtabs = [
     "AC Service & Cleaning",
     "AC Repair",
@@ -15525,7 +15658,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (subtabParam === "TV & Display" || subtabParam === "TV Service & Repair") return "TV Service & Repair";
     if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair" || subtabParam === "Washing Machine Jet Service") return "Washing Machine Jet Service";
     if (subtabParam === "Refrigerator & Fridge" || subtabParam === "Refrigerator" || subtabParam === "Refrigerator Repair" || subtabParam === "Refrigerator Service & Repair") return "Refrigerator Service & Repair";
-    if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave" || subtabParam === "Microwave") return "Microwave Repair";
+    if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave" || subtabParam === "Microwave" || subtabParam === "Microwave Oven") return "Microwave Repair";
+    if (subtabParam === "Water Purifier & RO" || subtabParam === "water_purifier" || subtabParam === "Water Purifier" || subtabParam === "RO Water Purifier") return "RO Water Purifier Servicing";
     if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrical" || subtabParam === "Electrician Services" || subtabParam === "Switches & Sockets") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers" || subtabParam === "Tap & Mixer") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter" || subtabParam === "Carpenter Services" || subtabParam === "Lock & Handle") return "Lock & Handle";
@@ -15541,6 +15675,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "mason" || String(nk) === "11" || cn.includes("mason") || cn.includes("civil")) return "Minor Masonry / Small Construction Work";
     if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
+    if (nk === "microwave" || cn.includes("microwave") || cn.includes("oven")) return "Microwave Repair";
+    if (nk === "water_purifier" || cn.includes("purifier") || cn.includes("ro")) return "RO Water Purifier Servicing";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
     if (nk === "hvac" || cn.includes("ac") || cn.includes("heating") || cn.includes("air conditioner")) return "AC Service & Cleaning";
     if (nk === "cleaning" || cn.includes("clean")) return "Occupied Apartment";
@@ -15550,6 +15686,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       if (itemStr.includes("carp") || itemStr.includes("lock") || itemStr.includes("handle") || itemStr.includes("door") || itemStr.includes("furniture")) return "Lock & Handle";
       if (itemStr.includes("elec") || itemStr.includes("switch") || itemStr.includes("socket") || itemStr.includes("fan")) return "Switches & Sockets";
       if (itemStr.includes("plumb") || itemStr.includes("tap") || itemStr.includes("drain")) return "Tap & Mixer";
+      if (itemStr.includes("micro") || itemStr.includes("oven")) return "Microwave Repair";
+      if (itemStr.includes("purifier") || itemStr.includes("ro")) return "RO Water Purifier Servicing";
       if (itemStr.includes("ac") || itemStr.includes("foam") || itemStr.includes("jet") || itemStr.includes("hvac")) return "AC Service & Cleaning";
     }
     return "Lock & Handle";
@@ -15565,8 +15703,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "washing_machine";
   } else if (normalizedKey === "refrigerator" || (category && (category.id === "refrigerator" || category.name === "Refrigerator & Fridge" || category.name === "Refrigerator"))) {
     effectiveKey = "refrigerator";
-  } else if (normalizedKey === "microwave" || (category && (category.id === "microwave" || category.name === "Microwave & Purifier" || category.name === "Microwave"))) {
+  } else if (normalizedKey === "microwave" || (category && (category.id === "microwave" || category.name === "Microwave Oven" || category.name === "Microwave & Purifier" || category.name === "Microwave" || category.slug === "microwave"))) {
     effectiveKey = "microwave";
+  } else if (normalizedKey === "water_purifier" || (category && (category.id === "water_purifier" || category.name === "Water Purifier & RO" || category.name === "Water Purifier" || category.slug === "water_purifier"))) {
+    effectiveKey = "water_purifier";
   } else if (normalizedKey === "electrical" || (category && (category.id === "electrical" || category.name === "Electrician" || category.name === "Electrical"))) {
     effectiveKey = "electrical";
   } else if (normalizedKey === "plumbing" || (category && (category.id === "plumbing" || category.name === "Plumber" || category.name === "Plumbing"))) {
@@ -15581,8 +15721,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "washing_machine";
   } else if (refrigeratorSubtabs.includes(activeSubTab)) {
     effectiveKey = "refrigerator";
-  } else if (activeSubTab === "Microwave & Purifier" || activeSubTab === "Microwave Repair") {
+  } else if (microwaveSubtabs.includes(activeSubTab)) {
     effectiveKey = "microwave";
+  } else if (waterPurifierSubtabs.includes(activeSubTab)) {
+    effectiveKey = "water_purifier";
   } else if (applianceSubtabs.includes(activeSubTab)) {
     effectiveKey = "appliance_repair";
   } else if (electricalSubtabs.includes(activeSubTab)) {
@@ -15683,6 +15825,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         setActiveSubTab("Washing Machine Jet Service");
       } else if (param === "Refrigerator & Fridge" || param === "Refrigerator" || param === "Refrigerator Repair") {
         setActiveSubTab("Refrigerator Service & Repair");
+      } else if (param === "Microwave & Purifier" || param === "Microwave Repair" || param === "microwave" || param === "Microwave" || param === "Microwave Oven") {
+        setActiveSubTab("Microwave Repair");
+      } else if (param === "Water Purifier & RO" || param === "water_purifier" || param === "Water Purifier" || param === "RO Water Purifier") {
+        setActiveSubTab("RO Water Purifier Servicing");
       } else if (param === "AC Service & Repair" || param === "AC Repair & Service" || param === "AC & Heating" || param === "hvac" || param === "Air Conditioner" || param === "Air Conditioner Services" || param === "AC Service") {
         setActiveSubTab("AC Service & Cleaning");
       } else if (param === "Electrician" || param === "electrical" || param === "Electrician Services") {
@@ -16057,91 +16203,87 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     refrigerator: {
       "Refrigerator Service & Repair": [
-        { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-3", name: "Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Thermostat check, relay replace, gas pressure audit & fan motor testing.", includes: ["Relay & OLP audit", "Thermostat test", "Gas pressure scan"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-srv-4", name: "Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Power plug wire test, thermal fuse check & main PCB power supply repair.", includes: ["Power cord continuity", "Thermal fuse check", "PCB power check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-5", name: "Excessive Noise", price: 399, duration: "45 mins", badge: "Noise Reduction", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor mounting pad dampening, fan blade lubrication & leveling fit.", includes: ["Fan blade realignment", "Vibration pad insertion", "Compressor mount check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-srv-6", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Unclog drain pipe tube, empty rear water collection tray & seal gasket leaks.", includes: ["Drain line vacuuming", "Tray cleanout", "Gasket seal alignment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "/mockups/refrigerator/icon_ref_service.jpg" },
+        { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "/mockups/refrigerator/refrigerator_service_hero.jpg" },
+        { id: "ref-srv-3", name: "Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Thermostat check, relay replace, gas pressure audit & fan motor testing.", includes: ["Relay & OLP audit", "Thermostat test", "Gas pressure scan"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-srv-4", name: "Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Power plug wire test, thermal fuse check & main PCB power supply repair.", includes: ["Power cord continuity", "Thermal fuse check", "PCB power check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-srv-5", name: "Excessive Noise", price: 399, duration: "45 mins", badge: "Noise Reduction", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor mounting pad dampening, fan blade lubrication & leveling fit.", includes: ["Fan blade realignment", "Vibration pad insertion", "Compressor mount check"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-srv-6", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Unclog drain pipe tube, empty rear water collection tray & seal gasket leaks.", includes: ["Drain line vacuuming", "Tray cleanout", "Gasket seal alignment"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" }
       ],
       "Refrigerator Installation": [
-        { id: "ref-inst-1", name: "Refrigerator Installation", price: 399, duration: "45 mins", badge: "Standard", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Unboxing, positioning, leveling feet adjustment & safe power socket setup.", includes: ["Unboxing & positioning", "Leveling alignment", "Stabilizer setup check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-2", name: "Refrigerator Reinstallation", price: 599, duration: "1 hr", badge: "Relocation", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dismounting from old location, safe transfer & setup at new kitchen spot.", includes: ["Safe dismounting", "New location placement", "Cooling cycle verification"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-inst-3", name: "Refrigerator Uninstallation", price: 249, duration: "30 mins", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Disconnecting power & water line connection, draining water tray & packaging prep.", includes: ["Power disconnect", "Water line detachment", "Drain tray emptying"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-4", name: "New Refrigerator Setup", price: 349, duration: "30 mins", badge: "New Appliance", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unpacking tape removal, glass shelf insertion, ice tray alignment & initial run check.", includes: ["Internal tape removal", "Glass shelf alignment", "Initial run check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-inst-5", name: "Leveling & Positioning", price: 199, duration: "20 mins", badge: "Balance", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Adjusting front leg screws to eliminate fridge wobbling & ensure proper door closure.", includes: ["Spirit level check", "Leg screw adjustment", "Door swing test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-inst-6", name: "Water Line Connection", price: 299, duration: "30 mins", badge: "Dispenser Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Connecting external RO / tap water line to fridge ice maker & water dispenser.", includes: ["Food-grade tubing fit", "Push-fit connector check", "Dispenser flow test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "ref-inst-1", name: "Refrigerator Installation", price: 399, duration: "45 mins", badge: "Standard", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Unboxing, positioning, leveling feet adjustment & safe power socket setup.", includes: ["Unboxing & positioning", "Leveling alignment", "Stabilizer setup check"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-2", name: "Refrigerator Reinstallation", price: 599, duration: "1 hr", badge: "Relocation", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dismounting from old location, safe transfer & setup at new kitchen spot.", includes: ["Safe dismounting", "New location placement", "Cooling cycle verification"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-3", name: "Refrigerator Uninstallation", price: 249, duration: "30 mins", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Disconnecting power & water line connection, draining water tray & packaging prep.", includes: ["Power disconnect", "Water line detachment", "Drain tray emptying"], image: "/mockups/refrigerator/icon_ref_service.jpg" },
+        { id: "ref-inst-4", name: "New Refrigerator Setup", price: 349, duration: "30 mins", badge: "New Appliance", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unpacking tape removal, glass shelf insertion, ice tray alignment & initial run check.", includes: ["Internal tape removal", "Glass shelf alignment", "Initial run check"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-5", name: "Leveling & Positioning", price: 199, duration: "20 mins", badge: "Balance", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Adjusting front leg screws to eliminate fridge wobbling & ensure proper door closure.", includes: ["Spirit level check", "Leg screw adjustment", "Door swing test"], image: "/mockups/refrigerator/icon_ref_installation.jpg" },
+        { id: "ref-inst-6", name: "Water Line Connection", price: 299, duration: "30 mins", badge: "Dispenser Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Connecting external RO / tap water line to fridge ice maker & water dispenser.", includes: ["Food-grade tubing fit", "Push-fit connector check", "Dispenser flow test"], image: "/mockups/refrigerator/icon_ref_service.jpg" }
       ],
       "Refrigerator Cooling": [
-        { id: "ref-cool-1", name: "Cooling Problem", price: 499, duration: "45 mins", badge: "Cooling Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Thermostat sensor audit, airflow duct check, compressor relay & capacitor test.", includes: ["Airflow duct scan", "Thermostat audit", "Capacitor check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-2", name: "Freezer Not Cooling", price: 599, duration: "1 hr", badge: "Freezer Restore", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater check, evaporator fan motor repair & expansion valve audit.", includes: ["Evaporator fan check", "Defrost heater test", "Freezer temp check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cool-3", name: "Uneven Cooling", price: 449, duration: "45 mins", badge: "Flow Balance", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Air damper flap motor adjustment, return air vent de-clogging & multi-flow tuning.", includes: ["Air damper check", "Return vent clearing", "Temperature sync"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-4", name: "Over Cooling", price: 449, duration: "45 mins", badge: "Temp Regulation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fixing food freezing in fresh food compartment, thermostat calibration & sensor swap.", includes: ["Thermostat calibration", "NTC sensor check", "Damper motor test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cool-5", name: "Temperature Problem", price: 399, duration: "45 mins", badge: "Sensor Calibration", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Digital panel temperature display error fix, sensor probe replacement & PCB sync.", includes: ["Digital panel test", "Sensor probe replace", "PCB signal check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cool-6", name: "Ice Formation Problem", price: 499, duration: "45 mins", badge: "Defrost Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing excessive ice buildup on evaporator coils, bi-metal thermostat & timer repair.", includes: ["Bi-metal fuse check", "Defrost timer test", "Drain tube heater check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "ref-cool-1", name: "Cooling Problem", price: 499, duration: "45 mins", badge: "Cooling Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Thermostat sensor audit, airflow duct check, compressor relay & capacitor test.", includes: ["Airflow duct scan", "Thermostat audit", "Capacitor check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-2", name: "Freezer Not Cooling", price: 599, duration: "1 hr", badge: "Freezer Restore", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater check, evaporator fan motor repair & expansion valve audit.", includes: ["Evaporator fan check", "Defrost heater test", "Freezer temp check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-3", name: "Uneven Cooling", price: 449, duration: "45 mins", badge: "Flow Balance", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Air damper flap motor adjustment, return air vent de-clogging & multi-flow tuning.", includes: ["Air damper check", "Return vent clearing", "Temperature sync"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-4", name: "Over Cooling", price: 449, duration: "45 mins", badge: "Temp Regulation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fixing food freezing in fresh food compartment, thermostat calibration & sensor swap.", includes: ["Thermostat calibration", "NTC sensor check", "Damper motor test"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
+        { id: "ref-cool-5", name: "Temperature Problem", price: 399, duration: "45 mins", badge: "Sensor Calibration", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Digital panel temperature display error fix, sensor probe replacement & PCB sync.", includes: ["Digital panel test", "Sensor probe replace", "PCB signal check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-cool-6", name: "Ice Formation Problem", price: 499, duration: "45 mins", badge: "Defrost Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing excessive ice buildup on evaporator coils, bi-metal thermostat & timer repair.", includes: ["Bi-metal fuse check", "Defrost timer test", "Drain tube heater check"], image: "/mockups/refrigerator/icon_ref_cooling.jpg" }
       ],
       "Refrigerator Gas & Compressor": [
-        { id: "ref-gas-1", name: "Gas Refill", price: 1299, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "R134a / R600a eco refrigerant gas charging with vacuum evacuation & leak testing.", includes: ["System vacuuming", "Eco refrigerant fill", "Cooling performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-2", name: "Gas Leak Detection", price: 399, duration: "45 mins", badge: "Leak Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Nitrogen pressure testing & electronic gas sniffer scan to locate microscopic leaks.", includes: ["Nitrogen pressure test", "Electronic sniffer scan", "Leak location report"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-3", name: "Gas Leak Repair", price: 1199, duration: "1.5 hrs", badge: "Copper Braze", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Copper brazing silver solder fix, filter dryer filter replacement & pressure holding test.", includes: ["Silver solder brazing", "Filter dryer replace", "Pressure hold test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-4", name: "Compressor Repair", price: 999, duration: "1.5 hrs", badge: "Compressor Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor terminal wire repair, overload protector swap, relay & start capacitor replace.", includes: ["Terminal wire resolder", "OLP protector swap", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-5", name: "Compressor Replacement", price: 1499, duration: "2 hrs", badge: "New Unit Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Installing brand new inverter / non-inverter compressor unit with gas charge.", includes: ["Old compressor dismount", "Brand new unit fit", "Full gas recharge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-gas-6", name: "Refrigerant Pressure Check", price: 299, duration: "30 mins", badge: "PSI Audit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Connecting manifold pressure gauge to check suction/discharge PSI levels.", includes: ["Manifold gauge check", "Suction PSI report", "Compressor current test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "ref-gas-1", name: "Gas Refill", price: 1299, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "R134a / R600a eco refrigerant gas charging with vacuum evacuation & leak testing.", includes: ["System vacuuming", "Eco refrigerant fill", "Cooling performance test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-2", name: "Gas Leak Detection", price: 399, duration: "45 mins", badge: "Leak Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Nitrogen pressure testing & electronic gas sniffer scan to locate microscopic leaks.", includes: ["Nitrogen pressure test", "Electronic sniffer scan", "Leak location report"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-3", name: "Gas Leak Repair", price: 1199, duration: "1.5 hrs", badge: "Copper Braze", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Copper brazing silver solder fix, filter dryer filter replacement & pressure holding test.", includes: ["Silver solder brazing", "Filter dryer replace", "Pressure hold test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-4", name: "Compressor Repair", price: 999, duration: "1.5 hrs", badge: "Compressor Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor terminal wire repair, overload protector swap, relay & start capacitor replace.", includes: ["Terminal wire resolder", "OLP protector swap", "Start capacitor check"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-5", name: "Compressor Replacement", price: 1499, duration: "2 hrs", badge: "New Unit Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Installing brand new inverter / non-inverter compressor unit with gas charge.", includes: ["Old compressor dismount", "Brand new unit fit", "Full gas recharge"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
+        { id: "ref-gas-6", name: "Refrigerant Pressure Check", price: 299, duration: "30 mins", badge: "PSI Audit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Connecting manifold pressure gauge to check suction/discharge PSI levels.", includes: ["Manifold gauge check", "Suction PSI report", "Compressor current test"], image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" }
       ],
       "Refrigerator Cleaning & Maintenance": [
-        { id: "ref-cln-1", name: "Refrigerator Deep Cleaning", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Deodorizing spray"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cln-2", name: "Freezer Cleaning", price: 349, duration: "45 mins", badge: "Ice Cleanout", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Steam defrosting of heavy ice buildup, internal wall sanitizing & anti-bacterial wash.", includes: ["Steam ice melt", "Wall anti-bacterial wipe", "Odour removal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-cln-3", name: "Condenser Coil Cleaning", price: 299, duration: "30 mins", badge: "Coil Wash", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Vacuuming and brushing rear/bottom condenser coils to improve heat dissipation.", includes: ["Coil dust vacuuming", "Fin brush cleaning", "Heat dissipation test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cln-4", name: "Drain Cleaning", price: 249, duration: "30 mins", badge: "Drain Flush", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Pressure flushing rear condensate drain hole & cleaning drip pan tray.", includes: ["Drain hole pressure flush", "Drip tray wash", "Algae treatment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "ref-cln-5", name: "Defrost System Check", price: 349, duration: "30 mins", badge: "Defrost Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Testing defrost heating element resistance, bimetal thermostat & timer sequence.", includes: ["Heater resistance test", "Bi-metal continuity check", "Timer cycle verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-cln-6", name: "Preventive Maintenance", price: 599, duration: "1 hr", badge: "Annual Care", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Full annual tune-up: gas check, coil wash, electrical terminal tight & gasket lubricate.", includes: ["Full gas pressure check", "Terminal screw tightening", "Gasket lubrication"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "ref-cln-1", name: "Refrigerator Deep Cleaning", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Deodorizing spray"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-2", name: "Freezer Cleaning", price: 349, duration: "45 mins", badge: "Ice Cleanout", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Steam defrosting of heavy ice buildup, internal wall sanitizing & anti-bacterial wash.", includes: ["Steam ice melt", "Wall anti-bacterial wipe", "Odour removal"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-3", name: "Condenser Coil Cleaning", price: 299, duration: "30 mins", badge: "Coil Wash", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Vacuuming and brushing rear/bottom condenser coils to improve heat dissipation.", includes: ["Coil dust vacuuming", "Fin brush cleaning", "Heat dissipation test"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-4", name: "Drain Cleaning", price: 249, duration: "30 mins", badge: "Drain Flush", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Pressure flushing rear condensate drain hole & cleaning drip pan tray.", includes: ["Drain hole pressure flush", "Drip tray wash", "Algae treatment"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-5", name: "Defrost System Check", price: 349, duration: "30 mins", badge: "Defrost Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Testing defrost heating element resistance, bimetal thermostat & timer sequence.", includes: ["Heater resistance test", "Bi-metal continuity check", "Timer cycle verification"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
+        { id: "ref-cln-6", name: "Preventive Maintenance", price: 599, duration: "1 hr", badge: "Annual Care", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Full annual tune-up: gas check, coil wash, electrical terminal tight & gasket lubricate.", includes: ["Full gas pressure check", "Terminal screw tightening", "Gasket lubrication"], image: "/mockups/refrigerator/icon_ref_cleaning.jpg" }
       ],
       "Refrigerator Parts & Electrical Repair": [
-        { id: "ref-prt-1", name: "Thermostat Replacement", price: 499, duration: "45 mins", badge: "Thermostat Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing mechanical / digital temperature control thermostat capillary unit.", includes: ["Capillary tube replace", "Temperature calibration", "Cut-off cycle test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-2", name: "Fan Motor Repair", price: 599, duration: "1 hr", badge: "Fan Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Evaporator / condenser fan motor winding check, bushing greasing or motor replacement.", includes: ["Motor winding check", "Blade balance fit", "Airflow test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-3", name: "Door Seal/Gasket Replacement", price: 449, duration: "45 mins", badge: "Gasket Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing worn magnetic door gasket & fitting brand-new food grade rubber seal.", includes: ["Worn gasket removal", "Magnetic strip insert", "Air tight seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-prt-4", name: "PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair & relay swap.", includes: ["PCB diagnostic test", "Micro-controller repair", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-5", name: "Temperature Sensor Replacement", price: 399, duration: "45 mins", badge: "NTC Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing faulty NTC thermistor temperature sensor probe.", includes: ["NTC resistance check", "Probe replacement", "Display error code clear"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-prt-6", name: "Relay & Capacitor Replacement", price: 349, duration: "30 mins", badge: "Relay Swap", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing PTC starter relay, overload protector (OLP) & start capacitor.", includes: ["PTC relay swap", "OLP protector replace", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "ref-prt-1", name: "Thermostat Replacement", price: 499, duration: "45 mins", badge: "Thermostat Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing mechanical / digital temperature control thermostat capillary unit.", includes: ["Capillary tube replace", "Temperature calibration", "Cut-off cycle test"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-2", name: "Fan Motor Repair", price: 599, duration: "1 hr", badge: "Fan Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Evaporator / condenser fan motor winding check, bushing greasing or motor replacement.", includes: ["Motor winding check", "Blade balance fit", "Airflow test"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-3", name: "Door Seal/Gasket Replacement", price: 449, duration: "45 mins", badge: "Gasket Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing worn magnetic door gasket & fitting brand-new food grade rubber seal.", includes: ["Worn gasket removal", "Magnetic strip insert", "Air tight seal check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-4", name: "PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair & relay swap.", includes: ["PCB diagnostic test", "Micro-controller repair", "60-day PCB warranty"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-5", name: "Temperature Sensor Replacement", price: 399, duration: "45 mins", badge: "NTC Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing faulty NTC thermistor temperature sensor probe.", includes: ["NTC resistance check", "Probe replacement", "Display error code clear"], image: "/mockups/refrigerator/icon_ref_parts.jpg" },
+        { id: "ref-prt-6", name: "Relay & Capacitor Replacement", price: 349, duration: "30 mins", badge: "Relay Swap", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing PTC starter relay, overload protector (OLP) & start capacitor.", includes: ["PTC relay swap", "OLP protector replace", "Start capacitor check"], image: "/mockups/refrigerator/icon_ref_parts.jpg" }
       ]
     },
     microwave: {
       "Microwave Repair": [
-        { id: "micro-rep-1", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-2", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-3", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "micro-rep-4", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-5", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-6", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "micro-rep-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, high voltage diode & capacitor test, transformer inspection.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-2", name: "Microwave Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & PCB fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "micro-rep-3", name: "Microwave Noise & Motor Repair", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
       ],
-      "Water Purifier & RO": [
-        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      "Microwave Check-up": [
+        { id: "micro-chk-1", name: "Microwave 15-Point Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full 15-point diagnostic inspection to identify mysterious sparks, radiation leakage, or erratic timer behavior.", includes: ["15-point diagnostic check", "Mica waveguide check", "Radiation leakage test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-chk-2", name: "Waveguide Mica Sheet Replacement", price: 199, duration: "20 mins", badge: "Spark Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing burnt, greasy or damaged mica waveguide cover to eliminate sparking inside cavity.", includes: ["Burnt mica removal", "Custom-fit mica sheet fit", "Spark test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
       ],
-      "Microwave & Purifier": [
-        { id: "micro-rep-1m", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-2m", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-3m", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "micro-rep-4m", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-5m", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-6m", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      "Keypad & Display Fix": [
+        { id: "micro-key-1", name: "Touch Keypad Membrane Replacement", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-key-2", name: "Door Interlock Switch Repair", price: 349, duration: "30 mins", badge: "Safety Switch", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing faulty primary/secondary door microswitches to ensure safe latch operation.", includes: ["Microswitch continuity test", "Door latch alignment", "Safety trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Cavity Deep Cleaning": [
+        { id: "micro-cln-1", name: "Microwave Cavity Deep Cleaning", price: 199, duration: "30 mins", badge: "Hygiene", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Internal degreasing, steam sanitization, burnt food stain removal, and glass turntable wash.", includes: ["Cavity degreasing", "Steam sanitization", "Turntable polishing"], image: "/mockups/microwave_clean.png" }
       ]
     },
-    appliance_repair: {
-      "Microwave Repair": [
-        { id: "micro-rep-1", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-2", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-3", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "micro-rep-4", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-5", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "micro-rep-6", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    water_purifier: {
+      "RO Water Purifier Servicing": [
+        { id: "ro-srv-1", name: "RO Comprehensive Servicing", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Sediment filter flush, pre-carbon cleaning, TDS level calibration, pump pressure check & sanitize.", includes: ["Filter sediment wash", "TDS level adjustment", "Full system sanitizer wash"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
       ],
-      "Water Purifier & RO": [
-        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      "Filter Replacement & TDS Check": [
+        { id: "ro-flt-1", name: "Complete Filter & Membrane Replacement", price: 1499, duration: "1 hr", badge: "Full Filter Set", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Brand new RO membrane, sediment filter, pre & post carbon candle with 100% pure TDS warranty.", includes: ["RO membrane swap", "Sediment & carbon cartridge", "TDS level verification"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "ro-flt-2", name: "Pre-Filter Housing & Candle Change", price: 299, duration: "25 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing external spun polypropylene candle & cleaning transparent outer housing.", includes: ["Spun filter candle replace", "Housing O-ring leak check", "Water line flush"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
       ],
-      "Microwave & Purifier": [
-        { id: "hvac-micro-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, spark in cavity, touch keypad failure, or turntable motor replacement.", includes: ["Magnetron & diode check", "High voltage safety test", "Door lock repair"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      "RO Installation & Uninstallation": [
+        { id: "ro-inst-1", name: "RO Water Purifier Installation", price: 499, duration: "45 mins", badge: "Safe Mount", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall bracket drilling, inlet diverter valve fitting, drain line clamp setup & pure water testing.", includes: ["Wall bracket mounting", "Diverter valve plumbing", "Reject water tube routing"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "ro-inst-2", name: "RO Water Purifier Uninstallation", price: 299, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe water line shutoff, unit dismounting, tank drainage, and pipe capping for relocation.", includes: ["Water line disconnect", "Unit dismounting", "Transit pipe capping"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ],
+      "Purifier Repair & Pump Fix": [
+        { id: "ro-rep-1", name: "RO Booster Pump Repair / Replacement", price: 799, duration: "1 hr", badge: "Pressure Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnosis for low water pressure, booster pump vibration, or adapter SMPS power supply failure.", includes: ["Booster pump PSI scan", "SMPS 24V adapter check", "Auto-cut off sensor fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "ro-rep-2", name: "Water Leakage & SV Solenoid Valve Fix", price: 349, duration: "35 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Replacing dripping push-fit elbow connectors, internal tubing, or faulty solenoid valve.", includes: ["Push-fit connector change", "Solenoid SV valve swap", "Pressure hold test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
       ]
     },
     tv_display: {
@@ -16370,6 +16512,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
   const rawOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
+    (OTHER_SERVICES["microwave"] && OTHER_SERVICES["microwave"][activeSubTab]) ||
+    (OTHER_SERVICES["water_purifier"] && OTHER_SERVICES["water_purifier"][activeSubTab]) ||
     (OTHER_SERVICES["electrical"] && OTHER_SERVICES["electrical"][activeSubTab]) ||
     (OTHER_SERVICES["refrigerator"] && OTHER_SERVICES["refrigerator"][activeSubTab]) ||
     (OTHER_SERVICES["tv_display"] && OTHER_SERVICES["tv_display"][activeSubTab]) ||
@@ -16391,8 +16535,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     const doesPackageMatchTab = (p) => {
       const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
       const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pSlug = (p.slug || p.id || "").toLowerCase();
       const pName = (p.name || "").toLowerCase();
       const tab = (activeSubTab || "").toLowerCase();
+      const nk = (effectiveKey || normalizedKey || "").toLowerCase();
 
       if (normalizedKey === "mason") {
         if (tab.includes("minor") || tab.includes("masonry") || tab.includes("construction")) {
@@ -16401,69 +16547,252 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         if (tab.includes("tile") || tab.includes("fixing") || tab.includes("bathroom")) {
           return sSlug.includes("tile-fixing") || sName.includes("tile") || sName.includes("fixing") || pName.includes("tile") || pName.includes("fixing");
         }
+        return false;
       }
 
-      // 1. Refrigerator subtabs
-      if (tab.includes("refrigerator") || tab.includes("fridge")) {
-        const isRef = sSlug.includes("ref") || sSlug.includes("refrigerator") || sName.includes("refrigerator");
-        if (!isRef) return false;
+      // 1. Washing Machine
+      if (nk === "washing_machine" || tab.includes("washing") || tab.includes("washer") || tab.includes("wm")) {
+        const isWm = sSlug.includes("washing") || sSlug.includes("wm") || sName.includes("washing") || pSlug.startsWith("wm-") || pName.includes("washer") || pName.includes("washing") || pName.includes("front load") || pName.includes("top load");
+        if (!isWm) return false;
 
-        if (tab.includes("cooling")) {
-          return sSlug.includes("cool") || sName.includes("cooling") || pName.includes("cool") || pName.includes("freezer");
+        if (tab.includes("jet") || tab.includes("cleaning") || tab.includes("wash") || tab.includes("clean")) {
+          return pSlug.startsWith("wm-cln-") || pSlug.startsWith("wm-jet-") || pSlug.includes("deep-clean") || pName.includes("jet") || pName.includes("descaling") || pName.includes("chemical") || pName.includes("sanitization") || pName.includes("bellow anti-mold") || pName.includes("maintenance") || pName.includes("coin trap");
         }
-        if (tab.includes("gas") || tab.includes("compressor")) {
-          return sSlug.includes("gas") || sSlug.includes("comp") || sName.includes("gas") || sName.includes("compressor") || pName.includes("gas") || pName.includes("compressor");
+        if (tab.includes("check-up") || tab.includes("checkup") || tab.includes("chk") || tab.includes("diagnostic")) {
+          return pSlug.startsWith("wm-chk-") || pSlug === "wm-cln-2" || pSlug.includes("repair-check") || pName.includes("check-up") || pName.includes("checkup") || pName.includes("21-point");
         }
-        if (tab.includes("cleaning") || tab.includes("maintenance")) {
-          return sSlug.includes("cln") || sName.includes("cleaning") || pName.includes("clean") || pName.includes("defrost") || pName.includes("maintenance");
+        if (tab.includes("install") || tab.includes("inst") || tab.includes("uninstall")) {
+          return pSlug.startsWith("wm-inst-") || pSlug.includes("install") || pSlug.includes("relocate") || pName.includes("installation") || pName.includes("uninstallation") || pName.includes("reinstallation") || pName.includes("rubber feet") || pName.includes("adapter") || pName.includes("hose extension");
         }
-        if (tab.includes("install")) {
-          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("leveling");
+        if (tab.includes("repair") || tab.includes("rep") || tab.includes("spin") || tab.includes("sound") || tab.includes("motor") || tab.includes("water") || tab.includes("drain") || tab.includes("elec")) {
+          return pSlug.startsWith("wm-rep-") || pSlug.startsWith("wm-spin-") || pSlug.startsWith("wm-mech-") || pSlug.startsWith("wm-elec-") || pSlug.startsWith("wm-wtr-") || pSlug.startsWith("wm-spinning") || pSlug.startsWith("wm-drain") || pSlug.startsWith("wm-door") || pName.includes("spinning") || pName.includes("sound") || pName.includes("issue") || pName.includes("unbalance") || pName.includes("damper") || pName.includes("shock absorber") || pName.includes("belt") || pName.includes("spider") || pName.includes("pulsator") || pName.includes("motor") || pName.includes("lock") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("heater") || pName.includes("wiring") || pName.includes("solenoid") || pName.includes("pump") || pName.includes("pressure switch") || pName.includes("gasket") || pName.includes("gearbox") || pName.includes("clutch") || pName.includes("valve") || pName.includes("pulley") || pName.includes("repair");
         }
-        if (tab.includes("parts") || tab.includes("electrical")) {
-          return sSlug.includes("prt") || sName.includes("parts") || pName.includes("part") || pName.includes("pcb") || pName.includes("thermostat") || pName.includes("sensor") || pName.includes("relay") || pName.includes("fan") || pName.includes("gasket") || pName.includes("seal");
-        }
-        // General refrigerator subtab fallback
         return true;
       }
 
-      // 2. Washing Machine
-      if (tab.includes("washing") || tab.includes("washer") || tab.includes("wm")) {
-        return sSlug.includes("washing") || sName.includes("washing");
+      // 2. TV & Display
+      if (nk === "tv_display" || tab.includes("tv") || tab.includes("display")) {
+        const isTv = sSlug.includes("tv") || sSlug.includes("display") || sName.includes("tv") || sName.includes("display") || pSlug.startsWith("tv-") || pName.includes("tv");
+        if (!isTv) return false;
+
+        if (tab === "tv service & repair" || tab === "tv & display" || (tab.includes("service") && tab.includes("repair"))) {
+          return pSlug.startsWith("tv-srv-") || pSlug.startsWith("tv-repair-") || pName.includes("general service") || pName.includes("fault diagnostic") || pName.includes("repair & diagnostics") || pName.includes("not turning on") || pName.includes("no picture") || pName.includes("no sound problem") || pName.includes("flickering problem");
+        }
+        if (tab.includes("install") || tab.includes("setup") || tab.includes("mount")) {
+          return pSlug.startsWith("tv-inst-") || pSlug.startsWith("tv-wall-") || pSlug.startsWith("tv-swivel-") || pName.includes("wall mount") || pName.includes("installation") || pName.includes("uninstallation") || pName.includes("reinstallation") || pName.includes("stand") || pName.includes("swivel") || pName.includes("bracket");
+        }
+        if (tab.includes("screen") || tab.includes("display panel")) {
+          return pSlug.startsWith("tv-scr-") || pSlug.startsWith("tv-backlight-") || pName.includes("screen") || pName.includes("panel") || pName.includes("backlight") || pName.includes("flickering repair") || pName.includes("line repair") || pName.includes("color problem") || pName.includes("t-con") || pName.includes("strip replacement");
+        }
+        if (tab.includes("sound") || tab.includes("speaker") || tab.includes("audio")) {
+          return pSlug.startsWith("tv-snd-") || pName.includes("speaker") || pName.includes("sound repair") || pName.includes("distorted sound") || pName.includes("audio port") || pName.includes("sound system") || pName.includes("bluetooth audio");
+        }
+        if (tab.includes("software") || tab.includes("smart")) {
+          return pSlug.startsWith("tv-soft-") || pName.includes("smart tv setup") || pName.includes("software update") || pName.includes("app installation") || pName.includes("wi-fi") || pName.includes("remote pairing") || pName.includes("factory reset");
+        }
+        if (tab.includes("parts") || tab.includes("electrical")) {
+          return pSlug.startsWith("tv-prt-") || pSlug.startsWith("tv-power-") || pName.includes("power supply") || pName.includes("motherboard") || pName.includes("hdmi") || pName.includes("usb port") || pName.includes("remote repair") || pName.includes("capacitor") || pName.includes("pcb repair");
+        }
+        return true;
       }
 
-      // 3. TV
-      if (tab.includes("tv") || tab.includes("display")) {
-        return sSlug.includes("tv") || sName.includes("tv") || sName.includes("display");
+      // 3. Refrigerator subtabs
+      if (nk === "refrigerator" || tab.includes("refrigerator") || tab.includes("fridge")) {
+        const isRef = sSlug.includes("ref") || sSlug.includes("fridge") || sName.includes("refrigerator") || pSlug.startsWith("ref-") || pName.includes("refrigerator") || pName.includes("fridge");
+        if (!isRef) return false;
+
+        if (tab.includes("service") || tab.includes("repair")) {
+          return pSlug.startsWith("ref-srv-") || pSlug.startsWith("ref-rep-") || pSlug.startsWith("ref-chk-") || pName.includes("general service") || pName.includes("diagnostic") || pName.includes("repair");
+        }
+        if (tab.includes("install")) {
+          return pSlug.startsWith("ref-inst-") || pName.includes("installation") || pName.includes("uninstallation") || pName.includes("leveling");
+        }
+        if (tab.includes("cooling")) {
+          return pSlug.startsWith("ref-cool-") || pName.includes("cooling") || pName.includes("freezer") || pName.includes("frost") || pName.includes("defrost");
+        }
+        if (tab.includes("gas") || tab.includes("compressor")) {
+          return pSlug.startsWith("ref-gas-") || pSlug.startsWith("ref-comp-") || pName.includes("gas") || pName.includes("refrigerant") || pName.includes("compressor") || pName.includes("charging");
+        }
+        if (tab.includes("cleaning") || tab.includes("maintenance")) {
+          return pSlug.startsWith("ref-cln-") || pName.includes("clean") || pName.includes("sanitiz") || pName.includes("odor") || pName.includes("maintenance");
+        }
+        if (tab.includes("parts") || tab.includes("electrical")) {
+          return pSlug.startsWith("ref-prt-") || pSlug.startsWith("ref-elec-") || pName.includes("thermostat") || pName.includes("sensor") || pName.includes("pcb") || pName.includes("gasket") || pName.includes("fan") || pName.includes("relay");
+        }
+        return true;
       }
 
-      // 4. Microwave
-      if (tab.includes("microwave") || tab.includes("oven")) {
-        return sSlug.includes("microwave") || sName.includes("microwave");
+      // 4. Microwave subtabs
+      if (nk === "microwave" || tab.includes("microwave") || tab.includes("oven") || tab.includes("cavity") || tab.includes("keypad") || tab.includes("magnetron")) {
+        const isMicro = sSlug.includes("microwave") || sSlug.includes("oven") || sName.includes("microwave") || pSlug.startsWith("micro-") || pName.includes("microwave") || pName.includes("oven");
+        if (!isMicro) return false;
+
+        if (tab.includes("repair") || tab.includes("rep")) {
+          return pSlug.startsWith("micro-rep-") || pName.includes("magnetron") || pName.includes("heating") || pName.includes("power") || pName.includes("noise") || pName.includes("repair");
+        }
+        if (tab.includes("check-up") || tab.includes("checkup") || tab.includes("chk") || tab.includes("diagnostic")) {
+          return pSlug.startsWith("micro-chk-") || pName.includes("check-up") || pName.includes("checkup") || pName.includes("mica") || pName.includes("waveguide") || pName.includes("diagnostic");
+        }
+        if (tab.includes("keypad") || tab.includes("display") || tab.includes("button") || tab.includes("touch")) {
+          return pSlug.startsWith("micro-key-") || pName.includes("touch") || pName.includes("keypad") || pName.includes("membrane") || pName.includes("button") || pName.includes("interlock") || pName.includes("switch");
+        }
+        if (tab.includes("cavity") || tab.includes("clean")) {
+          return pSlug.startsWith("micro-cln-") || pName.includes("cavity") || pName.includes("cleaning") || pName.includes("degreasing") || pName.includes("steam");
+        }
+        return true;
+      }
+
+      // 4b. Water Purifier subtabs
+      if (nk === "water_purifier" || tab.includes("purifier") || tab.includes("ro ") || tab.includes("filter")) {
+        const isRo = sSlug.includes("purifier") || sSlug.includes("ro") || sName.includes("purifier") || pSlug.startsWith("ro-") || pName.includes("purifier") || pName.includes("ro ");
+        if (!isRo) return false;
+
+        if (tab.includes("servicing") || tab.includes("service")) {
+          return pSlug.startsWith("ro-srv-") || pName.includes("service") || pName.includes("servicing") || pName.includes("comprehensive");
+        }
+        if (tab.includes("filter") || tab.includes("membrane") || tab.includes("tds")) {
+          return pSlug.startsWith("ro-flt-") || pName.includes("filter") || pName.includes("membrane") || pName.includes("candle") || pName.includes("tds");
+        }
+        if (tab.includes("install") || tab.includes("setup")) {
+          return pSlug.startsWith("ro-inst-") || pName.includes("installation") || pName.includes("uninstallation");
+        }
+        if (tab.includes("repair") || tab.includes("pump") || tab.includes("valve") || tab.includes("leak")) {
+          return pSlug.startsWith("ro-rep-") || pName.includes("pump") || pName.includes("booster") || pName.includes("leak") || pName.includes("solenoid") || pName.includes("valve");
+        }
+        return true;
       }
 
       // 5. AC/HVAC subtabs
-      if (tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
-        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating");
+      if (nk === "hvac" || tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
+        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") || pSlug.startsWith("hvac-") || pSlug.startsWith("ac-") || pName.includes("ac ");
         if (!isAc) return false;
 
-        if (tab.includes("gas") || tab.includes("refrigerant") || tab.includes("cooling")) {
-          return sSlug.includes("gas") || sName.includes("gas") || pName.includes("gas") || pName.includes("refill") || pName.includes("charge");
+        if (tab.includes("cleaning") || tab.includes("clean")) {
+          return pSlug.startsWith("hvac-fj-") || pSlug.startsWith("hvac-pj-") || pSlug.startsWith("hvac-ar-") || pSlug.startsWith("hvac-2in1") || pSlug.startsWith("hvac-3in1") || pSlug.startsWith("hvac-airflow") || pSlug.startsWith("ac-cln") || pName.includes("foam") || pName.includes("power jet") || pName.includes("jet") || pName.includes("cleaning") || pName.includes("deep clean") || pName.includes("sanitization") || pName.includes("anti-rust") || pName.includes("combo");
+        }
+        if (tab.includes("gas") || tab.includes("refrigerant")) {
+          return pSlug.startsWith("hvac-gas-") || pSlug.startsWith("ac-gas") || pName.includes("gas leak") || pName.includes("gas charging") || pName.includes("valve") || pName.includes("coil repair") || pName.includes("top-up") || pName.includes("brazing") || pName.includes("nitrogen");
         }
         if (tab.includes("install")) {
-          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("uninstallation");
+          return pSlug.startsWith("hvac-inst-") || pSlug.startsWith("hvac-uninst-") || pSlug.startsWith("hvac-reinst-") || pSlug.startsWith("ac-inst") || pName.includes("split ac install") || pName.includes("window ac install") || pName.includes("uninstall") || pName.includes("reinstall") || pName.includes("wall stand") || pName.includes("dismount");
         }
-        if (tab.includes("cleaning") || tab.includes("clean") || tab.includes("maintenance")) {
-          return sSlug.includes("clean") || sName.includes("clean") || sName.includes("cleaning") || pName.includes("foam") || pName.includes("jet") || pName.includes("wash");
-        }
-        if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
-          return sSlug.includes("repair") || sName.includes("repair") || sName.includes("diagnostics") || pName.includes("repair") || pName.includes("leakage") || pName.includes("noise");
-        }
-        if (tab.includes("pcb") || tab.includes("electrical")) {
-          return sSlug.includes("pcb") || sSlug.includes("cap") || sSlug.includes("cnt") || sSlug.includes("sns") || sSlug.includes("lvt") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("sensor") || pName.includes("contactor");
+        if (tab.includes("pcb") || (tab.includes("electrical") && !tab.includes("parts"))) {
+          return pSlug.startsWith("hvac-pcb-") || pSlug.startsWith("hvac-cap-") || pSlug.startsWith("hvac-cnt-") || pSlug.startsWith("hvac-sns-") || pSlug.startsWith("hvac-lvt-") || pSlug.startsWith("ac-elec") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("contactor") || pName.includes("sensor") || pName.includes("transformer") || pName.includes("lvt");
         }
         if (tab.includes("parts") || tab.includes("accessories")) {
-          return sSlug.includes("prt") || pName.includes("pipe") || pName.includes("stand") || pName.includes("plate") || pName.includes("fastener");
+          return pSlug.startsWith("hvac-prt-") || pSlug.startsWith("ac-part") || pName.includes("copper pipe") || pName.includes("drain pipe") || pName.includes("wall stand") || pName.includes("floor stand") || pName.includes("back plate") || pName.includes("fastener");
+        }
+        if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
+          return pSlug.startsWith("hvac-rep-") || pSlug.startsWith("ac-rep") || pName.includes("repair") || pName.includes("less cooling") || pName.includes("no cooling") || pName.includes("power issue") || pName.includes("water leakage") || pName.includes("noise") || pName.includes("smell") || pName.includes("fan motor") || pName.includes("remote sensor") || pName.includes("drain repair") || pName.includes("error code");
+        }
+        return true;
+      }
+
+      // 6. Electrical
+      if (nk === "electrical" || tab.includes("switch") || tab.includes("socket") || tab.includes("lighting") || tab.includes("mcb") || tab.includes("inverter")) {
+        const isElec = sSlug.includes("elec") || sName.includes("electr") || pSlug.startsWith("elec-") || pName.includes("switch") || pName.includes("fan") || pName.includes("mcb") || pName.includes("inverter") || pName.includes("wiring");
+        if (!isElec) return false;
+
+        if (tab.includes("switch") || tab.includes("socket")) {
+          return pSlug.startsWith("elec-sw-") || pName.includes("switch") || pName.includes("socket") || pName.includes("switchboard") || pName.includes("usb");
+        }
+        if (tab.includes("fan") || tab.includes("light")) {
+          return pSlug.startsWith("elec-fan-") || pName.includes("fan") || pName.includes("light") || pName.includes("led") || pName.includes("regulator") || pName.includes("fixture");
+        }
+        if (tab.includes("mcb") || tab.includes("wiring")) {
+          return pSlug.startsWith("elec-mcb-") || pName.includes("mcb") || pName.includes("db box") || pName.includes("distribution") || pName.includes("earthing") || pName.includes("short circuit") || pName.includes("wiring") || pName.includes("rccb") || pName.includes("elcb");
+        }
+        if (tab.includes("inverter") || tab.includes("heavy appliance") || tab.includes("geyser") || tab.includes("stabilizer")) {
+          return pSlug.startsWith("elec-inv-") || pName.includes("inverter") || pName.includes("battery") || pName.includes("geyser") || pName.includes("stabilizer");
+        }
+        return true;
+      }
+
+      // 7. Plumbing
+      if (nk === "plumbing" || tab.includes("tap") || tab.includes("toilet") || tab.includes("basin") || tab.includes("bath") || tab.includes("water tank") || tab.includes("drainage") || tab.includes("water filter") || tab.includes("grouting") || tab.includes("plumber")) {
+        const isPlum = sSlug.includes("plum") || sName.includes("plumb") || pSlug.startsWith("plum-") || pName.includes("tap") || pName.includes("toilet") || pName.includes("basin") || pName.includes("drain");
+        if (!isPlum) return false;
+
+        if (tab.includes("tap") || tab.includes("mixer")) {
+          return pSlug.startsWith("plum-tap-") || pName.includes("tap") || pName.includes("mixer") || pName.includes("shower");
+        }
+        if (tab.includes("toilet")) {
+          return pSlug.startsWith("plum-toil-") || pName.includes("jet spray") || pName.includes("faucet") || pName.includes("seat cover") || pName.includes("flush") || pName.includes("toilet") || pName.includes("commode") || pName.includes("pot blockage");
+        }
+        if (tab.includes("basin") || tab.includes("sink")) {
+          return pSlug.startsWith("plum-bs-") || pName.includes("basin") || pName.includes("sink") || pName.includes("waste pipe") || pName.includes("waste coupling");
+        }
+        if (tab.includes("bath")) {
+          return pSlug.startsWith("plum-bf-") || pName.includes("bath") || pName.includes("towel") || pName.includes("mirror") || pName.includes("fitting");
+        }
+        if (tab.includes("water tank") || tab.includes("motor")) {
+          return pSlug.startsWith("plum-wt-") || pName.includes("tank") || pName.includes("motor") || pName.includes("pump") || pName.includes("air cavity") || pName.includes("air lock");
+        }
+        if (tab.includes("drainage")) {
+          return pSlug.startsWith("plum-dr-") || pName.includes("drain blockage") || pName.includes("drainage") || pName.includes("pipe blockage");
+        }
+        if (tab.includes("water filter")) {
+          return pSlug.startsWith("plum-wf-") || pName.includes("water filter") || pName.includes("purifier") || pName.includes("ro") || pName.includes("cartridge");
+        }
+        if (tab.includes("grouting")) {
+          return pSlug.startsWith("plum-gr-") || pName.includes("grout") || pName.includes("tile joint");
+        }
+        if (tab.includes("plumber on-demand") || tab.includes("on-demand")) {
+          return pSlug.startsWith("plum-od-") || pName.includes("on-demand") || pName.includes("hourly") || pName.includes("full-day") || pName.includes("30-minute") || pName.includes("consultation");
+        }
+        return true;
+      }
+
+      // 8. Carpentry
+      if (nk === "carpentry" || tab.includes("lock") || tab.includes("cupboard") || tab.includes("kitchen fittings") || tab.includes("hangers") || tab.includes("furniture") || tab.includes("doors") || tab.includes("drill") || tab.includes("carpenter")) {
+        const isCarp = sSlug.includes("carp") || sName.includes("carpent") || pSlug.startsWith("carp-") || pName.includes("lock") || pName.includes("cupboard") || pName.includes("furniture") || pName.includes("door");
+        if (!isCarp) return false;
+
+        if (tab.includes("lock") || tab.includes("handle")) {
+          return pSlug.startsWith("carp-lock-") || pName.includes("lock") || pName.includes("handle") || pName.includes("tower bolt") || pName.includes("latch");
+        }
+        if (tab.includes("cupboard") || tab.includes("drawer")) {
+          return pSlug.startsWith("carp-cup-") || pName.includes("cupboard") || pName.includes("drawer") || pName.includes("hinge") || pName.includes("channel");
+        }
+        if (tab.includes("kitchen fittings")) {
+          return pSlug.startsWith("carp-kit-") || pName.includes("kitchen") || pName.includes("trolley") || pName.includes("chimney") || pName.includes("basket");
+        }
+        if (tab.includes("hangers") || tab.includes("drying")) {
+          return pSlug.startsWith("carp-hang-") || pName.includes("hanger") || pName.includes("drying") || pName.includes("curtain");
+        }
+        if (tab.includes("furniture")) {
+          return pSlug.startsWith("carp-furn-") || pName.includes("furniture") || pName.includes("bed") || pName.includes("table") || pName.includes("wardrobe") || pName.includes("sofa");
+        }
+        if (tab.includes("doors") || tab.includes("windows")) {
+          return pSlug.startsWith("carp-door-") || pName.includes("door") || pName.includes("window") || pName.includes("mesh") || pName.includes("sliding");
+        }
+        if (tab.includes("drill") || tab.includes("hanging")) {
+          return pSlug.startsWith("carp-drill-") || pName.includes("drill") || pName.includes("hang") || pName.includes("shelf") || pName.includes("photo") || pName.includes("mirror");
+        }
+        if (tab.includes("carpenter on-demand") || tab.includes("on-demand")) {
+          return pSlug.startsWith("carp-od-") || pName.includes("on-demand") || pName.includes("hourly") || pName.includes("consultation");
+        }
+        return true;
+      }
+
+      // 9. Pest Control
+      if (nk === "pest_control" || tab.includes("termite") || tab.includes("cockroach") || tab.includes("bed bug") || tab.includes("ant")) {
+        if (tab.includes("termite") || tab.includes("cockroach")) {
+          return pSlug.startsWith("pest-term-") || pSlug.startsWith("pest-roach-") || pName.includes("termite") || pName.includes("cockroach");
+        }
+        if (tab.includes("bed bug") || tab.includes("ant")) {
+          return pSlug.startsWith("pest-bug-") || pSlug.startsWith("pest-ant-") || pName.includes("bed bug") || pName.includes("ant");
+        }
+        return true;
+      }
+
+      // 10. Goods Transport
+      if (nk === "goods_transport" || tab.includes("shifting") || tab.includes("single item")) {
+        if (tab.includes("shifting") || tab.includes("house")) {
+          return pSlug.startsWith("shift-house-") || pName.includes("shifting") || pName.includes("house");
+        }
+        if (tab.includes("single item") || tab.includes("pickup") || tab.includes("transport")) {
+          return pSlug.startsWith("shift-item-") || pName.includes("single item") || pName.includes("pickup") || pName.includes("transport");
         }
         return true;
       }
@@ -16471,7 +16800,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       // Fallback: general word overlap match
       const normSName = sName.replace(/[^a-z0-9]/g, "");
       const normTab = tab.replace(/[^a-z0-9]/g, "");
-      return normSName.includes(normTab) || normTab.includes(normSName);
+      return normSName.includes(normTab) || normTab.includes(normSName) || pName.includes(normTab) || normTab.includes(pName);
     };
 
     const getDbCategorySlug = (nk) => {
@@ -16539,19 +16868,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       };
     });
 
-    // 2. Append any extra packages created in database for this service / subtab
+    // 2. Append any extra packages created in database for this specific subtab
     const extraDbPackages = filteredDbPackages.filter(p => {
       if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
-      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
-      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
-      const pName = (p.name || "").toLowerCase();
-      const eff = (effectiveKey || "").toLowerCase();
-      const tab = (activeSubTab || "").toLowerCase();
-
-      if (eff === "mason") return true;
-      const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
-      const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
-      return matchesService || matchesTab;
+      return true;
     }).map(p => {
       const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
       return {
@@ -16590,12 +16910,14 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
   const isRefTab = refrigeratorSubtabs.includes(activeSubTab);
+  const isMicroTab = microwaveSubtabs.includes(activeSubTab);
+  const isRoTab = waterPurifierSubtabs.includes(activeSubTab);
   const isElecTab = electricalSubtabs.includes(activeSubTab);
   const isPlumbingTab = plumbingSubtabs.includes(activeSubTab);
   const isCarpentryTab = carpentrySubtabs.includes(activeSubTab);
   const isApplianceTab = applianceSubtabs.includes(activeSubTab);
   const isHvacTab = hvacSubtabs.includes(activeSubTab);
-  const displayCategoryName = isTvTab ? "TV & Display" : isWmTab ? "Washing Machine" : isRefTab ? "Refrigerator & Fridge" : isElecTab ? "Electrician" : isPlumbingTab ? "Plumber" : isCarpentryTab ? "Carpentry" : isApplianceTab ? activeSubTab : isHvacTab ? "AC & Heating" : category.name;
+  const displayCategoryName = isTvTab ? "TV & Display" : isWmTab ? "Washing Machine" : isRefTab ? "Refrigerator & Fridge" : isMicroTab ? "Microwave Oven" : isRoTab ? "Water Purifier & RO" : isElecTab ? "Electrician" : isPlumbingTab ? "Plumber" : isCarpentryTab ? "Carpentry" : isApplianceTab ? activeSubTab : isHvacTab ? "AC & Heating" : category.name;
 
   const getBhkTitle = (tab, planName, bhk) => {
     return `${tab} - ${planName} (${bhk} BHK)`;
@@ -16959,12 +17281,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       {isFirst && (
                         <div className="w-full aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
-                            src={normalizedKey === "hvac" ? acServiceImg : p.image}
+                            src={
+                              normalizedKey === "hvac"
+                                ? acServiceImg
+                                : (normalizedKey === "refrigerator" || isRefTab)
+                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                : p.image
+                            }
                             alt={p.name}
                             className="w-full h-full object-cover object-center"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
+                              e.target.src = (normalizedKey === "refrigerator" || isRefTab)
+                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                : "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
                             }}
                           />
                         </div>
