@@ -130,7 +130,7 @@ def _get_company(request):
     # company), and only fall back to the old count()==1 heuristic if that
     # slug isn't found -- so a clean single-company environment (e.g. a
     # fresh install) still works without any extra configuration.
-    default_slug = os.environ.get("DEFAULT_COMPANY_SLUG", "caldim-engineering-pvt-ltd")
+    default_slug = os.environ.get("DEFAULT_COMPANY_SLUG", "calservices")
     company = Company.objects.filter(slug=default_slug).first()
     if company:
         return company
