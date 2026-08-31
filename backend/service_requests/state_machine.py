@@ -25,7 +25,7 @@ ALLOWED_TRANSITIONS = {
     S.RECEIVED:               {S.ACCEPTED, S.REJECTED, S.CONFIRMED, S.CANCELLED},
     S.ACCEPTED:               {S.ON_THE_WAY, S.ARRIVED, S.IN_PROGRESS, S.CONFIRMED, S.ASSIGNED, S.CANCELLED, S.FEEDBACK_RECEIVED},
     S.ON_THE_WAY:             {S.ARRIVED, S.IN_PROGRESS, S.CONFIRMED, S.CANCELLED, S.FEEDBACK_RECEIVED},
-    S.ARRIVED:                {S.IN_PROGRESS, S.CANCELLED, S.FEEDBACK_RECEIVED},
+    S.ARRIVED:                {S.IN_PROGRESS, S.CANCELLED, S.FEEDBACK_RECEIVED, S.COMPLETED, S.CLOSED},
     S.IN_PROGRESS:            {S.COMPLETED, S.PROOF_SUBMITTED, S.UNABLE_TO_COMPLETE, S.FEEDBACK_RECEIVED, S.CANCELLED},
     S.PROOF_SUBMITTED:        {S.COMPLETED, S.AWAITING_VERIFICATION, S.VERIFIED, S.FEEDBACK_RECEIVED, S.CANCELLED},
     S.UNABLE_TO_COMPLETE:     {S.CANCELLED, S.REWORK_REQUESTED, S.IN_PROGRESS, S.FEEDBACK_RECEIVED, S.CLOSED},
@@ -127,6 +127,34 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
     """
     current_status = service_request.status
     current_payment_status = service_request.payment_status
+
+    # Enforce advance payment block for Masonry bookings before moving to work-start states
+    if service_request.request_kind == "quoted_work" and new_status not in [S.CONFIRMED, S.REJECTED, S.CANCELLED]:
+        is_mason = (
+            service_request.service_category in ["mason", "masonry"] or
+            (service_request.parent_request and service_request.parent_request.service_category in ["mason", "masonry"])
+        )
+        if is_mason:
+            from .models import Payment
+            payments = Payment.objects.filter(service_request=service_request, status=ServiceRequest.PaymentStatus.PAID)
+            total_paid = sum(p.amount for p in payments)
+            
+            from .models import PaintingQuote
+            quote = PaintingQuote.objects.filter(
+                service_request=service_request.parent_request, 
+                status=PaintingQuote.Status.APPROVED
+            ).first()
+            if not quote:
+                quote = PaintingQuote.objects.filter(
+                    service_request=service_request, 
+                    status=PaintingQuote.Status.APPROVED
+                ).first()
+            
+            if quote and quote.advance_amount > 0:
+                if total_paid < quote.advance_amount:
+                    raise ValidationError(
+                        {"detail": f"Cannot transition to '{new_status}'. The required 50% advance payment of ₹{float(quote.advance_amount):.2f} is not successfully recorded for this Masonry work."}
+                    )
 
     allowed = ALLOWED_TRANSITIONS.get(current_status, set())
 

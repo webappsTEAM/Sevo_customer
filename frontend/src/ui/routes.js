@@ -44,6 +44,7 @@ export const routes = {
   catalog_packages: "/catalog/packages",
   catalog_addons: "/catalog/addons",
   catalog_change_log: "/catalog/change-log",
+  catalog_painting_rates: "/catalog/painting-rates",
   marketing_coupons: "/marketing/coupons",
   marketing_offers: "/marketing/offers",
   marketing_referrals: "/marketing/referrals",

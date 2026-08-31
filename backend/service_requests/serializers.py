@@ -930,3 +930,104 @@ class AdminRefundRequestSerializer(serializers.ModelSerializer):
             "internal_notes", "status", "status_display", "info_requested_from",
             "gateway_reference", "evidence", "created_at", "updated_at"
         )
+
+
+# ─── Painting Rate Card & Quote Serializers ───────────────────────────────────
+from .models import (
+    PaintingRateCard,
+    PaintingRateCardSlab,
+    PaintingQuote,
+    PaintingQuoteItem,
+    PaintingMeasurement,
+    PaintingMaterial,
+    QuotePhoto,
+)
+
+class PaintingRateCardSlabSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingRateCardSlab
+        fields = ("id", "slab_key", "rate", "unit", "is_active")
+
+
+class PaintingRateCardSerializer(serializers.ModelSerializer):
+    slabs = PaintingRateCardSlabSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PaintingRateCard
+        fields = (
+            "id", "category", "sub_service", "unit", "base_rate", "min_rate",
+            "classification", "warranty", "inclusions", "exclusions",
+            "is_active", "has_slabs", "slabs", "is_confirmed", "comments",
+            "created_at", "updated_at"
+        )
+
+
+class PaintingQuoteItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingQuoteItem
+        fields = (
+            "id", "category", "description", "quantity", "unit", "base_rate",
+            "proposed_rate", "discount", "final_rate", "amount",
+            "classification", "included", "notes", "slab_key"
+        )
+
+
+class PaintingMeasurementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingMeasurement
+        fields = (
+            "id", "area_name", "length", "width", "height",
+            "calculated_area", "deductions", "final_area", "notes"
+        )
+
+
+class PaintingMaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingMaterial
+        fields = (
+            "id", "brand", "product_name", "finish", "shade",
+            "quantity", "unit", "rate", "amount"
+        )
+
+
+class QuotePhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuotePhoto
+        fields = ("id", "photo", "caption", "uploaded_at")
+
+
+class PaintingQuoteSerializer(serializers.ModelSerializer):
+    items = PaintingQuoteItemSerializer(many=True, read_only=True)
+    measurements = PaintingMeasurementSerializer(many=True, read_only=True)
+    materials = PaintingMaterialSerializer(many=True, read_only=True)
+    photos = QuotePhotoSerializer(many=True, read_only=True)
+    history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaintingQuote
+        fields = (
+            "id", "quote_number", "quote_version", "status", "property_type",
+            "total_paintable_area", "subtotal", "discount", "tax", "grand_total",
+            "advance_amount", "balance_amount", "valid_until", "warranty",
+            "customer_decision_token", "customer_notes", "decline_reason",
+            "warranty_card", "warranty_certificate", "completion_certificate",
+            "items", "measurements", "materials", "photos", "history", "created_at", "updated_at"
+        )
+
+    def get_history(self, obj):
+        siblings = PaintingQuote.objects.filter(
+            service_request=obj.service_request
+        ).exclude(id=obj.id).order_by("-quote_version")
+        return PaintingQuoteHistorySerializer(siblings, many=True).data
+
+
+class PaintingQuoteHistorySerializer(serializers.ModelSerializer):
+    items = PaintingQuoteItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PaintingQuote
+        fields = (
+            "id", "quote_number", "quote_version", "status", "grand_total",
+            "valid_until", "items", "created_at"
+        )
+

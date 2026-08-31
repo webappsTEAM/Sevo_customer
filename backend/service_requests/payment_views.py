@@ -56,12 +56,24 @@ class PaymentInitiateView(APIView):
         if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
             return _error("This booking is already paid.")
 
+        # Check if this booking is a quoted work with split payment
+        amount_to_pay = float(sr.total_amount)
+        if sr.request_kind == "quoted_work":
+            from .models import PaintingQuote, Payment
+            quote = PaintingQuote.objects.filter(service_request=sr.parent_request, status=PaintingQuote.Status.APPROVED).first()
+            if quote and quote.advance_amount > 0 and quote.balance_amount > 0:
+                paid_payments = Payment.objects.filter(service_request=sr, status=ServiceRequest.PaymentStatus.PAID)
+                if not paid_payments.exists():
+                    amount_to_pay = float(quote.advance_amount)
+                else:
+                    amount_to_pay = float(quote.balance_amount)
+
         mock_order_id = f"order_cal_{uuid.uuid4().hex[:16]}"
 
         return _success(
             data={
                 "order_id": mock_order_id,
-                "amount": float(sr.total_amount),
+                "amount": amount_to_pay,
                 "currency": "INR",
                 "booking_id": sr.id,
                 "request_id": sr.request_id,
@@ -101,12 +113,86 @@ class PaymentVerifyView(APIView):
             sr.save(update_fields=["payment_status", "updated_at"])
             return _error("Payment failed. Please try again.")
 
-        sr.status         = ServiceRequest.Status.CONFIRMED
-        sr.payment_status = ServiceRequest.PaymentStatus.PAID
-        sr.transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
+        transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
+
+        # Prevent duplicate payments by checking database Payment records
+        from .models import Payment
+        if payment_id and Payment.objects.filter(service_request=sr, razorpay_payment_id=payment_id).exists():
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Payment already processed.",
+            )
+
+        # Check if booking is a quoted work with split payment
+        is_split_payment = False
+        quote = None
+        amount_paid = float(sr.total_amount)
+
+        if sr.request_kind == "quoted_work":
+            from .models import PaintingQuote
+            quote = PaintingQuote.objects.filter(
+                service_request=sr.parent_request, 
+                status=PaintingQuote.Status.APPROVED
+            ).first()
+            if not quote:
+                quote = PaintingQuote.objects.filter(
+                    service_request=sr, 
+                    status=PaintingQuote.Status.APPROVED
+                ).first()
+
+            if quote and quote.advance_amount > 0 and quote.balance_amount > 0:
+                is_split_payment = True
+
+        if is_split_payment and quote:
+            # Query existing successful Payments on this request
+            existing_payments = Payment.objects.filter(service_request=sr, status=ServiceRequest.PaymentStatus.PAID)
+            total_paid_so_far = float(sum(p.amount for p in existing_payments))
+            
+            if total_paid_so_far == 0.0:
+                amount_paid = float(quote.advance_amount)
+            else:
+                amount_paid = float(quote.balance_amount)
+
+        # Create the Payment record in CalServices database
+        from decimal import Decimal
+        Payment.objects.create(
+            customer=sr.customer,
+            service_request=sr,
+            amount=Decimal(str(amount_paid)),
+            status=ServiceRequest.PaymentStatus.PAID,
+            razorpay_order_id=order_id or f"order_mock_{uuid.uuid4().hex[:12]}",
+            razorpay_payment_id=payment_id or transaction_id
+        )
+
+        sr.transaction_id = payment_id or transaction_id
         sr.payment_gateway = "gateway"
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
+
+        if is_split_payment and quote:
+            # Re-fetch payments to include the one we just saved
+            all_payments = Payment.objects.filter(service_request=sr, status=ServiceRequest.PaymentStatus.PAID)
+            total_paid_after = float(sum(p.amount for p in all_payments))
+            
+            if total_paid_after >= float(quote.grand_total):
+                sr.payment_status = ServiceRequest.PaymentStatus.PAID
+                sr.status = ServiceRequest.Status.CONFIRMED
+            elif total_paid_after >= float(quote.advance_amount):
+                sr.payment_status = ServiceRequest.PaymentStatus.COLLECTED
+                sr.status = ServiceRequest.Status.CONFIRMED
+            else:
+                sr.payment_status = ServiceRequest.PaymentStatus.PENDING
+                sr.status = ServiceRequest.Status.CONFIRMED
+        else:
+            sr.status         = ServiceRequest.Status.CONFIRMED
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+
         sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
 
         return _success(

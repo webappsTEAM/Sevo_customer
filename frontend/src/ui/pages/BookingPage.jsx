@@ -2304,12 +2304,16 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [quoteExpanded, setQuoteExpanded] = useState(false)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
 
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentTargetBookingId, setPaymentTargetBookingId] = useState(null)
+  const [paymentTargetAmount, setPaymentTargetAmount] = useState(0)
+
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
-      const quoteToken = liveData?.quote?.decision_token
+      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
       if (!quoteToken) return
       
-      const response = await fetch(`http://localhost:8001/customer/quote-token/${quoteToken}/decide/`, {
+      const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2329,7 +2333,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
-      alert("Connection to vendor server failed. Please try again.")
+      alert("Connection to server failed. Please try again.")
     }
   }
 
@@ -3088,7 +3092,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
             border: `2px solid ${
               liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
+              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
               liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
             }`,
           }}
@@ -3109,15 +3113,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               fontWeight: 800,
               background: 
                 liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
                 liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
               color: 
                 liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
                 liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
             }}>
               {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
-               liveData.quote.status === "CUSTOMER_ACCEPTED" ? "Accepted" :
+               liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
                liveData.quote.status === "CONVERTED" ? "Converted to Work" :
                liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
                liveData.quote.status.replace(/_/g, " ")}
@@ -3136,19 +3140,19 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               marginBottom: 16,
               textAlign: 'left',
               background: 
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
                 liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
               border: `1px solid ${
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
                 liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
               }`,
               color: 
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
                 liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
               fontSize: '0.82rem',
               fontWeight: 700
             }}>
-              {liveData.quote.status === "CUSTOMER_ACCEPTED" && "✓ You have accepted this quotation. Creating your service booking..."}
+              {(liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED") && "✓ You have accepted this quotation. Creating your service booking..."}
               {liveData.quote.status === "CONVERTED" && "✓ Booking confirmed! Your service request has been scheduled."}
               {liveData.quote.status === "CHANGES_REQUESTED" && `⚠ Changes requested: "${liveData.quote.customer_notes || 'Please adjust the items'}"`}
               {liveData.quote.status === "DECLINED" && `✗ You declined this quotation: "${liveData.quote.customer_decline_reason || 'Other reason'}"`}
@@ -3589,6 +3593,176 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </div>
       </motion.div>
 
+      {/* ─────────────────── MASONRY SPLIT PAYMENT CARD ─────────────────── */}
+      {(() => {
+        const isMasonOrWp = (
+          liveData?.service_category === "mason" || 
+          liveData?.service_category === "masonry" || 
+          liveData?.service_category === "waterproofing" ||
+          liveData?.service_category === "waterproofing-services" ||
+          (liveData?.child_booking && (
+            liveData.child_booking.service_category === "mason" || 
+            liveData.child_booking.service_category === "masonry" ||
+            liveData.child_booking.service_category === "waterproofing" ||
+            liveData.child_booking.service_category === "waterproofing-services"
+          ))
+        );
+
+        if (!isMasonOrWp) return null;
+
+        const quoteObj = liveData?.quote;
+        const childBooking = liveData?.child_booking;
+        
+        // We show the payment card if:
+        // 1. Quote is approved/accepted (quote.status === "APPROVED" or childBooking exists)
+        const isQuoteAccepted = quoteObj && (quoteObj.status === "APPROVED" || quoteObj.status === "CUSTOMER_ACCEPTED" || quoteObj.status === "CONVERTED" || childBooking);
+        if (!isQuoteAccepted) return null;
+
+        const grandTotal = Number(liveData.quote_grand_total || quoteObj.grand_total || quoteObj.total_amount || 0);
+        const advanceRequired = Number(liveData.quote_advance_amount || quoteObj.advance_amount || (grandTotal * 0.5));
+        const remainingBalance = Number(liveData.quote_balance_amount || quoteObj.balance_amount || (grandTotal - advanceRequired));
+        
+        const targetBookingId = childBooking ? childBooking.id : liveData.booking_id;
+        const currentPaymentStatus = childBooking ? childBooking.payment_status : liveData.payment_status;
+        const advancePaid = liveData.advance_paid || currentPaymentStatus === "collected" || currentPaymentStatus === "paid";
+        const balancePaid = liveData.balance_paid || currentPaymentStatus === "paid";
+        const currentStatus = childBooking ? childBooking.status : liveData.status;
+
+        if (balancePaid) {
+          return (
+            <div style={{
+              background: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)',
+              border: '1.5px solid #10B981',
+              borderRadius: 20,
+              padding: '1.25rem',
+              marginBottom: '1.25rem',
+              textAlign: 'left',
+              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#065F46', fontWeight: 900, fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>✓</span> Fully Paid
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#065F46', fontWeight: 700 }}>
+                Quotation total of ₹{grandTotal.toLocaleString("en-IN")} has been fully paid.
+              </p>
+            </div>
+          );
+        }
+
+        const completionStates = new Set(["completed", "closed", "feedback_pending", "feedback_received", "proof_submitted", "verified"]);
+        const isWorkCompleted = completionStates.has(currentStatus);
+
+        return (
+          <div style={{
+            background: 'white',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: 20,
+            padding: '1.25rem',
+            marginBottom: '1.25rem',
+            textAlign: 'left',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontWeight: 900, fontSize: '0.95rem' }}>
+                Quote Accepted <span style={{ fontSize: '1.1rem' }}>✓</span>
+              </div>
+              <span style={{
+                fontSize: '0.7rem',
+                padding: '3px 8px',
+                borderRadius: 6,
+                fontWeight: 800,
+                background: !advancePaid ? '#FEF3C7' : '#EFF6FF',
+                color: !advancePaid ? '#B45309' : '#1E40AF'
+              }}>
+                {!advancePaid ? "Awaiting Advance (50%)" : "Awaiting Balance (50%)"}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16, background: '#f8fafc', padding: 12, borderRadius: 12, border: '1px solid #f1f5f9' }}>
+              <div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Quote Total</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900, color: '#0f172a', marginTop: 2 }}>₹{grandTotal.toLocaleString("en-IN")}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>50% Advance</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900, color: !advancePaid ? '#7C3AED' : '#065F46', marginTop: 2 }}>
+                  ₹{advanceRequired.toLocaleString("en-IN")} {advancePaid && "✓"}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Remaining 50%</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900, color: (advancePaid && !balancePaid) ? '#7C3AED' : '#64748b', marginTop: 2 }}>₹{remainingBalance.toLocaleString("en-IN")}</div>
+              </div>
+            </div>
+
+            {!advancePaid ? (
+              <button
+                onClick={() => {
+                  setPaymentTargetBookingId(targetBookingId);
+                  setPaymentTargetAmount(advanceRequired);
+                  setShowPaymentModal(true);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(124, 58, 237, 0.25)',
+                  textAlign: 'center'
+                }}
+              >
+                Pay ₹{advanceRequired.toLocaleString("en-IN")} Advance
+              </button>
+            ) : (
+              <div>
+                {isWorkCompleted ? (
+                  <button
+                    onClick={() => {
+                      setPaymentTargetBookingId(targetBookingId);
+                      setPaymentTargetAmount(remainingBalance);
+                      setShowPaymentModal(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      background: 'linear-gradient(135deg, #0d9488, #0f766e)',
+                      color: 'white',
+                      fontWeight: 800,
+                      fontSize: '0.82rem',
+                      border: 'none',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(13, 148, 136, 0.25)',
+                      textAlign: 'center'
+                    }}
+                  >
+                    Pay ₹{remainingBalance.toLocaleString("en-IN")} Balance
+                  </button>
+                ) : (
+                  <div style={{
+                    padding: '8px 12px',
+                    background: '#f8fafc',
+                    border: '1px dashed #cbd5e1',
+                    borderRadius: 10,
+                    textAlign: 'center',
+                    fontSize: '0.75rem',
+                    color: '#64748b',
+                    fontWeight: 700
+                  }}>
+                    Work in Progress — Balance payment available upon completion
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ─────────────────── REAL-TIME 4-STAGE TIMELINE ─────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -3737,6 +3911,23 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 cancellation_reason: data?.cancellation_reason,
               }))
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Split Payment Modal */}
+      <AnimatePresence>
+        {showPaymentModal && (
+          <PaymentModal
+            total={paymentTargetAmount}
+            allowedMethods={['online']}
+            onClose={() => setShowPaymentModal(false)}
+            onConfirm={async (method) => {
+              setShowPaymentModal(false);
+              // Trigger reload to refresh tracking data and show updated status
+              window.location.reload();
+            }}
+            bookingId={paymentTargetBookingId}
           />
         )}
       </AnimatePresence>
@@ -9486,6 +9677,38 @@ export function BookingPage() {
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
   const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "", flat_house_no: "" })
+
+  const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const customerLat = formData?.latitude ? parseFloat(formData.latitude) : 12.7409;
+  const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
+  const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
+  const currentFee = distanceKm > 15 ? 300 : 0;
+
+  useEffect(() => {
+    setCart(prev => {
+      if (!prev || prev.length === 0) return prev;
+      let hasChanged = false;
+      const updated = prev.map(item => {
+        if (item.name && item.name.includes("(Site Consultation)") && item.price !== currentFee) {
+          hasChanged = true;
+          return { ...item, price: currentFee };
+        }
+        return item;
+      });
+      return hasChanged ? updated : prev;
+    });
+  }, [currentFee]);
+
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -9829,7 +10052,10 @@ export function BookingPage() {
       quantity: c.quantity || 1,
       gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
       platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
-      categoryName: c.categoryName || category?.name || ""
+      categoryName: c.categoryName || category?.name || "",
+      selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
+      selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
+      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice
     }))))
     data.append("payment_method", backendPaymentMethod)
     if (couponCode) {
@@ -9865,7 +10091,10 @@ export function BookingPage() {
             quantity: c.quantity || 1,
             gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
             platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
-            categoryName: c.categoryName || category?.name || ""
+            categoryName: c.categoryName || category?.name || "",
+            selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
+            selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
+            predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice
           }))
         }
         setSuccessData(savedData)
@@ -10313,6 +10542,8 @@ export function BookingPage() {
                   }}
                   setLocation={setLocation}
                   setFormData={setFormData}
+                  formData={formData}
+                  dbCatalogPackages={dbCatalogPackages}
                 />
               );
             } else if (isMason) {
@@ -10693,7 +10924,7 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
-export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData, setLocation, setFormData }) {
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData, setLocation, setFormData, formData, dbCatalogPackages }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState(null);
   const [searchQuery, setSearchQuery] = useState("")
@@ -10703,6 +10934,23 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
+  const [activeTab, setActiveTab] = useState("paint-interior")
+
+  const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const customerLat = formData?.latitude ? parseFloat(formData.latitude) : 12.7409;
+  const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
+  const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
+  const currentFee = distanceKm > 15 ? 300 : 0;
   const { user } = useAuth();
   const navigate = useNavigate();
   const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
@@ -10750,218 +10998,103 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     }
   }
 
-  const paintingKey = React.useMemo(() => {
-    if (!packagesData) return null;
-    return Object.keys(packagesData).find(key =>
-      packagesData[key] && packagesData[key].some(p => p.category_slug === "painting" || p.category_slug === "paintings" || String(p.category) === "paintings" || String(p.category) === "17")
-    ) || null;
-  }, [packagesData]);
+  const [localCatalogPackages, setLocalCatalogPackages] = React.useState(dbCatalogPackages || []);
+
+  React.useEffect(() => {
+    if (dbCatalogPackages && dbCatalogPackages.length > 0) {
+      setLocalCatalogPackages(dbCatalogPackages);
+    }
+  }, [dbCatalogPackages]);
+
+  React.useEffect(() => {
+    if (!localCatalogPackages || localCatalogPackages.length === 0) {
+      apiRequest("/settings/catalog/public/packages/")
+        .then((res) => {
+          if (res?.success && Array.isArray(res.data)) {
+            setLocalCatalogPackages(res.data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch public catalog packages in modal:", err));
+    }
+  }, []);
 
   const dbPackages = React.useMemo(() => {
-    return paintingKey ? packagesData[paintingKey] : [];
-  }, [packagesData, paintingKey]);
+    if (!localCatalogPackages || !Array.isArray(localCatalogPackages)) return [];
+    return localCatalogPackages.filter(p =>
+      p.category_slug === "painting" ||
+      p.category_slug === "paintings" ||
+      String(p.category) === "paintings" ||
+      String(p.category) === "17" ||
+      p.service_slug === "interior-painting" ||
+      p.service_slug === "exterior-painting" ||
+      p.service_slug === "waterproofing" ||
+      p.service_slug === "wood-metal" ||
+      p.service_slug === "texture-decor"
+    );
+  }, [localCatalogPackages]);
 
-  const PAINTING_SERVICES = React.useMemo(() => {
-    const staticServices = [
-      {
-        id: "paint-interior",
-        serviceSlug: "interior-painting",
-        name: "Interior Painting",
-        rating: "4.8",
-        reviews: "18K",
-        image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
-        points: [
-          "Complete wall prep & putty application",
-          "Double coat premium emulsion paint",
-          "Detailed masking & post-cleanup protection",
-          "1-Year Service Warranty"
-        ],
-        benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
-        includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-        excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
-        inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
-        steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
-        subOptions: [
-          { id: "int-single-wall", name: "Single Wall", price: 0 },
-          { id: "int-one-room", name: "One Room", price: 0 },
-          { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
-          { id: "int-full-home", name: "Full House painting", price: 0 },
-          { id: "int-ceiling", name: "Ceiling", price: 0 }
-        ]
-      },
-      {
-        id: "paint-exterior",
-        serviceSlug: "exterior-painting",
-        name: "Exterior Painting",
-        rating: "4.7",
-        reviews: "15K",
-        image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
-        points: [
-          "Pressure washing & crack filling",
-          "Anti-fungal primer coat",
-          "Double coat weather-defense paint",
-          "Dust and dirt resistant finish"
-        ],
-        benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
-        includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
-        excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
-        inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
-        steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
-        subOptions: [
-          { id: "ext-wall", name: "Exterior Wall", price: 0 },
-          { id: "ext-building", name: "Building Exterior", price: 0 },
-          { id: "ext-compound", name: "Compound Wall", price: 0 },
-          { id: "ext-terrace", name: "Terrace", price: 0 }
-        ]
-      },
-      {
-        id: "paint-waterproofing",
-        serviceSlug: "waterproofing",
-        name: "Waterproofing Solutions",
-        rating: "4.6",
-        reviews: "12K",
-        image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
-        points: [
-          "Expert Leakage Detection & Dampness Solutions",
-          "Terrace, Bathroom & External Wall Waterproofing",
-          "We diagnose the cause. Fix it right. Waterproofing that lasts."
-        ],
-        benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
-        includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
-        excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
-        inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
-        steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
-        subOptions: [
-          { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
-          { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
-          { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
-          { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
-          { id: "wp-crack", name: "Crack Filling", price: 0 }
-        ]
-      },
-      {
-        id: "paint-wood-metal",
-        serviceSlug: "wood-metal",
-        name: "Wood & Metal Painting",
-        rating: "4.7",
-        reviews: "9K",
-        image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
-        points: [
-          "Rust removal & sanding treatment",
-          "Specialized wood/metal primer application",
-          "PU coating or premium enamel paint",
-          "High gloss or sophisticated matte finish"
-        ],
-        benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
-        includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
-        excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
-        inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
-        steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
-        subOptions: [
-          { id: "wm-doors", name: "Doors", price: 0 },
-          { id: "wm-windows", name: "Windows", price: 0 },
-          { id: "wm-grills", name: "Grills", price: 0 },
-          { id: "wm-cabinets", name: "Cabinets", price: 0 },
-          { id: "wm-gates", name: "Gates", price: 0 }
-        ]
-      },
-      {
-        id: "paint-texture",
-        serviceSlug: "texture-decor",
-        name: "Texture & Decorative Painting",
-        rating: "4.8",
-        reviews: "8K",
-        image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
-        points: [
-          "Specialty textured finishes & stencils",
-          "Premium metallic & non-metallic glazes",
-          "Vibrant accent wall styling consultation"
-        ],
-        benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
-        includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
-        excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
-        inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
-        steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
-        subOptions: [
-          { id: "td-texture", name: "Texture Finish", price: 0 },
-          { id: "td-designer", name: "Designer Finish", price: 0 },
-          { id: "td-stencil", name: "Stencil Decor", price: 0 },
-          { id: "td-accent", name: "Accent Wall Painting", price: 0 }
-        ]
-      }
-    ];
+  const PAINTING_CATEGORIES = [
+    { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
+    { id: "paint-exterior", slug: "exterior-painting", name: "Exterior Painting", image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" },
+    { id: "paint-waterproofing", slug: "waterproofing", name: "Waterproofing", image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=300&q=80&fit=crop" },
+    { id: "paint-wood-metal", slug: "wood-metal", name: "Wood & Metal", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop" },
+    { id: "paint-texture", slug: "texture-decor", name: "Texture Decor", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=300&q=80&fit=crop" }
+  ];
 
-    if (dbPackages && dbPackages.length > 0) {
-      return staticServices.map(service => {
-        const relevantPkgs = dbPackages.filter(p =>
-          p.service_slug === service.serviceSlug ||
-          (p.service_name && p.service_name.toLowerCase() === service.name.toLowerCase()) ||
-          String(p.service) === service.serviceSlug
-        );
-        if (relevantPkgs.length > 0) {
-          const cust = relevantPkgs[0]?.service_customization || {};
-          const dynamicSubOptions = relevantPkgs.map(p => ({
-            id: p.slug || p.id.toString(),
-            name: p.slug === "int-full-home" ? "Full House painting" : p.name,
-            price: parseFloat(p.price) || 0
-          }));
-          const serviceImg = relevantPkgs.find(p => p.service_image && !p.service_image.includes("1581578731548"))?.service_image;
-          const pkgImg = relevantPkgs.find(p => p.image && !p.image.includes("1581578731548"))?.image;
-          const resolvedImg = (serviceImg && serviceImg.trim()) ? serviceImg : ((pkgImg && pkgImg.trim()) ? pkgImg : service.image);
+  const PAINTING_SUB_SERVICES = React.useMemo(() => {
+    if (!dbPackages || !Array.isArray(dbPackages)) return [];
+    return dbPackages.map(pkg => {
+      const rawSlug = pkg.service_slug || "interior-painting";
+      let catId = "paint-interior";
+      if (rawSlug === "exterior-painting") catId = "paint-exterior";
+      else if (rawSlug === "waterproofing") catId = "paint-waterproofing";
+      else if (rawSlug === "wood-metal") catId = "paint-wood-metal";
+      else if (rawSlug === "texture-decor") catId = "paint-texture";
 
-          return {
-            ...service,
-            name: cust.heading || relevantPkgs[0]?.service_name || service.name,
-            image: resolvedImg,
-            rating: cust.rating || service.rating,
-            reviews: cust.reviews || service.reviews,
-            points: Array.isArray(cust.points) && cust.points.length > 0
-              ? cust.points.map(p => typeof p === "string" ? { text: p, checked: true } : p)
-                .filter(p => p && p.checked !== false && p.text)
-                .map(p => p.text)
-              : service.points,
-            benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0
-              ? cust.benefits.map(b => typeof b === "string" ? { title: b, checked: true } : b)
-                .filter(b => b && b.checked !== false && b.title)
-                .map(b => b.title)
-              : service.benefits,
-            includes: Array.isArray(cust.includes) && cust.includes.length > 0
-              ? cust.includes.map(i => typeof i === "string" ? { text: i, checked: true } : i)
-                .filter(i => i && i.checked !== false && i.text)
-                .map(i => i.text)
-              : service.includes,
-            excludes: Array.isArray(cust.excludes) && cust.excludes.length > 0
-              ? cust.excludes.map(e => typeof e === "string" ? { text: e, checked: true } : e)
-                .filter(e => e && e.checked !== false && e.text)
-                .map(e => e.text)
-              : service.excludes,
-            inspectionHighlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0
-              ? cust.inspection_highlights.map(h => typeof h === "string" ? { text: h, checked: true } : h)
-                .filter(h => h && h.checked !== false && h.text)
-                .map(h => h.text)
-              : service.inspectionHighlights,
-            steps: Array.isArray(cust.steps) && cust.steps.length > 0
-              ? cust.steps.filter(s => s && s.checked !== false)
-              : service.steps,
-            faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0
-              ? cust.faqs.filter(f => f && f.checked !== false)
-                .map(f => ({ q: f.q || f.question || "", a: f.a || f.answer || "" }))
-              : service.faqs,
-            reviews_list: cust.reviews_list || [],
-            button_text: cust.button_text || "View details",
-            price_list: Array.isArray(cust.price_list) && cust.price_list.length > 0
-              ? cust.price_list.filter(p => p && p.checked !== false)
-              : [],
-            paint_types: Array.isArray(cust.paint_types) && cust.paint_types.length > 0
-              ? cust.paint_types.filter(pt => pt && pt.checked !== false)
-              : [],
-            subOptions: dynamicSubOptions
-          };
-        }
-        return service;
-      });
-    }
-    return staticServices;
+      const cust = pkg.service_customization || {};
+      const resolvedImg = pkg.image || pkg.service_image || "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop";
+
+      return {
+        id: pkg.slug || pkg.id.toString(),
+        catId: catId,
+        name: pkg.name,
+        price: parseFloat(pkg.base_price) || 0,
+        priceStr: pkg.base_price && parseFloat(pkg.base_price) > 0 ? `Starts at ₹${pkg.base_price}` : "Inspection-based pricing",
+        badge: pkg.tag || (pkg.popular ? "Popular" : ""),
+        badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        duration: pkg.duration || "Flexible",
+        rating: cust.rating || "4.8",
+        reviews: cust.reviews || "100+",
+        image: resolvedImg,
+        includes: catId === "paint-waterproofing"
+          ? ["Compulsory Air Crack Check", ...(Array.isArray(pkg.includes) ? pkg.includes : [])]
+          : (Array.isArray(pkg.includes) && pkg.includes.length > 0
+            ? pkg.includes
+            : ["Professional surface check", "Digital wall measurement", "Clean post-service"]),
+        excludes: Array.isArray(pkg.excludes) ? pkg.excludes : [],
+        benefits: (Array.isArray(cust.benefits) ? cust.benefits : ["Top Rated", "Premium Paint", "Expert Quality", "Mess-free Clean"])
+          .filter(b => {
+            if (!b) return false;
+            const isObj = typeof b === 'object';
+            const label = isObj ? (b.title || b.label || b.name || "") : String(b);
+            if (isObj && b.checked === false) return false;
+            const isWaterproofing = catId === "paint-waterproofing";
+            if (!isWaterproofing && label.toLowerCase().includes("warranty")) return false;
+            return true;
+          }),
+        inspectionHighlights: catId === "paint-waterproofing"
+          ? ["Compulsory Air Crack Check", ...(Array.isArray(cust.inspection_highlights) ? cust.inspection_highlights : ["Visual Inspection", "Moisture Audit"])]
+          : (Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0
+            ? cust.inspection_highlights
+            : ["Visual Inspection", "Moisture Audit"]),
+        steps: Array.isArray(cust.steps) ? cust.steps : ["Select Areas", "Free Inspection", "Expert Painting"],
+        desc: pkg.description || `Expert painting service for your ${pkg.name.toLowerCase()}.`,
+        faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : [
+          { q: "Is inspection free?", a: "Yes, inspection is free within a 15 km radius. A fee of ₹300 applies beyond 15 km." }
+        ],
+        rawPackage: pkg
+      };
+    });
   }, [dbPackages]);
 
   const cardRefs = useRef({});
@@ -11103,18 +11236,17 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   };
 
   const filteredServices = searchQuery
-    ? PAINTING_SERVICES.filter(s => {
+    ? PAINTING_SUB_SERVICES.filter(s => {
       try {
         const queryLower = searchQuery.toLowerCase().trim();
         if (!queryLower) return true;
         const words = queryLower.split(/\s+/);
 
         const exactMatch = (s.name && s.name.toLowerCase().includes(queryLower)) ||
-          (s.points && s.points.some(p => p && p.toLowerCase().includes(queryLower))) ||
           (s.includes && s.includes.some(inc => inc && inc.toLowerCase().includes(queryLower)));
         if (exactMatch) return true;
 
-        const keywords = getSearchKeywords(s.id);
+        const keywords = getSearchKeywords(s.catId);
         if (keywords && keywords.length > 0) {
           return words.some(word =>
             keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
@@ -11127,7 +11259,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         return s.name && s.name.toLowerCase().includes(queryLower);
       }
     })
-    : PAINTING_SERVICES;
+    : PAINTING_SUB_SERVICES.filter(s => s.catId === activeTab);
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -11297,25 +11429,49 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {category?.name || "Painting Services"}
               </h2>
             </div>
-            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0" }}>
-              {PAINTING_SERVICES.map(svc => (
-                <button
-                  key={svc.id}
-                  className="uc-paint-tab-btn"
-                  onClick={() => scrollToCard(svc.id)}
-                >
-                  <img
-                    className="uc-paint-tab-img"
-                    src={resolveImageUrl(svc.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60")}
-                    alt={svc.name}
-                    onError={e => {
-                      e.target.onerror = null;
-                      e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60";
+            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", display: "flex", gap: "1.25rem", margin: 0, padding: "8px 0" }}>
+              {PAINTING_CATEGORIES.map(cat => {
+                const isActive = activeTab === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    className={`uc-paint-tab-btn ${isActive ? "active" : ""}`}
+                    onClick={() => { setActiveTab(cat.id); setSearchQuery(""); }}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer",
+                      display: "flex", flexDirection: "column", alignItems: "center", width: "90px"
                     }}
-                  />
-                  <span className="uc-paint-tab-label">{svc.name}</span>
-                </button>
-              ))}
+                  >
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "16px",
+                      background: "#f0fdf4",
+                      border: isActive ? "2.5px solid #10b981" : "1.5px solid #dcfce7",
+                      color: "#059669",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
+                      boxShadow: isActive ? "0 0 0 3px rgba(16,185,129,0.18)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
+                      overflow: "hidden",
+                      transition: "all 0.2s ease"
+                    }}>
+                      <img
+                        src={resolveImageUrl(cat.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop")}
+                        alt={cat.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                        }}
+                      />
+                    </div>
+                    <span className="uc-paint-tab-label" style={{
+                      marginTop: "6px", fontSize: "0.68rem", lineHeight: "1.2",
+                      fontWeight: isActive ? 900 : 700, color: isActive ? "#0f172a" : "#64748b",
+                      textAlign: "center"
+                    }}>
+                      {cat.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -11339,94 +11495,127 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
 
 
-                  <h3 className="uc-paint-section-title">Painting choices for your home</h3>
-                  <div className="uc-paint-list">
+                  <h3 className="uc-paint-section-title">
+                    {PAINTING_CATEGORIES.find(c => c.id === activeTab)?.name || "Painting Solutions"}
+                  </h3>
+
+                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                     {filteredServices.map(service => {
-                      const isExpanded = !!expanded[service.id];
-                      const count = getCartCount(service.id);
+                      const cartId = `serv-paint-estimate-${service.id}`;
+                      const count = getCartCount(cartId);
                       return (
-                        <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
-                          <div className="uc-paint-card-img-box">
-                            <img
-                              src={resolveImageUrl(service.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
-                              alt={service.name}
-                              onError={e => {
-                                e.target.onerror = null;
-                                e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop";
-                              }}
-                            />
-                            <div className="uc-paint-card-img-overlay">
-                              <h4 className="uc-paint-card-overlay-title">{service.name}</h4>
-                              <div className="uc-paint-card-overlay-rating">
-                                <Star size={12} style={{ fill: "#fbbf24", color: "#fbbf24", marginRight: 2 }} />
-                                <span>{service.rating} ({service.reviews})</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="uc-paint-card-body">
-                            <ul className="uc-paint-points">
-                              {service.points.map((p, idx) => (
-                                <li key={idx} className="uc-paint-point-item">
-                                  <span className="uc-paint-point-check">✓</span>
-                                  <span>{p}</span>
-                                </li>
-                              ))}
-                            </ul>
-
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1.25rem' }}>
-                              <button
-                                onClick={() => setActiveDetailService(service)}
-                                style={{
-                                  background: 'none', border: 'none',
-                                  color: '#7C3AED', fontWeight: 800, fontSize: '0.85rem',
-                                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                  gap: '2px', padding: 0
-                                }}
-                              >
-                                {service.button_text || "View details"} <ChevronRight size={14} />
-                              </button>
-                              <button
-                                className="uc-paint-action-btn"
-                                onClick={() => {
-                                  const cartId = `serv-paint-estimate-${service.id}`;
-                                  let updatedCart = [...cart];
-                                  const existing = updatedCart.find(c => c.id === cartId);
-                                  if (!existing) {
-                                    const newItem = {
-                                      id: cartId,
-                                      name: `${service.name} (Site Consultation)`,
-                                      price: 49,
-                                      quantity: 1,
-                                      categoryName: "Painting"
-                                    };
-                                    updatedCart.push(newItem);
-                                    setCart(prev => {
-                                      const hasIt = prev.some(c => c.id === cartId);
-                                      if (hasIt) return prev;
-                                      return [...prev, newItem];
-                                    });
-                                  }
-                                  if (onGetEstimate) {
-                                    onGetEstimate(updatedCart);
-                                  } else {
-                                    onCheckout(updatedCart);
-                                  }
-                                }}
-                                style={{ padding: '0.5rem 1.4rem', fontSize: '0.8rem' }}
-                              >
-                                GET ESTIMATE ₹49
-                              </button>
-                            </div>
-
-                            {getParentCartCount(service.id) > 0 && (
-                              <div className="uc-paint-card-footer" style={{ borderTop: '1px solid #f1f5f9', marginTop: '1rem', paddingTop: '0.75rem' }}>
-                                <div className="uc-paint-card-price" style={{ textAlign: 'center', width: '100%' }}>
-                                  <span style={{ color: '#059669', fontSize: '0.85rem', fontWeight: 800 }}>
-                                    ✓ {getParentCartCount(service.id)} area(s) selected for site visit
+                        <div
+                          key={service.id}
+                          ref={el => { cardRefs.current[service.id] = el; }}
+                          style={{
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "20px",
+                            padding: "1.25rem",
+                            background: "#ffffff",
+                            display: "flex",
+                            flexDirection: "column",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
+                            {/* Left Info Column */}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                {service.badge && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                                    {service.badge}
                                   </span>
-                                </div>
+                                )}
                               </div>
-                            )}
+                              <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
+                                {service.priceStr}
+                                {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
+                              </p>
+                              <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
+                                {currentFee > 0 ? "Visit Charge: ₹300 (> 15 km)" : "Visit Charge: FREE (≤ 15 km)"}
+                              </div>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+
+                              {/* Includes Bullet Points */}
+                              <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                {(service.includes || []).slice(0, 3).map((inc, i) => (
+                                  <li key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
+                                    <span style={{ color: "#94a3b8", fontSize: "1rem", lineHeight: 0 }}>•</span>
+                                    {typeof inc === 'string' ? inc : (inc?.text || '')}
+                                  </li>
+                                ))}
+                              </ul>
+
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                                <button
+                                  onClick={() => setActiveDetailService(service)}
+                                  style={{
+                                    background: "none", border: "none", color: "#2563eb", fontWeight: 850, fontSize: "0.75rem",
+                                    cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", padding: 0
+                                  }}
+                                >
+                                  View details <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    let updatedCart = [...cart];
+                                    const existing = updatedCart.find(c => c.id === cartId);
+                                    if (!existing) {
+                                      const newItem = {
+                                        id: cartId,
+                                        name: `${service.name} (Site Consultation)`,
+                                        price: currentFee,
+                                        quantity: 1,
+                                        categoryName: "Painting"
+                                      };
+                                      updatedCart.push(newItem);
+                                      setCart(prev => {
+                                        const hasIt = prev.some(c => c.id === cartId);
+                                        if (hasIt) return prev;
+                                        return [...prev, newItem];
+                                      });
+                                    }
+                                    if (onGetEstimate) {
+                                      onGetEstimate(updatedCart);
+                                    } else {
+                                      onCheckout(updatedCart);
+                                    }
+                                  }}
+                                  style={{
+                                    background: "#0d9488", border: "none", color: "#ffffff", borderRadius: "8px",
+                                    padding: "6px 14px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                    boxShadow: "0 2px 4px rgba(13,148,136,0.2)", textTransform: "uppercase", letterSpacing: "0.02em"
+                                  }}
+                                >
+                                  {currentFee > 0 ? "Book Consultation (₹300)" : "Book Free Consultation"}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Right Image Column */}
+                            <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                              <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
+                                <img
+                                  src={service.image}
+                                  alt={service.name}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  onError={e => {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                                  }}
+                                />
+                              </div>
+                              {count > 0 && (
+                                <div style={{
+                                  position: "absolute", bottom: "4px", background: "#10b981", color: "#ffffff",
+                                  padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 850,
+                                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+                                }}>
+                                  ✓ Selected
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -11864,7 +12053,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const rating = parseFloat(activeDetailService.rating) || 4.8;
                   const rawVal = parseFloat(activeDetailService.reviews);
-                  const multiplier = activeDetailService.reviews.toLowerCase().includes('k') ? 1000 : 1;
+                  const reviewsStr = String(activeDetailService.reviews || "100+");
+                  const multiplier = reviewsStr.toLowerCase().includes('k') ? 1000 : 1;
                   const total = isNaN(rawVal) ? 100 : Math.round(rawVal * multiplier);
 
                   let r5 = 0, r4 = 0, r3 = 0, r2 = 0, r1 = 0;
@@ -11893,7 +12083,93 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   const w2 = (r2 / total) * 100;
                   const w1 = (r1 / total) * 100;
 
-                  const serviceId = activeDetailService.id;
+                  const serviceId = activeDetailService.catId || activeDetailService.id;
+
+                  let resolvedExtra = PAINTING_DETAILS_EXTRA[serviceId] || { reviews: [], faqs: [] };
+                  if (serviceId === "paint-waterproofing") {
+                    const detailName = String(activeDetailService.name || "").toLowerCase();
+                    if (detailName.includes("terrace")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Ramesh Kumar", rating: 5.0, comment: "Excellent 4-coat waterproofing on our terrace. Did a water ponding test, no leakages found!" },
+                          { name: "Sunita Reddy", rating: 4.8, comment: "Very professional work. They sealed all hairline cracks before applying the coats." }
+                        ],
+                        faqs: [
+                          { q: "Do you offer a warranty on terrace waterproofing?", a: "Yes, our 4-coat terrace waterproofing comes with a 5-year warranty. The 2-coat option is a standard protective treatment without a extended warranty." },
+                          { q: "Will terrace waterproofing withstand heavy rainfall and standing water?", a: "Absolutely. Our 4-coat elastomeric coating forms a seamless, joint-free membrane designed to resist ponding water and thermal expansion." },
+                          { q: "How long does the terrace treatment take to cure?", a: "Each coat takes about 4 to 6 hours to dry. The entire process takes 1-2 days, and it should not be walked on for 24 hours after completion." }
+                        ]
+                      };
+                    } else if (detailName.includes("tar sheet") || detailName.includes("gas heating")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Karthik Raja", rating: 4.9, comment: "Heavy-duty gas heating membrane installed on our flat roof. Very solid job." },
+                          { name: "Meera Nair", rating: 5.0, comment: "Amazing quality APP membrane sheet. Zero dampness now." }
+                        ],
+                        faqs: [
+                          { q: "What is APP membrane/tar sheet waterproofing?", a: "It is a torch-applied modified bituminous membrane that offers extreme durability and heat resistance, ideal for roofs and slabs." },
+                          { q: "How long does tar sheet waterproofing last?", a: "It is one of the most durable waterproofing options and comes with a 10-year warranty." },
+                          { q: "Is it suitable for high-traffic roof areas?", a: "Yes, once applied, it provides a tough, puncture-resistant barrier. However, a protective screed/plaster layer is recommended for regular foot traffic." }
+                        ]
+                      };
+                    } else if (detailName.includes("bathroom")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Amit Patel", rating: 4.8, comment: "Clean bathroom grouting. Seepage in the kitchen wall downstairs has completely stopped." },
+                          { name: "Anil Sharma", rating: 4.9, comment: "Polite technicians, clean work, no mess left behind." }
+                        ],
+                        faqs: [
+                          { q: "Do you need to break bathroom tiles for waterproofing?", a: "For minor joint leakages, we do tile-joint grouting without breaking. For structural leakages, under-tile slab grouting or floor tile removal might be required." },
+                          { q: "How long does bathroom waterproofing take?", a: "It usually takes 1 day for grouting and sealants, and up to 2 days if floor tile relaying is needed." },
+                          { q: "When can we start using the bathroom after the service?", a: "We recommend keeping the bathroom dry for 24 hours post-treatment to allow the chemical grouts to cure completely." }
+                        ]
+                      };
+                    } else if (detailName.includes("water tank") || detailName.includes("tank")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Vijay R.", rating: 5.0, comment: "Water tank looks fresh and clean. The crystalline coating was applied very neatly." },
+                          { name: "Suresh P.", rating: 4.8, comment: "Quick service, did it in 4 hours. Checked for leaks and all clear." }
+                        ],
+                        faqs: [
+                          { q: "Are the chemicals used for water tank waterproofing safe for drinking water?", a: "Yes, we use food-grade, non-toxic crystalline waterproofing slurry that is certified safe for drinking water tanks." },
+                          { q: "Do you clean the tank before waterproofing?", a: "Yes, high-pressure water jet cleaning, sludge removal, and wall scrubbing are fully included before we apply the coatings." },
+                          { q: "How long should we wait before filling the tank again?", a: "We recommend curing for 24-48 hours, followed by a quick rinse, before refilling it with drinking water." }
+                        ]
+                      };
+                    } else if (detailName.includes("epoxy") || detailName.includes("flooring")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Nippon Electronics", rating: 5.0, comment: "High gloss 2mm epoxy flooring done for our manufacturing floor. Perfect finish." },
+                          { name: "Balaji Industries", rating: 4.9, comment: "Strong chemical resistance, easily handles heavy forklift traffic." }
+                        ],
+                        faqs: [
+                          { q: "What thickness of epoxy flooring should I choose?", a: "Choose 1mm for light foot traffic and warehouses, 2mm for medium industrial usage, and 3mm for heavy machinery or chemical-prone areas." },
+                          { q: "How long does epoxy flooring take to dry?", a: "It is dry to walk on in 24 hours, but requires 3-5 days to fully cure for heavy vehicles and machinery." },
+                          { q: "Is epoxy flooring slip-resistant?", a: "Yes, we can add anti-slip grit/texture to the top coat to prevent slips, especially in wet or oily industrial environments." }
+                        ]
+                      };
+                    } else if (detailName.includes("pu coating") || detailName.includes("dampness")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Gopal K.", rating: 4.8, comment: "Solved dampness on our living room wall. Excellent scanner check." }
+                        ],
+                        faqs: [
+                          { q: "How do you detect dampness on internal walls?", a: "We use professional digital moisture meters to scan walls and locate the exact source of seepage or rising dampness." },
+                          { q: "Is PU coating applied on wet walls?", a: "No, the wall must be cleaned and allowed to dry or treated with anti-efflorescence primers before applying the PU seepage barrier." }
+                        ]
+                      };
+                    } else if (detailName.includes("roof repair") || detailName.includes("patch")) {
+                      resolvedExtra = {
+                        reviews: [
+                          { name: "Raghu N.", rating: 4.7, comment: "Balcony joints and small roof cracks repaired before rains. Stopped the leakage." }
+                        ],
+                        faqs: [
+                          { q: "When is roof patch work sufficient vs full waterproofing?", a: "Patch work is ideal for localized cracks and joint leakages. For widespread water seepage, a complete multi-coat membrane is recommended." },
+                          { q: "What material is used for roof crack repair?", a: "We use fiber-reinforced elastomeric sealants that expand and contract with temperature changes without cracking." }
+                        ]
+                      };
+                    }
+                  }
 
                   // Define category-specific data
                   let startingRateText = "";
@@ -11931,96 +12207,150 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     }
                   } else {
                     if (serviceId === "paint-interior") {
-                      startingRateText = "Starting from ₹7/sq.ft";
+                      startingRateText = "Starting from ₹12/sq.ft";
                       subtitleText = "Final price depends on area, paint type & site inspection";
                       priceList = [
-                        { type: "Tractor UNO", price: "₹7/sq.ft" },
-                        { type: "Tractor Emulsion", price: "₹9/sq.ft" },
-                        { type: "Premium Emulsion", price: "₹15/sq.ft" },
-                        { type: "Royal Luxury Emulsion", price: "₹27/sq.ft" }
+                        { type: "Ceiling Painting", price: "₹12/sq.ft" },
+                        { type: "Premium Interior Emulsion", price: "₹15/sq.ft" }
                       ];
                       paintTypes = [
-                        { id: "tractor-uno", name: "Tractor UNO", price: 7, type: "Economy", image: "/tractor-uno.png" },
-                        { id: "tractor-emulsion", name: "Tractor Emulsion", price: 9, type: "Standard", image: "/tractor-emulsion.png" },
-                        { id: "premium-emulsion", name: "Premium Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" },
-                        { id: "royal-luxury", name: "Royal Luxury Emulsion", price: 27, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                        { id: "ceiling-painting", name: "Ceiling Painting", price: 12, type: "Standard", image: "/tractor-emulsion.png" },
+                        { id: "premium-interior-emulsion", name: "Premium Interior Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" }
                       ];
                     } else if (serviceId === "paint-exterior") {
-                      startingRateText = "Starting from ₹15/sq.ft";
+                      startingRateText = "Starting from ₹18/sq.ft";
                       subtitleText = "Final price depends on area, paint type & site inspection";
                       priceList = [
-                        { type: "Economy Exterior", price: "₹15/sq.ft" },
-                        { type: "Weather Protection", price: "₹20/sq.ft" },
-                        { type: "Premium Exterior", price: "₹28/sq.ft" },
-                        { type: "Advanced Weatherproof", price: "₹35/sq.ft" }
+                        { type: "Weatherproof Exterior Emulsion", price: "₹18/sq.ft" }
                       ];
                       paintTypes = [
-                        { id: "economy-exterior", name: "Economy Exterior", price: 15, type: "Economy", image: "/tractor-uno.png" },
-                        { id: "weather-protection", name: "Weather Protection", price: 20, type: "Standard", image: "/tractor-emulsion.png" },
-                        { id: "premium-exterior", name: "Premium Exterior", price: 28, type: "Premium", image: "/premium-emulsion.png" },
-                        { id: "advanced-weatherproof", name: "Advanced Weatherproof", price: 35, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                        { id: "weatherproof-exterior-emulsion", name: "Weatherproof Exterior Emulsion", price: 18, type: "Standard", image: "/tractor-emulsion.png" }
                       ];
                     } else if (serviceId === "paint-waterproofing") {
-                      startingRateText = "Starting from ₹30/sq.ft";
-                      subtitleText = "Final price after site inspection. Treatment depends heavily on the leakage problem.";
-                      viewListText = "View Treatments →";
-                      hideListText = "Hide Treatments ↑";
-                      tableHeaderType = "Waterproofing Service";
-                      priceList = [
-                        { type: "Terrace Waterproofing", price: "₹45/sq.ft" },
-                        { type: "Bathroom Waterproofing", price: "₹50/sq.ft" },
-                        { type: "Wall Seepage Treatment", price: "₹35/sq.ft" },
-                        { type: "Crack Waterproofing", price: "₹30/sq.ft" },
-                        { type: "Balcony Waterproofing", price: "₹45/sq.ft" }
-                      ];
-                      paintTypes = [
-                        { id: "crack-waterproofing", name: "Crack Waterproofing", price: 30, type: "Basic", image: "/premium-emulsion.png" },
-                        { id: "wall-seepage", name: "Wall Seepage Treatment", price: 35, type: "Standard", image: "/tractor-emulsion.png" },
-                        { id: "terrace-waterproofing", name: "Terrace Waterproofing", price: 45, type: "Premium", image: "/tractor-uno.png" },
-                        { id: "balcony-waterproofing", name: "Balcony Waterproofing", price: 45, type: "Premium", image: "/royal-luxury-emulsion.png" },
-                        { id: "bathroom-waterproofing", name: "Bathroom Waterproofing", price: 50, type: "Advanced", image: "/premium-emulsion.png" }
-                      ];
+                      const detailName = String(activeDetailService.name || "").toLowerCase();
+                      subtitleText = "Final price after site inspection. Slabs depend on treatment type & area.";
+                      viewListText = "View Treatments & Slabs →";
+                      hideListText = "Hide Treatments & Slabs ↑";
+                      tableHeaderType = "Waterproofing Solution / Slabs";
+
+                      if (detailName.includes("terrace")) {
+                        startingRateText = "Starting from ₹20/sq.ft";
+                        priceList = [
+                          { type: "Terrace Waterproofing (2 Coat)", price: "₹20/sq.ft (Mat+Lab)" },
+                          { type: "Terrace Waterproofing (4 Coat, 5-yr Warranty)", price: "₹50/sq.ft (Mat+Lab)" }
+                        ];
+                        paintTypes = [
+                          { id: "terrace-2coat", name: "Terrace Waterproofing (2 Coat)", price: 20, type: "Basic", image: "/tractor-uno.png" },
+                          { id: "terrace-4coat", name: "Terrace Waterproofing (4 Coat)", price: 50, type: "Premium", image: "/premium-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("tar sheet") || detailName.includes("gas heating")) {
+                        startingRateText = "Starting from ₹100/sq.ft";
+                        priceList = [
+                          { type: "Tar Sheet Waterproofing (3 mm, 10-yr Warranty)", price: "₹100/sq.ft" }
+                        ];
+                        paintTypes = [
+                          { id: "tarsheet-3mm", name: "Tar Sheet Waterproofing (3 mm)", price: 100, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("bathroom")) {
+                        startingRateText = "Starting from ₹3,500 total";
+                        priceList = [
+                          { type: "Bathroom Waterproofing — Small/Medium", price: "₹3,500 total" },
+                          { type: "Bathroom Waterproofing — Large", price: "₹8,000 total" }
+                        ];
+                        paintTypes = [
+                          { id: "bathroom-small-medium", name: "Bathroom Waterproofing — Small/Medium", price: 3500, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "bathroom-large", name: "Bathroom Waterproofing — Large", price: 8000, type: "Advanced", image: "/premium-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("water tank") || detailName.includes("tank")) {
+                        startingRateText = "Starting from ₹1,700 total";
+                        priceList = [
+                          { type: "Water Tank Waterproofing (1,000L)", price: "₹1,700 total" },
+                          { type: "Water Tank Waterproofing (10,000L)", price: "₹17,000 total" }
+                        ];
+                        paintTypes = [
+                          { id: "tank-1000", name: "Water Tank Waterproofing (1,000L)", price: 1700, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "tank-10000", name: "Water Tank Waterproofing (10,000L)", price: 17000, type: "Advanced", image: "/premium-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("epoxy") || detailName.includes("flooring")) {
+                        startingRateText = "Starting from ₹60/sq.ft";
+                        priceList = [
+                          { type: "Epoxy Flooring (1 mm)", price: "₹60/sq.ft" },
+                          { type: "Epoxy Flooring (2 mm)", price: "₹90/sq.ft" },
+                          { type: "Epoxy Flooring (3 mm)", price: "₹110/sq.ft" }
+                        ];
+                        paintTypes = [
+                          { id: "epoxy-1mm", name: "Epoxy Flooring (1 mm)", price: 60, type: "Basic", image: "/tractor-uno.png" },
+                          { id: "epoxy-2mm", name: "Epoxy Flooring (2 mm)", price: 90, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "epoxy-3mm", name: "Epoxy Flooring (3 mm)", price: 110, type: "Premium", image: "/premium-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("pu coating") || detailName.includes("dampness")) {
+                        startingRateText = "Inspection-based pricing";
+                        priceList = [
+                          { type: "PU Coating / Dampness Treatment", price: "Inspection-based pricing" }
+                        ];
+                        paintTypes = [
+                          { id: "pu-dampness", name: "PU Coating / Dampness Treatment", price: 0, type: "Standard", image: "/tractor-emulsion.png" }
+                        ];
+                      } else if (detailName.includes("roof repair") || detailName.includes("patch")) {
+                        startingRateText = "Starting from ₹25/sq.ft";
+                        priceList = [
+                          { type: "Roof Repair / Patch Work", price: "₹25/sq.ft" }
+                        ];
+                        paintTypes = [
+                          { id: "roof-repair", name: "Roof Repair / Patch Work", price: 25, type: "Standard", image: "/tractor-emulsion.png" }
+                        ];
+                      } else {
+                        startingRateText = "Starting from ₹20/sq.ft";
+                        priceList = [
+                          { type: "Terrace Waterproofing (2 Coat)", price: "₹20/sq.ft (Mat+Lab)" },
+                          { type: "Terrace Waterproofing (4 Coat, 5-yr Warranty)", price: "₹50/sq.ft (Mat+Lab)" },
+                          { type: "Tar Sheet Waterproofing (3 mm, 10-yr Warranty)", price: "₹100/sq.ft" },
+                          { type: "Bathroom Waterproofing (Small, 3x4 ft)", price: "₹3,500 total" },
+                          { type: "Bathroom Waterproofing (Medium, 4x4 ft)", price: "₹3,500 total" },
+                          { type: "Bathroom Waterproofing (Large, 10x10 ft)", price: "₹8,000 total" },
+                          { type: "Water Tank Waterproofing (1,000L)", price: "₹1,700 total" },
+                          { type: "Water Tank Waterproofing (10,000L)", price: "₹17,000 total" },
+                          { type: "Epoxy Flooring (1 mm)", price: "₹60/sq.ft" },
+                          { type: "Epoxy Flooring (2 mm)", price: "₹90/sq.ft" },
+                          { type: "Epoxy Flooring (3 mm)", price: "₹110/sq.ft" }
+                        ];
+                        paintTypes = [
+                          { id: "terrace-2coat", name: "Terrace Waterproofing (2 Coat)", price: 20, type: "Basic", image: "/tractor-uno.png" },
+                          { id: "terrace-4coat", name: "Terrace Waterproofing (4 Coat)", price: 50, type: "Premium", image: "/premium-emulsion.png" },
+                          { id: "tarsheet-3mm", name: "Tar Sheet Waterproofing (3 mm)", price: 100, type: "Luxury", image: "/royal-luxury-emulsion.png" },
+                          { id: "bathroom-small", name: "Bathroom (Small, 3x4 ft)", price: 3500, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "bathroom-medium", name: "Bathroom (Medium, 4x4 ft)", price: 3500, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "bathroom-large", name: "Bathroom (Large, 10x10 ft)", price: 8000, type: "Advanced", image: "/premium-emulsion.png" },
+                          { id: "tank-1000", name: "Water Tank Waterproofing (1,000L)", price: 1700, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "tank-10000", name: "Water Tank Waterproofing (10,000L)", price: 17000, type: "Advanced", image: "/premium-emulsion.png" },
+                          { id: "epoxy-1mm", name: "Epoxy Flooring (1 mm)", price: 60, type: "Basic", image: "/tractor-uno.png" },
+                          { id: "epoxy-2mm", name: "Epoxy Flooring (2 mm)", price: 90, type: "Standard", image: "/tractor-emulsion.png" },
+                          { id: "epoxy-3mm", name: "Epoxy Flooring (3 mm)", price: 110, type: "Premium", image: "/premium-emulsion.png" }
+                        ];
+                      }
                       chooseTypeTitle = "💧 Choose Treatment Type";
                       chooseTypePlaceholder = "Select a waterproof area above to choose treatment types & see exact price estimate.";
                     } else if (serviceId === "paint-wood-metal") {
-                      startingRateText = "Starting from ₹25/sq.ft";
+                      startingRateText = "Starting from ₹85/sq.ft";
                       subtitleText = "Final price depends on area, surface condition & site inspection";
                       tableHeaderType = "Service";
                       priceList = [
-                        { type: "Wooden Door Painting", price: "₹35/sq.ft" },
-                        { type: "Wooden Polish", price: "₹50/sq.ft" },
-                        { type: "Window Painting", price: "₹30/sq.ft" },
-                        { type: "Metal Grill Painting", price: "₹25/sq.ft" },
-                        { type: "Metal Gate Painting", price: "₹30/sq.ft" },
-                        { type: "Enamel Finish", price: "₹35/sq.ft" }
+                        { type: "PU Coat Gates / Doors", price: "₹85/sq.ft" }
                       ];
                       paintTypes = [
-                        { id: "metal-grill", name: "Metal Grill Painting", price: 25, type: "Basic", image: "/tractor-emulsion.png" },
-                        { id: "window-painting", name: "Window Painting", price: 30, type: "Basic", image: "/premium-emulsion.png" },
-                        { id: "metal-gate", name: "Metal Gate Painting", price: 30, type: "Standard", image: "/tractor-uno.png" },
-                        { id: "wooden-door", name: "Wooden Door Painting", price: 35, type: "Standard", image: "/royal-luxury-emulsion.png" },
-                        { id: "enamel-finish", name: "Enamel Finish", price: 35, type: "Standard", image: "/premium-emulsion.png" },
-                        { id: "wooden-polish", name: "Wooden Polish", price: 50, type: "Premium", image: "/royal-luxury-emulsion.png" }
+                        { id: "pu-coat-gates-doors", name: "PU Coat Gates / Doors", price: 85, type: "Standard", image: "/premium-emulsion.png" }
                       ];
                       chooseTypeTitle = "🚪 Choose Polish/Enamel Type";
                       chooseTypePlaceholder = "Select a wood/metal item above to choose types & see exact price estimate.";
                     } else if (serviceId === "paint-texture") {
-                      startingRateText = "Starting from ₹80/sq.ft";
+                      startingRateText = "Starting from ₹120/sq.ft";
                       subtitleText = "Final price depends on design complexity, texture type & site inspection";
                       tableHeaderType = "Texture Type";
                       priceList = [
-                        { type: "Smooth Texture", price: "₹80/sq.ft" },
-                        { type: "Sand Texture", price: "₹100/sq.ft" },
-                        { type: "Metallic Texture", price: "₹130/sq.ft" },
-                        { type: "Stone/Pebbled Texture", price: "₹170/sq.ft" },
-                        { type: "Premium Designer Texture", price: "₹200/sq.ft" }
+                        { type: "Royal Texture Play / Stencil Design", price: "₹120/sq.ft" }
                       ];
                       paintTypes = [
-                        { id: "smooth-texture", name: "Smooth Texture", price: 80, type: "Standard", image: "/tractor-uno.png" },
-                        { id: "sand-texture", name: "Sand Texture", price: 100, type: "Premium", image: "/tractor-emulsion.png" },
-                        { id: "metallic-texture", name: "Metallic Texture", price: 130, type: "Premium", image: "/premium-emulsion.png" },
-                        { id: "stone-texture", name: "Stone/Pebbled Texture", price: 170, type: "Luxury", image: "/royal-luxury-emulsion.png" },
-                        { id: "premium-designer", name: "Premium Designer Texture", price: 200, type: "Luxury", image: "/premium-emulsion.png" }
+                        { id: "royal-texture-play-stencil", name: "Royal Texture Play / Stencil Design", price: 120, type: "Premium", image: "/royal-luxury-emulsion.png" }
                       ];
                       chooseTypeTitle = "✨ Choose Texture Decor Type";
                       chooseTypePlaceholder = "Select a wall above to choose texture types & see exact price estimate.";
@@ -12055,12 +12385,28 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           gap: '6px',
                           marginTop: '0.2rem'
                         }}>
-                          {activeDetailService.benefits.map((benefit, i) => {
+                          {(activeDetailService.benefits || ["Top Rated", "Premium Paint", "Expert Quality", "Mess-free Clean"])
+                            .filter(benefit => {
+                              if (!benefit) return false;
+                              const isObj = typeof benefit === 'object';
+                              const label = isObj ? (benefit.title || benefit.label || benefit.name || "") : String(benefit);
+                              if (isObj && benefit.checked === false) return false;
+                              const isWaterproofing = activeDetailService.catId === "paint-waterproofing" || String(activeDetailService.category || "").toLowerCase().includes("waterproofing");
+                              if (!isWaterproofing && label.toLowerCase().includes("warranty")) return false;
+                              return true;
+                            })
+                            .map((benefit, i) => {
+                              if (!benefit) return null;
+                              const isObj = typeof benefit === 'object';
+                              const label = isObj ? (benefit.title || benefit.label || benefit.name || "") : String(benefit);
+                              const iconKey = isObj ? (benefit.icon || label || "") : label;
+                              const lowerIcon = String(iconKey).toLowerCase();
+
                             let icon = <Award size={14} color="#0d9488" />;
-                            if (benefit.toLowerCase().includes("premium") || benefit.toLowerCase().includes("accent")) icon = <Sparkles size={14} color="#b45309" />;
-                            if (benefit.toLowerCase().includes("verified") || benefit.toLowerCase().includes("safety") || benefit.toLowerCase().includes("tech")) icon = <ShieldCheck size={14} color="#2563eb" />;
-                            if (benefit.toLowerCase().includes("clean") || benefit.toLowerCase().includes("crack") || benefit.toLowerCase().includes("damp")) icon = <Brush size={14} color="#0d9488" />;
-                            if (benefit.toLowerCase().includes("warranty") || benefit.toLowerCase().includes("durability")) icon = <ShieldCheck size={14} color="#16a34a" />;
+                            if (lowerIcon.includes("premium") || lowerIcon.includes("accent") || lowerIcon.includes("spray") || lowerIcon.includes("droplet")) icon = <Sparkles size={14} color="#b45309" />;
+                            if (lowerIcon.includes("verified") || lowerIcon.includes("safety") || lowerIcon.includes("tech") || lowerIcon.includes("shield")) icon = <ShieldCheck size={14} color="#2563eb" />;
+                            if (lowerIcon.includes("clean") || lowerIcon.includes("crack") || lowerIcon.includes("damp") || lowerIcon.includes("tool") || lowerIcon.includes("sand")) icon = <Brush size={14} color="#0d9488" />;
+                            if (lowerIcon.includes("warranty") || lowerIcon.includes("durability") || lowerIcon.includes("award")) icon = <ShieldCheck size={14} color="#16a34a" />;
 
                             return (
                               <div key={i} style={{
@@ -12088,7 +12434,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 }}>
                                   {icon}
                                 </div>
-                                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#334155', lineHeight: 1.2 }}>{benefit}</span>
+                                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#334155', lineHeight: 1.2 }}>{label}</span>
                               </div>
                             );
                           })}
@@ -12145,75 +12491,79 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
                           <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Included</h4>
                           <ul style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.82rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.4rem', listStyleType: 'disc' }}>
-                            {activeDetailService.includes.map((inc, i) => (
+                            {(activeDetailService.includes || []).map((inc, i) => (
                               <li key={i} style={{ lineHeight: 1.4 }}>{typeof inc === 'string' ? inc : (inc?.text || '')}</li>
                             ))}
                           </ul>
                         </div>
 
                         {/* WHAT WOULD YOU LIKE TO PAINT? (Suboptions list) */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                          <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left' }}>
-                            {subOptionsTitle}
-                          </h4>
-                          {activeDetailService.subOptions.map(subOpt => {
-                            const isSelected = getSubOptionCartCount(subOpt.id) > 0;
-                            const description = getSubOptionDescription(subOpt.id, activeDetailService.name);
-                            return (
-                              <div
-                                key={subOpt.id}
-                                style={{
-                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  padding: '0.85rem 0', borderBottom: '1px dashed #f1f5f9', gap: '1rem'
-                                }}
-                              >
-                                <div style={{ flex: 1, textAlign: 'left' }}>
-                                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{subOpt.name}</div>
-                                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2, lineHeight: 1.3 }}>{description}</div>
-                                </div>
-                                <div style={{ shrink: 0 }}>
-                                  {isSelected ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '0.35rem 0.5rem', background: '#ffffff' }}>
-                                      <button
-                                        onClick={() => removeSubOptionFromCart(subOpt.id)}
-                                        style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
-                                      >
-                                        −
-                                      </button>
-                                      <span style={{ color: '#1e293b', fontWeight: 'extrabold', fontSize: '0.8rem', minWidth: '10px', textAlign: 'center' }}>
-                                        {getSubOptionCartCount(subOpt.id)}
-                                      </span>
+                        {activeDetailService.subOptions && activeDetailService.subOptions.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left' }}>
+                              {subOptionsTitle}
+                            </h4>
+                            {activeDetailService.subOptions.map(subOpt => {
+                              const isSelected = getSubOptionCartCount(subOpt.id) > 0;
+                              const description = getSubOptionDescription(subOpt.id, activeDetailService.name);
+                              return (
+                                <div
+                                  key={subOpt.id}
+                                  style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '0.85rem 0', borderBottom: '1px dashed #f1f5f9', gap: '1rem'
+                                  }}
+                                >
+                                  <div style={{ flex: 1, textAlign: 'left' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{subOpt.name}</div>
+                                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2, lineHeight: 1.3 }}>{description}</div>
+                                  </div>
+                                  <div style={{ shrink: 0 }}>
+                                    {isSelected ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '0.35rem 0.5rem', background: '#ffffff' }}>
+                                        <button
+                                          onClick={() => removeSubOptionFromCart(subOpt.id)}
+                                          style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
+                                        >
+                                          −
+                                        </button>
+                                        <span style={{ color: '#1e293b', fontWeight: 'extrabold', fontSize: '0.8rem', minWidth: '10px', textAlign: 'center' }}>
+                                          {getSubOptionCartCount(subOpt.id)}
+                                        </span>
+                                        <button
+                                          onClick={() => addSubOptionToCart(subOpt, activeDetailService)}
+                                          style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    ) : (
                                       <button
                                         onClick={() => addSubOptionToCart(subOpt, activeDetailService)}
-                                        style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
+                                        style={{
+                                          border: '1.5px solid #0d9488', borderRadius: '8px',
+                                          padding: '0.35rem 1rem', background: '#ffffff', color: '#0d9488',
+                                          fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = '#f0fdf4' }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = '#ffffff' }}
                                       >
-                                        +
+                                        Add
                                       </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => addSubOptionToCart(subOpt, activeDetailService)}
-                                      style={{
-                                        border: '1.5px solid #0d9488', borderRadius: '8px',
-                                        padding: '0.35rem 1rem', background: '#ffffff', color: '#0d9488',
-                                        fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s',
-                                      }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = '#f0fdf4' }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = '#ffffff' }}
-                                    >
-                                      Add
-                                    </button>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* CHOOSE TYPE */}
                         {paintTypes.length > 0 && (
                           (() => {
-                            const selectedAreasCount = activeDetailService.subOptions.reduce((sum, opt) => sum + getSubOptionCartCount(opt.id), 0);
+                            const selectedAreasCount = activeDetailService.subOptions
+                              ? activeDetailService.subOptions.reduce((sum, opt) => sum + getSubOptionCartCount(opt.id), 0)
+                              : 1;
                             if (selectedAreasCount === 0) {
                               return null;
                             }
@@ -12283,8 +12633,10 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             <Sparkles size={14} color="#059669" /> Free Site Inspection Included
                           </div>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
-                            {activeDetailService.inspectionHighlights.map((high, i) => (
-                              <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', background: '#d1fae5', borderRadius: '6px' }}>{high}</span>
+                            {(activeDetailService.inspectionHighlights || []).map((high, i) => (
+                              <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', background: '#d1fae5', borderRadius: '6px' }}>
+                                {typeof high === 'string' ? high : (high?.text || '')}
+                              </span>
                             ))}
                           </div>
                         </div>
@@ -12293,8 +12645,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
                           <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Not Included</h4>
                           <ul style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.82rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '0.4rem', listStyleType: 'disc' }}>
-                            {activeDetailService.excludes.map((exc, i) => (
-                              <li key={i} style={{ lineHeight: 1.4 }}>{exc}</li>
+                            {(activeDetailService.excludes || []).map((exc, i) => (
+                              <li key={i} style={{ lineHeight: 1.4 }}>{typeof exc === 'string' ? exc : (exc?.text || '')}</li>
                             ))}
                           </ul>
                         </div>
@@ -12302,7 +12654,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         {/* HOW CALTRACK WORKS */}
                         <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                           <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            How {activeDetailService.name?.toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
+                            How {String(activeDetailService.name || "").toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
                           </h4>
                           <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', paddingLeft: '0.5rem' }}>
                             {(() => {
@@ -12366,10 +12718,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               };
 
                               return steps.map((step, i, arr) => {
+                                if (!step) return null;
                                 const title = typeof step === 'string' ? step : (step.title || step.label || "");
                                 const desc = typeof step === 'string' ? "" : (step.desc || step.description || "");
-                                const bg = step.bg || stepColors[i % stepColors.length];
-                                const border = step.border || stepBorders[i % stepBorders.length];
+                                const bg = typeof step === 'string' ? stepColors[i % stepColors.length] : (step.bg || stepColors[i % stepColors.length]);
+                                const border = typeof step === 'string' ? stepBorders[i % stepBorders.length] : (step.border || stepBorders[i % stepBorders.length]);
                                 return (
                                   <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
                                     {/* Timeline Line */}
@@ -12441,7 +12794,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* CUSTOMER REVIEWS LIST */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                          const extra = resolvedExtra;
                           const reviews = Array.isArray(activeDetailService.reviews_list) && activeDetailService.reviews_list.length > 0
                             ? activeDetailService.reviews_list.filter(r => r.enabled !== false)
                             : (extra.reviews || []);
@@ -12474,7 +12827,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* FREQUENTLY ASKED QUESTIONS */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                          const extra = resolvedExtra;
                           if (extra.faqs.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
@@ -12520,16 +12873,16 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 const newItem = {
                                   id: cartId,
                                   name: `${service.name} (Site Consultation)`,
-                                  price: 49,
+                                  price: currentFee,
                                   quantity: 1,
                                   categoryName: "Painting"
                                 };
                                 updatedCart.push(newItem);
-                                setCart(prev => {
-                                  const hasIt = prev.some(c => c.id === cartId);
-                                  if (hasIt) return prev;
-                                  return [...prev, newItem];
-                                });
+                                  setCart(prev => {
+                                    const hasIt = prev.some(c => c.id === cartId);
+                                    if (hasIt) return prev;
+                                    return [...prev, newItem];
+                                  });
                               }
                               if (onGetEstimate) {
                                 onGetEstimate(updatedCart);
@@ -12546,7 +12899,9 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             boxShadow: '0 4px 12px rgba(13,148,136,0.22)',
                           }}
                         >
-                          Get Estimate ₹49
+                          {customerLat && customerLng
+                            ? (currentFee > 0 ? `Get Estimate ₹${currentFee}` : "Get Free Estimate")
+                            : "Get Estimate"}
                         </button>
                       </div>
                     </>
@@ -12562,6 +12917,34 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 }
 
 const MASON_DETAILS_EXTRA = {
+  "minor-masonry": {
+    benefits: ["Trained Masons", "Accurate Estimate", "Premium Materials", "Alignment Check"],
+    excludes: ["Structural column/beam casting", "Major architectural alterations"],
+    steps: ["Site Inspection & Leveling", "Material Mixing (Cement & Sand)", "Bricklaying / Partition Building", "Plaster Coat Leveling", "Post-Service Curing Check"],
+    reviews: [
+      { name: "Rajesh Kumar", rating: 5, comment: "Excellent brickwork! The wall alignment is absolutely perfect and strong." },
+      { name: "Anitha R.", rating: 4.8, comment: "Very professional mason team. Completed the new brick boundary wall on time." }
+    ],
+    faqs: [
+      { q: "Is material cost included in the price?", a: "Yes, our ₹120/sq.ft price is fully inclusive of standard raw materials (M-sand, cement, bricks) and professional labor." },
+      { q: "What is the minimum area required for booking?", a: "The minimum area requirement is 500 sq.ft for Minor Masonry work." },
+      { q: "How long does curing take?", a: "Curing takes approximately 7 to 10 days of watering for maximum brick/plaster strength." }
+    ]
+  },
+  "bathroom-tile-fixing": {
+    benefits: ["Expert Tilers", "Zero Leakage", "Epoxy Grouting", "Precision Cuts"],
+    excludes: ["Major plumbing line shifting", "Tile material cost (if customer chooses premium imported tiles)"],
+    steps: ["Old Tiles Chipping (if required)", "Surface Leveling & Sloping", "Adhesive Application & Tile Laying", "Spacer Insertion & Alignment", "Epoxy Grout Filling & Cleanup"],
+    reviews: [
+      { name: "Vikram Singh", rating: 5, comment: "Perfect tile fixing! The slopes are perfectly aligned to the drains and grouting is extremely neat." },
+      { name: "Priya D.", rating: 4.9, comment: "Done in 2 days. The layout is beautiful and there are no uneven heights." }
+    ],
+    faqs: [
+      { q: "What tiles are included in the package?", a: "Standard high-quality vitrified or ceramic tiles of standard sizes are included in the package." },
+      { q: "How is the slope check done?", a: "Our team uses water-level checks to verify that all slopes are perfectly angled towards the drain outlet to prevent water logging." },
+      { q: "How long after installation can the bathroom be used?", a: "We recommend waiting 24 to 48 hours for the adhesive and epoxy grout to set completely." }
+    ]
+  },
   "brick-new": {
     reviews: [
       { name: "Rajesh Kumar", rating: 5, comment: "Excellent brickwork! The wall alignment is absolutely perfect and strong." },
@@ -12851,6 +13234,57 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [generalDesc, setGeneralDesc] = useState("");
   const [generalPhoto, setGeneralPhoto] = useState(null);
   const [generalPhotoPreview, setGeneralPhotoPreview] = useState(null);
+
+  const [selectedArea, setSelectedArea] = useState(() => {
+    const item = cart.find(c => c.id === "serv-mason-minor-masonry");
+    return item?.selectedArea || "";
+  });
+  const [bathroomSize, setBathroomSize] = useState(() => {
+    const item = cart.find(c => c.id === "serv-mason-bathroom-tile-fixing");
+    return item?.selectedBathroomSize || "Small";
+  });
+
+  const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const customerLat = formData?.latitude ? parseFloat(formData.latitude) : 12.7409;
+  const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
+  const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
+  const currentFee = distanceKm > 15 ? 300 : 0;
+
+  useEffect(() => {
+    setCart(prev => prev.map(c => {
+      if (c.id === "serv-mason-minor-masonry") {
+        return { ...c, selectedArea: parseFloat(selectedArea) || 0 };
+      }
+      return c;
+    }));
+  }, [selectedArea]);
+
+  useEffect(() => {
+    const pkg = dbPackages.find(p => p.slug === "bathroom-tile-fixing");
+    const slabs = pkg?.service_customization?.pricing_slabs || { "Small": 10000, "Medium": 10000, "Large": 20000 };
+    const price = slabs[bathroomSize] || 10000;
+
+    setCart(prev => prev.map(c => {
+      if (c.id === "serv-mason-bathroom-tile-fixing") {
+        return { 
+          ...c, 
+          selectedBathroomSize: bathroomSize,
+          predefinedPrice: price
+        };
+      }
+      return c;
+    }));
+  }, [bathroomSize, dbPackages]);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -13261,7 +13695,16 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         return updated;
       }
       const rawName = pkg.name.endsWith(" (Site Consultation)") ? pkg.name : `${pkg.name} (Site Consultation)`;
-      const newItem = { id: cartId, name: rawName, price: 49, quantity: 1, categoryName: "Mason" };
+      const newItem = {
+        id: cartId,
+        name: rawName,
+        price: currentFee,
+        quantity: 1,
+        categoryName: "Mason",
+        selectedArea: pkg.slug === "minor-masonry" ? (parseFloat(selectedArea) || 0) : undefined,
+        selectedBathroomSize: pkg.slug === "bathroom-tile-fixing" ? bathroomSize : undefined,
+        predefinedPrice: pkg.slug === "bathroom-tile-fixing" ? ((pkg.service_customization?.pricing_slabs || { "Small": 10000, "Medium": 10000, "Large": 20000 })[bathroomSize] || 10000) : undefined
+      };
       const updated = [...currentCart, newItem];
       console.log("DEBUG [addToCart] added new item. New cart:", updated);
       return updated;
@@ -13598,16 +14041,16 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
-                                Consultation & Visit Charge: ₹49
+                                Consultation & Visit Charge: {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                               </div>
                               <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
 
                               {/* Includes Bullet Points */}
                               <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
-                                {service.includes.slice(0, 3).map((inc, i) => (
+                                {(service.includes || []).slice(0, 3).map((inc, i) => (
                                   <li key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
                                     <span style={{ color: "#94a3b8", fontSize: "1rem", lineHeight: 0 }}>•</span>
-                                    {inc}
+                                    {typeof inc === 'string' ? inc : (inc?.text || '')}
                                   </li>
                                 ))}
                               </ul>
@@ -13678,109 +14121,81 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             </div>
                           </div>
 
-                          {/* Questionnaire Inputs Embedded inside Complete construction cards (when not added yet) */}
-                          {service.customForm === "house" && count === 0 && (
-                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          {/* Minor Masonry Custom Area Input Form */}
+                          {service.id === "minor-masonry" && count > 0 && (
+                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                               <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Project details</label>
-                                <textarea
-                                  value={houseProject.desc}
-                                  onChange={e => setHouseProject(prev => ({ ...prev, desc: e.target.value }))}
-                                  placeholder="Describe your vision (e.g. floors, preferred materials)..."
-                                  style={{ width: "100%", height: "80px", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
-                                />
-                              </div>
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", textAlign: "left" }}>
-                                <div>
-                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Plot details</label>
-                                  <input
-                                    type="text"
-                                    value={houseProject.details}
-                                    onChange={e => setHouseProject(prev => ({ ...prev, details: e.target.value }))}
-                                    placeholder="e.g. 30x40 plot..."
-                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
-                                  <input
-                                    type="text"
-                                    value={houseProject.location}
-                                    onChange={e => setHouseProject(prev => ({ ...prev, location: e.target.value }))}
-                                    placeholder="Full address in Hosur..."
-                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                  />
-                                </div>
-                              </div>
-                              <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>
+                                  Service Area (sq.ft) <span style={{ color: "#ef4444" }}>*</span>
+                                </label>
                                 <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={e => handlePhotoUpload(e, "house")}
-                                  style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                  type="number"
+                                  placeholder="Enter area in sq.ft"
+                                  value={selectedArea}
+                                  onChange={e => setSelectedArea(e.target.value)}
+                                  style={{
+                                    width: "100%",
+                                    padding: "8px 12px",
+                                    border: `1.5px solid ${ (selectedArea && Number(selectedArea) < 500) ? '#fca5a5' : '#cbd5e1' }`,
+                                    borderRadius: "8px",
+                                    fontSize: "0.8rem",
+                                    outline: "none",
+                                    fontWeight: 700
+                                  }}
                                 />
-                                {houseProject.photoPreview && (
-                                  <img src={houseProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                                )}
+                                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "0.7rem" }}>
+                                  <span style={{ color: "#64748b", fontWeight: 650 }}>Rate: ₹120/sq.ft (Combined Material & Labour)</span>
+                                  <span style={{ 
+                                    color: (Number(selectedArea) < 500) ? "#dc2626" : "#059669", 
+                                    fontWeight: 800 
+                                  }}>
+                                    {Number(selectedArea) < 500 ? "⚠️ Minimum: 500 sq.ft" : "✓ Meets Minimum"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )}
 
-                          {service.customForm === "office" && count === 0 && (
-                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          {/* Bathroom Tile Fixing Custom Size Selector Form */}
+                          {service.id === "bathroom-tile-fixing" && count > 0 && (
+                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                               <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "6px" }}>Project Type</label>
-                                <div style={{ display: "flex", gap: "0.5rem" }}>
-                                  {["New Construction", "Renovation", "Modification"].map(t => (
-                                    <button
-                                      key={t}
-                                      type="button"
-                                      onClick={() => setOfficeProject(prev => ({ ...prev, type: t }))}
-                                      style={{
-                                        flex: 1, padding: "0.5rem 0.25rem", borderRadius: "8px", border: officeProject.type === t ? "1.5px solid #0d9488" : "1px solid #cbd5e1",
-                                        background: officeProject.type === t ? "#f0fdf4" : "#ffffff", color: officeProject.type === t ? "#0d9488" : "#475569",
-                                        fontWeight: 800, fontSize: "0.75rem", cursor: "pointer", transition: "all 0.15s"
-                                      }}
-                                    >
-                                      {t}
-                                    </button>
-                                  ))}
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "8px" }}>
+                                  Select Bathroom Size <span style={{ color: "#ef4444" }}>*</span>
+                                </label>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                  {(() => {
+                                    const pkg = dbPackages.find(p => p.slug === "bathroom-tile-fixing");
+                                    const slabs = pkg?.service_customization?.pricing_slabs || { "Small": 10000, "Medium": 10000, "Large": 20000 };
+                                    return Object.entries(slabs).map(([size, price]) => (
+                                      <button
+                                        key={size}
+                                        type="button"
+                                        onClick={() => setBathroomSize(size)}
+                                        style={{
+                                          flex: 1,
+                                          padding: "8px 4px",
+                                          borderRadius: "8px",
+                                          border: bathroomSize === size ? "2px solid #0d9488" : "1px solid #cbd5e1",
+                                          background: bathroomSize === size ? "#f0fdf4" : "#ffffff",
+                                          color: bathroomSize === size ? "#0f766e" : "#475569",
+                                          fontWeight: 800,
+                                          fontSize: "0.72rem",
+                                          cursor: "pointer",
+                                          textAlign: "center"
+                                        }}
+                                      >
+                                        <div>{size}</div>
+                                        <div style={{ fontSize: "0.65rem", color: bathroomSize === size ? "#0d9488" : "#64748b", marginTop: "2px" }}>
+                                          ₹{price.toLocaleString()}
+                                        </div>
+                                      </button>
+                                    ));
+                                  })()}
                                 </div>
-                              </div>
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", textAlign: "left" }}>
-                                <div>
-                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Approx Area (sqft)</label>
-                                  <input
-                                    type="text"
-                                    value={officeProject.area}
-                                    onChange={e => setOfficeProject(prev => ({ ...prev, area: e.target.value }))}
-                                    placeholder="e.g. 1500 sqft..."
-                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
-                                  <input
-                                    type="text"
-                                    value={officeProject.location}
-                                    onChange={e => setOfficeProject(prev => ({ ...prev, location: e.target.value }))}
-                                    placeholder="Full address in Hosur..."
-                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                  />
-                                </div>
-                              </div>
-                              <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={e => handlePhotoUpload(e, "office")}
-                                  style={{ fontSize: "0.75rem", color: "#64748b" }}
-                                />
-                                {officeProject.photoPreview && (
-                                  <img src={officeProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                                )}
+                                <p style={{ fontSize: "0.65rem", color: "#64748b", marginTop: "8px", fontStyle: "italic", lineHeight: "1.3" }}>
+                                  * Package price includes tiles, epoxy, and labour. No material or labour splits apply.
+                                </p>
                               </div>
                             </div>
                           )}
@@ -13996,11 +14411,35 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       </div>
                       <div className="uc-paint-cart-subtotal">
                         <span>Site Inspection</span>
-                        <span style={{ color: '#059669', fontWeight: 800 }}>FREE</span>
+                        <span style={{ color: currentFee > 0 ? '#4f46e5' : '#059669', fontWeight: 800 }}>
+                          {currentFee > 0 ? `₹${currentFee}` : "FREE"}
+                        </span>
                       </div>
-                      <button className="uc-paint-cart-checkout-btn" onClick={onCheckout}>
-                        Book Free Inspection
-                      </button>
+                      {(() => {
+                        const hasMinorMasonry = cart.some(c => c.id === "serv-mason-minor-masonry");
+                        const isAreaInvalid = hasMinorMasonry && (!selectedArea || Number(selectedArea) < 500);
+
+                        return (
+                          <div>
+                            {isAreaInvalid && (
+                              <div style={{ color: '#be123c', background: '#ffe4e6', border: '1px solid #fecdd3', fontSize: '0.72rem', fontWeight: 800, padding: '8px 10px', borderRadius: '10px', marginBottom: '8px', textAlign: 'center' }}>
+                                Area must be 500 sq.ft or more for Minor Masonry work.
+                              </div>
+                            )}
+                            <button 
+                              className="uc-paint-cart-checkout-btn" 
+                              onClick={onCheckout}
+                              disabled={isAreaInvalid}
+                              style={{
+                                opacity: isAreaInvalid ? 0.6 : 1,
+                                cursor: isAreaInvalid ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {currentFee > 0 ? `Book Consultation (₹${currentFee})` : "Book Free Consultation"}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -14309,7 +14748,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   {(() => {
                     const rating = parseFloat(activeDetailService.rating) || 4.8;
                     const rawVal = parseFloat(activeDetailService.reviews);
-                    const multiplier = activeDetailService.reviews.toLowerCase().includes('k') ? 1000 : 1;
+                    const reviewsStr = String(activeDetailService.reviews || "100+");
+                    const multiplier = reviewsStr.toLowerCase().includes('k') ? 1000 : 1;
                     const totalR = isNaN(rawVal) ? 100 : Math.round(rawVal * multiplier);
                     const r5 = Math.round(totalR * 0.78);
                     const r4 = Math.round(totalR * 0.15);
@@ -14677,6 +15117,33 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   else if (["pest", "pest_control"].some(k => rawCatKey.includes(k))) normalizedKey = "pest_control";
   else if (["goods", "transport", "mini_truck", "truck"].some(k => rawCatKey.includes(k))) normalizedKey = "goods_transport";
 
+  const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  let customerLat = 12.7409;
+  let customerLng = 77.8253;
+  try {
+    const savedAddressStr = localStorage.getItem("calservices_customer_address") || sessionStorage.getItem("calservices_customer_address");
+    if (savedAddressStr) {
+      const parsed = JSON.parse(savedAddressStr);
+      if (parsed?.latitude && parsed?.longitude) {
+        customerLat = parseFloat(parsed.latitude);
+        customerLng = parseFloat(parsed.longitude);
+      }
+    }
+  } catch (e) {}
+
+  const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
+  const currentFee = distanceKm > 15 ? 300 : 0;
+
   const EXTRA_SERVICES_BY_SUBCATEGORY = {
     "AC Service & Repair": [
       { id: "ext-ac-srv-1", name: "Anti-Rust Protective Coil Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Shields AC outdoor & indoor coils from atmospheric oxidation & gas leaks." },
@@ -14942,10 +15409,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Texture Decor", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
     ],
     mason: [
-      { name: "Brick & Block Work", image: "/mockups/brick_wall_construction_red.jpg" },
-      { name: "Plastering & Wall Repair", image: "/mockups/wall_plastering_masonry.jpg" },
-      { name: "Wall & Partition Construction", image: "/mockups/aac_block_wall_construction.jpg" },
-      { name: "Wall Breaking & Demolition", image: "/mockups/wall_crack_repair.jpg" }
+      { name: "Minor Masonry / Small Construction Work", image: "/mockups/brick_wall_construction_red.jpg" },
+      { name: "Bathroom Tile Fixing", image: "/mockups/aac_block_wall_construction.jpg" }
     ],
     pest_control: [
       { name: "Cockroach & Termite Control", image: "/mockups/termite_control.png" },
@@ -15031,10 +15496,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Furniture Repair"
   ];
   const masonSubtabs = [
-    "Brick & Block Work",
-    "Plastering & Wall Repair",
-    "Wall & Partition Construction",
-    "Wall Breaking & Demolition"
+    "Minor Masonry / Small Construction Work",
+    "Bathroom Tile Fixing"
   ];
   const applianceSubtabs = ["Microwave Repair", "Water Purifier & RO", "Refrigerator & Fridge", "Microwave & Purifier"];
   const hvacSubtabs = [
@@ -15066,7 +15529,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrical" || subtabParam === "Electrician Services" || subtabParam === "Switches & Sockets") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers" || subtabParam === "Tap & Mixer") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter" || subtabParam === "Carpenter Services" || subtabParam === "Lock & Handle") return "Lock & Handle";
-    if (subtabParam === "Mason" || subtabParam === "mason" || subtabParam === "Brick & Block Work") return "Brick & Block Work";
+    if (subtabParam === "Mason" || subtabParam === "mason" || subtabParam === "Brick & Block Work" || subtabParam === "Minor Masonry / Small Construction Work") return "Minor Masonry / Small Construction Work";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
@@ -15075,7 +15538,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
     if (nk === "plumbing" || cn.includes("plumb")) return "Tap & Mixer";
     if (nk === "carpentry" || cn.includes("carpenter") || cn.includes("carpentry")) return "Lock & Handle";
-    if (nk === "mason" || String(nk) === "11" || cn.includes("mason") || cn.includes("civil")) return "Brick & Block Work";
+    if (nk === "mason" || String(nk) === "11" || cn.includes("mason") || cn.includes("civil")) return "Minor Masonry / Small Construction Work";
     if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
@@ -15229,7 +15692,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       } else if (param === "Carpentry" || param === "carpentry" || param === "Carpenter Services") {
         setActiveSubTab("Lock & Handle");
       } else if (param === "Mason" || param === "mason") {
-        setActiveSubTab("Brick & Block Work");
+        setActiveSubTab("Minor Masonry / Small Construction Work");
       } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
         setActiveSubTab("Occupied Apartment");
       } else {
@@ -15857,144 +16320,30 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     mason: {
-      "Brick & Block Work": [
+      "Minor Masonry / Small Construction Work": [
         {
-          id: "mason-brick-1",
-          name: "Brick Wall Construction",
-          price: 1499,
-          duration: "3 hrs",
+          id: "minor-masonry",
+          name: "Minor Masonry / Small Construction Work",
+          price: 0,
+          duration: "Flexible",
           badge: "Popular",
           badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
-          description: "High-quality red clay brick masonry work with standard cement-mortar mix.",
-          includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
+          description: "Combined material & labour rate for small construction, brickwork, and plastering (minimum 500 sq.ft).",
+          includes: ["Cement, sand, and bricks", "Labour for laying and alignment", "Curing guidance"],
           image: "/mockups/brick_wall_construction_red.jpg"
-        },
-        {
-          id: "mason-brick-2",
-          name: "Block Wall Construction",
-          price: 1799,
-          duration: "3 hrs",
-          badge: "Lightweight",
-          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-          description: "AAC concrete block laying using thin-bed adhesive mortar for fast execution.",
-          includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
-          image: "/mockups/aac_block_wall_construction.jpg"
-        },
-        {
-          id: "mason-brick-3",
-          name: "Brick/Block Wall Repair",
-          price: 899,
-          duration: "2 hrs",
-          badge: "Quick Fix",
-          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-          description: "Replacing damaged bricks/blocks, repairing loose mortar joints, and strengthening structure.",
-          includes: ["Damaged brick removal", "Mortar joint repointing", "Joint bonding agent application"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
         }
       ],
-      "Plastering & Wall Repair": [
+      "Bathroom Tile Fixing": [
         {
-          id: "mason-plast-1",
-          name: "Wall Plastering",
-          price: 999,
-          duration: "2.5 hrs",
+          id: "bathroom-tile-fixing",
+          name: "Bathroom Tile Fixing",
+          price: 10000,
+          duration: "Flexible",
           badge: "Best Seller",
-          badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
-          description: "Smooth sand-cement plaster application for internal or external brick walls.",
-          includes: ["Surface preparation & wetting", "Base slurry application", "Sponge finish styling"],
-          image: "/mockups/wall_plastering_masonry.jpg"
-        },
-        {
-          id: "mason-plast-2",
-          name: "Plaster Repair",
-          price: 699,
-          duration: "1.5 hrs",
-          badge: "Fix-it",
-          badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
-          description: "Patching hollow/peeling plaster surfaces and restoring wall strength.",
-          includes: ["Hollow plaster scraping", "Cement paste bonding", "Patch trowel leveling"],
-          image: "/mockups/plaster_repair_patch.jpg"
-        },
-        {
-          id: "mason-plast-3",
-          name: "Crack Repair",
-          price: 499,
-          duration: "1 hr",
-          badge: "Preventive",
-          badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
-          description: "V-groove wall cracking repairs using polymer-modified mortar or specialized sealant.",
-          includes: ["Crack cleanout chiseling", "Polymer filler injection", "Surface smoothing"],
-          image: "/mockups/wall_crack_repair.jpg"
-        }
-      ],
-      "Wall & Partition Construction": [
-        {
-          id: "mason-part-1",
-          name: "New Partition Wall",
-          price: 2499,
-          duration: "4 hrs",
-          badge: "Structural",
-          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
-          description: "Heavy brick masonry partition wall built with proper top ceiling anchors.",
-          includes: ["Foundation course anchoring", "Brick partition build", "Lintel support casting"],
-          image: "/mockups/brick_wall_construction_red.jpg"
-        },
-        {
-          id: "mason-part-2",
-          name: "Room Partition",
-          price: 2199,
-          duration: "3.5 hrs",
-          badge: "Fast Build",
-          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-          description: "Autoclaved lightweight concrete block partition wall to divide living space.",
-          includes: ["Space layout leveling", "Block joint gluing", "Wall perimeter sealing"],
-          image: "/mockups/aac_block_wall_construction.jpg"
-        },
-        {
-          id: "mason-part-3",
-          name: "Half-Wall Construction",
-          price: 1299,
-          duration: "2 hrs",
-          badge: "Decorative",
           badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
-          description: "Low-height counter/half-brick walls for open kitchen partitions or balcony boundaries.",
-          includes: ["Layout leveling scan", "Counter brick layout work", "Top coping concrete slab"],
-          image: "/mockups/half_wall_construction.jpg"
-        }
-      ],
-      "Wall Breaking & Demolition": [
-        {
-          id: "mason-demo-1",
-          name: "Wall Breaking",
-          price: 1299,
-          duration: "2 hrs",
-          badge: "Heavy Duty",
-          badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
-          description: "Controlled brick or concrete block wall demolition using rotary hammer breakers.",
-          includes: ["Rotary breaker breaking", "Safety prop supporting", "Debris bagging"],
-          image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=80"
-        },
-        {
-          id: "mason-demo-2",
-          name: "Partition Removal",
-          price: 999,
-          duration: "1.5 hrs",
-          badge: "Clean Cut",
-          badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
-          description: "Disassembling soft or lightweight concrete partitions without structural damage.",
-          includes: ["Anchor detaching", "Block breaking", "Debris removal packing"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
-        },
-        {
-          id: "mason-demo-3",
-          name: "Door/Window Opening",
-          price: 1899,
-          duration: "3 hrs",
-          badge: "Expert Cut",
-          badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
-          description: "Chiseling and structural lintel casting to create a door or window opening cutout.",
-          includes: ["Lintel support insert", "Controlled wall cutting", "Smooth border plastering"],
-          image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=500&auto=format&fit=crop&q=80"
+          description: "Complete bathroom tiling package including premium tiles, epoxy grout, and professional laying.",
+          includes: ["Premium tiles & adhesives", "Epoxy grouting", "Laying & leveling"],
+          image: "/mockups/aac_block_wall_construction.jpg"
         }
       ]
     },
@@ -16046,17 +16395,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const tab = (activeSubTab || "").toLowerCase();
 
       if (normalizedKey === "mason") {
-        if (tab === "brick & block work" || tab.includes("brick") || tab.includes("block")) {
-          return sSlug.includes("brick") || sSlug.includes("block") || sName.includes("brick") || sName.includes("block");
+        if (tab.includes("minor") || tab.includes("masonry") || tab.includes("construction")) {
+          return sSlug.includes("minor-masonry") || sName.includes("minor") || sName.includes("masonry") || pName.includes("minor") || pName.includes("masonry");
         }
-        if (tab === "plastering & wall repair" || tab.includes("plastering")) {
-          return sSlug.includes("plaster") || sName.includes("plaster") || sName.includes("repair");
-        }
-        if (tab === "wall & partition construction" || (tab.includes("partition") && !tab.includes("breaking") && !tab.includes("demolition"))) {
-          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction");
-        }
-        if (tab === "wall breaking & demolition" || tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
-          return sSlug.includes("demo") || sName.includes("demolition") || sName.includes("breaking") || sName.includes("removal");
+        if (tab.includes("tile") || tab.includes("fixing") || tab.includes("bathroom")) {
+          return sSlug.includes("tile-fixing") || sName.includes("tile") || sName.includes("fixing") || pName.includes("tile") || pName.includes("fixing");
         }
       }
 
@@ -16655,7 +16998,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             </div>
                             {normalizedKey === "mason" && (
                               <div className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-100/60 rounded px-1.5 py-0.5 w-fit">
-                                Consultation & Visit Charge: ₹49
+                                Consultation & Visit Charge: {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                               </div>
                             )}
                           </div>
@@ -16738,9 +17081,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                                 onClick={() => {
                                   let updatedCart = [...cart];
                                   if (getCartItemCount(cartId) === 0) {
-                                    const newItem = { id: cartId, name: p.name + " (Site Consultation)", price: 49, quantity: 1 };
+                                    const newItem = { id: cartId, name: p.name + " (Site Consultation)", price: currentFee, quantity: 1 };
                                     updatedCart.push(newItem);
-                                    addItemToCart(cartId, p.name + " (Site Consultation)", 49, "");
+                                    addItemToCart(cartId, p.name + " (Site Consultation)", currentFee, "");
                                   }
                                   if (typeof onCheckout === "function") {
                                     onCheckout(updatedCart);
@@ -16769,7 +17112,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {
                                 const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
-                                const cartItemPrice = normalizedKey === "mason" ? 49 : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
+                                const cartItemPrice = normalizedKey === "mason" ? currentFee : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
                                 const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
 
                                 return count > 0 ? (
@@ -17172,7 +17515,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   <div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Consultation Fee</div>
                     <div className="text-base font-black text-slate-900 mt-0.5">
-                      ₹49
+                      {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                     </div>
                     <div className="text-[9px] font-semibold text-slate-400">
                       Starts at ₹{selectedMasonDetail.price}
@@ -17185,11 +17528,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
                         <button onClick={() => removeItemFromCart(`serv-mason-${selectedMasonDetail.id}`)} className="hover:text-emerald-900 cursor-pointer">-</button>
                         <span>{getCartItemCount(`serv-mason-${selectedMasonDetail.id}`)}</span>
-                        <button onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", 49, "")} className="hover:text-emerald-900 cursor-pointer">+</button>
+                        <button onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", currentFee, "")} className="hover:text-emerald-900 cursor-pointer">+</button>
                       </div>
                     ) : (
                       <button
-                        onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", 49, "")}
+                        onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", currentFee, "")}
                         className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2.5 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <ShoppingCart size={13} /> Add
@@ -17201,7 +17544,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 <div className="mt-3 bg-blue-50/50 border border-blue-100/60 rounded-xl p-3 text-[10px] text-blue-700 leading-normal flex items-start gap-2">
                   <span className="text-blue-500 font-extrabold text-xs mt-0.5">ℹ</span>
                   <span>
-                    A nominal consultation and visiting charge of <strong>₹49</strong> applies for inspection and estimate calculation. This amount will be fully adjusted in your final service invoice once the mason inspects the site and provides the final quote.
+                    {currentFee > 0 ? (
+                      <>
+                        A nominal visiting charge of <strong>₹300</strong> applies for inspection and estimate calculation since your location is beyond 15 km from our hub. This amount will be fully adjusted in your final service invoice once the mason inspects the site and provides the final quote.
+                      </>
+                    ) : (
+                      <>
+                        A visiting charge is <strong>FREE</strong> for inspection and estimate calculation since your location is within 15 km of our hub.
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
@@ -17398,9 +17749,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   const cartId = `serv-mason-${selectedMasonDetail.id}`;
                   let updatedCart = [...cart];
                   if (getCartItemCount(cartId) === 0) {
-                    const newItem = { id: cartId, name: selectedMasonDetail.name + " (Site Consultation)", price: 49, quantity: 1 };
+                    const newItem = { id: cartId, name: selectedMasonDetail.name + " (Site Consultation)", price: currentFee, quantity: 1 };
                     updatedCart.push(newItem);
-                    addItemToCart(cartId, selectedMasonDetail.name + " (Site Consultation)", 49, "");
+                    addItemToCart(cartId, selectedMasonDetail.name + " (Site Consultation)", currentFee, "");
                   }
                   setSelectedMasonDetail(null);
                   if (typeof onCheckout === "function") {

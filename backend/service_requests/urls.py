@@ -17,6 +17,12 @@ from .views import (
     CatalogServiceListView,
     CatalogSubServiceListView,
     CustomerQuoteDetailView,
+    CustomerQuoteDecideView,
+    CustomerQuotePDFView,
+    AdminPaintingRateCardListView,
+    AdminPaintingRateCardDetailView,
+    AdminQuoteCreateView,
+    AdminQuoteActionView,
 
     # Admin — Service Requests
     AdminSRListView,
@@ -228,4 +234,14 @@ urlpatterns = [
     path('admin/coupons/<int:pk>/status/',               CouponDetailView.as_view(),                   name='admin-coupon-status'),
     path('customer/coupons/',                            CustomerCouponListView.as_view(),             name='customer-coupon-list'),
     path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
+
+    # ── Painting & Waterproofing Quotes & Rate Card ──────────────────────────
+    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),            name='customer-quote-decide'),
+    path('booking/quote/<str:token>/pdf/',               CustomerQuotePDFView.as_view(),               name='customer-quote-pdf'),
+    path('admin/painting/rate-card/',                    AdminPaintingRateCardListView.as_view(),       name='admin-painting-rate-card-list'),
+    path('admin/painting/rate-card/<int:pk>/',           AdminPaintingRateCardDetailView.as_view(),     name='admin-painting-rate-card-detail'),
+    path('admin/painting/quotes/create/',                AdminQuoteCreateView.as_view(),                name='admin-painting-quote-create'),
+    path('admin/painting/quotes/<int:pk>/action/',       AdminQuoteActionView.as_view(),                name='admin-painting-quote-action'),
+    path('admin/mason/quotes/create/',                   AdminQuoteCreateView.as_view(),                name='admin-mason-quote-create'),
+    path('admin/mason/quotes/<int:pk>/action/',          AdminQuoteActionView.as_view(),                name='admin-mason-quote-action'),
 ]
