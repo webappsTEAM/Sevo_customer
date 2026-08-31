@@ -1839,7 +1839,38 @@ export function LandingPage() {
     }
   }
 
-  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
+  const [modalCart, setModalCart] = useState(() => {
+    if (location.state?.cart && Array.isArray(location.state.cart) && location.state.cart.length > 0) {
+      return location.state.cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false)
+    }
+    try {
+      const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart")
+      if (saved) {
+        const p = JSON.parse(saved)
+        if (Array.isArray(p) && p.length > 0) {
+          return p.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false)
+        }
+      }
+    } catch (e) { }
+    return []
+  })
+
+  // Persist customer service cart in localStorage whenever updated
+  useEffect(() => {
+    if (Array.isArray(modalCart)) {
+      try {
+        localStorage.setItem("calservices_customer_cart", JSON.stringify(modalCart))
+      } catch (e) { }
+    }
+  }, [modalCart])
+
+  // Restore cart when navigation routes back with state
+  useEffect(() => {
+    if (location.state?.cart && Array.isArray(location.state.cart)) {
+      setModalCart(location.state.cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
+    }
+  }, [location.state])
+
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -2603,7 +2634,11 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(finalCart);
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
                 <BathroomCleaningModal
@@ -2611,7 +2646,11 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(finalCart);
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
                 <PaintingPackageModal

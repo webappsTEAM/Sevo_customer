@@ -6,7 +6,6 @@ import { extractAuthError, API_BASE_URL } from "../../api/authService.js"
 
 import { validateLoginForm } from "../../utils/validate.js"
 import { routes } from "../routes.js"
-import { useGoogleLogin } from "@react-oauth/google"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink, Sparkles, KeyRound } from "lucide-react"
 import IntroAnimation from "../../components/ui/scroll-morph-hero"
@@ -221,23 +220,6 @@ export function LoginPage() {
       setLoading(false)
     }
   }
-
-  const googleLoginHandler = useGoogleLogin({
-    flow: "implicit",
-    onSuccess: async (tr) => {
-      setLoading(true)
-      try { 
-        const u = await loginWithGoogle(tr.access_token)
-        navigate(postLoginRoute(u), { replace: true }) 
-      }
-      catch (err) { setError(extractAuthError(err, "Google login failed.")) }
-      finally { setLoading(false) }
-    },
-    onError: (err) => {
-      console.error("Google OAuth error:", err)
-      setError(err?.error_description || err?.error || "Google login failed. Please try again.")
-    }
-  })
 
   const handleRetryAuth = () => {
     setShowFailedLogin(false)

@@ -1342,6 +1342,25 @@ class AdminSRAssignView(APIView):
             apply_transition(sr, ServiceRequest.Status.ASSIGNED, actor=request.user)
 
             # Persist technician details passed by admin
+            if request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id"):
+                tech_val = request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id")
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                t_user = User.objects.filter(pk=tech_val).first() if str(tech_val).isdigit() else User.objects.filter(username=str(tech_val)).first()
+                if t_user:
+                    sr.technician = t_user
+                    if not sr.technician_name:
+                        sr.technician_name = t_user.get_full_name() or t_user.username
+                    if not sr.technician_phone:
+                        sr.technician_phone = getattr(t_user, "phone", "") or getattr(t_user, "mobile_number", "")
+                    if not sr.technician_photo and getattr(t_user, "avatar", None) and bool(t_user.avatar):
+                        try:
+                            sr.technician_photo = t_user.avatar.url
+                        except Exception:
+                            pass
+                    if sr.technician_rating is None and getattr(t_user, "rating", None) is not None:
+                        sr.technician_rating = t_user.rating
+
             if request.data.get("technician_name") or request.data.get("employee_name"):
                 sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")
             if request.data.get("technician_phone") or request.data.get("employee_phone"):
@@ -1407,6 +1426,26 @@ class AdminSRUpdateTechnicianLocationView(APIView):
                 sr = ServiceRequest.objects.get(request_id=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
+
+        if "technician_id" in request.data or "technician" in request.data or "employee_id" in request.data:
+            tech_val = request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id")
+            if tech_val:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                t_user = User.objects.filter(pk=tech_val).first() if str(tech_val).isdigit() else User.objects.filter(username=str(tech_val)).first()
+                if t_user:
+                    sr.technician = t_user
+                    if not sr.technician_name:
+                        sr.technician_name = t_user.get_full_name() or t_user.username
+                    if not sr.technician_phone:
+                        sr.technician_phone = getattr(t_user, "phone", "") or getattr(t_user, "mobile_number", "")
+                    if not sr.technician_photo and getattr(t_user, "avatar", None) and bool(t_user.avatar):
+                        try:
+                            sr.technician_photo = t_user.avatar.url
+                        except Exception:
+                            pass
+                    if sr.technician_rating is None and getattr(t_user, "rating", None) is not None:
+                        sr.technician_rating = t_user.rating
 
         if "technician_name" in request.data or "employee_name" in request.data:
             sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")

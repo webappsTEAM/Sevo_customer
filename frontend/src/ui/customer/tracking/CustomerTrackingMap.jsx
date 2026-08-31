@@ -304,7 +304,7 @@ export function CustomerTrackingMap({
   vendorName = "",
   requestId = "",
 }) {
-  const [mapLayer, setMapLayer] = useState("osm_streets")
+  const [mapLayer, setMapLayer] = useState("google_streets")
   const [roadRoute, setRoadRoute] = useState([])
   const [hasRoadGeometry, setHasRoadGeometry] = useState(false)
   const [currentStreetName, setCurrentStreetName] = useState("")
@@ -654,7 +654,7 @@ export function CustomerTrackingMap({
         </button>
 
         {[
-          { id: "osm_streets", label: "Street" },
+          { id: "google_streets", label: "Street" },
           { id: "satellite", label: "Satellite" },
           { id: "dark", label: "Dark" },
         ].map(l => (
@@ -672,7 +672,7 @@ export function CustomerTrackingMap({
         center={defaultCenter}
         zoom={17}
         minZoom={4}
-        maxZoom={19}
+        maxZoom={20}
         scrollWheelZoom={true}
         doubleClickZoom={true}
         touchZoom={true}
@@ -684,26 +684,23 @@ export function CustomerTrackingMap({
         <MapEventsHandler onUserInteract={handleUserInteract} />
         <MapResizeListener />
 
-        {/* ── Tile Layers: High-Detail Streets / Satellite / Dark ── */}
-        {mapLayer === "osm_streets" && (
+        {/* ── Tile Layers: Google Maps Standard Streets / Google Satellite Hybrid / CartoDB Dark ── */}
+        {(mapLayer === "google_streets" || mapLayer === "osm_streets") && (
           <TileLayer
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maxZoom={19}
+            url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+            subdomains={["mt0", "mt1", "mt2", "mt3"]}
+            maxZoom={20}
+            attribution="&copy; Google Maps"
           />
         )}
 
         {mapLayer === "satellite" && (
-          <>
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-              opacity={0.85}
-            />
-          </>
+          <TileLayer
+            url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+            subdomains={["mt0", "mt1", "mt2", "mt3"]}
+            maxZoom={20}
+            attribution="&copy; Google Maps Satellite"
+          />
         )}
 
         {mapLayer === "dark" && (
@@ -711,6 +708,7 @@ export function CustomerTrackingMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             subdomains={["a", "b", "c", "d"]}
             maxZoom={19}
+            attribution="&copy; CartoDB &copy; OpenStreetMap"
           />
         )}
 

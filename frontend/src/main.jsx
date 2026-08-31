@@ -1,7 +1,6 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
-import { GoogleOAuthProvider } from "@react-oauth/google"
 import { Provider as ReduxProvider } from "react-redux"
 
 import { store } from "./store/store.js"
@@ -33,7 +32,6 @@ if (!enableLogs) {
 initTheme()
 
 console.log("DEBUG: main.jsx loaded and initTheme() called");
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "628867483502-e7snj6l150js2vpvkv70opo5h4aacgus.apps.googleusercontent.com"
 const rootEl = document.getElementById("root");
 console.log("DEBUG: Root element found:", rootEl);
 
@@ -41,11 +39,9 @@ createRoot(rootEl).render(
   <StrictMode>
     <ReduxProvider store={store}>
       <BrowserRouter basename={import.meta.env.DEV ? "/" : "/Caltrack"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <GoogleOAuthProvider clientId={googleClientId}>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </GoogleOAuthProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </BrowserRouter>
     </ReduxProvider>
   </StrictMode>
