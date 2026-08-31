@@ -363,6 +363,21 @@ class BookingCreateView(APIView):
         # catches the common tampering/bug pattern of a total_amount that
         # doesn't match what the cart itself lists, without needing catalog
         # resolution.
+        #
+        # BUGFIX (same day): the original version of this check compared
+        # total_amount against the raw cart line-item sum with only a
+        # +/-1%/Rs.5 symmetric tolerance. That's wrong -- total_amount
+        # legitimately includes GST/taxes and platform fees on top of the
+        # cart subtotal (the frontend adds these; cart_data only carries the
+        # per-item price), so it is normally *higher* than the raw cart sum,
+        # often by 15-25%+. The tight symmetric tolerance rejected every real
+        # booking with tax/fees, not just tampered ones. The actual security
+        # concern this check exists for is a submitted total *lower* than
+        # what the cart should cost (underpaying), so the bound is now
+        # one-sided: total_amount must not be noticeably below the cart
+        # subtotal, and is capped at a generous multiple to still catch
+        # wildly-wrong/corrupted totals without false-positiving on normal
+        # tax/fee/delivery-charge/tip overhead.
         _cart_for_check = serializer.validated_data.get("cart_data") or []
         if (
             serializer.validated_data.get("service_category", "") not in LOGISTICS_CATEGORIES
@@ -378,8 +393,10 @@ class BookingCreateView(APIView):
             except (TypeError, ValueError):
                 _cart_total = None
             if _cart_total is not None and _cart_total > 0:
-                _tolerance = max(5.0, _cart_total * 0.01)
-                if abs(float(corrected_fare) - _cart_total) > _tolerance:
+                _submitted = float(corrected_fare)
+                _lower_bound = _cart_total - max(5.0, _cart_total * 0.01)
+                _upper_bound = (_cart_total * 1.75) + 100.0
+                if _submitted < _lower_bound or _submitted > _upper_bound:
                     return _error(
                         "The submitted amount doesn't match the selected services. "
                         "Please refresh and try booking again.",
