@@ -8,6 +8,7 @@ Two primary groups of views:
 Decoupled from local employee models — dispatches and tracking queries delegate to WorkforceIntegrationService.
 """
 import logging
+import os
 import re
 import uuid
 from decimal import Decimal
@@ -109,6 +110,30 @@ def _get_company(request):
     if company:
         return company
     from companies.models import Company
+    # BUGFIX: this used to fall back to "if there's exactly 1 Company row,
+    # use it" -- CompanyMiddleware is a documented no-op ("operates as a
+    # unified global single-application architecture"), so request.company
+    # is NEVER set and this count()==1 fallback was the ONLY mechanism that
+    # ever resolved a company here. It worked by accident whenever the table
+    # happened to hold exactly one row, and silently returned None the
+    # moment a second row existed for any reason (e.g. leftover test-suite
+    # fixture companies) -- with no error anywhere. A booking created with
+    # company=None can NEVER be dispatched: automatic_dispatch.dispatch_job()
+    # hard-refuses any job with no company_id. Found live during end-to-end
+    # testing: the companies table had accumulated 168 rows (mostly
+    # obviously-synthetic e2e fixture companies -- "Acme Service Co", "GPS
+    # Trace Corp", "Solar Wave Solutions 716581", etc.), silently breaking
+    # dispatch for every booking made after the 2nd company appeared.
+    #
+    # Fixed to resolve the real operating company by its stable slug first
+    # (configurable via DEFAULT_COMPANY_SLUG, defaulting to this org's own
+    # company), and only fall back to the old count()==1 heuristic if that
+    # slug isn't found -- so a clean single-company environment (e.g. a
+    # fresh install) still works without any extra configuration.
+    default_slug = os.environ.get("DEFAULT_COMPANY_SLUG", "caldim-engineering-pvt-ltd")
+    company = Company.objects.filter(slug=default_slug).first()
+    if company:
+        return company
     if Company.objects.count() == 1:
         return Company.objects.first()
     return None
