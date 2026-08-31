@@ -588,24 +588,32 @@ class ProfileUpdateView(APIView):
         try:
             from .serializers import ProfileUpdateSerializer
             data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
-
-            avatar_val = data.pop('avatar', None)
+            remove_avatar = data.pop('remove_avatar', None)
+            avatar_present = 'avatar' in request.data or 'avatar' in data
+            avatar_val = data.pop('avatar', None) if avatar_present else None
             data.pop('profile_picture', None)
 
-            if avatar_val:
-                if isinstance(avatar_val, str) and avatar_val.strip():
-                    if '/media/' in avatar_val:
-                        request.user.avatar.name = avatar_val.split('/media/')[-1]
-                    else:
-                        request.user.avatar.name = avatar_val
-                    try:
-                        request.user.save(update_fields=['avatar'])
-                    except Exception:
-                        request.user.save()
-
             avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
-            if avatar_file:
+
+            if str(remove_avatar).lower() in ('true', '1', 'yes') or (avatar_present and not avatar_file and avatar_val in (None, '', 'null')):
+                if request.user.avatar:
+                    request.user.avatar.delete(save=False)
+                request.user.avatar = None
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif avatar_file:
                 request.user.avatar = avatar_file
+                try:
+                    request.user.save(update_fields=['avatar'])
+                except Exception:
+                    request.user.save()
+            elif avatar_val and isinstance(avatar_val, str) and avatar_val.strip():
+                if '/media/' in avatar_val:
+                    request.user.avatar.name = avatar_val.split('/media/')[-1]
+                else:
+                    request.user.avatar.name = avatar_val
                 try:
                     request.user.save(update_fields=['avatar'])
                 except Exception:

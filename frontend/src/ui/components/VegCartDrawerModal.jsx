@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { motion } from "framer-motion"
 import {
   X, ShoppingCart, ArrowLeft, Trash2, Heart,
-  MapPin, ChevronRight, Share2, Info, Plus, Minus
+  MapPin, ChevronRight, Share2, Info, Plus, Minus, Clock
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useNavigate } from "react-router-dom"

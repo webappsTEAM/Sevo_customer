@@ -302,6 +302,48 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
+function isSlotInPast(dateStr, slotStr) {
+  if (!dateStr || !slotStr) return false
+  const now = new Date()
+
+  // Format today's date in local YYYY-MM-DD
+  const todayYear = now.getFullYear()
+  const todayMonth = String(now.getMonth() + 1).padStart(2, '0')
+  const todayDay = String(now.getDate()).padStart(2, '0')
+  const todayStr = `${todayYear}-${todayMonth}-${todayDay}`
+
+  // Normalize dateStr
+  const cleanDateStr = String(dateStr).split('T')[0].trim()
+
+  // If date is before today, it's in the past
+  if (cleanDateStr < todayStr) return true
+  // If date is strictly in the future, slot is available
+  if (cleanDateStr > todayStr) return false
+
+  // If date is today, parse the slot time
+  let hours = 0
+  let minutes = 0
+
+  const slotUpper = String(slotStr).trim().toUpperCase()
+  if (slotUpper.includes('AM') || slotUpper.includes('PM')) {
+    const match = slotUpper.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/)
+    if (match) {
+      hours = parseInt(match[1], 10)
+      minutes = parseInt(match[2], 10)
+      const period = match[3]
+      if (period === 'PM' && hours !== 12) hours += 12
+      if (period === 'AM' && hours === 12) hours = 0
+    }
+  } else if (slotStr.includes(':')) {
+    const parts = slotStr.split(':')
+    hours = parseInt(parts[0], 10)
+    minutes = parseInt(parts[1], 10) || 0
+  }
+
+  const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0)
+  return slotDate <= now
+}
+
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MINI COMPONENTS
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
@@ -1231,6 +1273,8 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
     return `${h12}:00 ${ampm}`
   }
 
+  const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
       {/* LEFT: Slot Picker */}
@@ -1262,7 +1306,12 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
             {DAYS_LIST.map(d => (
               <button
                 key={d.iso}
-                onClick={() => onDateChange(d.iso)}
+                onClick={() => {
+                  onDateChange(d.iso)
+                  if (selectedTime && isSlotInPast(d.iso, selectedTime)) {
+                    onTimeChange('')
+                  }
+                }}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   minWidth: 62, padding: '10px 8px', borderRadius: 14, border: `2px solid ${selectedDate === d.iso ? '#7C3AED' : '#e2e8f0'}`,
@@ -1292,21 +1341,31 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
                 {group.icon} {group.period}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {group.slots.map(t => (
-                  <button
-                    key={`${group.period}-${t}`}
-                    onClick={() => onTimeChange(t)}
-                    style={{
-                      padding: '8px 18px', borderRadius: 99,
-                      border: `2px solid ${selectedTime === t ? '#7C3AED' : '#e2e8f0'}`,
-                      background: selectedTime === t ? '#7C3AED' : 'white',
-                      color: selectedTime === t ? 'white' : '#374151',
-                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.18s'
-                    }}
-                  >
-                    {formatSlot(t)}
-                  </button>
-                ))}
+                {group.slots.map(t => {
+                  const isPast = isSlotInPast(selectedDate, t)
+                  const isSel = selectedTime === t
+                  return (
+                    <button
+                      key={`${group.period}-${t}`}
+                      disabled={isPast}
+                      onClick={() => {
+                        if (isPast) return
+                        onTimeChange(t)
+                      }}
+                      style={{
+                        padding: '8px 18px', borderRadius: 99,
+                        border: `2px solid ${isPast ? '#e2e8f0' : isSel ? '#7C3AED' : '#e2e8f0'}`,
+                        background: isPast ? '#f1f5f9' : isSel ? '#7C3AED' : 'white',
+                        color: isPast ? '#94a3b8' : isSel ? 'white' : '#374151',
+                        fontWeight: 700, fontSize: '0.8rem', cursor: isPast ? 'not-allowed' : 'pointer', transition: 'all 0.18s',
+                        opacity: isPast ? 0.6 : 1,
+                        userSelect: 'none'
+                      }}
+                    >
+                      {formatSlot(t)}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ))}
@@ -1748,7 +1807,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const gstRate = itemsList.length > 0 && itemsList[0].gst_rate !== undefined ? Number(itemsList[0].gst_rate) : (pkg?.gst_rate !== undefined ? Number(pkg.gst_rate) : 18)
   const platformFee = totalPrice === 0 || isFreeCategory ? 0 : ((itemsList.length > 0) ? Math.max(29, ...itemsList.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29)) : 29)
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
-  const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
+  const tipAmount = tip === 'custom' ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = totalPrice + roundedGst + platformFee - discount + tipAmount
 
   // Gather service/package info
@@ -1900,7 +1959,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
               ))}
               <button onClick={() => setTip(tip === 'custom' ? null : 'custom')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === 'custom' ? '#7C3AED' : '#e2e8f0'}`, background: tip === 'custom' ? '#ede9fe' : 'white', color: tip === 'custom' ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', transition: 'all 0.18s' }}>Custom</button>
             </div>
-            {tip === 'custom' && <input type="number" value={customTip} onChange={e => setCustomTip(e.target.value)} placeholder="Enter amount" style={{ marginTop: 8, width: '100%', padding: '8px 12px', border: '2px solid #7C3AED', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />}
+            {tip === 'custom' && <input type="number" min="0" value={customTip} onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }} onChange={e => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Enter amount" style={{ marginTop: 8, width: '100%', padding: '8px 12px', border: '2px solid #7C3AED', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />}
           </div>
 
           {/* Price Breakdown */}
@@ -4348,6 +4407,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }
 
+  const handleRemoveAvatar = async () => {
+    setProfileError('')
+    setProfileSuccess('')
+    try {
+      const body = new FormData()
+      body.append("remove_avatar", "true")
+      body.append("avatar", "")
+      await apiRequest("/auth/profile/", { method: "PATCH", body })
+      setAvatarPreview('')
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+      if (refreshMe) await refreshMe()
+      setProfileSuccess("Profile photo removed successfully!")
+    } catch (err) {
+      setProfileError(err?.body?.message || "Failed to remove profile photo.")
+    }
+  }
+
   const handleSaveProfile = async () => {
     setProfileError('')
     setProfileSuccess('')
@@ -5052,9 +5128,54 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Profile</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', overflow: 'hidden', flexShrink: 0 }}>
+              <div
+                className="relative group"
+                style={{
+                  width: 88,
+                  height: 88,
+                  borderRadius: '50%',
+                  background: '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid #e2e8f0',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  position: 'relative'
+                }}
+              >
                 {avatarPreview || user?.avatar_url || user?.avatar ? (
-                  <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <>
+                    <img
+                      src={avatarPreview || user?.avatar_url || user?.avatar}
+                      alt="Profile"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                    <div
+                      onClick={handleRemoveAvatar}
+                      title="Click to remove photo"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.75)',
+                        backdropFilter: 'blur(2px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 3,
+                        color: 'white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    >
+                      <Trash2 size={18} color="#f87171" />
+                      <span style={{ fontSize: '0.62rem', fontWeight: 800, color: 'white', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Remove
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <User size={36} color="#94a3b8" />
                 )}
@@ -5076,13 +5197,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   style={{ display: 'none' }}
                   onChange={handleAvatarUpload}
                 />
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
-                >
-                  Change Photo
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.18s' }}
+                  >
+                    Change Photo
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -7971,12 +8094,12 @@ function QuickCommerceCartCheckout({
   const isSurgeActive = QUICK_COMMERCE_PRICING.SURGE_ACTIVE
   const surgeCharge = QUICK_COMMERCE_PRICING.getSurgeFee(itemsTotal, isSurgeActive, QUICK_COMMERCE_PRICING.SURGE_FEE)
   const donationAmount = 0
-  const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
+  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
   const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
 
   const handleUpdateQty = (id, delta) => {
     setCart(prev => {
-      return prev
+      const nextCart = prev
         .map(it => {
           if (it.id === id) {
             const nextQty = (it.quantity || 1) + delta
@@ -7985,6 +8108,27 @@ function QuickCommerceCartCheckout({
           return it
         })
         .filter(Boolean)
+
+      const nextFoodCart = {}
+      nextCart.forEach(item => {
+        const key = item.displayName || item.name
+        if (key && (item.quantity || 1) > 0) {
+          nextFoodCart[key] = item.quantity || 1
+        }
+      })
+      try {
+        localStorage.setItem("calservice_veg_food_cart", JSON.stringify(nextFoodCart))
+      } catch {}
+
+      if (nextCart.length === 0) {
+        setTimeout(() => {
+          if (typeof onBack === "function") {
+            onBack(nextFoodCart)
+          }
+        }, 10)
+      }
+
+      return nextCart
     })
   }
 
@@ -8555,8 +8699,10 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 <div className="pt-2">
                   <input
                     type="number"
+                    min="0"
                     value={customTip}
-                    onChange={(e) => setCustomTip(e.target.value)}
+                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
+                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="Enter custom tip amount (₹)"
                     className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                   />
@@ -8648,8 +8794,8 @@ function StepWorkflowCheckout({
   setFormData,
   setLocation
 }) {
-  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime)
-  const isSlotSelected = Boolean(selectedDate && selectedTime)
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
+  const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
@@ -8716,7 +8862,10 @@ function StepWorkflowCheckout({
     for (let i = 0; i < 7; i++) {
       const d = new Date(today)
       d.setDate(today.getDate() + i)
-      const dateStr = d.toISOString().split("T")[0]
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, "0")
+      const day = String(d.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
       let label = d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
       if (i === 0) label = `Today, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
       if (i === 1) label = `Tomorrow, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
@@ -8754,7 +8903,7 @@ function StepWorkflowCheckout({
   const roundedGst = Math.round(totalGst)
   const gstRate = items.length > 0 && items[0].gst_rate !== undefined ? Number(items[0].gst_rate) : 18
   const platformFee = itemTotal === 0 || isFreeCategory ? 0 : Math.max(29, ...items.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
-  const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
+  const tipAmount = tip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
   const relatedServicesCatalog = {
@@ -8936,7 +9085,24 @@ function StepWorkflowCheckout({
           </div>
           <button
             type="button"
-            onClick={onBack}
+            onClick={() => {
+              if (category?.isQuickCommerce || incomingCategory?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
+                try {
+                  localStorage.setItem("calservice_veg_food_cart", "{}")
+                } catch {}
+                navigate(routes.landing || "/home", {
+                  replace: true,
+                  state: {
+                    openFoodHealthModal: true,
+                    openVegetablesModal: true,
+                    openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
+                    foodCart: {},
+                  }
+                })
+              } else {
+                onBack()
+              }
+            }}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 border-none"
           >
             Book Another Service
@@ -9069,7 +9235,12 @@ function StepWorkflowCheckout({
                             return (
                               <button
                                 key={item.dateStr}
-                                onClick={() => onDateChange(item.dateStr)}
+                                onClick={() => {
+                                  onDateChange(item.dateStr)
+                                  if (selectedTime && isSlotInPast(item.dateStr, selectedTime)) {
+                                    onTimeChange("")
+                                  }
+                                }}
                                 className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSel
                                   ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
                                   : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
@@ -9091,16 +9262,21 @@ function StepWorkflowCheckout({
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                           {timeSlots.map(t => {
                             const isSel = selectedTime === t
+                            const isPast = isSlotInPast(selectedDate, t)
                             return (
                               <button
                                 key={t}
+                                disabled={isPast}
                                 onClick={() => {
+                                  if (isPast) return
                                   onTimeChange(t)
                                   if (selectedDate) setShowSlotPicker(false)
                                 }}
-                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${isSel
-                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white"
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  : isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
                                   }`}
                               >
                                 {t}
@@ -9434,9 +9610,11 @@ function StepWorkflowCheckout({
               {tip === "custom" && (
                 <input
                   type="number"
+                  min="0"
                   placeholder="Enter tip amount"
                   value={customTip}
-                  onChange={e => setCustomTip(e.target.value)}
+                  onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
+                  onChange={e => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
                   className="w-full mt-2 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 font-bold"
                 />
               )}
@@ -10057,6 +10235,10 @@ export function BookingPage() {
       setShowCustomerEntryModal(true)
       return
     }
+    if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
+      setError("Please select an upcoming date and time slot.");
+      return
+    }
     setLoading(true); setError(null)
     // Map frontend choices to backend enum values
     const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
@@ -10099,7 +10281,7 @@ export function BookingPage() {
         discount = Math.min(discount, Number(appliedCoupon.max_discount || appliedCoupon.maxDiscount));
       }
     }
-    const tipAmount = Number(tipValue) || 0;
+    const tipAmount = Math.max(0, Number(tipValue) || 0);
     const calculatedGrandTotal = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
 
     console.log("========== REAL BOOKING SUBMISSION ==========");
@@ -10244,6 +10426,23 @@ export function BookingPage() {
       routerLocation.state?.isQuickCommerce ||
       cart.some(i => i.serviceType === "vegetables_quick_delivery"))
 
+  useEffect(() => {
+    if (isQuickCommerce && cart.length === 0) {
+      try {
+        localStorage.setItem("calservice_veg_food_cart", "{}")
+      } catch {}
+      navigate(routes.landing || "/home", {
+        replace: true,
+        state: {
+          openFoodHealthModal: true,
+          openVegetablesModal: true,
+          openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
+          foodCart: {},
+        }
+      })
+    }
+  }, [isQuickCommerce, cart.length, navigate, routerLocation.state, category])
+
   if (isQuickCommerce && cart.length > 0) {
     return (
       <>
@@ -10253,21 +10452,26 @@ export function BookingPage() {
           category={category}
           user={user}
           onRequireAuth={() => setShowCustomerEntryModal(true)}
-          onBack={() => {
-            const restoredFoodCart = {}
-            cart.forEach(item => {
-              const key = item.displayName || item.name
-              if (key) {
-                restoredFoodCart[key] = item.quantity || 1
-              }
-            })
+          onBack={(explicitFoodCart) => {
+            const restoredFoodCart = explicitFoodCart !== undefined ? explicitFoodCart : {}
+            if (explicitFoodCart === undefined) {
+              cart.forEach(item => {
+                const key = item.displayName || item.name
+                if (key && (item.quantity || 1) > 0) {
+                  restoredFoodCart[key] = item.quantity || 1
+                }
+              })
+            }
+            try {
+              localStorage.setItem("calservice_veg_food_cart", JSON.stringify(restoredFoodCart))
+            } catch {}
             navigate(routes.landing || "/home", {
               replace: true,
               state: {
                 openFoodHealthModal: true,
                 openVegetablesModal: true,
                 openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
-                foodCart: Object.keys(restoredFoodCart).length > 0 ? restoredFoodCart : (routerLocation.state?.foodCart || {}),
+                foodCart: restoredFoodCart,
               }
             })
           }}

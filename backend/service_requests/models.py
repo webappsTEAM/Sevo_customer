@@ -1682,6 +1682,39 @@ class QuotePhoto(models.Model):
     def __str__(self):
         return f"Photo for {self.quote.quote_number}"
 
+class TechnicianLocation(models.Model):
+    """
+    High-frequency GPS telemetry point emitted by the Technician App during active service lifecycle.
+    """
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="location_logs",
+        db_index=True,
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="technician_locations",
+    )
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy = models.FloatField(null=True, blank=True)
+    heading = models.FloatField(default=0.0, blank=True)
+    speed = models.FloatField(default=0.0, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["booking", "created_at"]),
+            models.Index(fields=["technician", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
 
 
 

@@ -2053,7 +2053,7 @@ export function LandingPage() {
     return foodHealthSub.find((sub) => sub.id === selectedFoodSubModuleId) || null
   }, [foodHealthSub, selectedFoodSubModuleId])
   const [foodCart, setFoodCart] = useState(() => {
-    if (location.state?.foodCart && Object.keys(location.state.foodCart).length > 0) {
+    if (location.state?.foodCart !== undefined) {
       return location.state.foodCart
     }
     try {
@@ -2076,8 +2076,11 @@ export function LandingPage() {
     if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
       setIsFoodHealthModalOpen(true)
       setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "vegetables")
-      if (location.state?.foodCart) {
+      if (location.state?.foodCart !== undefined) {
         setFoodCart(location.state.foodCart)
+        try {
+          localStorage.setItem("calservice_veg_food_cart", JSON.stringify(location.state.foodCart || {}))
+        } catch {}
       }
       // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
       navigate(".", { replace: true, state: {} })
