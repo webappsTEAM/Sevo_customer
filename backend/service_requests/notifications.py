@@ -714,3 +714,51 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     except Exception as e:
         logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
 
+
+def send_quote_notification(quote) -> None:
+    """Send quote notification with a link to tracking and decision portal."""
+    sr = quote.service_request
+    if not sr.email:
+        logger.info(f"Skipping quote notification for {quote.quote_number}: No email on Service Request.")
+        return
+        
+    title = f"Quotation Prepared for {sr.request_id}"
+    greeting = f"Hello {sr.customer_name or 'Valued Customer'},"
+    intro = f"A new quotation ({quote.quote_number}) has been prepared for your Painting service request ({sr.request_id})."
+    
+    details = {
+        "Quote Number": f"{quote.quote_number} (v{quote.quote_version})",
+        "Grand Total": f"₹{quote.grand_total}",
+        "Property Type": quote.property_type or "N/A",
+        "Total Paintable Area": f"{quote.total_paintable_area} sq.ft",
+        "Valid Until": str(quote.valid_until or "N/A")
+    }
+    
+    cta_url = f"{settings.FRONTEND_URL}/track/{sr.request_id}?token={sr.tracking_token}"
+    cta_text = "Review & Approve Quotation"
+    footer = "Please review the quotation details and take action. This link is private to you."
+    
+    html_content = _render_html_template(
+        title=title,
+        greeting=greeting,
+        intro_text=intro,
+        details_dict=details,
+        cta_url=cta_url,
+        cta_text=cta_text,
+        footer_note=footer
+    )
+    
+    try:
+        send_mail(
+            subject=title,
+            message=f"A new quote has been prepared. Please review it here: {cta_url}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[sr.email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+        logger.info(f"Quote notification email sent to {sr.email} for {quote.quote_number}")
+    except Exception as e:
+        logger.warning(f"Failed to send quote notification email: {e}")
+
+

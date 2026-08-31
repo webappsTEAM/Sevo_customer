@@ -83,6 +83,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#3B82F6" },
       { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
+      { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
     ]
   },
   {
