@@ -106,7 +106,8 @@ def _norm_slug(s: str) -> str:
 def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_name: str = "") -> bool:
     """
     Checks if a requested slug or service title matches an allowed service slug/name in the zone.
-    Uses exact matching and specific service alias mapping, preventing false-positive cross matches.
+    Uses exact matching, comprehensive bidirectional alias sets, and safe token prefix matching.
+    Prevents false-positive cross matches (e.g. 'ac' matching inside 'packers-movers').
     """
     if not requested_slug or requested_slug in ("general", "all", "service-booking", "services-added"):
         return True
@@ -118,59 +119,85 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
     if r == c or (n and r == n):
         return True
 
-    # Exact alias mapping for catalog services
+    # Exact bidirectional alias mapping for all service categories and sub-services
     ALIASES = {
+        # Vegetables & Groceries
+        "vegetables": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "fresh-vegetables", "veggies", "farm-fresh"},
+        "vegetable": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "fresh-vegetables"},
+        "farm-fresh-vegetable": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "fresh-vegetables"},
+        "farm-fresh-vegetables": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "fresh-vegetables"},
+        "vegetables-quick-delivery": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "fresh-vegetables"},
+        "vegetables-groceries": {"vegetables", "vegetable", "farm-fresh-vegetable", "farm-fresh-vegetables", "vegetables-quick-delivery", "vegetables-groceries", "groceries"},
+        "groceries": {"groceries", "vegetables-groceries", "daily-essentials", "grocery"},
+
+        # Goods & Logistics
+        "goods-and-transports": {"truck", "two-wheeler", "packers-movers", "goods-transports", "transport", "mini-truck", "instant-bike-courier", "house-shifting"},
+        "goods-transports": {"truck", "two-wheeler", "packers-movers", "transport"},
+        "goods-transport-truck": {"truck", "mini-truck", "mini-truck-transport", "goods-and-transports"},
+        "goods-transport-bike": {"two-wheeler", "instant-bike-courier", "bike", "goods-and-transports"},
+        "goods-transport-packers": {"packers-movers", "house-shifting", "packers-and-movers", "goods-and-transports"},
+        "truck": {"truck", "mini-truck", "mini-truck-transport", "goods-transport-truck"},
+        "mini-truck": {"truck", "mini-truck", "mini-truck-transport", "goods-transport-truck"},
+        "two-wheeler": {"two-wheeler", "bike", "instant-bike-courier", "goods-transport-bike"},
+        "packers-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
+        "packers-and-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
+
+        # Home Cleaning & Pest Control
         "home-services-and-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "home-pest-control", "pest-control"},
         "home-cleaning-and-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "home-pest-control", "pest-control"},
         "home-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "pest-control"},
-        "cleaning": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "full-home-deep-clean"},
-        "pest-control": {"cockroach-control", "termite-control", "ants-bed-bugs-control"},
+        "cleaning": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "full-home-deep-clean", "cleaning"},
+        "pest-control": {"cockroach-control", "termite-control", "ants-bed-bugs-control", "pest-control"},
         "kitchen-cleaning": {"kitchen-cleaning", "kitchen", "kitchen-clean"},
         "sofa-cleaning": {"sofa-cleaning", "sofa", "sofa-clean"},
         "bathroom-cleaning": {"bathroom-cleaning", "bathroom", "bathroom-clean"},
-        "full-house-cleaning": {"full-house-cleaning", "full-house", "occupied-apartment", "cleaning", "full-home-cleaning"},
-        "full-home-deep-clean": {"full-home-deep-clean", "deep-cleaning", "deep-clean"},
+        "full-house-cleaning": {"full-house-cleaning", "full-house", "occupied-apartment", "cleaning", "full-home-cleaning", "full-home-deep-clean"},
+        "full-home-deep-clean": {"full-home-deep-clean", "deep-cleaning", "deep-clean", "full-house-cleaning"},
         "cockroach-control": {"cockroach-control", "cockroach", "cockroach-and-termite-control"},
         "termite-control": {"termite-control", "termite", "cockroach-and-termite-control"},
         "ants-bed-bugs-control": {"ants-bed-bugs-control", "ants-control", "bedbugs-control", "ants-and-bed-bugs-control", "bed-bugs"},
+
+        # Electrical, Plumbing & Carpentry
         "electrician-plumbing-and-carpentry": {"electrician", "plumbing", "carpentry", "electrician-plumbing-carpentry"},
         "electrician-plumbing-carpentry": {"electrician", "plumbing", "carpentry"},
-        "plumbing": {"plumbing", "plumber"},
-        "electrician": {"electrician", "electrical"},
-        "carpentry": {"carpentry", "carpenter"},
-        "ac-and-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance"},
-        "ac-and-appliance-repair": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance"},
-        "ac-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave"},
-        "hvac": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation"},
+        "plumbing": {"plumbing", "plumber", "plumber-services"},
+        "electrician": {"electrician", "electrical", "electrician-services"},
+        "carpentry": {"carpentry", "carpenter", "carpenter-services"},
+
+        # AC & Appliances
+        "ac-and-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance", "ac"},
+        "ac-and-appliance-repair": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance", "ac"},
+        "ac-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac"},
+        "hvac": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "ac"},
+        "ac": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "ac", "air-conditioner"},
+        "air-conditioner": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "ac"},
         "ac-service-cleaning": {"ac-service-cleaning", "ac-service", "ac"},
-        "ac-repair": {"ac-repair", "ac-diagnostics"},
-        "ac-gas-refill": {"ac-gas-refill", "ac-gas"},
-        "ac-installation": {"ac-installation", "ac-install"},
-        "refrigerator": {"refrigerator", "fridge"},
-        "washing-machine": {"washing-machine"},
-        "tv-display": {"tv-display", "tv", "tv-and-display"},
-        "microwave": {"microwave", "microwave-oven"},
+        "ac-repair": {"ac-repair", "ac-diagnostics", "ac"},
+        "ac-gas-refill": {"ac-gas-refill", "ac-gas", "ac"},
+        "ac-installation": {"ac-installation", "ac-install", "ac"},
+        "refrigerator": {"refrigerator", "fridge", "refrigerator-repair"},
+        "washing-machine": {"washing-machine", "washing-machine-repair"},
+        "tv-display": {"tv-display", "tv", "tv-and-display", "tv-repair"},
+        "microwave": {"microwave", "microwave-oven", "microwave-repair"},
+
+        # Painting
         "paintings": {"interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor", "painting"},
-        "painting": {"interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"},
-        "interior-painting": {"interior-painting"},
-        "exterior-painting": {"exterior-painting"},
+        "painting": {"interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor", "painting"},
+        "interior-painting": {"interior-painting", "painting"},
+        "exterior-painting": {"exterior-painting", "painting"},
         "waterproofing": {"waterproofing", "wall-waterproofing"},
         "wood-metal": {"wood-metal", "wood-and-metal-polish", "wood-and-metal"},
         "texture-decor": {"texture-decor"},
-        "mason": {"brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction"},
-        "brick-block-work": {"brick-block-work"},
-        "plastering-wall-repair": {"plastering-wall-repair"},
-        "wall-partition-construction": {"wall-partition-construction"},
-        "wall-breaking-demolition": {"wall-breaking-demolition"},
-        "home-construction": {"home-construction"},
-        "full-house-construction": {"full-house-construction"},
-        "goods-and-transports": {"truck", "two-wheeler", "packers-movers", "goods-transports", "transport"},
-        "goods-transports": {"truck", "two-wheeler", "packers-movers", "transport"},
-        "truck": {"truck", "mini-truck"},
-        "two-wheeler": {"two-wheeler", "bike"},
-        "packers-movers": {"packers-movers", "house-shifting"},
-        "vegetables": {"vegetables", "farm-fresh-vegetable", "farm-fresh-vegetables"},
-        "groceries": {"groceries"},
+
+        # Masonry
+        "mason": {"brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction", "masonry"},
+        "masonry": {"brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction", "mason"},
+        "brick-block-work": {"brick-block-work", "mason"},
+        "plastering-wall-repair": {"plastering-wall-repair", "mason"},
+        "wall-partition-construction": {"wall-partition-construction", "mason"},
+        "wall-breaking-demolition": {"wall-breaking-demolition", "mason"},
+        "home-construction": {"home-construction", "mason"},
+        "full-house-construction": {"full-house-construction", "mason"},
     }
 
     allowed_set = ALIASES.get(c, {c})
@@ -181,10 +208,14 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
     if c in req_set or (n and n in req_set):
         return True
 
-    # Fallback fuzzy check
-    clean_r = r.replace("-", "").replace("_", "")
-    clean_c = c.replace("-", "").replace("_", "")
-    if clean_r and clean_c and (clean_r in clean_c or clean_c in clean_r):
+    # Safe token-based matching: only match whole words or substantial stems (>= 4 chars)
+    # Never match short tokens like "ac" inside "packers"
+    r_tokens = set(r.split("-"))
+    c_tokens = set(c.split("-"))
+
+    # If any non-trivial word token (len >= 4) matches exactly
+    meaningful_common = {t for t in (r_tokens & c_tokens) if len(t) >= 4}
+    if meaningful_common:
         return True
 
     return False

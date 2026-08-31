@@ -243,7 +243,7 @@ function FlyTo({ lat, lng, zoom = 14 }) {
 
 /* ── Zone Map Preview ────────────────────────────────────────────────────────── */
 
-function ZoneOverlays({ zones, selectedZoneId }) {
+function ZoneOverlays({ zones, selectedZoneId, onSelectZone }) {
   return zones.map(zone => {
     const isSelected = selectedZoneId === zone.id
     if (zone.zone_type === "polygon" && zone.polygon?.coordinates?.[0]) {
@@ -252,6 +252,9 @@ function ZoneOverlays({ zones, selectedZoneId }) {
         <Polygon
           key={zone.id}
           positions={positions}
+          eventHandlers={{
+            click: () => onSelectZone?.(zone)
+          }}
           pathOptions={{
             color: zone.color,
             fillColor: zone.color,
@@ -276,6 +279,9 @@ function ZoneOverlays({ zones, selectedZoneId }) {
           key={zone.id}
           center={[zone.center_lat, zone.center_lng]}
           radius={zone.radius_meters || 5000}
+          eventHandlers={{
+            click: () => onSelectZone?.(zone)
+          }}
           pathOptions={{
             color: zone.color,
             fillColor: zone.color,
@@ -308,20 +314,29 @@ const EMPTY_FORM = {
 }
 
 function ZoneForm({ editZone, onSaved, onCancel }) {
-  const [form, setForm] = useState(() =>
-    editZone ? {
+  const [form, setForm] = useState(() => {
+    let initLat = editZone?.center_lat ?? null
+    let initLng = editZone?.center_lng ?? null
+    if (editZone?.zone_type === "polygon" && editZone?.polygon?.coordinates?.[0]) {
+      const pts = editZone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])
+      if (pts.length >= 3) {
+        initLat = pts.reduce((s, p) => s + p[0], 0) / pts.length
+        initLng = pts.reduce((s, p) => s + p[1], 0) / pts.length
+      }
+    }
+    return editZone ? {
       name: editZone.name || "",
       description: editZone.description || "",
       color: editZone.color || COLOURS[0],
       is_active: editZone.is_active !== false,
       zone_type: editZone.zone_type || "circle",
-      center_lat: editZone.center_lat ?? null,
-      center_lng: editZone.center_lng ?? null,
+      center_lat: initLat,
+      center_lng: initLng,
       radius_meters: editZone.radius_meters || 5000,
       polygon: editZone.polygon || null,
       services: (editZone.services || []).map(s => s.service_slug),
     } : { ...EMPTY_FORM }
-  )
+  })
   const [polygonPoints, setPolygonPoints] = useState(() => {
     if (editZone?.zone_type === "polygon" && editZone?.polygon?.coordinates?.[0]) {
       const pts = editZone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])
@@ -339,7 +354,12 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
   const [serviceCatalog, setServiceCatalog] = useState(SERVICE_OPTIONS)
   const [serviceSearch, setServiceSearch] = useState("")
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("all")
-  const [centerSearch, setCenterSearch] = useState("")
+  const [centerSearch, setCenterSearch] = useState(() => {
+    if (editZone?.name && !editZone.name.startsWith("Service Area @") && !editZone.name.startsWith("Zone @")) {
+      return editZone.name.replace(/ Service Area$/i, "")
+    }
+    return ""
+  })
   const [centerSearching, setCenterSearching] = useState(false)
   const [onlineCenterSuggestions, setOnlineCenterSuggestions] = useState([])
   const [showCenterSuggestions, setShowCenterSuggestions] = useState(false)
@@ -677,17 +697,44 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
       const cleanName = loc.name.split("(")[0].trim()
       set("name", `${cleanName} Service Area`)
     }
+
+    if (form.zone_type === "polygon") {
+      // Trace initial rectangular boundary centered around the searched location (~180m)
+      const dLat = 0.0014
+      const dLng = 0.0014
+      const initialBox = [
+        [lat + dLat, lng - dLng],
+        [lat + dLat, lng + dLng],
+        [lat - dLat, lng + dLng],
+        [lat - dLat, lng - dLng],
+      ]
+      setPolygonPoints(initialBox)
+      const closed = [...initialBox, initialBox[0]].map(([la, ln]) => [ln, la])
+      const geom = { type: "Polygon", coordinates: [closed] }
+      set("polygon", geom)
+      setDrawn(geom)
+    }
   }
 
   const handleSave = async () => {
-    // Auto-generate name if user left it blank
-    const finalName = form.name.trim() || (form.center_lat ? `Service Area @ ${form.center_lat.toFixed(3)}, ${form.center_lng?.toFixed(3)}` : "Primary Service Area")
-    if (form.zone_type === "circle" && (!form.center_lat || !form.center_lng)) {
-      setError("Please click on the map or use GPS to pin the center location."); return
+    let centerLat = form.center_lat ? Number(form.center_lat) : null
+    let centerLng = form.center_lng ? Number(form.center_lng) : null
+
+    if (form.zone_type === "polygon") {
+      if (!form.polygon || polygonPoints.length < 3) {
+        setError("Please click at least 3 points on the map below to define a closed polygon boundary.")
+        return
+      }
+      centerLat = polygonPoints.reduce((s, p) => s + p[0], 0) / polygonPoints.length
+      centerLng = polygonPoints.reduce((s, p) => s + p[1], 0) / polygonPoints.length
+    } else if (form.zone_type === "circle") {
+      if (!centerLat || !centerLng) {
+        setError("Please click on the map or use GPS to pin the center location.")
+        return
+      }
     }
-    if (form.zone_type === "polygon" && (!form.polygon || polygonPoints.length < 3)) {
-      setError("Please click at least 3 points on the map below to define a closed polygon boundary."); return
-    }
+
+    const finalName = form.name.trim() || (centerLat ? `Service Area @ ${centerLat.toFixed(3)}, ${centerLng?.toFixed(3)}` : "Primary Service Area")
 
     setSaving(true); setError("")
     try {
@@ -697,8 +744,8 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
         color: form.color,
         is_active: form.is_active,
         zone_type: form.zone_type,
-        center_lat: form.center_lat ? Number(form.center_lat) : null,
-        center_lng: form.center_lng ? Number(form.center_lng) : null,
+        center_lat: centerLat,
+        center_lng: centerLng,
         radius_meters: Number(form.radius_meters),
         polygon: form.polygon,
         services: form.services.map(slug => ({
@@ -805,113 +852,111 @@ function ZoneForm({ editZone, onSaved, onCancel }) {
           </div>
         </div>
 
-        {/* Circle Center Search & Direct Coordinates */}
-        {form.zone_type === "circle" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "var(--surface)", padding: 12, borderRadius: 10, border: "1px solid var(--stroke)" }}>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Search Location (India Only)
-                </label>
-                <span style={{ fontSize: 10, color: "#4F46E5", fontWeight: 700 }}>🇮🇳 India Locations</span>
-              </div>
-              <div ref={centerSearchWrapperRef} style={{ position: "relative" }}>
-                <input
-                  value={centerSearch}
-                  onFocus={() => setShowCenterSuggestions(true)}
-                  onClick={() => setShowCenterSuggestions(true)}
-                  onChange={e => {
-                    setCenterSearch(e.target.value)
-                    setShowCenterSuggestions(true)
-                  }}
-                  placeholder="Search Indian city, area, pin code (e.g. Rachana Villas, Hosur, KCC Nagar)..."
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, boxSizing: "border-box" }}
-                  autoComplete="off"
-                />
-                {centerSearching && (
-                  <div style={{ position: "absolute", right: 10, top: 10, fontSize: 11, color: "#6366F1", fontWeight: 700 }}>
-                    Searching...
+        {/* Center Search & Direct Coordinates (Circle and Polygon) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "var(--surface)", padding: 12, borderRadius: 10, border: "1px solid var(--stroke)" }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                {form.zone_type === "polygon" ? "Search Location / Landmark to Center Polygon (India Only)" : "Search Location (India Only)"}
+              </label>
+              <span style={{ fontSize: 10, color: "#4F46E5", fontWeight: 700 }}>🇮🇳 India Locations</span>
+            </div>
+            <div ref={centerSearchWrapperRef} style={{ position: "relative" }}>
+              <input
+                value={centerSearch}
+                onFocus={() => setShowCenterSuggestions(true)}
+                onClick={() => setShowCenterSuggestions(true)}
+                onChange={e => {
+                  setCenterSearch(e.target.value)
+                  setShowCenterSuggestions(true)
+                }}
+                placeholder="Search Indian city, area, pin code (e.g. Vassuthaa Garden, KCC Nagar, Hosur)..."
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, boxSizing: "border-box" }}
+                autoComplete="off"
+              />
+              {centerSearching && (
+                <div style={{ position: "absolute", right: 10, top: 10, fontSize: 11, color: "#6366F1", fontWeight: 700 }}>
+                  Searching...
+                </div>
+              )}
+              {showCenterSuggestions && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1050, background: "#ffffff", borderRadius: 16, boxShadow: "0 20px 40px rgba(0,0,0,0.15)", border: "1px solid #e2e8f0", overflow: "hidden", maxHeight: 280, overflowY: "auto", marginTop: 4 }}>
+                  <div style={{ padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span>{centerSearch ? `Suggestions for "${centerSearch}"` : "Suggested Hosur Locations"}</span>
+                    <span style={{ fontSize: 9, color: "#059669", fontWeight: 700 }}>{centerSuggestions.length} found</span>
                   </div>
-                )}
-                {showCenterSuggestions && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1050, background: "#ffffff", borderRadius: 16, boxShadow: "0 20px 40px rgba(0,0,0,0.15)", border: "1px solid #e2e8f0", overflow: "hidden", maxHeight: 280, overflowY: "auto", marginTop: 4 }}>
-                    <div style={{ padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      <span>{centerSearch ? `Suggestions for "${centerSearch}"` : "Suggested Hosur Locations"}</span>
-                      <span style={{ fontSize: 9, color: "#059669", fontWeight: 700 }}>{centerSuggestions.length} found</span>
-                    </div>
-                    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-                      {centerSuggestions.length > 0 ? (
-                        centerSuggestions.map((loc, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              handleSelectCenterSuggestion(loc)
-                            }}
-                            style={{
-                              width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 10,
-                              background: "transparent", border: "none", cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-                              transition: "background 0.15s ease"
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#ecfdf5"}
-                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <MapPin size={14} style={{ color: "#64748b" }} />
+                  <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {centerSuggestions.length > 0 ? (
+                      centerSuggestions.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            handleSelectCenterSuggestion(loc)
+                          }}
+                          style={{
+                            width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 10,
+                            background: "transparent", border: "none", cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = "#ecfdf5"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <MapPin size={14} style={{ color: "#64748b" }} />
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {loc.name}
                               </div>
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {loc.name}
-                                </div>
-                                <div style={{ fontSize: 10, color: "#64748b", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {loc.subtitle || loc.fullAddress}
-                                </div>
+                              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {loc.subtitle || loc.fullAddress}
                               </div>
                             </div>
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#f1f5f9", color: "#475569", flexShrink: 0 }}>
-                              {loc.category || "Hosur Location"}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <div style={{ padding: "12px", textAlign: "center", fontSize: 12, color: "#64748b" }}>
-                          No matching location found for "{centerSearch}"
-                        </div>
-                      )}
-                    </div>
+                          </div>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#f1f5f9", color: "#475569", flexShrink: 0 }}>
+                            {loc.category || "Hosur Location"}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div style={{ padding: "12px", textAlign: "center", fontSize: 12, color: "#64748b" }}>
+                        No matching location found for "{centerSearch}"
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Latitude / Longitude numerical inputs */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Latitude</label>
-                <input
-                  type="number" step="any"
-                  value={form.center_lat ?? ""}
-                  onChange={e => set("center_lat", e.target.value ? parseFloat(e.target.value) : null)}
-                  placeholder="e.g. 12.7409"
-                  style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 12, boxSizing: "border-box" }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Longitude</label>
-                <input
-                  type="number" step="any"
-                  value={form.center_lng ?? ""}
-                  onChange={e => set("center_lng", e.target.value ? parseFloat(e.target.value) : null)}
-                  placeholder="e.g. 77.8253"
-                  style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 12, boxSizing: "border-box" }}
-                />
-              </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Latitude / Longitude numerical inputs */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Latitude</label>
+              <input
+                type="number" step="any"
+                value={form.center_lat ?? ""}
+                onChange={e => set("center_lat", e.target.value ? parseFloat(e.target.value) : null)}
+                placeholder="e.g. 12.7409"
+                style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 12, boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Longitude</label>
+              <input
+                type="number" step="any"
+                value={form.center_lng ?? ""}
+                onChange={e => set("center_lng", e.target.value ? parseFloat(e.target.value) : null)}
+                placeholder="e.g. 77.8253"
+                style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--stroke)", background: "var(--bg)", color: "var(--fg)", fontSize: 12, boxSizing: "border-box" }}
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Radius input + presets */}
         {form.zone_type === "circle" && (
@@ -1572,8 +1617,31 @@ export function ServiceAreasPanel() {
   const handleEdit = (zone) => { setEditZone(zone); setShowForm(true) }
   const handleToggleActive = (updated) => setZones(prev => prev.map(z => z.id === updated.id ? updated : z))
 
+  const handleSelectZone = async (zone) => {
+    if (selectedZone?.id === zone.id) {
+      setSelectedZone(null)
+      return
+    }
+    setSelectedZone(zone)
+    const polyCoords = zone.polygon?.coordinates?.[0]
+    const zLat = zone.center_lat ?? (polyCoords ? polyCoords.reduce((s, c) => s + c[1], 0) / polyCoords.length : DEFAULT_INDIA_CENTER[0])
+    const zLng = zone.center_lng ?? (polyCoords ? polyCoords.reduce((s, c) => s + c[0], 0) / polyCoords.length : DEFAULT_INDIA_CENTER[1])
+    setPinnedLocation({
+      lat: zLat,
+      lng: zLng,
+      name: zone.name || `Service Zone (${zLat.toFixed(4)}, ${zLng.toFixed(4)})`
+    })
+    try {
+      const addr = await getAddress(zLat, zLng)
+      if (addr) {
+        setPinnedLocation({ lat: zLat, lng: zLng, name: addr })
+      }
+    } catch {}
+  }
+
   // Overview map click handler: pin anywhere in India
   const handleOverviewMapClick = async (lat, lng) => {
+    setSelectedZone(null)
     setPinnedLocation({ lat, lng, name: "Loading address..." })
     try {
       const addr = await getAddress(lat, lng)
@@ -1721,7 +1789,7 @@ export function ServiceAreasPanel() {
                   key={zone.id}
                   zone={zone}
                   isSelected={selectedZone?.id === zone.id}
-                  onSelect={(z) => setSelectedZone(prev => prev?.id === z.id ? null : z)}
+                  onSelect={handleSelectZone}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onToggleActive={handleToggleActive}
@@ -1809,7 +1877,7 @@ export function ServiceAreasPanel() {
                 url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
                 attribution="&copy; Google Maps"
               />
-              <ZoneOverlays zones={zones} selectedZoneId={selectedZone?.id} />
+              <ZoneOverlays zones={zones} selectedZoneId={selectedZone?.id} onSelectZone={handleSelectZone} />
 
               {/* Auto-fly to selected zone geofence on card click */}
               {selectedZone && (

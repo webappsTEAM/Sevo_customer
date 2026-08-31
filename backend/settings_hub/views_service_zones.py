@@ -140,6 +140,10 @@ class ServiceZoneListCreateView(APIView):
                 return Response({"detail": "polygon (GeoJSON) is required for polygon zones."}, status=400)
             center_lat = data.get("center_lat")
             center_lng = data.get("center_lng")
+            coords = polygon.get("coordinates", [[]])[0] if isinstance(polygon.get("coordinates"), list) else []
+            if coords and len(coords) >= 3:
+                center_lat = sum(pt[1] for pt in coords) / len(coords)
+                center_lng = sum(pt[0] for pt in coords) / len(coords)
             radius_meters = float(data.get("radius_meters", 5000))
 
         zone = ServiceZone.objects.create(
@@ -236,6 +240,11 @@ class ServiceZoneDetailView(APIView):
             zone.radius_meters = float(data["radius_meters"])
         if "polygon" in data:
             zone.polygon = data["polygon"]
+            if zone.zone_type == "polygon" and zone.polygon and isinstance(zone.polygon, dict):
+                coords = zone.polygon.get("coordinates", [[]])[0] if isinstance(zone.polygon.get("coordinates"), list) else []
+                if coords and len(coords) >= 3:
+                    zone.center_lat = sum(pt[1] for pt in coords) / len(coords)
+                    zone.center_lng = sum(pt[0] for pt in coords) / len(coords)
         zone.save()
 
         # Replace services if provided

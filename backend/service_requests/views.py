@@ -187,7 +187,7 @@ class CatalogServiceListView(APIView):
             if cached_res is not None:
                 return Response(cached_res)
 
-        qs = Package.objects.select_related("service", "service__category").all().order_by('name')
+        qs = Package.objects.select_related("service", "service__category").all().order_by('id')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         if service_slug:
