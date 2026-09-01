@@ -79,11 +79,18 @@ export function CustomerMergesPage() {
         
         {/* LEFT COLUMN: CANDIDATES QUEUE */}
         <div className="lg:col-span-1 p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 shadow-sm space-y-4">
-          <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">Candidate Duplicates</h3>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              Candidate Duplicates
+            </h3>
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold">
+              {candidates?.length || 0}
+            </span>
+          </div>
           
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {loading ? (
-              <div className="text-center text-slate-400 italic text-xs py-8">Loading candidates...</div>
+              <div className="text-center text-slate-400 italic text-xs py-8">Scanning for duplicates...</div>
             ) : candidates && candidates.length > 0 ? (
               candidates.map((c, idx) => (
                 <div
@@ -97,18 +104,24 @@ export function CustomerMergesPage() {
                 >
                   <div className="text-xs font-black text-slate-800 dark:text-slate-200">📞 {c.phone}</div>
                   <div className="text-[10px] text-slate-400 font-bold mt-1">
-                    {c.matching_identities?.length} accounts share this phone number.
+                    {c.matching_identities?.length} accounts share this contact.
                   </div>
                 </div>
               ))
             ) : (
-              <div className="text-center text-slate-400 italic text-xs py-8">No duplicate accounts found in queue.</div>
+              <div className="p-6 text-center rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+                <Check className="mx-auto text-emerald-600 dark:text-emerald-400 mb-2" size={24} />
+                <p className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300">All Identities Clean</p>
+                <p className="text-[11px] font-medium text-emerald-600/80 dark:text-emerald-400/80 mt-1">
+                  No duplicate phone numbers or accounts found in database.
+                </p>
+              </div>
             )}
           </div>
         </div>
 
         {/* RIGHT COLUMN: COMPARISON PANEL */}
-        <div className="lg:col-span-2 p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col justify-between min-h-[400px]">
+        <div className="lg:col-span-2 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col justify-between min-h-[400px]">
           {selectedCandidate ? (
             <div className="space-y-6">
               <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
@@ -163,9 +176,16 @@ export function CustomerMergesPage() {
 
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs py-8 space-y-2">
-              <UserCheck size={32} className="text-slate-300" />
-              <p className="font-semibold italic">Select a candidate group from the list to begin review.</p>
+            <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-8 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400">
+                <GitMerge size={26} />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-slate-700 dark:text-slate-300 text-sm">Automated Identity Reconciliation</h4>
+                <p className="text-xs text-slate-400 max-w-sm mt-1">
+                  When two or more customer profiles share the same mobile phone or email address, they will be queued here for side-by-side comparison and one-click history merge.
+                </p>
+              </div>
             </div>
           )}
         </div>

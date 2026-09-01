@@ -13839,20 +13839,56 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     }
   ];
 
-  const masonKey = React.useMemo(() => {
-    if (!packagesData) return null;
-    const foundKey = Object.keys(packagesData).find(key =>
-      packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
-    );
-    console.log("DEBUG: [MasonPackageModal] foundKey:", foundKey);
-    return foundKey || null;
+  const [localCatalogPackages, setLocalCatalogPackages] = React.useState(() => {
+    if (Array.isArray(packagesData) && packagesData.length > 0) return packagesData;
+    if (packagesData && typeof packagesData === "object") {
+      const allPkgs = Object.values(packagesData).flat();
+      if (allPkgs.length > 0) return allPkgs;
+    }
+    return [];
+  });
+
+  React.useEffect(() => {
+    if (packagesData) {
+      if (Array.isArray(packagesData) && packagesData.length > 0) {
+        setLocalCatalogPackages(packagesData);
+      } else if (typeof packagesData === "object") {
+        const allPkgs = Object.values(packagesData).flat();
+        if (allPkgs.length > 0) {
+          setLocalCatalogPackages(allPkgs);
+        }
+      }
+    }
   }, [packagesData]);
 
+  React.useEffect(() => {
+    if (!localCatalogPackages || localCatalogPackages.length === 0) {
+      apiRequest("/settings/catalog/public/packages/")
+        .then((res) => {
+          if (res?.success && Array.isArray(res.data)) {
+            setLocalCatalogPackages(res.data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch public catalog packages in mason modal:", err));
+    }
+  }, []);
+
   const dbPackages = React.useMemo(() => {
-    const pkgs = masonKey ? packagesData[masonKey] : [];
-    console.log("DEBUG: [MasonPackageModal] dbPackages size:", pkgs.length, pkgs);
-    return pkgs;
-  }, [packagesData, masonKey]);
+    if (!localCatalogPackages || !Array.isArray(localCatalogPackages)) return [];
+    return localCatalogPackages.filter(p =>
+      p.category_slug === "mason" ||
+      p.category_slug === "masons" ||
+      p.category_slug === "masonry" ||
+      String(p.category) === "mason" ||
+      String(p.category) === "masons" ||
+      String(p.category) === "11" ||
+      p.service_slug === "brick-block-work" ||
+      p.service_slug === "plastering-wall-repair" ||
+      p.service_slug === "wall-partition-construction" ||
+      p.service_slug === "wall-breaking-demolition" ||
+      String(p.service_slug || "").startsWith("mason-")
+    );
+  }, [localCatalogPackages]);
 
   const MASON_CATEGORIES = React.useMemo(() => {
     if (dbPackages && dbPackages.length > 0) {
@@ -13942,25 +13978,73 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
         const staticTemplate = STATIC_MASON_SERVICES.find(s => s.id === pkg.slug || s.name === pkg.name);
         const resolvedImage = resolveImageUrl(pkg.service_image || pkg.image || staticTemplate?.image, staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop");
+        const cust = pkg.service_customization || {};
+
+        // Parse steps properly whether array of strings or objects {title, desc}
+        let parsedSteps = staticTemplate?.steps || ["Site prep", "Execution", "Clean-up"];
+        if (Array.isArray(cust.steps) && cust.steps.length > 0) {
+          parsedSteps = cust.steps
+            .filter(s => typeof s === "string" ? true : s.checked !== false)
+            .map(s => typeof s === "string" ? s : (s.desc ? `${s.title}: ${s.desc}` : s.title));
+        }
+
+        // Parse inspection highlights
+        let parsedHighlights = staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"];
+        if (Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0) {
+          parsedHighlights = cust.inspection_highlights
+            .filter(h => typeof h === "string" ? true : h.checked !== false)
+            .map(h => typeof h === "string" ? h : (h.text || h.title || String(h)));
+        }
+
+        // Parse FAQs
+        let parsedFaqs = Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticTemplate?.faqs || getMasonDefaultFaqs(pkg.name));
+        if (Array.isArray(cust.faqs) && cust.faqs.length > 0) {
+          parsedFaqs = cust.faqs
+            .filter(f => f.checked !== false)
+            .map(f => ({ q: f.q || f.question || "", a: f.a || f.answer || "" }));
+        }
+
+        // Parse Reviews List
+        let parsedReviewsList = undefined;
+        if (Array.isArray(cust.reviews_list) && cust.reviews_list.length > 0) {
+          parsedReviewsList = cust.reviews_list.filter(r => r.enabled !== false);
+        }
+
+        // Parse Includes & Excludes
+        let parsedIncludes = Array.isArray(pkg.includes) && pkg.includes.length > 0
+          ? pkg.includes
+          : (Array.isArray(cust.includes) && cust.includes.length > 0
+            ? cust.includes.filter(inc => typeof inc === "string" ? true : inc.checked !== false).map(inc => typeof inc === "string" ? inc : inc.text)
+            : (staticTemplate?.includes || ["Quality masonry work", "Sevo warranty"]));
+
+        let parsedExcludes = Array.isArray(pkg.excludes) && pkg.excludes.length > 0
+          ? pkg.excludes
+          : (Array.isArray(cust.excludes) && cust.excludes.length > 0
+            ? cust.excludes.filter(exc => typeof exc === "string" ? true : exc.checked !== false).map(exc => typeof exc === "string" ? exc : exc.text)
+            : (staticTemplate?.excludes || []));
 
         return {
           id: pkg.slug || pkg.id.toString(),
           catId: cId,
           name: pkg.name,
-          price: parseFloat(pkg.price) || 0,
-          priceStr: pkg.priceStr || `Starts at ₹${pkg.price}`,
+          price: parseFloat(pkg.price || pkg.base_price) || 0,
+          priceStr: pkg.priceStr || (pkg.base_price && parseFloat(pkg.base_price) > 0 ? `Starts at ₹${pkg.base_price}` : `Starts at ₹${pkg.price || 0}`),
           badge: pkg.tag || staticTemplate?.badge || "",
           badgeColor: staticTemplate?.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100",
           duration: pkg.duration || staticTemplate?.duration || "Flexible",
-          rating: pkg.service_customization?.rating || staticTemplate?.rating || "4.8",
-          reviews: pkg.service_customization?.reviews || staticTemplate?.reviews || "100+",
+          rating: cust.rating || staticTemplate?.rating || "4.8",
+          reviews: cust.reviews || staticTemplate?.reviews || "100+",
+          reviews_list: parsedReviewsList,
           image: resolvedImage,
-          includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "Sevo warranty"]),
-          excludes: Array.isArray(pkg.excludes) ? pkg.excludes : (staticTemplate?.excludes || []),
-          inspectionHighlights: staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"],
-          steps: staticTemplate?.steps || ["Site prep", "Execution", "Clean-up"],
+          includes: parsedIncludes,
+          excludes: parsedExcludes,
+          inspectionHighlights: parsedHighlights,
+          steps: parsedSteps,
           desc: pkg.description || staticTemplate?.desc || `Professional masonry service for ${pkg.name.toLowerCase()}.`,
-          faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticTemplate?.faqs || getMasonDefaultFaqs(pkg.name))
+          faqs: parsedFaqs,
+          button_text: cust.button_text || "View details",
+          estimate_cta: cust.estimate_cta || "Get Estimate",
+          rawPackage: pkg,
         };
       });
     }
