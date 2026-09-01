@@ -1,15 +1,20 @@
 /**
  * AddressBottomSheet.jsx
- * Instamart/Swiggy-style Delivery Location Picker Sheet UI
+ * Swiggy/Instamart-style Delivery Location Picker Sheet UI
+ * Single Primary Action: "CONFIRM LOCATION"
  */
 
 import React, { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { MapPin, Home, Briefcase, Star, MoreVertical, Edit2, ChevronRight, AlertTriangle, ShieldAlert, CheckCircle2, BookmarkPlus, Plus, Check } from "lucide-react"
+import { motion } from "framer-motion"
+import {
+  MapPin, Home, Briefcase, Star, Edit2, ChevronRight,
+  AlertTriangle, CheckCircle2, Navigation
+} from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 
 export function AddressBottomSheet({
   address,
+  initialLocation = null,
   loading,
   error,
   zoneStatus,
@@ -20,13 +25,7 @@ export function AddressBottomSheet({
   onEditDetails
 }) {
   const [savedAddresses, setSavedAddresses] = useState([])
-  const [selectedSavedId, setSelectedSavedId] = useState(null)
-  const [showSaveForm, setShowSaveForm] = useState(false)
-  const [saveLabel, setSaveLabel] = useState("Home")
-  const [houseNumber, setHouseNumber] = useState("")
-  const [landmark, setLandmark] = useState("")
-  const [savingAddress, setSavingAddress] = useState(false)
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState("")
+  const [selectedSavedId, setSelectedSavedId] = useState(initialLocation?.id || initialLocation?.saved_address_id || null)
 
   const loadSaved = async () => {
     try {
@@ -45,7 +44,14 @@ export function AddressBottomSheet({
     loadSaved()
   }, [])
 
-  const hasAddress = !!address?.formatted_address
+  useEffect(() => {
+    if (initialLocation?.id || initialLocation?.saved_address_id) {
+      setSelectedSavedId(initialLocation.id || initialLocation.saved_address_id)
+    }
+  }, [initialLocation])
+
+  const activeAddr = address?.formatted_address ? address : (initialLocation?.formatted_address ? initialLocation : address)
+  const hasAddress = Boolean(activeAddr?.formatted_address)
   const isOutOfZone = zoneStatus && zoneStatus.inZone === false
   const isServiceBlocked = zoneStatus && zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
   const isAvailable = zoneStatus && zoneStatus.inZone === true && (zoneStatus.serviceAllowed === undefined || zoneStatus.serviceAllowed === true)
@@ -56,7 +62,7 @@ export function AddressBottomSheet({
   let cleanSecondary = "Fetching address details..."
 
   if (hasAddress) {
-    const rawParts = (address.formatted_address || "")
+    const rawParts = (activeAddr.formatted_address || "")
       .split(",")
       .map(s => s.trim())
       .filter(Boolean)
@@ -65,22 +71,22 @@ export function AddressBottomSheet({
     if (rawParts.length >= 2) {
       cleanPrimary = rawParts.slice(0, 2).join(", ")
       const tail = rawParts.slice(2).filter(Boolean).join(", ")
-      const cityPart = address.city || ""
+      const cityPart = activeAddr.city || ""
       const pieces = [tail, cityPart].filter(Boolean).join(", ")
-      cleanSecondary = pieces + (address.pincode ? ` - ${address.pincode}` : "")
+      cleanSecondary = pieces + (activeAddr.pincode ? ` - ${activeAddr.pincode}` : "")
     } else if (rawParts.length === 1) {
       cleanPrimary = rawParts[0]
-      const locPart = address.locality || ""
-      const cityPart = address.city || ""
+      const locPart = activeAddr.locality || ""
+      const cityPart = activeAddr.city || ""
       const pieces = [locPart, cityPart].filter(Boolean).join(", ")
-      cleanSecondary = pieces + (address.pincode ? ` - ${address.pincode}` : "")
+      cleanSecondary = pieces + (activeAddr.pincode ? ` - ${activeAddr.pincode}` : "")
     } else {
-      cleanPrimary = address.formatted_address
+      cleanPrimary = activeAddr.formatted_address
       cleanSecondary = ""
     }
 
     if (!cleanSecondary.trim()) {
-      cleanSecondary = [address.locality, address.city, address.state].filter(Boolean).join(", ")
+      cleanSecondary = [activeAddr.locality, activeAddr.city, activeAddr.state].filter(Boolean).join(", ")
     }
   }
 
@@ -88,43 +94,6 @@ export function AddressBottomSheet({
     setSelectedSavedId(item.id)
     if (typeof onSelectSavedAddress === "function") {
       onSelectSavedAddress(item)
-    }
-  }
-
-  const handleSaveAddressSubmit = async (e) => {
-    e?.preventDefault()
-    if (!address?.formatted_address && !address?.locality) return
-    setSavingAddress(true)
-    try {
-      const fullLine1 = [houseNumber, landmark].filter(Boolean).join(", ") || (address.formatted_address ? address.formatted_address.split(",")[0] : "Location")
-      const payload = {
-        label: saveLabel,
-        address_type: saveLabel.toLowerCase(),
-        address_line1: fullLine1,
-        locality: address.locality || address.city || "",
-        city: address.city || "",
-        state: address.state || "",
-        pincode: address.pincode || "",
-        formatted_address: address.formatted_address || fullLine1,
-        latitude: address.latitude || address.lat,
-        longitude: address.longitude || address.lng,
-      }
-      const res = await apiRequest("/auth/customer/addresses/", {
-        method: "POST",
-        json: payload,
-      })
-      if (res && res.success) {
-        setSaveSuccessMsg("✓ Address saved successfully!")
-        setShowSaveForm(false)
-        setHouseNumber("")
-        setLandmark("")
-        await loadSaved()
-        setTimeout(() => setSaveSuccessMsg(""), 3000)
-      }
-    } catch (err) {
-      console.warn("Failed to save address:", err)
-    } finally {
-      setSavingAddress(false)
     }
   }
 
@@ -145,7 +114,7 @@ export function AddressBottomSheet({
         return
       }
     }
-    onConfirm(address)
+    onConfirm(activeAddr)
   }
 
   return (
@@ -200,7 +169,9 @@ export function AddressBottomSheet({
 
         {/* Deliver to section */}
         <div style={styles.deliverToWrap}>
-          <span style={styles.deliverToLabel}>DELIVER TO</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "between", width: "100%" }}>
+            <span style={styles.deliverToLabel}>SELECT SERVICE LOCATION</span>
+          </div>
 
           <div style={styles.deliverMainRow}>
             <div style={styles.deliverTextWrap}>
@@ -216,106 +187,21 @@ export function AddressBottomSheet({
               type="button"
               onClick={() => {
                 if (typeof onEditDetails === "function") {
-                  onEditDetails(address)
+                  onEditDetails(activeAddr)
                 } else {
                   handleConfirmClick()
                 }
               }}
               style={styles.editBtn}
-              title="Edit address details (House/Flat, Landmark)"
+              title="Add doorstep details (House/Flat No, Landmark)"
             >
-              <Edit2 size={16} style={{ color: "#334155" }} />
+              <Edit2 size={15} style={{ color: "#475569" }} />
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginLeft: 4 }}>
+                Edit
+              </span>
             </button>
           </div>
         </div>
-
-        {/* Save Address Toggle Button */}
-        {hasAddress && !showSaveForm && (
-          <div style={{ marginBottom: "0.75rem" }}>
-            <button
-              type="button"
-              onClick={() => setShowSaveForm(true)}
-              style={styles.saveAddressToggleBtn}
-            >
-              <BookmarkPlus size={15} color="#4F46E5" />
-              <span>Save this address</span>
-            </button>
-            {saveSuccessMsg && (
-              <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 800, marginLeft: 8 }}>
-                {saveSuccessMsg}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Save Address Form */}
-        <AnimatePresence>
-          {showSaveForm && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              style={styles.saveFormContainer}
-            >
-              <div style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>
-                Save as:
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                {["Home", "Work", "Other"].map((lbl) => (
-                  <button
-                    key={lbl}
-                    type="button"
-                    onClick={() => setSaveLabel(lbl)}
-                    style={{
-                      ...styles.labelPill,
-                      ...(saveLabel === lbl ? styles.labelPillActive : {})
-                    }}
-                  >
-                    {lbl === "Home" && <Home size={13} />}
-                    {lbl === "Work" && <Briefcase size={13} />}
-                    {lbl === "Other" && <Star size={13} />}
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-                <input
-                  type="text"
-                  placeholder="House / Flat / Floor No. (Optional)"
-                  value={houseNumber}
-                  onChange={e => setHouseNumber(e.target.value)}
-                  style={styles.formInput}
-                />
-                <input
-                  type="text"
-                  placeholder="Nearby Landmark (Optional)"
-                  value={landmark}
-                  onChange={e => setLandmark(e.target.value)}
-                  style={styles.formInput}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowSaveForm(false)}
-                  style={styles.cancelSaveBtn}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAddressSubmit}
-                  disabled={savingAddress}
-                  style={styles.submitSaveBtn}
-                >
-                  {savingAddress ? "Saving..." : "Save Address"}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Divider */}
         <div style={styles.divider} />
@@ -325,14 +211,14 @@ export function AddressBottomSheet({
           style={styles.currentLocRow}
           onClick={() => typeof onUseCurrentLocation === "function" && onUseCurrentLocation()}
         >
-          <div style={styles.orangeIconBadge}>
-            <MapPin size={18} style={{ color: "#ff5200" }} />
+          <div style={styles.greenIconBadge}>
+            <Navigation size={17} style={{ color: "#00875A" }} />
           </div>
           <div style={{ flex: 1 }}>
             <span style={styles.currentLocTitle}>Use my current location</span>
             <span style={styles.currentLocSub}>Detect exact GPS location automatically</span>
           </div>
-          <ChevronRight size={18} style={{ color: "#94a3b8" }} />
+          <ChevronRight size={18} style={{ color: "#059669" }} />
         </div>
 
         {/* SAVED LOCATIONS */}
@@ -343,7 +229,7 @@ export function AddressBottomSheet({
               {savedAddresses.map((item) => {
                 const isSelected = selectedSavedId === item.id
                 const displayStr = [item.address_line1, item.locality, item.city].filter(Boolean).join(", ") + (item.pincode ? ` - ${item.pincode}` : "")
-                
+
                 let Icon = Home
                 if (item.label?.toLowerCase() === "work") Icon = Briefcase
                 if (item.label?.toLowerCase() === "parents" || item.label?.toLowerCase() === "other") Icon = Star
@@ -358,7 +244,7 @@ export function AddressBottomSheet({
                     }}
                   >
                     <div style={styles.savedIconBadge}>
-                      <Icon size={18} style={{ color: "#ff5200" }} />
+                      <Icon size={16} style={{ color: "#00875A" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -380,7 +266,7 @@ export function AddressBottomSheet({
 
       </div>
 
-      {/* Deliver here Button */}
+      {/* Single Primary Action: CONFIRM LOCATION Button */}
       <div style={styles.footerWrap}>
         <motion.button
           style={{
@@ -395,7 +281,7 @@ export function AddressBottomSheet({
             ? "⚠️ Services Unavailable in Area"
             : isServiceBlocked
               ? "⚠️ Service Disabled in Area"
-              : "Confirm Location"}
+              : "CONFIRM LOCATION"}
         </motion.button>
       </div>
 
@@ -430,18 +316,46 @@ const styles = {
     flexShrink: 0,
   },
   scrollBody: {
-    flex: 1,
     overflowY: "auto",
-    paddingRight: "0.1rem",
+    flex: 1,
+    paddingRight: 2,
+  },
+  outOfZoneWarning: {
+    background: "#fef2f2",
+    border: "1px solid #fca5a5",
+    borderRadius: 14,
+    padding: "10px 14px",
+    marginBottom: "0.75rem",
+  },
+  serviceBlockedWarning: {
+    background: "#fffbeb",
+    border: "1px solid #fcd34d",
+    borderRadius: 14,
+    padding: "10px 14px",
+    marginBottom: "0.75rem",
+  },
+  availableBadge: {
+    background: "#ecfdf5",
+    border: "1px solid #a7f3d0",
+    borderRadius: 12,
+    padding: "6px 12px",
+    marginBottom: "0.75rem",
+    fontSize: "0.76rem",
+    fontWeight: 800,
+    color: "#065f46",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
   },
   deliverToWrap: {
-    marginBottom: "0.5rem",
+    marginBottom: "0.6rem",
   },
   deliverToLabel: {
-    fontSize: "0.72rem",
+    fontSize: "0.68rem",
     fontWeight: 800,
     color: "#64748b",
-    letterSpacing: "0.04em",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
     display: "block",
     marginBottom: 4,
   },
@@ -449,116 +363,35 @@ const styles = {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 12,
   },
   deliverTextWrap: {
     flex: 1,
+    minWidth: 0,
   },
   mainTitle: {
-    fontSize: "0.98rem",
-    fontWeight: 800,
-    color: "#0f172a",
     margin: 0,
+    fontSize: "1.05rem",
+    fontWeight: 900,
+    color: "#0f172a",
     lineHeight: 1.3,
   },
   subTitle: {
-    fontSize: "0.78rem",
+    margin: "3px 0 0",
+    fontSize: "0.8rem",
     color: "#64748b",
-    margin: "4px 0 0",
     lineHeight: 1.4,
   },
   editBtn: {
+    display: "flex",
+    alignItems: "center",
+    padding: "6px 10px",
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     borderRadius: 10,
-    width: 32,
-    height: 32,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     cursor: "pointer",
     flexShrink: 0,
-  },
-  availableBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 12px",
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    borderRadius: 10,
-    fontSize: "0.74rem",
-    fontWeight: 700,
-    color: "#065f46",
-    marginBottom: "10px",
-  },
-  saveAddressToggleBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "5px 12px",
-    background: "#f5f3ff",
-    border: "1px solid #ddd6fe",
-    borderRadius: 8,
-    fontSize: "0.75rem",
-    fontWeight: 700,
-    color: "#4f46e5",
-    cursor: "pointer",
-  },
-  saveFormContainer: {
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: 14,
-    padding: "12px",
-    marginBottom: "12px",
-  },
-  labelPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 10px",
-    borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    background: "#fff",
-    fontSize: "0.75rem",
-    fontWeight: 700,
-    color: "#475569",
-    cursor: "pointer",
-  },
-  labelPillActive: {
-    background: "#4f46e5",
-    borderColor: "#4f46e5",
-    color: "#fff",
-  },
-  formInput: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    fontSize: "0.78rem",
-    color: "#0f172a",
-    outline: "none",
-  },
-  cancelSaveBtn: {
-    padding: "5px 12px",
-    borderRadius: 8,
-    border: "1px solid #e2e8f0",
-    background: "#fff",
-    fontSize: "0.74rem",
-    fontWeight: 700,
-    color: "#64748b",
-    cursor: "pointer",
-  },
-  submitSaveBtn: {
-    padding: "5px 14px",
-    borderRadius: 8,
-    border: "none",
-    background: "#4f46e5",
-    fontSize: "0.74rem",
-    fontWeight: 800,
-    color: "#fff",
-    cursor: "pointer",
+    marginTop: 2,
   },
   divider: {
     height: 1,
@@ -569,16 +402,18 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "0.65rem 0.5rem",
+    padding: "8px 12px",
     borderRadius: 14,
+    background: "#ecfdf5",
+    border: "1.5px solid #a7f3d0",
     cursor: "pointer",
-    transition: "background 0.15s",
+    marginBottom: "0.75rem",
   },
-  orangeIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: "50%",
-    background: "#fff7ed",
+  greenIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    background: "#d1fae5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -586,26 +421,27 @@ const styles = {
   },
   currentLocTitle: {
     display: "block",
-    fontSize: "0.88rem",
+    fontSize: "0.86rem",
     fontWeight: 800,
-    color: "#ff5200",
+    color: "#065f46",
   },
   currentLocSub: {
     display: "block",
-    fontSize: "0.74rem",
-    color: "#64748b",
-    marginTop: 2,
+    fontSize: "0.72rem",
+    color: "#047857",
+    marginTop: 1,
   },
   savedSection: {
-    marginTop: "0.75rem",
+    marginTop: "0.5rem",
   },
   savedSectionTitle: {
-    fontSize: "0.72rem",
+    fontSize: "0.68rem",
     fontWeight: 800,
     color: "#64748b",
-    letterSpacing: "0.04em",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
     display: "block",
-    marginBottom: "0.5rem",
+    marginBottom: 6,
   },
   savedList: {
     display: "flex",
@@ -614,92 +450,75 @@ const styles = {
   },
   savedItemRow: {
     display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "0.5rem",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: "8px 10px",
     borderRadius: 12,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
     cursor: "pointer",
-    border: "1px solid transparent",
+    transition: "all 0.15s ease",
   },
   savedItemRowSelected: {
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    background: "#ecfdf5",
+    borderColor: "#00875A",
   },
   savedIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    background: "#fff7ed",
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    background: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    marginTop: 2,
+    border: "1px solid #e2e8f0",
   },
   savedItemLabel: {
-    display: "block",
-    fontSize: "0.88rem",
+    fontSize: "0.82rem",
     fontWeight: 800,
     color: "#0f172a",
+    textTransform: "capitalize",
   },
   savedItemAddr: {
-    fontSize: "0.75rem",
-    fontWeight: 500,
-    color: "#64748b",
     margin: "2px 0 0",
-    whiteSpace: "nowrap",
+    fontSize: "0.72rem",
+    color: "#64748b",
+    lineHeight: 1.3,
     overflow: "hidden",
     textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   footerWrap: {
-    flexShrink: 0,
     paddingTop: "0.75rem",
-    borderTop: "1px solid #f1f5f9",
-    background: "#fff",
+    flexShrink: 0,
   },
   deliverHereBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     width: "100%",
-    padding: "0.85rem 1rem",
-    fontWeight: 800,
-    fontSize: "1rem",
+    padding: "0.875rem",
+    borderRadius: 14,
     border: "none",
-    borderRadius: 16,
-    boxSizing: "border-box",
+    fontSize: "0.92rem",
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     cursor: "pointer",
     transition: "all 0.15s ease",
   },
   deliverHereBtnActive: {
-    background: "#ff5200",
+    background: "linear-gradient(135deg, #00875A 0%, #059669 100%)",
     color: "#fff",
-    boxShadow: "0 6px 20px rgba(255,82,0,0.35)",
-    cursor: "pointer",
-  },
-  deliverHereBtnDisabled: {
-    background: "#f1f5f9",
-    color: "#94a3b8",
-    cursor: "not-allowed",
+    boxShadow: "0 6px 20px rgba(0, 135, 90, 0.35)",
   },
   deliverHereBtnOutOfZone: {
-    background: "#fee2e2",
-    color: "#dc2626",
-    border: "1.5px solid #fca5a5",
-    cursor: "pointer",
-    boxShadow: "0 4px 12px rgba(220,38,38,0.15)",
+    background: "#ef4444",
+    color: "#fff",
+    cursor: "not-allowed",
   },
-  outOfZoneWarning: {
-    padding: "10px 14px",
-    background: "#fef2f2",
-    border: "1.5px solid #fecaca",
-    borderRadius: 14,
-    marginBottom: "12px",
-  },
-  serviceBlockedWarning: {
-    padding: "10px 14px",
-    background: "#fffbeb",
-    border: "1.5px solid #fde68a",
-    borderRadius: 14,
-    marginBottom: "12px",
-  },
+  deliverHereBtnDisabled: {
+    background: "#e2e8f0",
+    color: "#94a3b8",
+    cursor: "not-allowed",
+  }
 }

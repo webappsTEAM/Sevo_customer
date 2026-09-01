@@ -16,6 +16,7 @@ import { HeroServiceVisualization } from "../components/HeroServiceVisualization
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
@@ -24,11 +25,20 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { usePendingIntent } from "../../hooks/usePendingIntent.js"
 import { ThemeToggle } from "../shell/ThemeToggle.jsx"
 import { apiUpdateCustomerLastLocation, apiFetchCustomerBookings } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
+import {
+  getCustomerLocation,
+  setCustomerLocation,
+  getCustomerSelectedAddress,
+  setCustomerSelectedAddress,
+  clearCustomerLocation,
+  clearLegacyLocationStorage
+} from "../../utils/customerLocationStorage.js"
 import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
@@ -717,7 +727,7 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   // 100% Accurate Verified Photographic Matches for Tamil & English Vegetable Names
   if (n.includes("basket") || n.includes("essential")) return "/mockups/vegetables_realistic.png"
   if (n.includes("tomato") || n.includes("thakkali") || n.includes("tamatar") || n.includes("cherry")) return "/mockups/veg_tomato.png"
-  
+
   // Spring Onion MUST precede general onion
   if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
   if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
@@ -1789,6 +1799,7 @@ const ALL_SEARCHABLE_SERVICES = [
 
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
+  const { save: savePendingIntent, restore: restorePendingIntent } = usePendingIntent()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -1801,16 +1812,16 @@ export function LandingPage() {
       apiFetchCustomerBookings()
         .then(res => {
           if (res?.data && Array.isArray(res.data)) {
-            const activeBookingsCount = res.data.filter(b => 
-              b.status === "PENDING" || 
-              b.status === "ASSIGNED" || 
-              b.status === "ACCEPTED" || 
+            const activeBookingsCount = res.data.filter(b =>
+              b.status === "PENDING" ||
+              b.status === "ASSIGNED" ||
+              b.status === "ACCEPTED" ||
               b.status === "IN_PROGRESS"
             ).length
             setNotificationCount(activeBookingsCount)
           }
         })
-        .catch(() => {})
+        .catch(() => { })
     } else {
       setNotificationCount(0)
     }
@@ -2093,16 +2104,92 @@ export function LandingPage() {
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
-  const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
-    return localStorage.getItem("calservice_user_location") || null;
-  })
-  const [zoneCheckResult, setZoneCheckResult] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("calservice_zone_result") || "null")
-    } catch { return null }
-  })
+  const [activeLocationLabel, setActiveLocationLabel] = useState(null)
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false)
+  const [zoneCheckResult, setZoneCheckResult] = useState(null)
   const [serviceAlertMessage, setServiceAlertMessage] = useState("")
   const [activeNav, setActiveNav] = useState("home")
+
+  // Customer-scoped location synchronization
+  useEffect(() => {
+    let isMounted = true
+
+    const syncLocationForCustomer = async () => {
+      if (!user?.id) {
+        // Guest user: reset customer location state
+        setActiveLocationLabel(null)
+        setZoneCheckResult(null)
+        return
+      }
+
+      setIsLoadingLocation(true)
+      try {
+        // 1. Read customer-scoped selected address first
+        const currentSelected = getCustomerSelectedAddress(user.id)
+        const scopedLoc = getCustomerLocation(user.id)
+        if (scopedLoc && isMounted) {
+          setActiveLocationLabel(scopedLoc)
+        }
+
+        // 2. Query backend for this customer's saved addresses
+        const res = await apiRequest("/auth/customer/addresses/")
+        const addresses = res?.data || (Array.isArray(res) ? res : [])
+        if (!isMounted) return
+
+        if (Array.isArray(addresses) && addresses.length > 0) {
+          // Find matching address for current selection, or fall back to default, or first
+          let activeAddr = null
+          if (currentSelected?.id) {
+            activeAddr = addresses.find((a) => Number(a.id) === Number(currentSelected.id))
+          }
+          if (!activeAddr) {
+            activeAddr = addresses.find((a) => a.is_default) || addresses[0]
+          }
+
+          const label = activeAddr.formatted_address || activeAddr.address_line1 || activeAddr.locality || ""
+          if (label && isMounted) {
+            setActiveLocationLabel(label)
+            setCustomerSelectedAddress(user.id, activeAddr)
+            setCustomerLocation(user.id, label)
+            if (activeAddr.latitude && activeAddr.longitude) {
+              verifyServiceZone(Number(activeAddr.latitude), Number(activeAddr.longitude), label)
+            }
+          }
+        } else if (scopedLoc && isMounted) {
+          setActiveLocationLabel(scopedLoc)
+        } else {
+          // No saved addresses for this customer: check customer profile last known location
+          const lastLoc = user?.last_known_location || user?.lastKnownLocation
+          const lastLocStr = typeof lastLoc === "string" ? lastLoc : (lastLoc?.label || "")
+          if (lastLocStr && isMounted) {
+            setActiveLocationLabel(lastLocStr)
+            setCustomerLocation(user.id, lastLocStr)
+          } else if (isMounted) {
+            setActiveLocationLabel(null)
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to sync customer location from backend:", err)
+      } finally {
+        if (isMounted) setIsLoadingLocation(false)
+      }
+    }
+
+    syncLocationForCustomer()
+
+    const handleAuthOrAddressChange = () => {
+      syncLocationForCustomer()
+    }
+
+    window.addEventListener("calservice_auth_changed", handleAuthOrAddressChange)
+    window.addEventListener("calservice_address_changed", handleAuthOrAddressChange)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener("calservice_auth_changed", handleAuthOrAddressChange)
+      window.removeEventListener("calservice_address_changed", handleAuthOrAddressChange)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -2144,26 +2231,12 @@ export function LandingPage() {
         json: { lat, lng }
       })
       setZoneCheckResult(zoneRes)
-      localStorage.setItem("calservice_zone_result", JSON.stringify(zoneRes))
     } catch (e) {
       // Fail open if endpoint is down
       const openRes = { in_zone: true, open_access: true, zone: null, available_services: [] }
       setZoneCheckResult(openRes)
     }
   }
-
-  // Initial zone check on mount - only if user previously selected/detected coordinates
-  useEffect(() => {
-    const storedCoords = localStorage.getItem("calservice_user_coords")
-    if (storedCoords) {
-      try {
-        const parsed = JSON.parse(storedCoords)
-        if (parsed?.lat && parsed?.lng) {
-          verifyServiceZone(parsed.lat, parsed.lng)
-        }
-      } catch (e) { }
-    }
-  }, [])
 
   // Check if a service is enabled in customer's current zone
   // Check if a service is enabled in customer's current zone
@@ -2358,9 +2431,8 @@ export function LandingPage() {
   }, [])
 
   useEffect(() => {
-    // If user already has a saved location, do not overwrite it with automatic geolocation
-    const storedLocation = localStorage.getItem("calservice_user_location")
-    if (storedLocation) return
+    // Only detect live GPS for guest users who do not have an active location set yet
+    if (user?.id || activeLocationLabel) return
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -2369,20 +2441,19 @@ export function LandingPage() {
           const lng = parseFloat(pos.coords.longitude.toFixed(6))
           try {
             const display = await getAddress(lat, lng)
-            if (display) {
+            if (display && !activeLocationLabel) {
               setActiveLocationLabel(display)
-              localStorage.setItem("calservice_user_location", display)
             }
             await verifyServiceZone(lat, lng, display)
           } catch (e) { }
         },
-        (err) => {
-          console.warn("Live location detection warning:", err)
+        () => {
+          // Graceful fallback for location denial/timeout
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       )
     }
-  }, [])
+  }, [user?.id, activeLocationLabel])
 
   // Helper to dynamically categorize vegetable items based on their names
   const getVegetableCategory = (pkgName) => {
@@ -2964,24 +3035,29 @@ export function LandingPage() {
         <BkStyles />
 
         {showLocationPickerModal && (
-          <AddAddressSearchModal
+          <SelectServiceAddressDrawer
+            isOpen={showLocationPickerModal}
             onClose={() => setShowLocationPickerModal(false)}
-            onSelectLocation={async (locStr, coords) => {
+            currentAddress={activeLocationLabel}
+            onSelectAddress={async (locObj) => {
               setShowLocationPickerModal(false)
-              if (locStr) {
-                const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+              if (locObj) {
+                const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
                 setActiveLocationLabel(labelStr)
-                localStorage.setItem("calservice_user_location", labelStr)
-                if (coords?.lat && coords?.lng) {
-                  localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+                if (user?.id) {
+                  setCustomerLocation(user.id, labelStr)
+                  setCustomerSelectedAddress(user.id, locObj)
+                }
+                if (locObj.latitude && locObj.longitude) {
+                  const coords = { lat: Number(locObj.latitude), lng: Number(locObj.longitude) }
                   await verifyServiceZone(coords.lat, coords.lng, labelStr)
                 }
                 if (user) {
                   try {
                     await apiUpdateCustomerLastLocation({
                       label: labelStr,
-                      latitude: coords?.lat,
-                      longitude: coords?.lng,
+                      latitude: locObj.latitude,
+                      longitude: locObj.longitude,
                       detected_at: new Date().toISOString()
                     })
                   } catch (e) { }
@@ -3032,11 +3108,10 @@ export function LandingPage() {
                     key={item.id}
                     href={`#${item.id}`}
                     onClick={(e) => handleNavClick(e, item.id)}
-                    className={`py-1 transition-all cursor-pointer ${
-                      isActive
+                    className={`py-1 transition-all cursor-pointer ${isActive
                         ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
                         : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </a>
@@ -3056,6 +3131,7 @@ export function LandingPage() {
                 <MapPin className="w-3.5 h-3.5 shrink-0 text-[var(--sevo-primary)]" />
                 <span className="truncate">
                   {(() => {
+                    if (isLoadingLocation) return "Loading your location..."
                     if (activeLocationLabel) return activeLocationLabel
                     const locObj = user?.last_known_location || user?.lastKnownLocation
                     if (locObj) {
@@ -3063,7 +3139,7 @@ export function LandingPage() {
                       if (locObj.label) return locObj.label
                     }
                     if (user?.address) return user.address
-                    return "Hosur, Tamil Nadu"
+                    return "Select your location"
                   })()}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[var(--sevo-text-muted)] shrink-0 ml-auto" />
@@ -3188,9 +3264,8 @@ export function LandingPage() {
             <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
               <form
                 onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${
-                  isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
-                }`}
+                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
+                  }`}
               >
                 <div className="pl-3 pr-2 text-[var(--sevo-text-muted)]">
                   <Search className="w-4.5 h-4.5" />
@@ -3894,9 +3969,8 @@ export function LandingPage() {
               window.scrollTo({ top: 0, behavior: "smooth" })
               setActiveNav("home")
             }}
-            className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${
-              activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-            }`}
+            className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
+              }`}
           >
             <Home className="w-5 h-5" />
             <span>Home</span>
@@ -5141,8 +5215,8 @@ export function LandingPage() {
                         disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                         onClick={() => setShowVegCartDrawer(true)}
                         className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
-                            : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
                           }`}
                       >
                         <ShoppingCart className="w-4 h-4" />
@@ -5227,8 +5301,8 @@ export function LandingPage() {
                           })
                         }}
                         className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                            : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
                           }`}
                       >
                         <span>
@@ -6220,8 +6294,8 @@ export function LandingPage() {
                               type="button"
                               onClick={() => setVegCategoryFilter(cat)}
                               className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${vegCategoryFilter === cat
-                                  ? "bg-emerald-600 text-white shadow-xs"
-                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 }`}
                             >
                               {cat}
@@ -6796,8 +6870,8 @@ export function LandingPage() {
                       disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                       onClick={() => setShowVegCartDrawer(true)}
                       className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
-                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                        : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <ShoppingCart className="w-4 h-4" />
@@ -6886,8 +6960,7 @@ export function LandingPage() {
                           }
                         })
                       }}
-                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
                           ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
                             ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
                             : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
@@ -7311,6 +7384,13 @@ export function LandingPage() {
         onComplete={() => {
           setShowCustomerEntryModal(false)
           if (typeof refreshMe === "function") refreshMe()
+          // Restore any pending booking intent (e.g. customer pressed "View Cart" while logged out)
+          const intent = restorePendingIntent()
+          if (intent?.type === "GO_TO_CHECKOUT" && intent.cart?.length) {
+            navigate(routes.booking_checkout, {
+              state: { category: intent.category, cart: intent.cart }
+            })
+          }
         }}
       />
 
@@ -7387,7 +7467,17 @@ export function LandingPage() {
           {/* View Cart / Proceed Action Button */}
           <button
             type="button"
-            onClick={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onClick={() => {
+              // If not logged in, save GO_TO_CHECKOUT intent so cart is restored after auth
+              if (!user && modalCart?.length) {
+                savePendingIntent({
+                  type: "GO_TO_CHECKOUT",
+                  cart: modalCart,
+                  category: activeCategory,
+                })
+              }
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
+            }}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer active:scale-95 shrink-0 uppercase tracking-wider"
           >
             <span>View Cart</span>
@@ -7397,24 +7487,29 @@ export function LandingPage() {
       )}
 
       {showLocationPickerModal && (
-        <AddAddressSearchModal
+        <SelectServiceAddressDrawer
+          isOpen={showLocationPickerModal}
           onClose={() => setShowLocationPickerModal(false)}
-          onSelectLocation={async (locStr, coords) => {
+          currentAddress={activeLocationLabel}
+          onSelectAddress={async (locObj) => {
             setShowLocationPickerModal(false)
-            if (locStr) {
-              const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+            if (locObj) {
+              const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
               setActiveLocationLabel(labelStr)
-              localStorage.setItem("calservice_user_location", labelStr)
-              if (coords?.lat && coords?.lng) {
-                localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+              if (user?.id) {
+                setCustomerLocation(user.id, labelStr)
+                setCustomerSelectedAddress(user.id, locObj)
+              }
+              if (locObj.latitude && locObj.longitude) {
+                const coords = { lat: Number(locObj.latitude), lng: Number(locObj.longitude) }
                 await verifyServiceZone(coords.lat, coords.lng, labelStr)
               }
               if (user) {
                 try {
                   await apiUpdateCustomerLastLocation({
                     label: labelStr,
-                    latitude: coords?.lat,
-                    longitude: coords?.lng,
+                    latitude: locObj.latitude,
+                    longitude: locObj.longitude,
                     detected_at: new Date().toISOString()
                   })
                 } catch (e) { }

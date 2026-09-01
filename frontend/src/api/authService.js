@@ -142,7 +142,7 @@ export async function apiUpdateCustomerLastLocation(location_data) {
 }
 
 export async function apiDetectCustomerLocation(latitude, longitude, accuracy = null) {
-  return fetchJSON("/customer/location/detect/", {
+  return fetchJSON("/auth/customer/location/detect/", {
     method: "POST",
     body: JSON.stringify({ latitude, longitude, accuracy })
   })

@@ -299,7 +299,9 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
 
         # 4. Public customer live tracking: if client knows the specific booking ID / request_id, grant live tracking read stream
         if self.sr:
-            return True
+            clean_id = str(self.identifier).replace("#", "").strip().lower()
+            if clean_id in [str(self.sr.id).lower(), str(self.sr.request_id).lower()]:
+                return True
 
         return False
 

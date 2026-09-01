@@ -191,6 +191,8 @@ class ServiceRequest(models.Model):
     address          = models.TextField()
     latitude         = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude        = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    saved_address_id = models.IntegerField(null=True, blank=True)
+    service_location_snapshot = models.JSONField(default=dict, blank=True)
     preferred_date   = models.DateField()
     preferred_time   = models.CharField(max_length=50, blank=True, null=True)
     photo            = models.ImageField(upload_to="service_requests/photos/", null=True, blank=True)
@@ -1681,6 +1683,28 @@ class QuotePhoto(models.Model):
 
     def __str__(self):
         return f"Photo for {self.quote.quote_number}"
+
+
+class TechnicianLocation(models.Model):
+    booking = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name="location_logs")
+    technician = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="technician_locations")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy = models.FloatField(null=True, blank=True)
+    heading = models.FloatField(default=0.0, blank=True)
+    speed = models.FloatField(default=0.0, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["booking", "created_at"]),
+            models.Index(fields=["technician", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Location ({self.latitude}, {self.longitude}) for Booking #{self.booking_id} at {self.created_at}"
+
 
 
 

@@ -17,6 +17,7 @@ import "leaflet/dist/leaflet.css"
  */
 function MapEventBridge({ onDragStart, onMoveEnd, onMapClick }) {
   useMapEvents({
+    movestart() { onDragStart() },
     dragstart() { onDragStart() },
     moveend(e) {
       const c = e.target.getCenter()
@@ -31,58 +32,193 @@ function MapEventBridge({ onDragStart, onMoveEnd, onMapClick }) {
   return null
 }
 
-// ─── Fixed-center pin ─────────────────────────────────────────────────────────
+// ─── Compact Premium 3D Delivery Pin ─────────────────────────────────────────
+
+// ─── Compact Premium 3D Delivery Pin ─────────────────────────────────────────
+
+function Premium3DPinSvg({ isOutOfZone, isServiceBlocked }) {
+  const gradId = isOutOfZone ? "pinGradRed" : isServiceBlocked ? "pinGradAmber" : "pinGradGreen"
+  const glossId = isOutOfZone ? "pinGlossRed" : isServiceBlocked ? "pinGlossAmber" : "pinGlossGreen"
+  const darkStop = isOutOfZone ? "#7F1D1D" : isServiceBlocked ? "#78350F" : "#023B25"
+  const midStop = isOutOfZone ? "#DC2626" : isServiceBlocked ? "#D97706" : "#00875A"
+  const lightStop = isOutOfZone ? "#F87171" : isServiceBlocked ? "#FBBF24" : "#10B981"
+  const brightStop = isOutOfZone ? "#FCA5A5" : isServiceBlocked ? "#FDE68A" : "#34D399"
+
+  return (
+    <svg
+      viewBox="0 0 44 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "block",
+        overflow: "visible",
+        filter: "drop-shadow(0 6px 12px rgba(0, 40, 25, 0.35))",
+      }}
+    >
+      <defs>
+        {/* Main 3D body gradient */}
+        <linearGradient id={gradId} x1="4" y1="2" x2="40" y2="54" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor={brightStop} />
+          <stop offset="25%" stopColor={lightStop} />
+          <stop offset="65%" stopColor={midStop} />
+          <stop offset="100%" stopColor={darkStop} />
+        </linearGradient>
+
+        {/* 3D radial gloss lighting */}
+        <radialGradient id={glossId} cx="32%" cy="26%" r="62%" fx="28%" fy="20%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.75" />
+          <stop offset="35%" stopColor="#FFFFFF" stopOpacity="0.2" />
+          <stop offset="70%" stopColor="#FFFFFF" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Rim border lighting */}
+        <linearGradient id="pinRimGrad" x1="22" y1="2" x2="22" y2="55" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.7" />
+          <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.2" />
+          <stop offset="85%" stopColor="rgba(0,0,0,0.12)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+        </linearGradient>
+
+        {/* Center hole depth bevel */}
+        <radialGradient id="holeDepth" cx="45%" cy="38%" r="60%">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="75%" stopColor="#F8FAFC" />
+          <stop offset="100%" stopColor="#E2E8F0" />
+        </radialGradient>
+      </defs>
+
+      {/* Pin 3D Body */}
+      <path
+        d="M 22 2 C 11.5 2, 3 10.5, 3 21 C 3 34.5, 19.4 52.8, 21.4 54.8 C 21.75 55.15, 22.25 55.15, 22.6 54.8 C 24.6 52.8, 41 34.5, 41 21 C 41 10.5, 32.5 2, 22 2 Z"
+        fill={`url(#${gradId})`}
+        stroke="url(#pinRimGrad)"
+        strokeWidth="1.2"
+      />
+
+      {/* Gloss lighting overlay */}
+      <path
+        d="M 22 3 C 12.1 3, 4 11.1, 4 21 C 4 33.8, 19.6 51.5, 21.5 53.4 C 21.8 53.7, 22.2 53.7, 22.5 53.4 C 24.4 51.5, 40 33.8, 40 21 C 40 11.1, 31.9 3, 22 3 Z"
+        fill={`url(#${glossId})`}
+      />
+
+      {/* Top-left specular crescent reflection */}
+      <path
+        d="M 9.5 18 C 9.5 12.5, 14 7.5, 20.5 6.6 C 18.5 7.2, 13.2 9.5, 11.2 14.8 C 10.4 17.2, 10.8 20.2, 11.6 22 C 10.3 20.9, 9.5 19.5, 9.5 18 Z"
+        fill="#FFFFFF"
+        fillOpacity="0.45"
+      />
+
+      {/* Center cutout hole outer shadow/depth ring */}
+      <circle
+        cx="22"
+        cy="21"
+        r="7.5"
+        fill="rgba(0, 35, 20, 0.25)"
+      />
+
+      {/* Center cutout white circle */}
+      <circle
+        cx="22"
+        cy="20.5"
+        r="6.8"
+        fill="url(#holeDepth)"
+        stroke="rgba(255, 255, 255, 0.95)"
+        strokeWidth="0.8"
+      />
+    </svg>
+  )
+}
 
 function FixedCenterPin({ lifted, isOutOfZone, isServiceBlocked }) {
   const isAlert = isOutOfZone || isServiceBlocked
-  const pinColor = isOutOfZone ? "#DC2626" : isServiceBlocked ? "#D97706" : "#FF5200"
 
   return (
     <div style={pinStyles.wrapper} aria-hidden>
-      {/* Floating Status Warning Popup right above the Pin */}
-      {isAlert && (
+      {/* ── Exact Center Anchor Point (50% 50%) ── */}
+      <div style={pinStyles.centerAnchor}>
+
+        {/* Ground Radar & Contact Shadow (centered at 0, 0) */}
+        <div style={pinStyles.groundArea}>
+          {/* Outer subtle concentric radar circle */}
+          <motion.div
+            style={{
+              ...pinStyles.radarOuter,
+              background: isOutOfZone ? "rgba(220, 38, 38, 0.1)" : isServiceBlocked ? "rgba(217, 119, 6, 0.1)" : "rgba(0, 135, 90, 0.12)",
+              borderColor: isOutOfZone ? "rgba(220, 38, 38, 0.32)" : isServiceBlocked ? "rgba(217, 119, 6, 0.32)" : "rgba(0, 135, 90, 0.3)",
+            }}
+            animate={{
+              scale: lifted ? 0.92 : [0.94, 1.05, 0.94],
+              opacity: lifted ? 0.25 : [0.45, 0.75, 0.45],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          {/* Inner concentric radar ring */}
+          <motion.div
+            style={{
+              ...pinStyles.radarInner,
+              borderColor: isOutOfZone ? "rgba(220, 38, 38, 0.45)" : isServiceBlocked ? "rgba(217, 119, 6, 0.45)" : "rgba(0, 135, 90, 0.42)",
+            }}
+            animate={{
+              scale: lifted ? 0.88 : [0.96, 1.04, 0.96],
+              opacity: lifted ? 0.3 : [0.55, 0.85, 0.55],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.15 }}
+          />
+
+          {/* Direct ground contact anchor shadow dot */}
+          <motion.div
+            style={{
+              ...pinStyles.contactShadow,
+              background: isOutOfZone ? "rgba(153, 27, 27, 0.6)" : isServiceBlocked ? "rgba(146, 64, 14, 0.6)" : "rgba(3, 69, 45, 0.65)",
+            }}
+            animate={{
+              scale: lifted ? 0.55 : 1,
+              opacity: lifted ? 0.3 : 0.85,
+            }}
+            transition={{ type: "spring", damping: 18, stiffness: 280 }}
+          />
+        </div>
+
+        {/* The 3D Pin Motion Wrapper (sitting directly above 0, 0) */}
         <motion.div
-          initial={{ opacity: 0, y: 6, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          style={{
-            ...pinStyles.warningBubble,
-            background: isOutOfZone ? "#dc2626" : "#d97706",
-            boxShadow: isOutOfZone ? "0 4px 14px rgba(220,38,38,0.4)" : "0 4px 14px rgba(217,119,6,0.4)",
+          style={pinStyles.pinMotionWrap}
+          animate={{
+            y: lifted ? -18 : 0,
+            scale: lifted ? 1.05 : 1,
+          }}
+          transition={{
+            type: "spring",
+            damping: lifted ? 14 : 18,
+            stiffness: lifted ? 320 : 280,
+            mass: 0.8,
           }}
         >
-          <span style={{ fontSize: 13 }}>⚠️</span>
-          <span>{isOutOfZone ? "Outside Service Area" : "Service Unavailable Here"}</span>
+          {/* Floating Status Warning Popup right above the Pin */}
+          {isAlert && (
+            <motion.div
+              initial={{ opacity: 0, y: 4, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              style={{
+                ...pinStyles.warningBubble,
+                background: isOutOfZone ? "#dc2626" : "#d97706",
+                boxShadow: isOutOfZone ? "0 4px 14px rgba(220,38,38,0.4)" : "0 4px 14px rgba(217,119,6,0.4)",
+              }}
+            >
+              <span style={{ fontSize: 12 }}>⚠️</span>
+              <span>{isOutOfZone ? "Outside Service Area" : "Service Unavailable Here"}</span>
+            </motion.div>
+          )}
+
+          {/* 3D Pin SVG Box */}
+          <div style={pinStyles.pinBox}>
+            <Premium3DPinSvg isOutOfZone={isOutOfZone} isServiceBlocked={isServiceBlocked} />
+          </div>
         </motion.div>
-      )}
 
-      {/* Radar pulse circle */}
-      <motion.div
-        style={{
-          ...pinStyles.radarPulse,
-          background: isOutOfZone ? "rgba(220, 38, 38, 0.15)" : isServiceBlocked ? "rgba(217, 119, 6, 0.15)" : "rgba(59, 130, 246, 0.2)",
-          border: isOutOfZone ? "1.5px solid rgba(220, 38, 38, 0.4)" : isServiceBlocked ? "1.5px solid rgba(217, 119, 6, 0.4)" : "1.5px solid rgba(59, 130, 246, 0.4)",
-        }}
-        animate={{ scale: lifted ? 0.8 : [0.9, 1.1, 0.9], opacity: lifted ? 0.2 : [0.3, 0.6, 0.3] }}
-        transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      {/* Live GPS dot */}
-      <div style={{
-        ...pinStyles.blueDot,
-        background: isOutOfZone ? "#dc2626" : isServiceBlocked ? "#d97706" : "#2563eb",
-      }} />
-
-      {/* The pin itself */}
-      <motion.div
-        style={{
-          ...pinStyles.pin,
-          filter: isOutOfZone ? "drop-shadow(0 6px 12px rgba(220,38,38,0.55))" : isServiceBlocked ? "drop-shadow(0 6px 12px rgba(217,119,6,0.55))" : "drop-shadow(0 6px 12px rgba(255,82,0,0.45))",
-        }}
-        animate={{ y: lifted ? -14 : 0 }}
-        transition={{ type: "spring", damping: 18, stiffness: 280 }}
-      >
-        <MapPin size={46} fill={pinColor} color="#ffffff" strokeWidth={1.5} />
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -91,52 +227,91 @@ const pinStyles = {
   wrapper: {
     position: "absolute",
     inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
     pointerEvents: "none",
     zIndex: 800,
   },
+  centerAnchor: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: 0,
+    height: 0,
+    pointerEvents: "none",
+  },
+  groundArea: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 84,
+    height: 52,
+    marginLeft: -42,
+    marginTop: -26,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  },
+  radarOuter: {
+    position: "absolute",
+    width: 80,
+    height: 48,
+    borderRadius: "50%",
+    border: "1px solid rgba(0, 135, 90, 0.3)",
+    pointerEvents: "none",
+  },
+  radarInner: {
+    position: "absolute",
+    width: 48,
+    height: 28,
+    borderRadius: "50%",
+    border: "1.2px solid rgba(0, 135, 90, 0.42)",
+    pointerEvents: "none",
+  },
+  contactShadow: {
+    position: "absolute",
+    width: 14,
+    height: 6,
+    borderRadius: "50%",
+    filter: "blur(1px)",
+    pointerEvents: "none",
+  },
+  pinMotionWrap: {
+    position: "absolute",
+    bottom: -1,
+    left: -22,
+    width: 44,
+    height: 56,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    transformOrigin: "bottom center",
+    willChange: "transform",
+    pointerEvents: "none",
+    zIndex: 802,
+  },
+  pinBox: {
+    width: 44,
+    height: 56,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  },
   warningBubble: {
     position: "absolute",
-    bottom: "calc(50% + 32px)",
+    bottom: "calc(100% + 8px)",
+    left: "50%",
+    transform: "translateX(-50%)",
     display: "flex",
     alignItems: "center",
     gap: 5,
-    padding: "5px 12px",
-    background: "#dc2626",
+    padding: "4px 10px",
     color: "#ffffff",
     borderRadius: 20,
-    fontSize: "0.74rem",
+    fontSize: "0.72rem",
     fontWeight: 800,
     whiteSpace: "nowrap",
     zIndex: 850,
-  },
-  radarPulse: {
-    position: "absolute",
-    width: 64,
-    height: 64,
-    borderRadius: "50%",
-    background: "rgba(59, 130, 246, 0.2)",
-    border: "1.5px solid rgba(59, 130, 246, 0.4)",
-    marginTop: 22,
-  },
-  blueDot: {
-    position: "absolute",
-    width: 14,
-    height: 14,
-    borderRadius: "50%",
-    background: "#2563eb",
-    border: "2.5px solid #ffffff",
-    boxShadow: "0 2px 6px rgba(37,99,235,0.4)",
-    marginTop: 22,
-    zIndex: 801,
-  },
-  pin: {
-    marginBottom: -22,
-    filter: "drop-shadow(0 6px 12px rgba(255,82,0,0.45))",
-    zIndex: 802,
   },
 }
 
@@ -203,6 +378,7 @@ const pillStyle = {
 
 export function MapPickerScreen({
   initialCoords,
+  initialLocation = null,
   serviceSlug = "",
   onClose,
   onConfirm,
@@ -210,25 +386,39 @@ export function MapPickerScreen({
   initialFlat = "",
   initialLandmark = ""
 }) {
-  const [step, setStep]                   = useState("map") // "map" | "details"
+  const [step, setStep] = useState("map") // "map" | "details"
   const [selectedAddressData, setSelectedAddressData] = useState(null)
-  const [mapReady, setMapReady]           = useState(false)
-  const [pinLifted, setPinLifted]         = useState(false)
-  const [isDragging, setIsDragging]       = useState(false)
-  const [isLocating, setIsLocating]       = useState(false)
-  const [serviceZones, setServiceZones]   = useState([])
-  const [zoneStatus, setZoneStatus]       = useState({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
+  const [mapReady, setMapReady] = useState(false)
+  const [pinLifted, setPinLifted] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
+  const [serviceZones, setServiceZones] = useState([])
+  const [zoneStatus, setZoneStatus] = useState({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
   const [currentCenter, setCurrentCenter] = useState(() => {
-    const lat = Number(initialCoords?.lat || initialCoords?.latitude) || 12.754598
-    const lng = Number(initialCoords?.lng || initialCoords?.longitude) || 77.834477
+    const lat = Number(initialLocation?.latitude || initialLocation?.lat || initialCoords?.lat || initialCoords?.latitude) || 12.754598
+    const lng = Number(initialLocation?.longitude || initialLocation?.lng || initialCoords?.lng || initialCoords?.longitude) || 77.834477
     return { lat, lng }
   })
-  const mapRef                            = useRef(null)
+  const mapRef = useRef(null)
+
+  // ── Sync with initialLocation when passed ───────────────────────
+  useEffect(() => {
+    if (initialLocation?.latitude && initialLocation?.longitude) {
+      const lat = Number(initialLocation.latitude)
+      const lng = Number(initialLocation.longitude)
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setCurrentCenter({ lat, lng })
+        if (mapRef.current) {
+          mapRef.current.flyTo([lat, lng], 17, { animate: true, duration: 1 })
+        }
+      }
+    }
+  }, [initialLocation])
 
   // ── Top Search Bar State ───────────────────────────────────────
-  const [searchQuery, setSearchQuery]     = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState([])
-  const [isSearching, setIsSearching]     = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
   const [showSearchBox, setShowSearchBox] = useState(false)
 
   // ── Load active service zones from backend ─────────────────────
@@ -239,7 +429,7 @@ export function MapPickerScreen({
         if (Array.isArray(res)) {
           setServiceZones(res)
         }
-      } catch {}
+      } catch { }
     }
     loadZones()
   }, [])
@@ -274,9 +464,15 @@ export function MapPickerScreen({
   // ── Reverse geocoding of current map center ────────────────────
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── Real-time service-specific zone check on pin movement ──────
+  // ── Real-time service-specific zone check on pin movement (Debounced 600ms & Race Condition Protected) ──────
+  const zoneCheckReqIdRef = useRef(0)
+
   useEffect(() => {
+    if (isDragging) return
+
+    const currentReqId = ++zoneCheckReqIdRef.current
     let active = true
+
     const timer = setTimeout(async () => {
       try {
         const res = await apiRequest("/settings/service-zones/check/", {
@@ -287,7 +483,7 @@ export function MapPickerScreen({
             service_slug: serviceSlug || ""
           }
         })
-        if (active && res) {
+        if (active && currentReqId === zoneCheckReqIdRef.current && res) {
           setZoneStatus({
             inZone: res.in_zone !== false,
             serviceAllowed: res.service_allowed !== false && res.in_zone !== false,
@@ -298,43 +494,52 @@ export function MapPickerScreen({
           })
         }
       } catch {
-        if (active) setZoneStatus({ inZone: true, serviceAllowed: true, zoneId: null, zoneName: null, message: "" })
+        if (active && currentReqId === zoneCheckReqIdRef.current) {
+          setZoneStatus({ inZone: true, serviceAllowed: true, zoneId: null, zoneName: null, message: "" })
+        }
       }
-    }, 300)
+    }, 200)
 
     return () => {
       active = false
       clearTimeout(timer)
     }
-  }, [currentCenter.lat, currentCenter.lng, serviceSlug])
+  }, [currentCenter.lat, currentCenter.lng, serviceSlug, isDragging])
 
   // ── "Re-center on me" / Live GPS fetch ─────────────────────────
   const handleRecenter = useCallback(() => {
     if (navigator.geolocation) {
       setIsLocating(true)
+      const onPos = (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        setCurrentCenter({ lat, lng })
+        setIsLocating(false)
+        if (mapRef.current) {
+          mapRef.current.flyTo([lat, lng], 17, { animate: true, duration: 0.8 })
+        }
+      }
+
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = parseFloat(pos.coords.latitude.toFixed(6))
-          const lng = parseFloat(pos.coords.longitude.toFixed(6))
-          setCurrentCenter({ lat, lng })
-          setIsLocating(false)
-          if (mapRef.current) {
-            mapRef.current.flyTo([lat, lng], 17, { animate: true, duration: 1 })
-          }
-        },
+        onPos,
         (err) => {
-          console.warn("Geolocation positioning error:", err)
-          setIsLocating(false)
-          if (initialCoords && mapRef.current) {
-            const initLat = Number(initialCoords.lat || initialCoords.latitude)
-            const initLng = Number(initialCoords.lng || initialCoords.longitude)
-            if (initLat && initLng) {
-              mapRef.current.flyTo([initLat, initLng], 17, { animate: true })
-              setCurrentCenter({ lat: initLat, lng: initLng })
-            }
-          }
+          navigator.geolocation.getCurrentPosition(
+            onPos,
+            (err2) => {
+              setIsLocating(false)
+              if (initialCoords && mapRef.current) {
+                const initLat = Number(initialCoords.lat || initialCoords.latitude)
+                const initLng = Number(initialCoords.lng || initialCoords.longitude)
+                if (initLat && initLng) {
+                  mapRef.current.flyTo([initLat, initLng], 17, { animate: true, duration: 0.8 })
+                  setCurrentCenter({ lat: initLat, lng: initLng })
+                }
+              }
+            },
+            { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
+          )
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 4000, maximumAge: 120000 }
       )
     }
   }, [initialCoords])
@@ -428,27 +633,43 @@ export function MapPickerScreen({
   const isServiceBlocked = zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
 
   const handleConfirmLocation = (resolvedAddr) => {
-    // If user selected an ALREADY SAVED address (from "SAVED LOCATIONS"),
-    // it already has complete details (label, flat/house no, landmark, locality, etc.).
-    // Confirm immediately and do NOT show the AddressDetailsForm again!
-    if (resolvedAddr && (resolvedAddr.id || resolvedAddr.isSaved || resolvedAddr.is_saved)) {
-      const fullDisplay = resolvedAddr.formatted_address || [
-        resolvedAddr.address_line1 || resolvedAddr.flat_house_no,
-        resolvedAddr.landmark,
-        resolvedAddr.locality,
-        resolvedAddr.city,
-        resolvedAddr.state,
-        resolvedAddr.pincode
-      ].filter(Boolean).join(", ")
+    const targetAddr = resolvedAddr || address || initialLocation || {}
+    const fullDisplay = targetAddr.formatted_address || [
+      targetAddr.flat_house_no || targetAddr.house_number || initialFlat,
+      targetAddr.address_line1 || targetAddr.street_address,
+      targetAddr.landmark || initialLandmark,
+      targetAddr.locality,
+      targetAddr.city,
+      targetAddr.state,
+      targetAddr.pincode
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
 
+    const streetAddress = targetAddr.address_line1 || targetAddr.street_address || [targetAddr.flat_house_no || initialFlat, targetAddr.landmark || initialLandmark].filter(Boolean).join(", ") || fullDisplay.split(",")[0]
+
+    // If user selected an ALREADY SAVED address or explicitly confirms without needing full details form
+    if (resolvedAddr && (resolvedAddr.id || resolvedAddr.isSaved || resolvedAddr.is_saved || initialLocation?.id)) {
+      const rawType = resolvedAddr.address_type || resolvedAddr.label || resolvedAddr.tag || initialLocation?.address_type || "Home"
       const confirmedData = {
-        ...resolvedAddr,
+        id: resolvedAddr.id || resolvedAddr.saved_address_id || initialLocation?.address_id || initialLocation?.saved_address_id || initialLocation?.id || `addr_${Date.now()}`,
+        address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
+        label: rawType.toLowerCase(),
+        flat_house_no: resolvedAddr.flat_house_no || resolvedAddr.house_number || initialLocation?.flat_house_no || initialFlat || "",
+        address_line1: streetAddress,
+        street_address: streetAddress,
+        landmark: resolvedAddr.landmark || initialLocation?.landmark || initialLandmark || "",
+        locality: resolvedAddr.locality || address?.locality || "",
+        city: resolvedAddr.city || address?.city || initialLocation?.city || "Hosur",
+        state: resolvedAddr.state || address?.state || initialLocation?.state || "Tamil Nadu",
+        pincode: resolvedAddr.pincode || address?.pincode || initialLocation?.pincode || "635109",
         formatted_address: fullDisplay,
-        address_line1: resolvedAddr.address_line1 || resolvedAddr.flat_house_no || "",
-        latitude: Number(resolvedAddr.latitude || resolvedAddr.lat || currentCenter.lat),
-        longitude: Number(resolvedAddr.longitude || resolvedAddr.lng || currentCenter.lng),
+        latitude: Number(currentCenter.lat),
+        longitude: Number(currentCenter.lng),
+        location_source: initialLocation?.location_source || resolvedAddr.location_source || (resolvedAddr.id ? "saved_address" : "map_pin"),
+        geocoding_status: "verified",
+        serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
         zone_id: zoneStatus.zoneId || resolvedAddr.zone_id || null,
-        zone_name: zoneStatus.zoneName || resolvedAddr.zone_name || null,
+        zone_name: zoneStatus.zoneName || resolvedAddr.zone_name || "Hosur City",
+        confirmed_at: new Date().toISOString()
       }
 
       if (typeof onConfirm === "function") {
@@ -464,21 +685,112 @@ export function MapPickerScreen({
     }
 
     const finalObj = {
+      ...initialLocation,
       ...resolvedAddr,
-      formatted_address: resolvedAddr?.formatted_address || address?.formatted_address || "Custom Location",
-      address_line1: resolvedAddr?.address_line1 || address?.address_line1 || address?.locality || "",
+      formatted_address: fullDisplay || "Custom Location",
+      address_line1: streetAddress,
+      street_address: streetAddress,
       locality: resolvedAddr?.locality || address?.locality || "",
-      city: resolvedAddr?.city || address?.city || "",
-      state: resolvedAddr?.state || address?.state || "",
-      pincode: resolvedAddr?.pincode || address?.pincode || "",
-      latitude: currentCenter.lat,
-      longitude: currentCenter.lng,
+      city: resolvedAddr?.city || address?.city || initialLocation?.city || "Hosur",
+      state: resolvedAddr?.state || address?.state || initialLocation?.state || "Tamil Nadu",
+      pincode: resolvedAddr?.pincode || address?.pincode || initialLocation?.pincode || "635109",
+      latitude: Number(currentCenter.lat),
+      longitude: Number(currentCenter.lng),
       zone_id: zoneStatus.zoneId || resolvedAddr?.zone_id || null,
-      zone_name: zoneStatus.zoneName || resolvedAddr?.zone_name || null,
-      flat_house_no: selectedAddressData?.flat_house_no || initialFlat,
-      landmark: selectedAddressData?.landmark || initialLandmark,
+      zone_name: zoneStatus.zoneName || resolvedAddr?.zone_name || "Hosur City",
+      flat_house_no: selectedAddressData?.flat_house_no || initialLocation?.flat_house_no || initialFlat || "",
+      landmark: selectedAddressData?.landmark || initialLocation?.landmark || initialLandmark || "",
+      location_source: initialLocation?.location_source || "map_pin",
+      geocoding_status: "verified",
+      address_type: initialLocation?.address_type || "Home"
     }
-    setSelectedAddressData(finalObj)
+
+    // If initialLocation had mode === 'details' or isNew or isEditing
+    if (initialLocation?.isNew || initialLocation?.isEditing || initialLocation?.mode === 'details') {
+      setSelectedAddressData(finalObj)
+      setStep("details")
+      return
+    }
+
+    // Direct confirm without requiring redundant form if address is already rich
+    const rawType = finalObj.address_type || finalObj.label || "Home"
+    const confirmedData = {
+      id: finalObj.id || finalObj.saved_address_id || `addr_${Date.now()}`,
+      address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
+      label: rawType.toLowerCase(),
+      flat_house_no: finalObj.flat_house_no || "",
+      address_line1: finalObj.address_line1 || finalObj.street_address || "",
+      street_address: finalObj.address_line1 || finalObj.street_address || "",
+      landmark: finalObj.landmark || "",
+      locality: finalObj.locality || "",
+      city: finalObj.city || "Hosur",
+      state: finalObj.state || "Tamil Nadu",
+      pincode: finalObj.pincode || "635109",
+      formatted_address: finalObj.formatted_address,
+      latitude: Number(currentCenter.lat),
+      longitude: Number(currentCenter.lng),
+      location_source: finalObj.location_source || "map_pin",
+      geocoding_status: "verified",
+      serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
+      zone_id: zoneStatus.zoneId || null,
+      zone_name: zoneStatus.zoneName || "Hosur City",
+      confirmed_at: new Date().toISOString()
+    }
+
+    if (typeof onConfirm === "function") {
+      onConfirm(confirmedData)
+    }
+    if (typeof onCenterChange === "function") {
+      onCenterChange(confirmedData.latitude, confirmedData.longitude, confirmedData)
+    }
+    if (typeof onClose === "function") {
+      onClose()
+    }
+  }
+
+  // ── Open AddressDetailsForm for doorstep edits (Flat/House No, Landmark, Label, Receiver) ──
+  const handleOpenDetailsForm = (resolvedAddr) => {
+    const targetAddr = resolvedAddr || address || initialLocation || {}
+    const fullDisplay = targetAddr.formatted_address || [
+      targetAddr.flat_house_no || targetAddr.house_number || initialFlat,
+      targetAddr.address_line1 || targetAddr.street_address,
+      targetAddr.landmark || initialLandmark,
+      targetAddr.locality,
+      targetAddr.city,
+      targetAddr.state,
+      targetAddr.pincode
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
+
+    const streetAddress = targetAddr.address_line1 || targetAddr.street_address || [targetAddr.flat_house_no || initialFlat, targetAddr.landmark || initialLandmark].filter(Boolean).join(", ") || fullDisplay.split(",")[0]
+
+    const detailsObj = {
+      ...initialLocation,
+      ...targetAddr,
+      id: targetAddr.id || initialLocation?.id || null,
+      address_id: targetAddr.id || initialLocation?.id || null,
+      saved_address_id: targetAddr.id || initialLocation?.id || null,
+      formatted_address: fullDisplay || "Custom Location",
+      address_line1: streetAddress,
+      street_address: streetAddress,
+      locality: targetAddr.locality || address?.locality || "",
+      city: targetAddr.city || address?.city || initialLocation?.city || "Hosur",
+      state: targetAddr.state || address?.state || initialLocation?.state || "Tamil Nadu",
+      pincode: targetAddr.pincode || address?.pincode || initialLocation?.pincode || "635109",
+      latitude: Number(currentCenter.lat),
+      longitude: Number(currentCenter.lng),
+      zone_id: zoneStatus.zoneId || targetAddr.zone_id || null,
+      zone_name: zoneStatus.zoneName || targetAddr.zone_name || "Hosur City",
+      flat_house_no: targetAddr.flat_house_no || targetAddr.house_number || initialLocation?.flat_house_no || initialFlat || "",
+      landmark: targetAddr.landmark || initialLocation?.landmark || initialLandmark || "",
+      location_source: initialLocation?.location_source || "map_pin",
+      geocoding_status: "verified",
+      address_type: targetAddr.address_type || targetAddr.label || initialLocation?.address_type || "Home",
+      label: (targetAddr.label || targetAddr.address_type || initialLocation?.label || "home").toLowerCase(),
+      receiver_name: targetAddr.receiver_name || initialLocation?.receiver_name || "",
+      receiver_phone: targetAddr.receiver_phone || initialLocation?.receiver_phone || ""
+    }
+
+    setSelectedAddressData(detailsObj)
     setStep("details")
   }
 
@@ -489,6 +801,7 @@ export function MapPickerScreen({
           <AddressDetailsForm
             addressData={selectedAddressData || {
               ...address,
+              ...initialLocation,
               latitude: currentCenter.lat,
               longitude: currentCenter.lng,
             }}
@@ -500,14 +813,28 @@ export function MapPickerScreen({
                 finalPayload.formatted_address || [finalPayload.locality, finalPayload.city, finalPayload.state, finalPayload.pincode].filter(Boolean).join(", ")
               ].filter(Boolean).join(", ")
 
+              const rawType = finalPayload.address_type || finalPayload.label || initialLocation?.address_type || "Home"
               const confirmedData = {
-                ...finalPayload,
+                id: finalPayload.id || finalPayload.saved_address_id || finalPayload.address_id || `addr_${Date.now()}`,
+                address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
+                label: rawType.toLowerCase(),
+                flat_house_no: finalPayload.flat_house_no || "",
+                address_line1: finalPayload.address_line1 || finalPayload.street_address || [finalPayload.flat_house_no, finalPayload.landmark].filter(Boolean).join(", "),
+                street_address: [finalPayload.flat_house_no, finalPayload.landmark].filter(Boolean).join(", "),
+                landmark: finalPayload.landmark || "",
+                locality: finalPayload.locality || "",
+                city: finalPayload.city || "Hosur",
+                state: finalPayload.state || "Tamil Nadu",
+                pincode: finalPayload.pincode || "635109",
                 formatted_address: fullDisplay,
-                address_line1: [finalPayload.flat_house_no, finalPayload.landmark].filter(Boolean).join(", "),
-                latitude: currentCenter.lat,
-                longitude: currentCenter.lng,
+                latitude: Number(currentCenter.lat),
+                longitude: Number(currentCenter.lng),
+                location_source: initialLocation?.location_source || "add_new",
+                geocoding_status: "verified",
+                serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
                 zone_id: zoneStatus.zoneId || finalPayload.zone_id || null,
-                zone_name: zoneStatus.zoneName || finalPayload.zone_name || null,
+                zone_name: zoneStatus.zoneName || finalPayload.zone_name || "Hosur City",
+                confirmed_at: new Date().toISOString()
               }
               if (typeof onConfirm === "function") {
                 onConfirm(confirmedData)
@@ -587,12 +914,12 @@ export function MapPickerScreen({
               <div
                 style={{
                   ...screenStyles.searchPill,
-                  borderColor: isOutOfZone ? "#fca5a5" : isServiceBlocked ? "#fde68a" : "#fed7aa",
+                  border: `1.5px solid ${isOutOfZone ? "#fca5a5" : isServiceBlocked ? "#fde68a" : "#a7f3d0"}`,
                   background: isOutOfZone ? "#fef2f2" : isServiceBlocked ? "#fffbeb" : "#fff",
                 }}
                 onClick={() => setShowSearchBox(true)}
               >
-                <MapPin size={16} style={{ color: isOutOfZone ? "#dc2626" : isServiceBlocked ? "#d97706" : "#ff5200" }} />
+                <MapPin size={16} style={{ color: isOutOfZone ? "#dc2626" : isServiceBlocked ? "#d97706" : "#00875A" }} />
                 <span style={screenStyles.searchPillText}>
                   {address?.city ? [address.city, address.state].filter(Boolean).join(", ") : (address?.formatted_address ? address.formatted_address.split(",").slice(0, 2).join(", ") : "Detecting Location...")}
                 </span>
@@ -614,7 +941,7 @@ export function MapPickerScreen({
               >
                 {isSearching && searchResults.length === 0 && (
                   <div style={screenStyles.searchingPlaceholder}>
-                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite", color: "#4f46e5", flexShrink: 0 }} />
+                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite", color: "#00875A", flexShrink: 0 }} />
                     <span>Searching for "{searchQuery}"...</span>
                   </div>
                 )}
@@ -630,7 +957,7 @@ export function MapPickerScreen({
                     style={screenStyles.searchResultItem}
                   >
                     <div style={screenStyles.resultIconBadge}>
-                      <MapPin size={15} color="#ff5200" />
+                      <MapPin size={15} color="#00875A" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={screenStyles.resultName}>{item.name}</div>
@@ -708,7 +1035,7 @@ export function MapPickerScreen({
               id="map-recenter-btn"
             >
               {isLocating ? (
-                <Loader2 size={18} style={{ color: "#ff5200", animation: "spin 1s linear infinite" }} />
+                <Loader2 size={18} style={{ color: "#00875A", animation: "spin 1s linear infinite" }} />
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="7" />
@@ -729,14 +1056,29 @@ export function MapPickerScreen({
             style={{ width: "100%", height: "100%" }}
             zoomControl={false}
             attributionControl={false}
+            preferCanvas={true}
+            inertia={true}
+            inertiaDeceleration={2400}
+            inertiaMaxSpeed={2000}
+            easeLinearity={0.25}
+            wheelPxPerZoomLevel={60}
+            wheelDebounceTime={25}
+            zoomAnimation={true}
+            fadeAnimation={true}
+            markerZoomAnimation={true}
             tap={false}
             ref={mapRef}
             whenReady={() => setMapReady(true)}
           >
             <TileLayer
-              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-              attribution="&copy; Google Maps"
+              url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              subdomains={["0", "1", "2", "3"]}
+              keepBuffer={8}
+              updateWhenIdle={false}
+              updateInterval={60}
+              maxNativeZoom={19}
               maxZoom={19}
+              attribution="&copy; Google Maps"
             />
 
             {/* Admin-defined Service Zone Overlays */}
@@ -748,8 +1090,8 @@ export function MapPickerScreen({
                     center={[zone.center_lat, zone.center_lng]}
                     radius={Number(zone.radius_meters || 5000)}
                     pathOptions={{
-                      color: zone.color || "#4F46E5",
-                      fillColor: zone.color || "#4F46E5",
+                      color: zone.color || "#00875A",
+                      fillColor: zone.color || "#00875A",
                       fillOpacity: 0.12,
                       weight: 2,
                       dashArray: "6, 6",
@@ -763,8 +1105,8 @@ export function MapPickerScreen({
                     key={zone.id}
                     positions={zone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])}
                     pathOptions={{
-                      color: zone.color || "#4F46E5",
-                      fillColor: zone.color || "#4F46E5",
+                      color: zone.color || "#00875A",
+                      fillColor: zone.color || "#00875A",
                       fillOpacity: 0.12,
                       weight: 2,
                       dashArray: "6, 6",
@@ -786,6 +1128,7 @@ export function MapPickerScreen({
         {/* ── Address bottom sheet with unified saved addresses, GPS & confirm ── */}
         <AddressBottomSheet
           address={address}
+          initialLocation={initialLocation}
           loading={geoLoading}
           error={geoError}
           zoneStatus={zoneStatus}
@@ -793,9 +1136,22 @@ export function MapPickerScreen({
           onManualSearch={() => setShowSearchBox(true)}
           onUseCurrentLocation={handleRecenter}
           onSelectSavedAddress={handleSelectSavedAddress}
-          onEditDetails={handleConfirmLocation}
+          onEditDetails={handleOpenDetailsForm}
         />
 
+        <style>{`
+          .leaflet-container {
+            touch-action: pan-x pan-y !important;
+            cursor: grab !important;
+            -webkit-tap-highlight-color: transparent;
+          }
+          .leaflet-container:active {
+            cursor: grabbing !important;
+          }
+          .leaflet-tile-container img {
+            will-change: transform;
+          }
+        `}</style>
       </div>
     </div>
   )
@@ -877,7 +1233,7 @@ const screenStyles = {
     display: "flex", alignItems: "center", gap: 8,
     padding: "0.5rem 0.85rem",
     background: "#f8fafc",
-    border: "1.5px solid #4f46e5",
+    border: "1.5px solid #00875A",
     borderRadius: 14,
   },
   searchInput: {
@@ -891,7 +1247,7 @@ const screenStyles = {
   },
   goSearchBtn: {
     padding: "4px 10px",
-    background: "#4f46e5",
+    background: "#00875A",
     color: "#ffffff",
     border: "none",
     borderRadius: 8,
@@ -899,7 +1255,7 @@ const screenStyles = {
     fontWeight: 700,
     cursor: "pointer",
     flexShrink: 0,
-    boxShadow: "0 2px 6px rgba(79, 70, 229, 0.3)",
+    boxShadow: "0 2px 6px rgba(0, 135, 90, 0.3)",
   },
   searchResultsDropdown: {
     position: "absolute", top: "100%", left: 0, right: 0,
@@ -923,7 +1279,7 @@ const screenStyles = {
   },
   resultIconBadge: {
     width: 32, height: 32, borderRadius: "50%",
-    background: "#fff7ed", display: "flex",
+    background: "#ecfdf5", display: "flex",
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   resultName: {
@@ -937,9 +1293,9 @@ const screenStyles = {
     display: "flex", alignItems: "center", gap: 10,
     padding: "0.625rem 1rem",
     background: "#fff",
-    border: "1.5px solid #fed7aa",
+    border: "1.5px solid #a7f3d0",
     borderRadius: 16,
-    boxShadow: "0 2px 8px rgba(255,82,0,0.06)",
+    boxShadow: "0 2px 8px rgba(0, 135, 90, 0.08)",
     cursor: "pointer",
   },
   searchPillText: {
@@ -947,7 +1303,7 @@ const screenStyles = {
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   },
   changeBtn: {
-    fontSize: "0.84rem", fontWeight: 800, color: "#ff5200",
+    fontSize: "0.84rem", fontWeight: 800, color: "#00875A",
     background: "none", border: "none", cursor: "pointer", flexShrink: 0,
   },
   mapWrapper: {

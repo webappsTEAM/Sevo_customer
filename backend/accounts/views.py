@@ -8,8 +8,8 @@ from django.db.models import Q
 from companies.models import Company
 from settings_hub.models import TeamInvite
 
-from rest_framework import permissions, serializers, status
-from rest_framework.exceptions import ValidationError
+from rest_framework import permissions, serializers, status, exceptions
+from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -1554,24 +1554,36 @@ def _ce(message, status_code=400):
 
 def _serialize_address(addr):
     serviceability = customer_services.check_address_serviceability(addr)
+    lat_val = float(addr.latitude) if addr.latitude is not None else None
+    lng_val = float(addr.longitude) if addr.longitude is not None else None
+    loc_available = bool(lat_val is not None and lng_val is not None)
+
     return {
         "id":                    addr.pk,
         "label":                 addr.label,
+        "address_type":          addr.label,
         "label_display":         addr.get_label_display(),
         "address_line1":         addr.address_line1,
+        "street_address":        addr.address_line1,
         "address_line2":         addr.address_line2,
-        "formatted_address":     addr.formatted_address or "",
+        "formatted_address":     addr.formatted_address or f"{addr.address_line1}, {addr.city}, {addr.state} {addr.pincode}",
         "flat_house_no":         addr.flat_house_no or "",
         "landmark":              addr.landmark or "",
         "locality":              addr.locality or "",
         "city":                  addr.city,
         "state":                 addr.state,
         "pincode":               addr.pincode,
+        "country":               addr.country or "India",
         "phone_number":          addr.phone_number or "",
         "receiver_name":         addr.receiver_name or "",
         "receiver_phone":        addr.receiver_phone or "",
-        "latitude":              str(addr.latitude) if addr.latitude is not None else None,
-        "longitude":             str(addr.longitude) if addr.longitude is not None else None,
+        "latitude":              lat_val,
+        "longitude":             lng_val,
+        "location_available":    loc_available,
+        "location_source":       addr.location_source or ("device_gps" if loc_available else "geocoding"),
+        "geocoded_at":           addr.geocoded_at.isoformat() if addr.geocoded_at else None,
+        "geocoding_status":      addr.geocoding_status or ("verified" if loc_available else "failed"),
+        "location_confirmed_at": addr.location_confirmed_at.isoformat() if getattr(addr, "location_confirmed_at", None) else None,
         "is_default":            addr.is_default,
         "last_used_at":          addr.last_used_at.isoformat() if addr.last_used_at else None,
         "serviceable":           serviceability.get("available", True),
@@ -1594,9 +1606,8 @@ class CustomerProfileUpdateView(APIView):
     """PATCH /api/auth/customer/profile/ — Update own profile fields."""
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
     parser_classes = [FormParser, MultiPartParser, JSONParserClass]
-
     def patch(self, request):
-        allowed = {"first_name", "last_name", "phone", "email", "avatar", "last_known_location"}
+        allowed = {"first_name", "last_name", "phone", "email", "bio", "language", "timezone", "last_known_location"}
         payload = {k: v for k, v in request.data.items() if k in allowed}
 
         try:
@@ -1676,68 +1687,115 @@ class CustomerAddressListCreateView(APIView):
         return _cs([_serialize_address(a) for a in addresses])
 
     def post(self, request):
-        flat_house_no = str(request.data.get("flat_house_no") or "").strip()
-        formatted_address = str(request.data.get("formatted_address") or "").strip()
-        address_line1 = str(request.data.get("address_line1") or "").strip() or flat_house_no or formatted_address or "Address"
-        flat_house_no = flat_house_no or address_line1
-
-        city = str(request.data.get("city") or "").strip() or str(request.data.get("locality") or "").strip() or "Hosur"
-        state = str(request.data.get("state") or "").strip() or "Tamil Nadu"
-
-        import re
+        street_address = str(
+            request.data.get("address_line1")
+            or request.data.get("street_address")
+            or request.data.get("flat_house_no")
+            or ""
+        ).strip()
+        landmark = str(
+            request.data.get("address_line2")
+            or request.data.get("landmark")
+            or request.data.get("locality")
+            or ""
+        ).strip()
+        city = str(request.data.get("city") or "").strip()
+        state = str(request.data.get("state") or "").strip()
         pincode = str(request.data.get("pincode") or "").strip()
-        clean_pincode = re.sub(r"\D", "", pincode)
-        if len(clean_pincode) == 6:
-            pincode = clean_pincode
-        elif not pincode or not re.match(r"^\d{6}$", pincode):
-            pincode = clean_pincode if (clean_pincode and len(clean_pincode) >= 4) else "635109"
-
-        receiver_phone = str(request.data.get("receiver_phone") or request.data.get("phone_number") or "").strip()
-        if receiver_phone:
-            clean_phone = re.sub(r"[\s\-\(\)]+", "", receiver_phone)
-            clean_phone = re.sub(r"^(\+91|91|0)", "", clean_phone)
-            if len(clean_phone) >= 10:
-                receiver_phone = clean_phone[-10:]
-            else:
-                receiver_phone = clean_phone
-        if not receiver_phone:
-            receiver_phone = str(getattr(request.user, "phone", "") or getattr(request.user, "mobile_number", "") or "")
-
-        receiver_name = str(request.data.get("receiver_name") or "").strip() or request.user.get_full_name() or request.user.username or "Customer"
-
-        raw_label = str(request.data.get("label") or "").strip().lower()
-        if raw_label in ["home", "work", "other"]:
-            label = raw_label
-        elif raw_label:
-            label = "other"
-        else:
+        country = str(request.data.get("country") or "India").strip()
+        label = str(request.data.get("label") or request.data.get("address_type") or "home").strip().lower()
+        if label not in ["home", "work", "other"]:
             label = "home"
 
-        def _clean_coord(val):
-            if val is None or val == "":
-                return None
-            try:
-                return round(float(val), 6)
-            except (ValueError, TypeError):
-                return None
+        receiver_name = str(request.data.get("receiver_name") or request.user.get_full_name() or "").strip()
+        receiver_phone = str(request.data.get("receiver_phone") or request.data.get("phone_number") or request.user.phone or "").strip()
+
+        # Step 1: Validate required address components
+        missing_fields = []
+        if not street_address:
+            missing_fields.append("street address")
+        if not city:
+            missing_fields.append("city")
+        if not state:
+            missing_fields.append("state")
+        if not pincode:
+            missing_fields.append("pincode")
+
+        if missing_fields:
+            return _ce(f"Please enter complete address details. Missing: {', '.join(missing_fields)}.", 400)
+
+        # Validate 6-digit Indian pincode format
+        import re
+        clean_pincode = re.sub(r"\D", "", pincode)
+        if not re.match(r"^\d{6}$", clean_pincode):
+            return _ce("Please enter a valid 6-digit Indian postal code (pincode).", 400)
+        pincode = clean_pincode
+
+        # Step 2 & 3: Geocode and resolve real coordinates
+        from service_requests.services.address_service import AddressService
+        from django.utils import timezone
+        raw_lat = request.data.get("latitude")
+        raw_lng = request.data.get("longitude")
+        location_source = str(request.data.get("location_source") or "").strip()
+        location_confirmed_at = None
+
+        # Check if legitimate device GPS coordinates or map-confirmed coordinates were supplied
+        if location_source in ("device_gps", "map_confirmed") and raw_lat is not None and raw_lng is not None:
+            if AddressService.validate_coordinates(raw_lat, raw_lng, country=country):
+                lat = round(float(raw_lat), 6)
+                lng = round(float(raw_lng), 6)
+                formatted_address = str(request.data.get("formatted_address") or "").strip()
+                if not formatted_address:
+                    formatted_address = f"{street_address}, {landmark + ', ' if landmark else ''}{city}, {state}, {pincode}, {country}"
+                geocoded_at = timezone.now()
+                geocoding_status = "verified"
+                if location_source == "map_confirmed":
+                    location_confirmed_at = timezone.now()
+            else:
+                lat = None
+                lng = None
+                formatted_address = f"{street_address}, {landmark + ', ' if landmark else ''}{city}, {state}, {pincode}, {country}"
+                geocoded_at = timezone.now()
+                geocoding_status = "failed"
+        else:
+            # Backend Geocoding Engine
+            geo_res = AddressService.resolve_address_coordinates(
+                street_address=street_address,
+                landmark=landmark,
+                city=city,
+                state=state,
+                pincode=pincode,
+                country=country,
+            )
+            lat = geo_res.get("latitude")
+            lng = geo_res.get("longitude")
+            formatted_address = geo_res.get("formatted_address")
+            location_source = geo_res.get("location_source", "geocoding")
+            geocoding_status = geo_res.get("geocoding_status", "failed")
+            geocoded_at = geo_res.get("geocoded_at")
 
         data = {
-            "label":             label,
-            "address_line1":     address_line1,
-            "address_line2":     str(request.data.get("address_line2") or ""),
-            "formatted_address": formatted_address,
-            "flat_house_no":     flat_house_no,
-            "landmark":          str(request.data.get("landmark") or ""),
-            "locality":          str(request.data.get("locality") or ""),
-            "city":              city,
-            "state":             state,
-            "pincode":           pincode,
-            "phone_number":      receiver_phone,
-            "receiver_name":     receiver_name,
-            "receiver_phone":    receiver_phone,
-            "latitude":          _clean_coord(request.data.get("latitude")),
-            "longitude":         _clean_coord(request.data.get("longitude")),
-            "is_default":        bool(request.data.get("is_default", False)),
+            "label":                 label,
+            "address_line1":         street_address,
+            "address_line2":         landmark,
+            "formatted_address":     formatted_address,
+            "flat_house_no":         street_address,
+            "landmark":              landmark,
+            "locality":              str(request.data.get("locality") or ""),
+            "city":                  city,
+            "state":                 state,
+            "pincode":               pincode,
+            "country":               country,
+            "phone_number":          receiver_phone,
+            "receiver_name":         receiver_name,
+            "receiver_phone":        receiver_phone,
+            "latitude":              lat,
+            "longitude":             lng,
+            "location_source":       location_source,
+            "geocoded_at":           geocoded_at,
+            "geocoding_status":      geocoding_status,
+            "location_confirmed_at": location_confirmed_at,
+            "is_default":            bool(request.data.get("is_default", False)),
         }
 
         try:
@@ -1752,7 +1810,7 @@ class CustomerAddressDetailView(APIView):
     """
     GET    /api/auth/customer/addresses/<id>/ — retrieve one address.
     PATCH  /api/auth/customer/addresses/<id>/ — update fields.
-    DELETE /api/auth/customer/addresses/<id>/ — delete (blocked if active booking or default).
+    DELETE /api/auth/customer/addresses/<id>/ — delete.
     """
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
@@ -1764,20 +1822,72 @@ class CustomerAddressDetailView(APIView):
             return _ce("Address not found.", 404)
 
     def patch(self, request, pk):
-        allowed = {"label", "address_line1", "address_line2", "city", "state", "pincode",
-                   "phone_number", "latitude", "longitude", "is_default"}
+        from django.utils import timezone
+        allowed = {
+            "label", "address_line1", "street_address", "address_line2", "landmark",
+            "city", "state", "pincode", "country", "phone_number", "receiver_name",
+            "receiver_phone", "latitude", "longitude", "is_default", "location_source",
+            "geocoding_status", "location_confirmed_at"
+        }
         payload = {k: v for k, v in request.data.items() if k in allowed}
+
+        # Map aliases
+        if "street_address" in payload and "address_line1" not in payload:
+            payload["address_line1"] = payload.pop("street_address")
+        if "landmark" in payload and "address_line2" not in payload:
+            payload["address_line2"] = payload["landmark"]
+
+        # Validate 6-digit pincode if pincode is updated
+        if "pincode" in payload:
+            import re
+            clean_pin = re.sub(r"\D", "", str(payload["pincode"]))
+            if not re.match(r"^\d{6}$", clean_pin):
+                return _ce("Please enter a valid 6-digit pincode.", 400)
+            payload["pincode"] = clean_pin
+
+        # If map confirmed
+        if payload.get("location_source") == "map_confirmed":
+            payload["location_confirmed_at"] = timezone.now()
+            payload["geocoding_status"] = "verified"
+
+        # If address components changed and coordinates were not explicitly passed, re-geocode
+        address_changed = any(f in payload for f in ["address_line1", "address_line2", "city", "state", "pincode"])
+        if address_changed and "latitude" not in payload and "longitude" not in payload:
+            try:
+                curr = request.user.saved_addresses.get(pk=pk)
+                street = payload.get("address_line1", curr.address_line1)
+                lmark = payload.get("address_line2", curr.landmark)
+                c_city = payload.get("city", curr.city)
+                c_state = payload.get("state", curr.state)
+                c_pin = payload.get("pincode", curr.pincode)
+                c_country = payload.get("country", curr.country)
+
+                from service_requests.services.address_service import AddressService
+                geo = AddressService.resolve_address_coordinates(street, lmark, c_city, c_state, c_pin, c_country)
+                payload["latitude"] = geo.get("latitude")
+                payload["longitude"] = geo.get("longitude")
+                payload["formatted_address"] = geo.get("formatted_address")
+                payload["location_source"] = geo.get("location_source", "geocoding")
+                payload["geocoding_status"] = geo.get("geocoding_status", "failed")
+                payload["geocoded_at"] = geo.get("geocoded_at")
+            except Exception:
+                pass
+
         try:
             addr = customer_services.update_saved_address(request.user, pk, payload)
             return _cs(_serialize_address(addr), message="Address updated.")
+        except (SavedAddress.DoesNotExist, exceptions.NotFound):
+            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            return _ce(str(detail), 400)
 
     def delete(self, request, pk):
         try:
             customer_services.delete_saved_address(request.user, pk)
             return _cs(message="Address deleted.")
+        except (SavedAddress.DoesNotExist, exceptions.NotFound):
+            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
             if isinstance(detail, dict) and "detail" in detail:
@@ -1786,16 +1896,18 @@ class CustomerAddressDetailView(APIView):
 
 
 class CustomerAddressSetDefaultView(APIView):
-    """POST /api/auth/customer/addresses/<id>/set-default/ — make one address the default."""
+    """POST /api/auth/customer/addresses/<id>/set-default/ or /default/ — make one address the default."""
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
     def post(self, request, pk):
         try:
             addr = customer_services.set_default_address(request.user, pk)
             return _cs(_serialize_address(addr), message="Default address updated.")
+        except (SavedAddress.DoesNotExist, exceptions.NotFound):
+            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            return _ce(str(detail), 400)
 
 
 class CustomerAddressServiceabilityView(APIView):
@@ -1807,7 +1919,7 @@ class CustomerAddressServiceabilityView(APIView):
             addr = request.user.saved_addresses.get(pk=pk)
             res = customer_services.check_address_serviceability(addr)
             return _cs(res)
-        except SavedAddress.DoesNotExist:
+        except (SavedAddress.DoesNotExist, exceptions.NotFound):
             return _ce("Address not found.", 404)
 
 
@@ -1819,6 +1931,8 @@ class CustomerAddressMarkUsedView(APIView):
         try:
             addr = customer_services.mark_address_used(request.user, pk)
             return _cs(_serialize_address(addr), message="Address marked as used.")
+        except (SavedAddress.DoesNotExist, exceptions.NotFound):
+            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            return _ce(str(detail), 400)
