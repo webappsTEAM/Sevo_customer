@@ -10905,6 +10905,8 @@ const PAINTING_DETAILS_EXTRA = {
 };
 
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData, setLocation, setFormData, formData, dbCatalogPackages }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState(null);
   const [searchQuery, setSearchQuery] = useState("")
@@ -10931,8 +10933,6 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
   const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
   const currentFee = distanceKm > 15 ? 300 : 0;
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
   useEffect(() => {
     const t = setInterval(() => setPaintSearchRotateIdx(i => (i + 1) % PAINT_SEARCH_HINTS.length), 2800);
