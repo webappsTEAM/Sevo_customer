@@ -194,6 +194,14 @@ def update_customer_profile(user, validated_data):
     for field, value in validated_data.items():
         if field not in allowed_fields or field == "avatar":
             continue
+        if field == "email" and value:
+            val_clean = str(value).strip().lower()
+            from django.contrib.auth import get_user_model
+            from rest_framework.exceptions import ValidationError
+            User = get_user_model()
+            if User.objects.filter(email__iexact=val_clean).exclude(pk=user.pk).exists():
+                raise ValidationError("A user with this email address already exists.")
+            value = val_clean
         setattr(user, field, value)
         update_fields.append(field)
 
@@ -234,16 +242,51 @@ def list_saved_addresses(user):
 
 def create_saved_address(user, validated_data):
     """
-    Create a new saved address.
+    Create a new saved address or update existing if duplicate.
     If is_default=True, unset all other defaults for this user first inside an atomic transaction.
     Enforces max 10 addresses per customer.
     """
-    if user.saved_addresses.count() >= 10:
-        raise ValidationError({"detail": "Maximum of 10 saved addresses allowed."})
+    line1_clean = str(validated_data.get("address_line1") or "").strip().lower()
+    pin_clean = str(validated_data.get("pincode") or "").strip()
+    lat = validated_data.get("latitude")
+    lng = validated_data.get("longitude")
+    label_clean = str(validated_data.get("label") or "").strip().lower()
+
+    existing = None
+    if line1_clean and pin_clean:
+        existing = user.saved_addresses.filter(
+            address_line1__iexact=line1_clean,
+            pincode=pin_clean
+        ).first()
+
+    if not existing and lat is not None and lng is not None:
+        try:
+            existing = user.saved_addresses.filter(
+                latitude__gte=float(lat) - 0.0001,
+                latitude__lte=float(lat) + 0.0001,
+                longitude__gte=float(lng) - 0.0001,
+                longitude__lte=float(lng) + 0.0001,
+            ).first()
+        except Exception:
+            pass
 
     is_default = validated_data.get("is_default", False)
 
     with transaction.atomic():
+        if existing:
+            # Update existing duplicate record
+            for k, v in validated_data.items():
+                if k != "is_default" and v is not None:
+                    setattr(existing, k, v)
+            if is_default:
+                user.saved_addresses.filter(is_default=True).exclude(pk=existing.pk).update(is_default=False)
+                existing.is_default = True
+            existing.save()
+            return existing
+
+        if user.saved_addresses.count() >= 10:
+            raise ValidationError({"detail": "Maximum of 10 saved addresses allowed."})
+
         if is_default:
             user.saved_addresses.filter(is_default=True).update(is_default=False)
         elif not user.saved_addresses.exists():
@@ -284,25 +327,6 @@ def delete_saved_address(user, address_id):
     If deleting default address while other addresses exist, automatically reassign default to the next address.
     """
     address = _get_address_or_404(user, address_id)
-
-    # 1. Check active booking reference
-    NON_ACTIVE_STATUSES = {"closed", "rejected", "completed", "cancelled"}
-    try:
-        from service_requests.models import ServiceRequest
-        active_count = ServiceRequest.objects.filter(
-            customer=user,
-        ).filter(
-            address__icontains=address.address_line1
-        ).exclude(status__in=NON_ACTIVE_STATUSES).count()
-
-        if active_count > 0:
-            raise ValidationError({
-                "detail": f"Cannot delete address: it is currently referenced by {active_count} active booking(s)."
-            })
-    except ValidationError:
-        raise
-    except Exception:
-        pass
 
     was_default = address.is_default
     address.delete()

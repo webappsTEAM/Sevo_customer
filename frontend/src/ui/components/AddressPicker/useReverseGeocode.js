@@ -13,8 +13,15 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { apiRequest } from "../../../api/client.js"
 
-// Debounce window in ms — avoids firing on every intermediate idle after fast drags
-const DEBOUNCE_MS = 500
+// In-memory geocode cache for instantaneous resolution when panning over visited areas
+const geoCache = new Map()
+
+// Debounce window in ms — fast enough to feel immediate, while avoiding network spam during continuous drag
+const DEBOUNCE_MS = 180
+
+function getCacheKey(lat, lng) {
+  return `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`
+}
 
 /**
  * @param {{ lat: number, lng: number } | null} coords
@@ -24,7 +31,13 @@ const DEBOUNCE_MS = 500
  *   { formatted_address, locality, city, state, pincode, country, latitude, longitude }
  */
 export function useReverseGeocode(coords) {
-  const [address, setAddress] = useState(null)
+  const [address, setAddress] = useState(() => {
+    if (coords?.lat && coords?.lng) {
+      const key = getCacheKey(coords.lat, coords.lng)
+      return geoCache.get(key) || null
+    }
+    return null
+  })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
 
@@ -33,6 +46,13 @@ export function useReverseGeocode(coords) {
   const debounceRef = useRef(null)
 
   const fetchGeocode = useCallback(async (lat, lng, signal) => {
+    const key = getCacheKey(lat, lng)
+    if (geoCache.has(key)) {
+      setAddress(geoCache.get(key))
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -143,9 +163,10 @@ export function useReverseGeocode(coords) {
       if (signal.aborted) return
 
       if (resolvedData) {
+        geoCache.set(getCacheKey(lat, lng), resolvedData)
         setAddress(resolvedData)
       } else {
-        setAddress({
+        const fallback = {
           formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
           locality: `Current GPS Location`,
           city: "",
@@ -153,7 +174,9 @@ export function useReverseGeocode(coords) {
           pincode: "",
           latitude: lat,
           longitude: lng,
-        })
+        }
+        geoCache.set(getCacheKey(lat, lng), fallback)
+        setAddress(fallback)
       }
     } catch (err) {
       if (err?.name === "AbortError" || signal.aborted) return

@@ -15,11 +15,8 @@ import {
   apiRequestCustomerOTP,
   apiVerifyCustomerOTP,
   apiCompleteCustomerProfile,
-  apiUpdateCustomerLastLocation,
-  apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
-import { LocationPermissionHandler } from "./AddressPicker"
 
 const MODAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -214,15 +211,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [customerId, setCustomerId] = useState(null)
   const [fullName, setFullName] = useState("")
   const [secondIdentifier, setSecondIdentifier] = useState("")
-  const [manualLocationInput, setManualLocationInput] = useState("")
-  const [showManualLocation, setShowManualLocation] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
   const [successToast, setSuccessToast] = useState("")
   const [attemptsRemaining, setAttemptsRemaining] = useState(null)
   const [devOtp, setDevOtp] = useState("")
   const [resendCooldown, setResendCooldown] = useState(30)
-  const [showMapPicker, setShowMapPicker] = useState(false)
 
   const otpInputRefs = useRef([])
   const isVerifyingRef = useRef(false)
@@ -239,15 +233,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       setCustomerId(null)
       setFullName("")
       setSecondIdentifier("")
-      setManualLocationInput("")
-      setShowManualLocation(false)
       setLoading(false)
       setErrorMsg("")
       setSuccessToast("")
       setAttemptsRemaining(null)
       setDevOtp("")
       setResendCooldown(30)
-      setShowMapPicker(false)
     }
   }, [isOpen])
 
@@ -416,14 +407,19 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   }
 
   // ── 5. Profile Completion (Step 3) ────────────────────────────────────────
+  // secondIdentifier (email when phone was used, or vice versa) is OPTIONAL.
+  // The backend apiCompleteCustomerProfile accepts an empty profileArgs object.
   const secondChannel = channel === "EMAIL" ? "PHONE" : "EMAIL"
-  const isSecondIdentifierValid = secondChannel === "EMAIL"
-    ? EMAIL_RE.test(secondIdentifier.trim())
-    : /^[6-9]\d{9}$/.test(secondIdentifier.trim())
+  const secondIdentifierTrimmed = secondIdentifier.trim()
+  const isSecondIdentifierValid = !secondIdentifierTrimmed || (
+    secondChannel === "EMAIL"
+      ? EMAIL_RE.test(secondIdentifierTrimmed)
+      : /^[6-9]\d{9}$/.test(secondIdentifierTrimmed)
+  )
 
   const handleCompleteProfile = async () => {
     if (!fullName.trim()) { setErrorMsg("Full Name is required."); return }
-    if (!isSecondIdentifierValid) {
+    if (secondIdentifierTrimmed && !isSecondIdentifierValid) {
       setErrorMsg(secondChannel === "EMAIL" ? "Please enter a valid email address." : "Please enter a valid 10-digit mobile number.")
       return
     }
@@ -431,12 +427,19 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     setErrorMsg("")
 
     try {
-      const profileArgs = secondChannel === "EMAIL"
-        ? { email: secondIdentifier.trim() }
-        : { phone: secondIdentifier.trim() }
+      // Build optional profile args — only include second identifier if provided
+      const profileArgs = {}
+      if (secondIdentifierTrimmed) {
+        if (secondChannel === "EMAIL") profileArgs.email = secondIdentifierTrimmed
+        else profileArgs.phone = secondIdentifierTrimmed
+      }
       const res = await apiCompleteCustomerProfile(customerId, fullName.trim(), profileArgs)
       if (res && res.success) {
-        setStep(4)
+        // Profile complete — refresh session and close modal immediately.
+        // Location/address is handled by the booking flow, NOT here.
+        if (typeof refreshMe === "function") await refreshMe()
+        if (typeof onComplete === "function") onComplete()
+        onClose()
       } else {
         setErrorMsg(res?.error?.message || "Failed to complete profile.")
       }
@@ -447,31 +450,10 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     }
   }
 
-  // ── 6. Location Handler (Step 4) ──────────────────────────────────────────
-  const handleFinishFlow = async (savedLoc = null) => {
-    if (typeof refreshMe === "function") await refreshMe()
-    if (typeof onComplete === "function") onComplete(savedLoc)
-    onClose()
-  }
-
-  const handleSaveManualLocation = async () => {
-    if (!manualLocationInput.trim()) { setErrorMsg("Please enter a location."); return }
-    setLoading(true)
-    try {
-      await apiUpdateCustomerLastLocation({ label: manualLocationInput.trim(), manual: true, updated_at: new Date().toISOString() })
-    } catch (e) {
-      console.warn("Location save warning:", e)
-    } finally {
-      setLoading(false)
-      await handleFinishFlow({ label: manualLocationInput.trim() })
-    }
-  }
-
   const STEP_TITLES = {
     1: { title: "Welcome Back", sub: channel === "EMAIL" ? "Enter your email address to receive an instant verification code" : "Enter your mobile number to receive an instant verification code" },
     2: { title: "Verify OTP", sub: channel === "EMAIL" ? `6-digit verification code sent to ${emailInput}` : `6-digit verification code sent to +91 ${mobileNumber}` },
-    3: { title: "Create Profile", sub: "Tell us your name to personalize your service experience" },
-    4: { title: "Service Location", sub: "Set your location to discover verified professionals in your area" },
+    3: { title: "Create Profile", sub: "Just your name — we'll handle the rest" },
   }
 
   const initials = fullName.trim().split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2) || null
@@ -510,14 +492,14 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
             {/* Step Progress Tracker */}
             <div className="cef-progress-row">
               <div className="cef-progress-dots">
-                {[1, 2, 3, 4].map(s => (
+                {[1, 2, 3].map(s => (
                   <div
                     key={s}
                     className={`cef-dot-item ${step === s ? "active" : step > s ? "done" : ""}`}
                   />
                 ))}
               </div>
-              <span className="cef-step-count">Step {step} of 4</span>
+              <span className="cef-step-count">Step {step} of {step === 3 ? "3" : "3"}</span>
             </div>
 
             {/* Error & Success Messages */}
@@ -774,7 +756,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                 <div className="cef-single-input-card">
                   <label className="cef-label-tag">
                     <span>{secondChannel === "EMAIL" ? "Email Address" : "Mobile Number"}</span>
-                    <span className="cef-req-star">*</span>
+                    <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, marginLeft: 4 }}>Optional</span>
                   </label>
                   {secondChannel === "EMAIL" ? (
                     <Mail size={16} className="cef-single-icon" />
@@ -789,7 +771,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                       setSecondIdentifier(e.target.value)
                       if (errorMsg) setErrorMsg("")
                     }}
-                    placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com" : "10-digit mobile number"}
+                    placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com (optional)" : "10-digit mobile (optional)"}
                   />
                 </div>
 
@@ -803,125 +785,17 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                     <RefreshCcw size={16} className="animate-spin" />
                   ) : (
                     <>
-                      <span>Continue to Location</span>
-                      <ChevronRight size={16} strokeWidth={2.5} />
+                      <span>Complete Setup</span>
+                      <Check size={16} strokeWidth={2.5} />
                     </>
                   )}
                 </button>
               </motion.div>
             )}
 
-            {/* STEP 4: Location */}
-            {step === 4 && (
-              <motion.div key="s4" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
-                {!showManualLocation ? (
-                  <>
-                    <div
-                      onClick={() => setShowMapPicker(true)}
-                      style={{ border: "1.5px solid #e2e8f0", borderRadius: 16, padding: "1.05rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", cursor: "pointer", background: "#ffffff", marginBottom: "0.85rem", transition: "all 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}
-                    >
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: "#ecfdf5", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669", flexShrink: 0 }}>
-                        <Compass size={22} strokeWidth={2.2} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Use Current Location</div>
-                        <div style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 500 }}>Auto-detect via GPS map</div>
-                      </div>
-                      <ChevronRight size={16} style={{ color: "#94a3b8" }} />
-                    </div>
-
-                    <div
-                      onClick={() => setShowManualLocation(true)}
-                      style={{ border: "1.5px solid #e2e8f0", borderRadius: 16, padding: "1.05rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", cursor: "pointer", background: "#ffffff", marginBottom: "0.85rem", transition: "all 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}
-                    >
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", flexShrink: 0 }}>
-                        <Search size={20} strokeWidth={2.2} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Enter Location Manually</div>
-                        <div style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 500 }}>Type your city, area or pincode</div>
-                      </div>
-                      <ChevronRight size={16} style={{ color: "#94a3b8" }} />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleFinishFlow()}
-                      style={{ width: "100%", background: "none", border: "none", padding: "0.6rem", fontSize: "0.8rem", fontWeight: 700, color: "#94a3b8", cursor: "pointer", textAlign: "center", marginTop: "0.25rem", fontFamily: "inherit" }}
-                    >
-                      Skip for now
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", fontWeight: 700, color: "#059669", background: "none", border: "none", cursor: "pointer", marginBottom: "0.9rem", padding: 0, fontFamily: "inherit" }}
-                      onClick={() => { setShowManualLocation(false); setErrorMsg(""); }}
-                    >
-                      <ArrowLeft size={14} /> Back to options
-                    </button>
-
-                    <div className="cef-single-input-card">
-                      <label className="cef-label-tag">
-                        <span>City or Area Name</span>
-                        <span className="cef-req-star">*</span>
-                      </label>
-                      <MapPin size={16} className="cef-single-icon" />
-                      <input
-                        type="text"
-                        className="cef-single-field"
-                        value={manualLocationInput}
-                        onChange={e => {
-                          setManualLocationInput(e.target.value)
-                          if (errorMsg) setErrorMsg("")
-                        }}
-                        onKeyDown={e => { if (e.key === "Enter" && manualLocationInput.trim()) handleSaveManualLocation() }}
-                        placeholder="e.g. Koramangala, Bangalore"
-                        autoFocus
-                      />
-                    </div>
-
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button
-                        type="button"
-                        style={{ flex: 1, height: 48, border: "1.5px solid #cbd5e1", borderRadius: 14, background: "#f1f5f9", fontWeight: 700, fontSize: "0.88rem", color: "#334155", cursor: "pointer", fontFamily: "inherit" }}
-                        onClick={() => setShowManualLocation(false)}
-                      >
-                        Back
-                      </button>
-                      <button
-                        type="button"
-                        className="cef-btn-primary-green"
-                        style={{ flex: 2, height: 48 }}
-                        disabled={loading || !manualLocationInput.trim()}
-                        onClick={handleSaveManualLocation}
-                      >
-                        {loading ? <RefreshCcw size={16} className="animate-spin" /> : "Save Location"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            )}
           </div>
         </motion.div>
       </div>
-
-      {/* Map Picker Modal */}
-      {showMapPicker && (
-        <LocationPermissionHandler
-          onClose={() => setShowMapPicker(false)}
-          onManualSearch={() => {
-            setShowMapPicker(false)
-            setShowManualLocation(true)
-          }}
-          onLocationConfirmed={(savedAddress) => {
-            setShowMapPicker(false)
-            handleFinishFlow(savedAddress)
-          }}
-        />
-      )}
     </>
   )
 }

@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronLeft, ArrowLeft, Clock, Calendar, Camera,
   Upload, AlertCircle, Check, X, Info, Zap, Lock, Settings,
   Droplets, Wind, Bug, Brush, Cpu, Hammer, Package, Sparkles,
-  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass, Building2,
+  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass, Building2, Briefcase,
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
@@ -19,11 +19,12 @@ import {
   apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { usePendingIntent } from "../../hooks/usePendingIntent.js"
+import { setCustomerSelectedAddress, getCustomerSelectedAddress, getCustomerLocation, getCustomerCoordinates } from "../../utils/customerLocationStorage.js"
 import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest } from "../../api/client.js"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
-import { LocationPermissionHandler, MapPickerScreen } from "../components/AddressPicker/index.js"
+import { LocationPermissionHandler, MapPickerScreen, SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
@@ -32,10 +33,12 @@ import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
+import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -84,11 +87,66 @@ import imgMotorStartCapacitor from "../../assets/Motor Start Capacitor Replaceme
 import imgContactorReplacement from "../../assets/Contactor Replacement.png";
 import imgSensorReplacement from "../../assets/Sensor Replacement.png";
 import imgLvtReplacement from "../../assets/LVT Replacement.png";
+import imgAcSubServiceCleaning from "../../assets/hvac/ac_sub_service_cleaning.png";
+import imgAcSubRepairDiagnostics from "../../assets/hvac/ac_sub_repair_diagnostics.png";
+import imgAcSubGasRefrigerant from "../../assets/hvac/ac_sub_gas_refrigerant.png";
+import imgAcSubInstallationUninstallation from "../../assets/hvac/ac_sub_installation_uninstallation.png";
+import imgAcSubPcbElectrical from "../../assets/hvac/ac_sub_pcb_electrical.png";
+import imgAcSubPartsAccessories from "../../assets/hvac/ac_sub_parts_accessories.png";
+import imgRefSubServiceRepair from "../../assets/refrigerator/ref_sub_service_repair.png";
+import imgRefSubInstallation from "../../assets/refrigerator/ref_sub_installation.png";
+import imgRefSubCooling from "../../assets/refrigerator/ref_sub_cooling.png";
+import imgRefSubGasCompressor from "../../assets/refrigerator/ref_sub_gas_compressor.png";
+import imgRefSubCleaning from "../../assets/refrigerator/ref_sub_cleaning.png";
+import imgRefSubPartsElectrical from "../../assets/refrigerator/ref_sub_parts_electrical.png";
+import imgWmSubJetService from "../../assets/washing_machine/wm_sub_jet_service.png";
+import imgWmSubCheckup from "../../assets/washing_machine/wm_sub_checkup.png";
+import imgWmSubInstallation from "../../assets/washing_machine/wm_sub_installation.png";
+import imgWmSubRepair from "../../assets/washing_machine/wm_sub_repair.png";
+import imgTvSubServiceRepair from "../../assets/tv/tv_service_repair.png";
+import imgTvSubInstallationSetup from "../../assets/tv/tv_installation_setup.png";
+import imgTvSubScreenDisplay from "../../assets/tv/tv_screen_display.png";
+import imgTvSubSoundSpeaker from "../../assets/tv/tv_sound_speaker.png";
+import imgTvSubSoftwareSmartFeatures from "../../assets/tv/tv_software_smart_features.png";
+import imgTvSubPartsElectricalRepair from "../../assets/tv/tv_parts_electrical_repair.png";
+import imgTvServiceHero from "../../assets/tv/tv_service_hero.jpg";
+
+// Microwave subcategory assets
+import imgMicroRepair from "../../assets/microwave/micro_repair.png";
+import imgMicroCheckup from "../../assets/microwave/micro_checkup.png";
+import imgMicroKeypadDisplay from "../../assets/microwave/micro_keypad_display.png";
+import imgMicroCavityCleaning from "../../assets/microwave/micro_cavity_cleaning.png";
+
+// Electrical subcategory assets
+import imgElecSwitchesSockets from "../../assets/electrical/elec_switches_sockets.png";
+import imgElecFanLighting from "../../assets/electrical/elec_fan_lighting.png";
+import imgElecMcbWiring from "../../assets/electrical/elec_mcb_wiring.png";
+import imgElecInverterHeavy from "../../assets/electrical/elec_inverter_heavy.png";
+
+// Plumbing subcategory assets
+import imgPlumbTapMixer from "../../assets/plumbing/plumb_tap_mixer.png";
+import imgPlumbSink from "../../assets/plumbing/plumb_sink.png";
+import imgPlumbToilet from "../../assets/plumbing/plumb_toilet.png";
+import imgPlumbWaterHeater from "../../assets/plumbing/plumb_water_heater.png";
+import imgPlumbPipeLeakage from "../../assets/plumbing/plumb_pipe_leakage.png";
+import imgPlumbShower from "../../assets/plumbing/plumb_shower.png";
+import imgPlumbKitchen from "../../assets/plumbing/plumb_kitchen.png";
+import imgPlumbDrainage from "../../assets/plumbing/plumb_drainage.png";
+
+// Carpentry subcategory assets
+import imgCarpLockHandle from "../../assets/carpentry/carp_lock_handle.png";
+import imgCarpCupboardDrawer from "../../assets/carpentry/carp_cupboard_drawer.png";
+import imgCarpKitchenFittings from "../../assets/carpentry/carp_kitchen_fittings.png";
+import imgCarpHangersDrying from "../../assets/carpentry/carp_hangers_drying.png";
+import imgCarpFurnitureServices from "../../assets/carpentry/carp_furniture_services.png";
+import imgCarpDoorsWindows from "../../assets/carpentry/carp_doors_windows.png";
+import imgCarpDrillHanging from "../../assets/carpentry/carp_drill_hanging.png";
+import imgCarpCarpenterOnDemand from "../../assets/carpentry/carp_carpenter_on_demand.png";
 
 export const resolveAcServiceImage = (nameOrIdOrSlug) => {
   if (!nameOrIdOrSlug) return null;
   const str = String(nameOrIdOrSlug).toLowerCase().trim();
-  
+
   // Cleaning & Jet Services
   if (str.includes("2-in-1") || str.includes("2 in 1") || str.includes("combo")) return imgCombo2in1;
   if (str.includes("3-in-1") || str.includes("3 in 1") || str.includes("mega")) return imgMega3in1;
@@ -2324,7 +2382,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     try {
       const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
       if (!quoteToken) return
-      
+
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
         method: "POST",
         headers: {
@@ -2765,8 +2823,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               background: isArrived
                 ? 'linear-gradient(135deg, #10B981, #059669)'
                 : isInProgress
-                ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)'
-                : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                  ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)'
+                  : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -2786,19 +2844,19 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             {isArrived
               ? 'Partner Arrived at Location! 🏠'
               : isInProgress
-              ? 'Service in Progress 🛠️'
-              : isOnTheWay
-              ? 'Partner On The Way! 🛵'
-              : 'Partner Accepted Your Booking! 🎉'}
+                ? 'Service in Progress 🛠️'
+                : isOnTheWay
+                  ? 'Partner On The Way! 🛵'
+                  : 'Partner Accepted Your Booking! 🎉'}
           </h2>
           <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
             {isArrived
               ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
               : isInProgress
-              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is servicing your request</>
-              : isOnTheWay
-              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
-              : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
+                ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is servicing your request</>
+                : isOnTheWay
+                  ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
+                  : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
@@ -3239,11 +3297,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             padding: '1.5rem',
             marginBottom: '1rem',
             boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
-            border: `2px solid ${
-              liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-              liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
-            }`,
+            border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
+              }`,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -3260,20 +3317,20 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               padding: '4px 10px',
               borderRadius: 8,
               fontWeight: 800,
-              background: 
+              background:
                 liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              color: 
+                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
+                    liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
+              color:
                 liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
+                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
+                    liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
             }}>
               {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
-               liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
-               liveData.quote.status === "CONVERTED" ? "Converted to Work" :
-               liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
-               liveData.quote.status.replace(/_/g, " ")}
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
+                  liveData.quote.status === "CONVERTED" ? "Converted to Work" :
+                    liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
+                      liveData.quote.status.replace(/_/g, " ")}
             </span>
           </div>
 
@@ -3288,16 +3345,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               borderRadius: 12,
               marginBottom: 16,
               textAlign: 'left',
-              background: 
+              background:
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              border: `1px solid ${
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
-              }`,
-              color: 
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
+              border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
+                }`,
+              color:
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
               fontSize: '0.82rem',
               fontWeight: 700
             }}>
@@ -3399,7 +3455,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                           </a>
                         </div>
                       </div>
-                      
+
                       {isExpanded && (
                         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', textAlign: 'left' }}>
                           <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
@@ -3522,7 +3578,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <p style={{ margin: '0 0 16px', fontSize: '0.85rem', color: '#64748b' }}>
               Please select a reason for declining the quote to help us improve our service:
             </p>
-            
+
             <select
               value={declineReasonCode}
               onChange={(e) => setDeclineReasonCode(e.target.value)}
@@ -3745,12 +3801,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       {/* ─────────────────── MASONRY SPLIT PAYMENT CARD ─────────────────── */}
       {(() => {
         const isMasonOrWp = (
-          liveData?.service_category === "mason" || 
-          liveData?.service_category === "masonry" || 
+          liveData?.service_category === "mason" ||
+          liveData?.service_category === "masonry" ||
           liveData?.service_category === "waterproofing" ||
           liveData?.service_category === "waterproofing-services" ||
           (liveData?.child_booking && (
-            liveData.child_booking.service_category === "mason" || 
+            liveData.child_booking.service_category === "mason" ||
             liveData.child_booking.service_category === "masonry" ||
             liveData.child_booking.service_category === "waterproofing" ||
             liveData.child_booking.service_category === "waterproofing-services"
@@ -3761,7 +3817,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
         const quoteObj = liveData?.quote;
         const childBooking = liveData?.child_booking;
-        
+
         // We show the payment card if:
         // 1. Quote is approved/accepted (quote.status === "APPROVED" or childBooking exists)
         const isQuoteAccepted = quoteObj && (quoteObj.status === "APPROVED" || quoteObj.status === "CUSTOMER_ACCEPTED" || quoteObj.status === "CONVERTED" || childBooking);
@@ -3770,7 +3826,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const grandTotal = Number(liveData.quote_grand_total || quoteObj.grand_total || quoteObj.total_amount || 0);
         const advanceRequired = Number(liveData.quote_advance_amount || quoteObj.advance_amount || (grandTotal * 0.5));
         const remainingBalance = Number(liveData.quote_balance_amount || quoteObj.balance_amount || (grandTotal - advanceRequired));
-        
+
         const targetBookingId = childBooking ? childBooking.id : liveData.booking_id;
         const currentPaymentStatus = childBooking ? childBooking.payment_status : liveData.payment_status;
         const advancePaid = liveData.advance_paid || currentPaymentStatus === "collected" || currentPaymentStatus === "paid";
@@ -4309,6 +4365,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     }
   }
 
+  const [showAddressDrawer, setShowAddressDrawer] = useState(false)
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
 
@@ -4427,27 +4484,57 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const handleSaveProfile = async () => {
     setProfileError('')
     setProfileSuccess('')
+
+    const trimmedName = profileName.trim()
+    if (!trimmedName || trimmedName.length < 2) {
+      setProfileError("Full name is required (at least 2 characters).")
+      return
+    }
+
+    const trimmedEmail = profileEmail.trim()
+    if (trimmedEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(trimmedEmail)) {
+        setProfileError("Please enter a valid email address.")
+        return
+      }
+    }
+
     setIsSavingProfile(true)
-    const nameParts = profileName.trim().split(' ')
+    const nameParts = trimmedName.split(' ')
     const firstName = nameParts[0] || ''
     const lastName = nameParts.slice(1).join(' ')
 
     try {
-      const res = await apiRequest("/auth/profile/", {
-        method: "PATCH",
-        json: {
-          first_name: firstName,
-          last_name: lastName
-        }
-      })
-      if (res.success || res.id) {
-        await refreshMe()
+      const payload = {
+        first_name: firstName,
+        last_name: lastName,
+        email: trimmedEmail
+      }
+
+      let res
+      try {
+        res = await apiRequest("/auth/profile/", {
+          method: "PATCH",
+          json: payload
+        })
+      } catch (err) {
+        res = await apiRequest("/auth/customer/profile/update/", {
+          method: "PATCH",
+          json: payload
+        })
+      }
+
+      if (res?.success || res?.id || res?.data) {
+        if (refreshMe) await refreshMe()
         setProfileSuccess("Changes saved successfully!")
+        setTimeout(() => setProfileSuccess(''), 4000)
       } else {
-        setProfileError(res.message || "Failed to update profile")
+        setProfileError(res?.message || res?.error || "Failed to update profile.")
       }
     } catch (e) {
-      setProfileError(e.body?.message || "Failed to update profile")
+      const errMsg = e?.body?.message || e?.body?.error?.message || (typeof e?.body?.email === "object" ? e.body.email[0] : null) || e?.message || "Failed to update profile."
+      setProfileError(errMsg)
     } finally {
       setIsSavingProfile(false)
     }
@@ -4537,12 +4624,12 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     setSupportTicketLoading(true)
     try {
       const res = await apiRequest('/customer-care/tickets/')
-      const tickets = Array.isArray(res?.data) 
-        ? res.data 
-        : Array.isArray(res?.results) 
-          ? res.results 
-          : Array.isArray(res) 
-            ? res 
+      const tickets = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.results)
+          ? res.results
+          : Array.isArray(res)
+            ? res
             : []
       setCustomerTicketsList(tickets)
 
@@ -4697,9 +4784,68 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [addrPhone, setAddrPhone] = useState('')
   const [addrIsDefault, setAddrIsDefault] = useState(false)
   const [addrSubmitting, setAddrSubmitting] = useState(false)
-  const [addrError, setAddrError] = useState('')
   const [addrSuccess, setAddrSuccess] = useState('')
+  const [addrError, setAddrError] = useState('')
   const [addrAccuracy, setAddrAccuracy] = useState(null)
+  const [addrLat, setAddrLat] = useState(null)
+  const [addrLng, setAddrLng] = useState(null)
+  const [addrLocationSource, setAddrLocationSource] = useState('geocoding')
+  const [geoAddressLoading, setGeoAddressLoading] = useState(false)
+
+  const handleDetectLocationForAddress = () => {
+    if (!navigator.geolocation) {
+      setAddrError("Geolocation is not supported by your browser.")
+      return
+    }
+    setGeoAddressLoading(true)
+    setAddrError('')
+    setAddrSuccess('')
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        const accuracyM = Math.round(pos.coords.accuracy || 20)
+
+        setAddrLat(lat)
+        setAddrLng(lng)
+        setAddrLocationSource('device_gps')
+        setAddrAccuracy({
+          meters: accuracyM,
+          rating: accuracyM <= 50 ? 'high' : accuracyM <= 150 ? 'medium' : 'low'
+        })
+
+        try {
+          const res = await apiRequest('/customer/location/detect/', {
+            method: 'POST',
+            json: { latitude: lat, longitude: lng, accuracy: accuracyM }
+          })
+          if (res?.data) {
+            const d = res.data
+            if (d.road || d.area) setAddrLine1(d.road || d.area || '')
+            if (d.city) setAddrCity(d.city)
+            if (d.state) setAddrState(d.state)
+            if (d.pincode) setAddrPincode(d.pincode)
+            setAddrSuccess(`Location detected via GPS (${accuracyM}m accuracy).`)
+          }
+        } catch {
+          setAddrSuccess(`GPS coordinates captured (${lat.toFixed(4)}, ${lng.toFixed(4)}).`)
+        } finally {
+          setGeoAddressLoading(false)
+          setShowAddressForm(true)
+        }
+      },
+      (err) => {
+        setGeoAddressLoading(false)
+        if (err.code === err.PERMISSION_DENIED) {
+          setAddrError("Location permission was not granted. Please enter your address manually.")
+        } else {
+          setAddrError("Unable to obtain your location. Please enter your address manually.")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
 
   const [mapAddress, setMapAddress] = useState(null)
 
@@ -4972,112 +5118,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     setMockAddresses(mockAddresses.filter(a => a.id !== id))
   }
 
-  const [geoAddressLoading, setGeoAddressLoading] = useState(false)
-
-  const handleDetectLocationForAddress = () => {
-    if (!navigator.geolocation) {
-      setAddrError("Geolocation is not supported by your browser.")
-      return
-    }
-    setGeoAddressLoading(true)
-    setAddrError("")
-    setAddrSuccess("")
-    setAddrAccuracy(null)
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6))
-        const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        const acc = Math.round(pos.coords.accuracy)
-        const rating = acc <= 30 ? 'high' : acc <= 100 ? 'acceptable' : 'low'
-        setAddrAccuracy({ meters: acc, rating })
-
-        try {
-          let line1 = ""
-          let city = ""
-          let state = ""
-          let pincode = ""
-
-          try {
-            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
-            if (backendDetect && backendDetect.success && backendDetect.data) {
-              const d = backendDetect.data
-              const parts = [d.area, d.formatted_address ? d.formatted_address.split(',')[0] : ''].filter(Boolean)
-              line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(', ')
-              city = d.city
-              state = d.state
-              pincode = d.pincode
-            }
-          } catch (err) {
-            console.warn("Backend detect fallback:", err)
-          }
-
-          if (!line1) {
-            try {
-              const fullAddr = await getAddress(lat, lng)
-              if (fullAddr) {
-                line1 = fullAddr
-              }
-            } catch (e) {
-              console.warn("Reverse geocode warning:", e)
-            }
-          }
-
-          // Hosur Geo-fencing & Pincode Resolution
-          if ((pincode && pincode.startsWith("635")) || (12.55 <= lat && lat <= 12.85 && 77.70 <= lng && lng <= 77.98)) {
-            city = "Hosur"
-            state = "Tamil Nadu"
-            if (!pincode) pincode = "635109"
-          }
-
-          if (!line1) line1 = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-          if (!city) city = "Hosur"
-          if (!state) state = "Tamil Nadu"
-          if (!pincode) pincode = "635109"
-
-          setAddrLine1(line1)
-          setAddrCity(city)
-          setAddrState(state)
-          setAddrPincode(pincode)
-
-          // Update last_known_location for session
-          await apiUpdateCustomerLastLocation({
-            latitude: lat,
-            longitude: lng,
-            label: line1,
-            detected_at: new Date().toISOString()
-          })
-
-          setShowAddressForm(true)
-          if (rating === 'low') {
-            setAddrError(`⚠️ Location accuracy is low (~${acc}m). Please move outdoors or refine your street address details before saving.`)
-          } else {
-            setAddrSuccess(`📍 Current location detected (~${acc}m accuracy). Please review your address details below and click Confirm & Save Address.`)
-          }
-
-          if (typeof refreshMe === 'function') await refreshMe()
-        } catch (e) {
-          setAddrError("Failed to fetch address details for detected GPS coordinates.")
-        } finally {
-          setGeoAddressLoading(false)
-        }
-      },
-      (err) => {
-        setGeoAddressLoading(false)
-        if (err.code === 1) {
-          setAddrError("Location permission denied. Please allow location access in your browser settings.")
-        } else if (err.code === 2) {
-          setAddrError("Unable to detect high-accuracy GPS position. Please try again.")
-        } else if (err.code === 3) {
-          setAddrError("GPS request timed out. Please try again.")
-        } else {
-          setAddrError("Failed to detect location. Please enter manually.")
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    )
-  }
-
   const nonDraftBookings = (realBookings || []).filter(b => b.status !== 'draft')
   const hasNonDraftBookings = nonDraftBookings.length > 0
 
@@ -5182,14 +5222,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>{userFullName}</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>{profileName || user?.fullName || user?.username || 'Customer'}</span>
                   {(profileCustomerId || user?.customer_id || user?.customerId) && (
                     <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 800, fontFamily: 'monospace' }}>
                       ID: {profileCustomerId || user?.customer_id || user?.customerId}
                     </span>
                   )}
                 </div>
-                <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
+                <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12, fontWeight: 500 }}>
+                  {profilePhone || user?.phone ? `+91 ${profilePhone || user?.phone}` : (profileEmail || user?.email || '')}
+                </div>
                 <input
                   ref={avatarInputRef}
                   type="file"
@@ -5209,66 +5251,105 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               </div>
             </div>
 
-            {profileError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileError}</div>}
-            {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
+            {profileError && <div style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecdd3', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, marginBottom: 16 }}>{profileError}</div>}
+            {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
-                  <span>Customer ID</span>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
-                </label>
-                <input
-                  type="text"
-                  value={profileCustomerId || user?.customer_id || user?.customerId || "—"}
-                  disabled
-                  readOnly
-                  title="Customer ID (Non-editable)"
-                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
-                />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Row 1: Full Name & Optional Email Address */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', color: '#334155', fontWeight: 700, marginBottom: 8 }}>
+                    <span>Full Name</span>
+                    <span style={{ color: '#059669', fontWeight: 800 }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={e => {
+                      setProfileName(e.target.value)
+                      if (profileError) setProfileError('')
+                    }}
+                    placeholder="Enter your full name"
+                    style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 10, border: '1.5px solid #cbd5e1', fontSize: '0.92rem', color: '#0f172a', background: 'white', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: '#334155', fontWeight: 700, marginBottom: 8 }}>
+                    <span>Email Address</span>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, background: '#f1f5f9', padding: '2px 8px', borderRadius: 6 }}>Optional</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={profileEmail}
+                    onChange={e => {
+                      setProfileEmail(e.target.value)
+                      if (profileError) setProfileError('')
+                    }}
+                    placeholder="e.g. name@example.com (optional)"
+                    style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 10, border: '1.5px solid #cbd5e1', fontSize: '0.92rem', color: '#0f172a', background: 'white', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
               </div>
+
+              {/* Row 2: Protected Verified Phone Number */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Full Name</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={e => setProfileName(e.target.value)}
-                  placeholder="Enter your full name"
-                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: '#334155', fontWeight: 700, marginBottom: 8 }}>
                   <span>Phone Number</span>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.7rem', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                    ✓ Verified
+                  </span>
                 </label>
-                <input
-                  type="text"
-                  value={profilePhone}
-                  disabled
-                  readOnly
-                  title="Phone number cannot be edited after login"
-                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
-                  <span>Email Address</span>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
-                </label>
-                <input
-                  type="email"
-                  value={profileEmail}
-                  disabled
-                  readOnly
-                  title="Email address cannot be edited after login"
-                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
-                />
+                <div style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: '0.92rem', color: '#475569', background: '#f8fafc', fontWeight: 600, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>{profilePhone || user?.phone ? `+91 ${profilePhone || user?.phone}` : '—'}</span>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>Secured</span>
+                </div>
+                <div style={{ fontSize: '0.73rem', color: '#94a3b8', marginTop: 6, fontWeight: 500 }}>
+                  Phone number is verified via OTP and protected for your account security.
+                </div>
               </div>
             </div>
-            <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(5, 150, 105, 0.25)', opacity: isSavingProfile ? 0.7 : 1 }}>
-              {isSavingProfile ? 'Saving...' : 'Save Changes'}
-            </button>
+
+            {/* Save Changes Button */}
+            <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile || !hasProfileChanges || !profileName.trim() || profileName.trim().length < 2}
+                style={{
+                  padding: '0.9rem 2.5rem',
+                  background: (hasProfileChanges && profileName.trim() && profileName.trim().length >= 2 && !isSavingProfile)
+                    ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                    : '#e2e8f0',
+                  color: (hasProfileChanges && profileName.trim() && profileName.trim().length >= 2 && !isSavingProfile)
+                    ? '#ffffff'
+                    : '#94a3b8',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  cursor: (hasProfileChanges && profileName.trim() && profileName.trim().length >= 2 && !isSavingProfile)
+                    ? 'pointer'
+                    : 'not-allowed',
+                  boxShadow: (hasProfileChanges && profileName.trim() && profileName.trim().length >= 2 && !isSavingProfile)
+                    ? '0 10px 24px -4px rgba(5, 150, 105, 0.4)'
+                    : 'none',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                {isSavingProfile && <RefreshCw size={16} className="animate-spin" />}
+                <span>{isSavingProfile ? 'Saving Changes...' : 'Save Changes'}</span>
+              </button>
+
+              {hasProfileChanges && (
+                <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                  Unsaved changes
+                </span>
+              )}
+            </div>
           </motion.div>
         )
       case "My Bookings":
@@ -5318,62 +5399,62 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
-                          <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
+                            <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
-                        {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
-                        {isRescheduleEligible && (
-                          <div style={{ marginTop: 6 }}>
+                          {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
+                          {isRescheduleEligible && (
+                            <div style={{ marginTop: 6 }}>
+                              <button
+                                onClick={() => {
+                                  setRescheduleBookingId(b.id)
+                                  if (b.preferred_date) setRescheduleDate(b.preferred_date)
+                                  setShowRescheduleForm(true)
+                                  if (typeof onChangeTab === 'function') onChangeTab('My Reschedules')
+                                }}
+                                style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.3)' }}
+                                onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                                onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                              >
+                                <RefreshCw size={13} /> Reschedule
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
+                            {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                            {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setTrackingBooking(b)
+                                }}
+                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                              >
+                                <MapPin size={14} /> Track Live
+                              </button>
+                            )}
                             <button
-                              onClick={() => {
-                                setRescheduleBookingId(b.id)
-                                if (b.preferred_date) setRescheduleDate(b.preferred_date)
-                                setShowRescheduleForm(true)
-                                if (typeof onChangeTab === 'function') onChangeTab('My Reschedules')
-                              }}
-                              style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.3)' }}
+                              onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
+                              style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
                               onMouseOver={e => e.currentTarget.style.background = '#047857'}
                               onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
-                              <RefreshCw size={13} /> Reschedule
+                              {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
                             </button>
                           </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
-                          {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                          {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setTrackingBooking(b)
-                              }}
-                              style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
-                              onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                              onMouseOut={e => e.currentTarget.style.transform = 'none'}
-                            >
-                              <MapPin size={14} /> Track Live
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                            style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
-                            onMouseOver={e => e.currentTarget.style.background = '#047857'}
-                            onMouseOut={e => e.currentTarget.style.background = '#059669'}
-                          >
-                            {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                          </button>
                         </div>
                       </div>
-                    </div>
 
-                    {b.child_requests && b.child_requests.length > 0 && (
+                      {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -5710,493 +5791,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           </motion.div>
         )
       case "Saved Addresses":
-        const handleOpenForm = (addr = null) => {
-          setAddrError('')
-          setAddrSuccess('')
-          if (addr) {
-            setEditingAddress(addr)
-            setAddrLabel(addr.label || 'home')
-            setAddrLine1(addr.address_line1 || '')
-            setAddrLine2(addr.address_line2 || '')
-            setAddrCity(addr.city || '')
-            setAddrState(addr.state || '')
-            setAddrPincode(addr.pincode || '')
-            setAddrPhone(addr.phone_number || '')
-            setAddrIsDefault(!!addr.is_default)
-          } else {
-            setEditingAddress(null)
-            setAddrLabel('home')
-            setAddrLine1('')
-            setAddrLine2('')
-            setAddrCity('')
-            setAddrState('')
-            setAddrPincode('')
-            setAddrPhone(user?.phone || '')
-            setAddrIsDefault(savedAddresses.length === 0)
-          }
-          setShowAddressForm(true)
-        }
-
-        const handleSaveAddress = async () => {
-          setAddrError('')
-          setAddrSuccess('')
-          if (!addrLine1.trim() || !addrCity.trim() || !addrState.trim() || !addrPincode.trim()) {
-            setAddrError('Street Address, City, State, and Pincode are required.')
-            return
-          }
-
-          setAddrSubmitting(true)
-          const payload = {
-            label: addrLabel,
-            address_line1: addrLine1,
-            address_line2: addrLine2,
-            city: addrCity,
-            state: addrState,
-            pincode: addrPincode,
-            phone_number: addrPhone,
-            is_default: addrIsDefault,
-          }
-
-          try {
-            const url = editingAddress
-              ? `/auth/customer/addresses/${editingAddress.id}/`
-              : '/auth/customer/addresses/'
-            const method = editingAddress ? 'PATCH' : 'POST'
-            const res = await apiRequest(url, { method, json: payload })
-
-            if (res.success) {
-              setAddrSuccess(editingAddress ? 'Address updated successfully!' : 'New address saved!')
-              setShowAddressForm(false)
-              fetchAddresses()
-            } else {
-              setAddrError(res.message || 'Failed to save address.')
-            }
-          } catch (e) {
-            setAddrError(e?.body?.message || e?.message || 'Failed to save address.')
-          } finally {
-            setAddrSubmitting(false)
-          }
-        }
-
-        const handleSetDefault = async (addrId) => {
-          setAddrError('')
-          setAddrSuccess('')
-          try {
-            const res = await apiRequest(`/auth/customer/addresses/${addrId}/set-default/`, { method: 'POST', json: {} })
-            if (res.success) {
-              setAddrSuccess('Default address updated!')
-              fetchAddresses()
-            } else {
-              setAddrError(res.message || 'Failed to set default address.')
-            }
-          } catch (e) {
-            setAddrError(e?.body?.message || e?.message || 'Failed to set default address.')
-          }
-        }
-
-        const handleDelete = async (addrId) => {
-          setAddrError('')
-          setAddrSuccess('')
-          try {
-            const res = await apiRequest(`/auth/customer/addresses/${addrId}/`, { method: 'DELETE' })
-            if (!res || res.success || res.status === 204 || res.status === 200) {
-              setAddrSuccess('Address deleted successfully.')
-              setAddrError('')
-            } else {
-              const msg = res?.error?.detail || res?.detail || res?.message || 'Failed to delete address.'
-              setAddrError(msg)
-            }
-          } catch (e) {
-            setAddrError(e?.body?.detail || e?.message || 'Failed to delete address.')
-          } finally {
-            fetchAddresses()
-          }
-        }
-
-        const handleUseForBooking = async (addr) => {
-          try {
-            await apiRequest(`/auth/customer/addresses/${addr.id}/mark-used/`, { method: 'POST', json: {} })
-          } catch (e) {
-            console.error(e)
-          }
-          const fullAddr = `${addr.address_line1}${addr.address_line2 ? ', ' + addr.address_line2 : ''}, ${addr.city}, ${addr.state} ${addr.pincode}`
-          if (typeof setAddress === 'function') setAddress(fullAddr)
-          setAddrSuccess(`Selected "${addr.label_display || addr.label}" for booking!`)
-          setActiveTab('Book Service')
-        }
-
-        const labelIcons = {
-          home: '🏠',
-          work: '💼',
-          other: '📍',
-        }
-
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Saved Addresses</h3>
-                <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>Manage your home, office, and preferred service delivery locations.</p>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
-                  style={{ padding: '10px 16px', background: '#ecfdf5', color: '#059669', border: '1.5px solid #a7f3d0', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
-                </button>
-                <button onClick={() => handleOpenForm(null)}
-                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(5,150,105,0.25)' }}>
-                  <MapPin size={15} /> Add New Address
-                </button>
-              </div>
-            </div>
-
-            {addrSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '10px 14px', borderRadius: 12, fontSize: '0.82rem', fontWeight: 700, marginBottom: 18 }}>
-                ✓ {addrSuccess}
-              </div>
-            )}
-
-            {addrError && (
-              <div style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: 12, fontSize: '0.82rem', fontWeight: 700, marginBottom: 18 }}>
-                ⚠️ {addrError}
-              </div>
-            )}
-
-            {showAddressForm ? (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #05966930', borderRadius: 20, padding: '1.75rem', background: '#f0fdf4', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(5,150,105,0.08)' }}>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
-                  {editingAddress ? 'Edit Address' : 'Add New Address'}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleDetectLocationForAddress}
-                  disabled={geoAddressLoading}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: 'linear-gradient(135deg, #059669, #10b981)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 12,
-                    fontWeight: 800,
-                    fontSize: '0.83rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    marginBottom: 18,
-                    boxShadow: '0 4px 14px rgba(5,150,105,0.25)'
-                  }}
-                >
-                  <Compass size={17} color="white" /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
-                </button>
-
-                {addrAccuracy && (
-                  <div style={{
-                    background: addrAccuracy.rating === 'low' ? '#fef2f2' : addrAccuracy.rating === 'high' ? '#f0fdf4' : '#fffbeb',
-                    border: `1px solid ${addrAccuracy.rating === 'low' ? '#fecaca' : addrAccuracy.rating === 'high' ? '#bbf7d0' : '#fef08a'}`,
-                    borderRadius: 12,
-                    padding: '10px 14px',
-                    marginBottom: 14,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Compass size={18} style={{ color: addrAccuracy.rating === 'low' ? '#dc2626' : addrAccuracy.rating === 'high' ? '#16a34a' : '#d97706' }} />
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0f172a' }}>
-                          📍 Live GPS Location Detected
-                        </div>
-                        <div style={{ fontSize: '0.73rem', color: '#475569', fontWeight: 500 }}>
-                          {addrAccuracy.rating === 'low' ? 'Accuracy is low. Please review before confirming.' : 'Please add Flat/House No. if needed and click Confirm & Save.'}
-                        </div>
-                      </div>
-                    </div>
-                    <span style={{
-                      padding: '3px 8px',
-                      borderRadius: 99,
-                      fontSize: '0.7rem',
-                      fontWeight: 800,
-                      whiteSpace: 'nowrap',
-                      background: addrAccuracy.rating === 'low' ? '#fee2e2' : addrAccuracy.rating === 'high' ? '#dcfce7' : '#fef3c7',
-                      color: addrAccuracy.rating === 'low' ? '#991b1b' : addrAccuracy.rating === 'high' ? '#166534' : '#92400e'
-                    }}>
-                      ~{addrAccuracy.meters}m
-                    </span>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {/* Address Label Pills */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Address Type
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[
-                        { code: 'home', title: 'Home', icon: '🏠' },
-                        { code: 'work', title: 'Work', icon: '💼' },
-                        { code: 'other', title: 'Other', icon: '📍' },
-                      ].map(type => (
-                        <button key={type.code} type="button" onClick={() => setAddrLabel(type.code)}
-                          style={{
-                            padding: '10px 18px',
-                            borderRadius: 12,
-                            border: addrLabel === type.code ? '2px solid #059669' : '1px solid #cbd5e1',
-                            background: addrLabel === type.code ? '#ecfdf5' : 'white',
-                            color: addrLabel === type.code ? '#059669' : '#475569',
-                            fontWeight: 800,
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6
-                          }}>
-                          <span>{type.icon}</span> {type.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Street Lines */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Street Address (Line 1) *
-                    </label>
-                    <input value={addrLine1} onChange={e => setAddrLine1(e.target.value)} type="text" placeholder="e.g. 123 Main Street, Apt 4B"
-                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Landmark / Suite (Line 2)
-                    </label>
-                    <input value={addrLine2} onChange={e => setAddrLine2(e.target.value)} type="text" placeholder="e.g. Near Central Park Tower"
-                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                  </div>
-
-                  {/* City, State, Pincode */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>City *</label>
-                      <input value={addrCity} onChange={e => setAddrCity(e.target.value)} type="text" placeholder="Bengaluru"
-                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>State *</label>
-                      <input value={addrState} onChange={e => setAddrState(e.target.value)} type="text" placeholder="Karnataka"
-                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>Pincode *</label>
-                      <input value={addrPincode} onChange={e => setAddrPincode(e.target.value)} type="text" placeholder="560102"
-                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                    </div>
-                  </div>
-
-                  {/* Phone Number */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Contact Phone Number
-                    </label>
-                    <input value={addrPhone} onChange={e => setAddrPhone(e.target.value)} type="text" placeholder="+91 98765 43210"
-                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
-                  </div>
-
-                  {/* Set Default Toggle */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', marginTop: 4 }}>
-                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#059669' }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Set as Default Address for Bookings</span>
-                  </label>
-
-                  {/* Submit & Cancel */}
-                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                    <button onClick={handleSaveAddress} disabled={addrSubmitting}
-                      style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', opacity: addrSubmitting ? 0.7 : 1 }}>
-                      {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : 'Save Address')}
-                    </button>
-                    <button onClick={() => { setShowAddressForm(false); setEditingAddress(null); }}
-                      style={{ padding: '10px 18px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', color: '#475569' }}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <div>
-                {addressesLoading ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8', fontSize: '0.88rem' }}>Loading saved addresses...</div>
-                ) : savedAddresses.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3.5rem 1rem', background: '#f8fafc', borderRadius: 18, border: '1px solid #e2e8f0' }}>
-                    <MapPin size={36} style={{ marginBottom: 12, color: '#cbd5e1' }} />
-                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>No saved addresses found.</div>
-                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 4 }}>Add your home or office location for 1-click booking.</div>
-                    <button onClick={() => handleOpenForm(null)}
-                      style={{ marginTop: 16, padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}>
-                      + Add Your First Address
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
-                    {savedAddresses.map(addr => {
-                      const icon = labelIcons[addr.label] || '📍'
-                      return (
-                        <div key={addr.id}
-                          style={{
-                            border: addr.is_default ? '2px solid #059669' : '1px solid #e2e8f0',
-                            borderRadius: 18,
-                            padding: '1.35rem 1.4rem',
-                            background: '#ffffff',
-                            boxShadow: addr.is_default ? '0 8px 24px rgba(99,102,241,0.12)' : '0 2px 10px rgba(0,0,0,0.03)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            position: 'relative'
-                          }}>
-
-                          <div>
-                            {/* Card Header: Icon, Label, Default Badge */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 34, height: 34, borderRadius: 10, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.05rem' }}>
-                                  {icon}
-                                </div>
-                                <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0f172a', textTransform: 'capitalize' }}>
-                                  {addr.label_display || addr.label}
-                                </span>
-                              </div>
-                              {addr.is_default && (
-                                <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#059669', color: 'white' }}>
-                                  Default
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Address Lines */}
-                            <div style={{ fontSize: '0.88rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.5, marginBottom: 12 }}>
-                              <div style={{ color: '#0f172a', fontWeight: 700 }}>{addr.address_line1}</div>
-                              {addr.address_line2 && <div style={{ color: '#64748b', fontSize: '0.82rem' }}>{addr.address_line2}</div>}
-                              <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 3, fontWeight: 500 }}>
-                                {addr.city}, {addr.state} - <strong style={{ color: '#334155' }}>{addr.pincode}</strong>
-                              </div>
-                            </div>
-
-                            {/* Phone & Serviceable strip */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: '0.78rem', color: '#64748b', paddingTop: 10, borderTop: '1px solid #f1f5f9', marginBottom: 12, flexWrap: 'wrap' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <span>📞</span> <strong style={{ color: '#334155', fontWeight: 700 }}>{addr.phone_number || user?.phone || 'No phone'}</strong>
-                              </div>
-                              <div>
-                                {addr.serviceable ? (
-                                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 800, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                    ✓ Service Available
-                                  </span>
-                                ) : (
-                                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 800, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                    ✕ {addr.serviceability_reason || 'Not Serviceable'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Row */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <button onClick={() => handleUseForBooking(addr)}
-                              style={{ width: '100%', padding: '9px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
-                              Use for Booking
-                            </button>
-
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingTop: 4 }}>
-                              <button onClick={() => setMapAddress(addr)}
-                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#f5f3ff'; e.currentTarget.style.color = '#6366f1' }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}>
-                                🗺️ Map Pin
-                              </button>
-
-                              <button onClick={() => handleOpenForm(addr)}
-                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#f5f3ff'; e.currentTarget.style.color = '#6366f1' }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}>
-                                ✏️ Edit
-                              </button>
-
-                              {!addr.is_default ? (
-                                <button onClick={() => handleSetDefault(addr.id)}
-                                  style={{ padding: '7px 4px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#059669', textAlign: 'center' }}>
-                                  ⭐ Default
-                                </button>
-                              ) : null}
-
-                              <button onClick={() => handleDelete(addr.id)}
-                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                🗑️ Delete
-                              </button>
-                            </div>
-                          </div>
-
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* View Map Modal / Draggable Pin Adjustment Modal */}
-            {mapAddress && (
-              <LocationPickerModal
-                initialLocation={`${mapAddress.address_line1}, ${mapAddress.city}`}
-                initialCoords={mapAddress.latitude && mapAddress.longitude ? { lat: parseFloat(mapAddress.latitude), lng: parseFloat(mapAddress.longitude) } : null}
-                onClose={() => setMapAddress(null)}
-                onConfirm={async (confirmedPayload) => {
-                  setMapAddress(null)
-                  if (!confirmedPayload) return
-
-                  const line1 = confirmedPayload.area ? [confirmedPayload.area, confirmedPayload.formatted_address?.split(',')[0]].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') : (confirmedPayload.formatted_address || mapAddress.address_line1)
-                  const city = confirmedPayload.city || mapAddress.city || "Hosur"
-                  const state = confirmedPayload.state || mapAddress.state || "Tamil Nadu"
-                  const pincode = confirmedPayload.pincode || mapAddress.pincode || "635109"
-
-                  try {
-                    const saveRes = await apiRequest(`/auth/customer/addresses/${mapAddress.id}/`, {
-                      method: 'PATCH',
-                      json: {
-                        address_line1: line1,
-                        city: city,
-                        state: state,
-                        pincode: pincode,
-                        latitude: confirmedPayload.latitude || mapAddress.latitude,
-                        longitude: confirmedPayload.longitude || mapAddress.longitude
-                      }
-                    })
-                    if (saveRes.success || saveRes.data || saveRes.id) {
-                      setAddrSuccess('Address pin location updated!')
-                      const finalLat = confirmedPayload.latitude || mapAddress.latitude;
-                      const finalLng = confirmedPayload.longitude || mapAddress.longitude;
-                      if (finalLat && finalLng) {
-                        onChange({ target: { name: "latitude", value: String(finalLat) } });
-                        onChange({ target: { name: "longitude", value: String(finalLng) } });
-                      }
-                      fetchAddresses()
-                    }
-                  } catch (e) {
-                    console.error("Failed to update address location:", e)
-                  }
-                }}
-              />
-            )}
-          </motion.div>
+          <SavedAddressesPage user={user} onClose={onClose} />
         )
       case "Payment Methods":
         return (
@@ -6403,7 +5999,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                       {supportTicket ? "Support Ticket Open" : "Start a New Conversation"}
                     </div>
                     <p style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5, margin: 0 }}>
-                      {supportTicket 
+                      {supportTicket
                         ? `Your ticket #${supportTicket.ticket_number} is connected. Send a message below to chat with our care team.`
                         : "Type your query below or pick a quick prompt to immediately start a live chat with our support team."}
                     </p>
@@ -7554,7 +7150,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     return (
                       <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
                         <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸  Support Team' : 'ðŸ‘· Employee'}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? '🛡️ Support Team' : '👷 Employee'}</div>
                           {resp.message}
                           <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
                         </div>
@@ -7584,7 +7180,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   </button>
                 </div>
 
-                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>•œ… {complaintSuccess}</div>}
+                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>✅ {complaintSuccess}</div>}
 
                 {showComplaintForm && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
@@ -7705,8 +7301,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
               )}
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--sevo-text-secondary, #64748b)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
+              <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileName || user?.fullName || user?.username || 'Customer'}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--sevo-text-secondary, #64748b)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {profilePhone || user?.phone ? `+91 ${profilePhone || user?.phone}` : (profileEmail || user?.email || '')}
+              </div>
               {(profileCustomerId || user?.customer_id || user?.customerId) && (
                 <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--sevo-primary-light, #eff6ff)', color: 'var(--sevo-primary, #1d4ed8)', border: '1px solid var(--sevo-border, #bfdbfe)', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'monospace' }}>
                   ID: {profileCustomerId || user?.customer_id || user?.customerId}
@@ -7719,7 +7317,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             {tabs.map(t => (
               <div
                 key={t.id}
-                onClick={() => onChangeTab(t.id)}
+                onClick={() => {
+                  if (typeof onChangeTab === 'function') {
+                    onChangeTab(t.id)
+                  } else {
+                    setActiveTab(t.id)
+                  }
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', cursor: 'pointer',
                   borderRadius: 12,
@@ -8267,156 +7871,6 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
     )
   }
 
-  // Address Selection View
-  if (isAddressScreenOpen) {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
-        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-2xl rounded-3xl flex flex-col justify-between overflow-hidden border border-slate-100">
-          <div>
-            {/* Header */}
-            <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
-              <button
-                type="button"
-                onClick={() => setIsAddressScreenOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-base font-bold text-slate-900">Select Delivery Address</h2>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {/* Add a new address button */}
-              <button
-                type="button"
-                onClick={() => setShowAddAddressModal(true)}
-                className="w-full bg-white rounded-2xl p-4 border border-slate-200 hover:border-slate-350 shadow-2xs flex items-center gap-3 text-slate-700 hover:text-slate-900 font-extrabold text-sm transition-all cursor-pointer"
-              >
-                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-black">
-                  <Plus className="w-4 h-4" />
-                </div>
-                <span>Add a new address</span>
-              </button>
-
-              {/* Your saved address Section */}
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
-                  Saved Addresses
-                </h3>
-                <div className="space-y-3">
-                  {savedAddresses.map((addr) => {
-                    const isSelected = selectedAddressId === addr.id
-                    return (
-                      <div
-                        key={addr.id}
-                        onClick={() => {
-                          setSelectedAddressId(addr.id)
-                          setIsAddressScreenOpen(false)
-                        }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs ${isSelected
-                          ? "border-emerald-600 ring-2 ring-emerald-500/10 bg-emerald-50/10"
-                          : "border-slate-200/80 hover:border-slate-300"
-                          }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5 shadow-3xs">
-                            {addr.type.toLowerCase() === "work" ? (
-                              <Users className="w-4 h-4" />
-                            ) : (
-                              <Home className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-slate-800">{addr.type}</h4>
-                              {isSelected && (
-                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                  SELECTED
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed line-clamp-3">
-                              {addr.address}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setNewAddressText(addr.address)
-                            setNewAddressType(addr.type)
-                            setShowAddAddressModal(true)
-                          }}
-                          className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0 border border-slate-100"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Add Address Modal */}
-          {showAddAddressModal && (
-            <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between mb-5">
-                  <h3 className="text-base font-bold text-slate-900">Add Address in Hosur</h3>
-                  <button onClick={() => setShowAddAddressModal(false)} className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center border border-slate-100 text-slate-400 transition-colors">
-                    <X className="w-4 h-4 text-slate-600" />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Save Address as</label>
-                    <div className="flex gap-2">
-                      {["Home", "Work", "Other"].map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setNewAddressType(t)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${newAddressType === t
-                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                            : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100/60"
-                            }`}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Complete Address</label>
-                    <textarea
-                      rows={3}
-                      value={newAddressText}
-                      onChange={(e) => setNewAddressText(e.target.value)}
-                      placeholder="House/Flat No., Building, Street, Area, Hosur..."
-                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddNewAddress}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-98"
-                  >
-                    Save &amp; Select Address
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   // Main "My Cart" View
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
@@ -8768,6 +8222,32 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
           </button>
         </div>
       </div>
+
+      {/* Standard Swiggy-Style Select Service Address Drawer */}
+      {isAddressScreenOpen && (
+        <SelectServiceAddressDrawer
+          isOpen={isAddressScreenOpen}
+          onClose={() => setIsAddressScreenOpen(false)}
+          currentAddress={activeAddressObj?.address || ""}
+          onSelectAddress={(locObj) => {
+            setIsAddressScreenOpen(false)
+            if (locObj) {
+              const fullAddr = typeof locObj === "string" ? locObj : (locObj.formatted_address || locObj.address || "")
+              setSavedAddresses(prev => [
+                { id: `addr_${Date.now()}`, type: locObj.address_type || "Home", address: fullAddr, icon: "home" },
+                ...prev
+              ])
+              setSelectedAddressId(`addr_${Date.now()}`)
+              try {
+                if (user?.id) {
+                  setCustomerSelectedAddress(user.id, locObj)
+                }
+              } catch (e) {}
+              window.dispatchEvent(new Event("calservice_address_changed"))
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -8804,6 +8284,30 @@ function StepWorkflowCheckout({
   const [typedCouponCode, setTypedCouponCode] = useState("")
   const [couponError, setCouponError] = useState("")
   const [dbCoupons, setDbCoupons] = useState([])
+
+  useEffect(() => {
+    const handleAddressSync = () => {
+      try {
+        const parsed = getCustomerSelectedAddress(user?.id)
+        if (parsed && (parsed.formatted_address || parsed.address)) {
+          const addrStr = parsed.formatted_address || parsed.address || ""
+          setFormData(prev => ({
+            ...prev,
+            address: addrStr,
+            latitude: parsed.latitude ? String(parsed.latitude) : prev.latitude,
+            longitude: parsed.longitude ? String(parsed.longitude) : prev.longitude,
+            flat_house_no: parsed.flat_house_no || prev.flat_house_no,
+            landmark: parsed.landmark || prev.landmark,
+            saved_address_id: parsed.saved_address_id || parsed.id || prev.saved_address_id,
+            address_type: parsed.address_type || parsed.tag || prev.address_type
+          }))
+        }
+      } catch (_) { }
+    }
+
+    window.addEventListener("calservice_address_changed", handleAddressSync)
+    return () => window.removeEventListener("calservice_address_changed", handleAddressSync)
+  }, [setFormData, user?.id])
 
   useEffect(() => {
     apiRequest("/api/customer/coupons/")
@@ -8853,6 +8357,7 @@ function StepWorkflowCheckout({
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
   const [showAddSearchModal, setShowAddSearchModal] = useState(false)
   const [showMapModal, setShowMapModal] = useState(false)
+  const [showAddressDrawer, setShowAddressDrawer] = useState(false)
   const [selectedSearchLoc, setSelectedSearchLoc] = useState("")
   const [showTaxesDropdown, setShowTaxesDropdown] = useState(false)
 
@@ -9163,25 +8668,93 @@ function StepWorkflowCheckout({
               </div>
             </div>
 
-            {/* Step 2: Address */}
+            {/* Step 2: Address (Rich Swiggy / Urban Company Style Address Card) */}
             <div className="p-5 flex items-start gap-4">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
-                <MapPin size={18} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-500">Address</span>
-                  <button
-                    onClick={() => setShowMapModal(true)}
-                    className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                  >
-                    Edit
-                  </button>
-                </div>
-                <p className="text-xs font-bold text-slate-800 leading-snug">
-                  {formData.address || "Select service address"}
-                </p>
-              </div>
+              {(() => {
+                const hasAddress = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                const tagType = (formData.address_type || "Home").toLowerCase();
+                const isHome = tagType.includes("home");
+                const isWork = tagType.includes("work") || tagType.includes("office");
+
+                return (
+                  <>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${
+                      !hasAddress
+                        ? "bg-slate-100 text-slate-500"
+                        : isHome
+                        ? "bg-amber-100 text-amber-700 border border-amber-200"
+                        : isWork
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                        : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    }`}>
+                      {isHome ? <Home size={18} /> : isWork ? <Briefcase size={18} /> : <MapPin size={18} />}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-500">Service Address</span>
+                          {hasAddress && (
+                            <span className="text-[9.5px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
+                              {formData.address_type || "Home"}
+                            </span>
+                          )}
+                        </div>
+                        {hasAddress ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowAddressDrawer(true)}
+                            className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95"
+                          >
+                            Change
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowAddressDrawer(true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3.5 py-1.5 text-xs font-extrabold transition-all shadow-xs cursor-pointer active:scale-95"
+                          >
+                            + Add / Select Address
+                          </button>
+                        )}
+                      </div>
+
+                      {hasAddress ? (
+                        <div className="space-y-1 mt-1">
+                          {(formData.flat_house_no || formData.landmark) && (
+                            <div className="font-extrabold text-xs text-slate-900">
+                              {[formData.flat_house_no, formData.landmark ? `Landmark: ${formData.landmark}` : ""].filter(Boolean).join(" • ")}
+                            </div>
+                          )}
+                          <p className="text-xs font-medium text-slate-700 leading-snug">
+                            {formData.address}
+                          </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 size={11} />
+                              Service Available
+                            </span>
+                            {(formData.latitude && formData.longitude) && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                                📍 Location verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1">
+                          <p className="text-xs font-bold text-slate-400">
+                            Select service address
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Add a delivery address to verify technician serviceability.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Step 3: Slot (Time & Date) */}
@@ -9205,7 +8778,15 @@ function StepWorkflowCheckout({
                         </span>
                       </div>
                       <button
-                        onClick={() => setShowSlotPicker(true)}
+                        onClick={() => {
+                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                          if (!hasAddr) {
+                            setShowAddressDrawer(true);
+                            setSlotRevalidateNotice("Please select your service address first to check availability.");
+                            return;
+                          }
+                          setShowSlotPicker(true);
+                        }}
                         className="text-xs font-bold text-indigo-600 hover:underline"
                       >
                         Change slot
@@ -9213,11 +8794,26 @@ function StepWorkflowCheckout({
                     </div>
                   ) : (
                     <button
-                      onClick={() => setShowSlotPicker(true)}
+                      onClick={() => {
+                        const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                        if (!hasAddr) {
+                          setShowAddressDrawer(true);
+                          setSlotRevalidateNotice("Please select your service address first to check availability.");
+                          return;
+                        }
+                        setShowSlotPicker(true);
+                      }}
                       className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
                     >
                       Select time & date
                     </button>
+                  )}
+
+                  {slotRevalidateNotice && (
+                    <div className="mt-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-xl flex items-center gap-1.5">
+                      <AlertCircle size={14} className="shrink-0 text-amber-600" />
+                      <span>{slotRevalidateNotice}</span>
+                    </div>
                   )}
 
                   {/* Inline Slot Picker Panel */}
@@ -9632,6 +9228,112 @@ function StepWorkflowCheckout({
 
       </div>
 
+      {/* Swiggy-Style Select Service Address Drawer */}
+      <AnimatePresence>
+        {showAddressDrawer && (
+          <SelectServiceAddressDrawer
+            isOpen={showAddressDrawer}
+            onClose={() => setShowAddressDrawer(false)}
+            currentAddress={formData.address}
+            currentAddressId={formData.saved_address_id}
+            serviceSlug={category?.id || categoryKey || "general"}
+            onSelectAddress={(addrObj) => {
+              setShowAddressDrawer(false)
+              if (addrObj) {
+                const addrStr = addrObj.formatted_address || addrObj.address || ""
+                const latVal = addrObj.latitude ? String(addrObj.latitude) : ""
+                const lngVal = addrObj.longitude ? String(addrObj.longitude) : ""
+                const flatVal = addrObj.flat_house_no || addrObj.house_number || ""
+                const landVal = addrObj.landmark || ""
+                const savedId = addrObj.saved_address_id || addrObj.id || null
+                const tagVal = addrObj.address_type || addrObj.tag || "Home"
+
+                // ── Slot Revalidation on Address Change ──
+                if (selectedDate || selectedTime) {
+                  if (addrObj.serviceable === false) {
+                    if (typeof onTimeChange === "function") onTimeChange("")
+                    setSlotRevalidateNotice("This time slot is no longer available for the selected address. Please choose another available slot.")
+                    setShowSlotPicker(true)
+                  } else {
+                    setSlotRevalidateNotice("")
+                  }
+                }
+
+                setFormData(prev => ({
+                  ...prev,
+                  address: addrStr,
+                  latitude: latVal || prev.latitude,
+                  longitude: lngVal || prev.longitude,
+                  flat_house_no: flatVal,
+                  landmark: landVal,
+                  saved_address_id: savedId,
+                  address_type: tagVal
+                }))
+
+                if (typeof setLocation === "function") {
+                  setLocation(addrStr)
+                }
+
+                try {
+                  if (user?.id) {
+                    setCustomerSelectedAddress(user.id, addrObj)
+                  }
+                } catch (e) { }
+              }
+            }}
+            onOpenMapSearch={() => {
+              setShowAddressDrawer(false)
+              setShowMapModal(true)
+            }}
+            onAddNewAddress={() => {
+              setShowAddressDrawer(false)
+              setShowAddSearchModal(true)
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Add New Address Modal with full details */}
+      {showAddSearchModal && (
+        <AddAddressSearchModal
+          onClose={() => setShowAddSearchModal(false)}
+          initialFlat={formData.flat_house_no || ""}
+          initialLandmark={formData.landmark || ""}
+          serviceSlug={category?.id || categoryKey || "general"}
+          onSelectLocation={(loc, coords) => {
+            setShowAddSearchModal(false)
+            if (loc) {
+              const addrStr = typeof loc === "string"
+                ? loc
+                : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              const flatVal = loc.flat_house_no || loc.house_number || "";
+              const landVal = loc.landmark || "";
+              const savedId = loc.id || loc.saved_address_id || null;
+              const tagVal = loc.address_type || loc.tag || "Home";
+
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude,
+                flat_house_no: flatVal,
+                landmark: landVal,
+                saved_address_id: savedId,
+                address_type: tagVal
+              }))
+              if (typeof setLocation === "function") setLocation(addrStr);
+              try {
+                if (user?.id) {
+                  setCustomerSelectedAddress(user.id, loc);
+                }
+              } catch (e) { }
+            }
+          }}
+        />
+      )}
+
       {showMapModal && (
         <MapPickerScreen
           initialCoords={{
@@ -9651,10 +9353,16 @@ function StepWorkflowCheckout({
                 latitude: addrObj.latitude ? String(addrObj.latitude) : prev.latitude,
                 longitude: addrObj.longitude ? String(addrObj.longitude) : prev.longitude,
                 flat_house_no: addrObj.flat_house_no || "",
-                landmark: addrObj.landmark || ""
+                landmark: addrObj.landmark || "",
+                saved_address_id: addrObj.id || addrObj.saved_address_id || null,
+                address_type: addrObj.address_type || addrObj.tag || "Home"
               }))
               if (typeof setLocation === "function") setLocation(fullAddr);
-              try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) { }
+              try {
+                if (user?.id) {
+                  setCustomerSelectedAddress(user.id, addrObj);
+                }
+              } catch (e) { }
             }
             setShowMapModal(false);
           }}
@@ -9841,6 +9549,7 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
 }
 
 export function BookingPage() {
+  const { user, refreshMe } = useAuth()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const routerLocation = useLocation()
@@ -9967,16 +9676,62 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "", flat_house_no: "" })
+  const [formData, setFormData] = useState(() => {
+    let initAddress = ""
+    let initLat = ""
+    let initLng = ""
+    let initFlat = ""
+    let initLandmark = ""
+    let initSavedAddrId = null
+    let initTag = "Home"
+
+    if (routerLocation.state?.address) {
+      initAddress = routerLocation.state.address
+      if (routerLocation.state?.latitude) initLat = String(routerLocation.state.latitude)
+      if (routerLocation.state?.longitude) initLng = String(routerLocation.state.longitude)
+      if (routerLocation.state?.flat_house_no) initFlat = routerLocation.state.flat_house_no
+      if (routerLocation.state?.landmark) initLandmark = routerLocation.state.landmark
+      if (routerLocation.state?.saved_address_id) initSavedAddrId = routerLocation.state.saved_address_id
+      if (routerLocation.state?.address_type) initTag = routerLocation.state.address_type
+    } else {
+      try {
+        const parsed = getCustomerSelectedAddress(user?.id)
+        if (parsed && (parsed.formatted_address || parsed.address)) {
+          initAddress = parsed.formatted_address || parsed.address
+          initLat = parsed.latitude ? String(parsed.latitude) : ""
+          initLng = parsed.longitude ? String(parsed.longitude) : ""
+          initFlat = parsed.flat_house_no || parsed.house_number || ""
+          initLandmark = parsed.landmark || ""
+          initSavedAddrId = parsed.id || parsed.saved_address_id || null
+          initTag = parsed.address_type || parsed.tag || "Home"
+        }
+      } catch (e) { }
+    }
+
+    return {
+      customer_name: "",
+      phone: "",
+      email: "",
+      issue_title: "",
+      description: "",
+      address: initAddress,
+      landmark: initLandmark,
+      latitude: initLat,
+      longitude: initLng,
+      flat_house_no: initFlat,
+      saved_address_id: initSavedAddrId,
+      address_type: initTag
+    }
+  })
 
   const getHaversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -9984,6 +9739,24 @@ export function BookingPage() {
   const customerLng = formData?.longitude ? parseFloat(formData.longitude) : 77.8253;
   const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
   const currentFee = distanceKm > 15 ? 300 : 0;
+
+  useEffect(() => {
+    if (!routerLocation.state?.address) {
+      const parsed = getCustomerSelectedAddress(user?.id)
+      if (parsed && (parsed.formatted_address || parsed.address)) {
+        setFormData(prev => ({
+          ...prev,
+          address: parsed.formatted_address || parsed.address || "",
+          latitude: parsed.latitude ? String(parsed.latitude) : prev.latitude,
+          longitude: parsed.longitude ? String(parsed.longitude) : prev.longitude,
+          flat_house_no: parsed.flat_house_no || prev.flat_house_no,
+          landmark: parsed.landmark || prev.landmark,
+          saved_address_id: parsed.id || parsed.saved_address_id || null,
+          address_type: parsed.address_type || parsed.tag || "Home"
+        }))
+      }
+    }
+  }, [user?.id, routerLocation.state?.address])
 
   useEffect(() => {
     setCart(prev => {
@@ -10056,6 +9829,8 @@ export function BookingPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [location, setLocation] = useState("Set location")
   const [showLocPicker, setShowLocPicker] = useState(false)
+  const [showMapModal, setShowMapModal] = useState(false)
+  const [showAddSearchModal, setShowAddSearchModal] = useState(false)
   const [showPostFlow, setShowPostFlow] = useState(false)
   const [assignedTech, setAssignedTech] = useState(null)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
@@ -10063,12 +9838,12 @@ export function BookingPage() {
   const contentRef = useRef()
 
   // Auth state — customer profile + bookings
-  const { user, refreshMe } = useAuth()
+  const { save: savePendingIntent, restore: restorePendingIntent } = usePendingIntent()
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [customerBookings, setCustomerBookings] = useState([])
   const hasNonDraftBookings = customerBookings.some(b => b.status !== "draft")
 
-  // Auto-sync customer name, phone, and email from authenticated user session
+  // Auto-sync customer name, phone, email, and address from authenticated user session
   useEffect(() => {
     let savedPhone = ""
     try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) { }
@@ -10082,12 +9857,8 @@ export function BookingPage() {
     }
   }, [user])
 
-  // ALWAYS enforce Login / Signup first before proceeding through Checkout or viewing booking details
-  useEffect(() => {
-    if (!user && step > 0 && !trackParam) {
-      setShowCustomerEntryModal(true)
-    }
-  }, [user, step, trackParam])
+  // Auth is gated on protected ACTIONS only (e.g. handleSubmit), NOT on page mount.
+  // Customers can see their cart, date, and booking details freely without logging in.
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
 
@@ -10147,59 +9918,72 @@ export function BookingPage() {
     loadCatalog()
   }, [])
 
-  // Requirement 1 of Prompt 3: Resolve location from customer profile (last_known_location), fallback to "Set location"
+  // Auto-sync location & address from customer profile (default saved address, last_known_location, address)
   useEffect(() => {
-    const locObj = user?.last_known_location || user?.lastKnownLocation
-    if (locObj) {
-      if (typeof locObj === "string" && locObj.trim()) {
-        setLocation(locObj)
-        return
+    let chosenAddress = ""
+    let chosenLat = ""
+    let chosenLng = ""
+    let chosenFlat = ""
+    let chosenLandmark = ""
+    let chosenSavedId = null
+    let chosenTag = "Home"
+
+    if (user?.saved_addresses && Array.isArray(user.saved_addresses) && user.saved_addresses.length > 0) {
+      const defAddr = user.saved_addresses.find(a => a.is_default) || user.saved_addresses[0]
+      if (defAddr) {
+        chosenAddress = defAddr.formatted_address || [defAddr.address_line1, defAddr.landmark, defAddr.city, defAddr.state, defAddr.pincode].filter(Boolean).join(", ")
+        chosenLat = defAddr.latitude ? String(defAddr.latitude) : ""
+        chosenLng = defAddr.longitude ? String(defAddr.longitude) : ""
+        chosenFlat = defAddr.flat_house_no || defAddr.house_number || ""
+        chosenLandmark = defAddr.landmark || ""
+        chosenSavedId = defAddr.id
+        chosenTag = defAddr.address_type || defAddr.tag || "Home"
       }
-      if (locObj.label) {
-        setLocation(locObj.label)
-        return
-      }
-    }
-    if (user?.address) {
-      setLocation(user.address)
-      return
     }
 
-    // Fetch initial location
-    if (navigator.geolocation) {
-      setLocation("Detecting location...")
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-          fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data && data.features && data.features.length > 0) {
-                const p = data.features[0].properties;
-                const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-                setLocation(display);
-              } else {
-                setLocation("Hosur, Tamil Nadu, India");
-              }
-            })
-            .catch(() => setLocation("Hosur, Tamil Nadu, India"));
-        },
-        () => {
-          setLocation("Hosur, Tamil Nadu, India");
+    if (!chosenAddress) {
+      const locObj = user?.last_known_location || user?.lastKnownLocation
+      if (locObj) {
+        if (typeof locObj === "string" && locObj.trim()) {
+          chosenAddress = locObj
+        } else if (locObj.label || locObj.formatted_address) {
+          chosenAddress = locObj.label || locObj.formatted_address
+          if (locObj.latitude) chosenLat = String(locObj.latitude)
+          if (locObj.longitude) chosenLng = String(locObj.longitude)
         }
-      );
+      }
+    }
+
+    if (!chosenAddress && user?.address) {
+      chosenAddress = user.address
+    }
+
+    if (chosenAddress) {
+      setLocation(chosenAddress)
+      setFormData(prev => ({
+        ...prev,
+        address: prev.address && prev.address !== "Set location" && prev.address !== "Hosur, Tamil Nadu" ? prev.address : chosenAddress,
+        latitude: prev.latitude || chosenLat,
+        longitude: prev.longitude || chosenLng,
+        flat_house_no: prev.flat_house_no || chosenFlat,
+        landmark: prev.landmark || chosenLandmark,
+        saved_address_id: prev.saved_address_id || chosenSavedId,
+        address_type: prev.address_type || chosenTag
+      }))
     } else {
-      setLocation("Hosur, Tamil Nadu, India");
+      const storedLoc = getCustomerLocation(user?.id)
+      if (storedLoc && storedLoc !== "Set location") {
+        setLocation(storedLoc)
+      } else {
+        setLocation("Hosur, Tamil Nadu")
+      }
     }
 
     // Auto open location picker if triggerLocPicker was passed in navigation state
     if (routerLocation.state?.triggerLocPicker) {
-      setShowLocPicker(true);
+      setShowLocPicker(true)
     }
-    // Fallback if null or manual entry skipped
-    setLocation("Set location")
-  }, [user])
+  }, [user, routerLocation.state])
 
   useEffect(() => {
     let query = "";
@@ -10232,6 +10016,18 @@ export function BookingPage() {
 
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
     if (!user) {
+      // Save the full booking context before opening auth — it will be restored on success
+      savePendingIntent({
+        type: "CONFIRM_BOOKING",
+        returnPath: window.location.pathname + window.location.search,
+        cart,
+        step,
+        category,
+        selDate,
+        selTime,
+        formData,
+        paymentMethod,
+      })
       setShowCustomerEntryModal(true)
       return
     }
@@ -10267,7 +10063,7 @@ export function BookingPage() {
     const isFreeCategory = itemTotal === 0 && (category?.id === "painting" || category?.id === "mason");
     const totalGst = isFreeCategory ? 0 : cart.reduce((s, i) => s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
     const platformFee = (itemTotal === 0 || isFreeCategory) ? 0 : cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
-    
+
     // Check coupon discount
     let discount = 0;
     const appliedCoupon = couponObj;
@@ -10310,6 +10106,15 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    if (formData.flat_house_no) {
+      data.append("flat_house_no", formData.flat_house_no)
+    }
+    if (formData.landmark) {
+      data.append("landmark", formData.landmark)
+    }
+    if (formData.saved_address_id) {
+      data.append("saved_address_id", formData.saved_address_id)
+    }
     if (formData.latitude) {
       const parsedLat = parseFloat(formData.latitude);
       data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : formData.latitude);
@@ -10329,9 +10134,9 @@ export function BookingPage() {
 
     // Serialize cart_data with gst_rate and platform_fee as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
-      id: c.id, 
-      name: c.name, 
-      price: c.price, 
+      id: c.id,
+      name: c.name,
+      price: c.price,
       quantity: c.quantity || 1,
       gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
       platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
@@ -10358,8 +10163,8 @@ export function BookingPage() {
             console.error("Failed to verify online payment:", e)
           }
         }
-        const savedData = { 
-          ...res.data, 
+        const savedData = {
+          ...res.data,
           paymentMethod: backendPaymentMethod,
           total_amount: calculatedGrandTotal,
           item_total: itemTotal,
@@ -10368,9 +10173,9 @@ export function BookingPage() {
           discount_amount: discount,
           tip_amount: tipAmount,
           cart_data: cart.map(c => ({
-            id: c.id, 
-            name: c.name, 
-            price: c.price, 
+            id: c.id,
+            name: c.name,
+            price: c.price,
             quantity: c.quantity || 1,
             gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
             platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
@@ -10476,25 +10281,6 @@ export function BookingPage() {
             })
           }}
         />
-        <AnimatePresence>
-          {showCustomerEntryModal && (
-            <CustomerEntryFlowModal
-              isOpen={showCustomerEntryModal}
-              onClose={() => {
-                setShowCustomerEntryModal(false)
-                if (!user && !trackParam) {
-                  navigate(routes.landing || "/home", { replace: true })
-                }
-              }}
-              onComplete={(locData) => {
-                setShowCustomerEntryModal(false)
-                setTimeout(() => {
-                  refreshMe && refreshMe()
-                }, 200)
-              }}
-            />
-          )}
-        </AnimatePresence>
       </>
     )
   }
@@ -10537,22 +10323,29 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {/* Customer Login / OTP Flow Modal */}
       <AnimatePresence>
         {showCustomerEntryModal && (
           <CustomerEntryFlowModal
             isOpen={showCustomerEntryModal}
             onClose={() => {
+              // Close without redirecting — cart and booking data remain intact
               setShowCustomerEntryModal(false)
-              if (!user && step > 0 && !trackParam) {
-                navigate(routes.landing || "/home", { replace: true })
-              }
             }}
-            onComplete={(locData) => {
+            onComplete={() => {
               setShowCustomerEntryModal(false)
-              // After login, sync user data into booking form
-              setTimeout(() => {
-                refreshMe && refreshMe()
+              // Restore pending intent and resume booking where the customer left off
+              setTimeout(async () => {
+                await refreshMe?.()
+                const intent = restorePendingIntent()
+                if (intent?.type === "CONFIRM_BOOKING") {
+                  if (intent.cart?.length) setCart(intent.cart)
+                  if (intent.selDate) setSelDate(intent.selDate)
+                  if (intent.selTime) setSelTime(intent.selTime)
+                  if (intent.formData) setFormData(prev => ({ ...prev, ...intent.formData }))
+                  // Advance to address step if address is missing, otherwise to review/summary
+                  const hasAddress = !!(intent.formData?.address)
+                  setStep(hasAddress ? 3 : 2)
+                }
               }, 200)
             }}
           />
@@ -10899,59 +10692,129 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {showLocPicker && (
+      {/* Select Service Address Drawer for header pill & page actions */}
+      <AnimatePresence>
+        {showLocPicker && (
+          <SelectServiceAddressDrawer
+            isOpen={showLocPicker}
+            onClose={() => setShowLocPicker(false)}
+            currentAddress={formData.address}
+            currentAddressId={formData.saved_address_id}
+            onSelectAddress={(addrObj) => {
+              setShowLocPicker(false)
+              if (addrObj) {
+                const addrStr = addrObj.formatted_address || addrObj.address || ""
+                const latVal = addrObj.latitude ? String(addrObj.latitude) : ""
+                const lngVal = addrObj.longitude ? String(addrObj.longitude) : ""
+                const flatVal = addrObj.flat_house_no || addrObj.house_number || ""
+                const landVal = addrObj.landmark || ""
+                const savedId = addrObj.saved_address_id || addrObj.id || null
+                const tagVal = addrObj.address_type || addrObj.tag || "Home"
+
+                setFormData(prev => ({
+                  ...prev,
+                  address: addrStr,
+                  latitude: latVal || prev.latitude,
+                  longitude: lngVal || prev.longitude,
+                  flat_house_no: flatVal,
+                  landmark: landVal,
+                  saved_address_id: savedId,
+                  address_type: tagVal
+                }))
+                setLocation(addrStr)
+
+                try {
+                  if (user?.id) {
+                    setCustomerSelectedAddress(user.id, addrObj)
+                  }
+                } catch (e) { }
+              }
+            }}
+            onOpenMapSearch={() => {
+              setShowLocPicker(false)
+              setShowMapModal(true)
+            }}
+            onAddNewAddress={() => {
+              setShowLocPicker(false)
+              setShowAddSearchModal(true)
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Add New Address Modal with full details */}
+      {showAddSearchModal && (
         <AddAddressSearchModal
-          onClose={() => setShowLocPicker(false)}
+          onClose={() => setShowAddSearchModal(false)}
           initialFlat={formData.flat_house_no || ""}
           initialLandmark={formData.landmark || ""}
+          serviceSlug={category?.id || "general"}
           onSelectLocation={(loc, coords) => {
-            setShowLocPicker(false)
+            setShowAddSearchModal(false)
             if (loc) {
               const addrStr = typeof loc === "string"
                 ? loc
                 : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
               const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
               const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
-              if (addrStr) {
-                setLocation(addrStr)
-                setFormData(prev => ({
-                  ...prev,
-                  address: addrStr,
-                  latitude: latVal ? String(latVal) : prev.latitude,
-                  longitude: lngVal ? String(lngVal) : prev.longitude,
-                  flat_house_no: loc.flat_house_no || "",
-                  landmark: loc.landmark || ""
-                }))
-                localStorage.setItem("calservice_user_location", addrStr)
-              }
+              const flatVal = loc.flat_house_no || loc.house_number || "";
+              const landVal = loc.landmark || "";
+              const savedId = loc.id || loc.saved_address_id || null;
+              const tagVal = loc.address_type || loc.tag || "Home";
+
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude,
+                flat_house_no: flatVal,
+                landmark: landVal,
+                saved_address_id: savedId,
+                address_type: tagVal
+              }))
+              setLocation(addrStr)
+              try {
+                if (user?.id) {
+                  setCustomerSelectedAddress(user.id, loc);
+                }
+              } catch (e) { }
             }
           }}
-          onUseCurrentLocation={() => {
-            setShowLocPicker(false)
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(async (pos) => {
-                try {
-                  const lat = pos.coords.latitude;
-                  const lng = pos.coords.longitude;
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
-                  const data = await res.json();
-                  if (data?.features?.[0]?.properties) {
-                    const p = data.features[0].properties;
-                    const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-                    if (display) {
-                      setLocation(display);
-                      setFormData(prev => ({
-                        ...prev,
-                        address: display,
-                        latitude: String(lat),
-                        longitude: String(lng)
-                      }));
-                      localStorage.setItem("calservice_user_location", display);
-                    }
-                  }
-                } catch (e) { }
-              });
+        />
+      )}
+
+      {/* Interactive Map Picker Modal */}
+      {showMapModal && (
+        <MapPickerScreen
+          initialCoords={{
+            lat: Number(formData.latitude) || 12.754598,
+            lng: Number(formData.longitude) || 77.834477,
+          }}
+          initialFlat={formData.flat_house_no || ""}
+          initialLandmark={formData.landmark || ""}
+          serviceSlug={category?.id || "general"}
+          onClose={() => setShowMapModal(false)}
+          onConfirm={(addrObj) => {
+            if (addrObj) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.locality, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+              setFormData(prev => ({
+                ...prev,
+                address: fullAddr,
+                latitude: addrObj.latitude ? String(addrObj.latitude) : prev.latitude,
+                longitude: addrObj.longitude ? String(addrObj.longitude) : prev.longitude,
+                flat_house_no: addrObj.flat_house_no || "",
+                landmark: addrObj.landmark || "",
+                saved_address_id: addrObj.id || addrObj.saved_address_id || null,
+                address_type: addrObj.address_type || addrObj.tag || "Home"
+              }))
+              setLocation(fullAddr);
+              try {
+                if (user?.id) {
+                  setCustomerSelectedAddress(user.id, addrObj);
+                }
+              } catch (e) { }
             }
+            setShowMapModal(false);
           }}
         />
       )}
@@ -11246,7 +11109,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [expanded, setExpanded] = useState({})
   const [activeDetailService, setActiveDetailService] = useState(null)
   const [showLocSearchModal, setShowLocSearchModal] = useState(false)
-  const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
+  const [paintLocation, setPaintLocation] = useState(() => getCustomerLocation(user?.id) || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
   const [activeTab, setActiveTab] = useState("paint-interior")
@@ -11255,10 +11118,10 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -11477,7 +11340,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     setCart(prev => {
       const parentId = `serv-paint-estimate-${parentService.id}`;
       const existingParent = prev.find(c => c.id === parentId);
-      
+
       let updatedParent;
       if (existingParent) {
         const subOpts = existingParent.selectedSubOptions || [];
@@ -11496,7 +11359,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
           selectedSubOptions: [subOpt.name]
         };
       }
-      
+
       const filtered = prev.filter(c => c.id !== parentId && c.parentId !== parentService.id && c.id !== subOpt.id);
       return [...filtered, updatedParent];
     });
@@ -11694,7 +11557,6 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
                 if (addrStr) {
                   setPaintLocation(addrStr);
-                  localStorage.setItem("calservice_user_location", addrStr);
                   if (typeof setLocation === "function") {
                     setLocation(addrStr);
                   }
@@ -11721,7 +11583,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     if (data?.features?.[0]?.properties) {
                       const p = data.features[0].properties;
                       const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
-                      if (display) { setPaintLocation(display); localStorage.setItem("calservice_user_location", display); }
+                      if (display) { setPaintLocation(display); }
                     }
                   } catch (e) { }
                 });
@@ -12717,42 +12579,42 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               const iconKey = isObj ? (benefit.icon || label || "") : label;
                               const lowerIcon = String(iconKey).toLowerCase();
 
-                            let icon = <Award size={14} color="#0d9488" />;
-                            if (lowerIcon.includes("premium") || lowerIcon.includes("accent") || lowerIcon.includes("spray") || lowerIcon.includes("droplet")) icon = <Sparkles size={14} color="#b45309" />;
-                            if (lowerIcon.includes("verified") || lowerIcon.includes("safety") || lowerIcon.includes("tech") || lowerIcon.includes("shield")) icon = <ShieldCheck size={14} color="#2563eb" />;
-                            if (lowerIcon.includes("clean") || lowerIcon.includes("crack") || lowerIcon.includes("damp") || lowerIcon.includes("tool") || lowerIcon.includes("sand")) icon = <Brush size={14} color="#0d9488" />;
-                            if (lowerIcon.includes("warranty") || lowerIcon.includes("durability") || lowerIcon.includes("award")) icon = <ShieldCheck size={14} color="#16a34a" />;
+                              let icon = <Award size={14} color="#0d9488" />;
+                              if (lowerIcon.includes("premium") || lowerIcon.includes("accent") || lowerIcon.includes("spray") || lowerIcon.includes("droplet")) icon = <Sparkles size={14} color="#b45309" />;
+                              if (lowerIcon.includes("verified") || lowerIcon.includes("safety") || lowerIcon.includes("tech") || lowerIcon.includes("shield")) icon = <ShieldCheck size={14} color="#2563eb" />;
+                              if (lowerIcon.includes("clean") || lowerIcon.includes("crack") || lowerIcon.includes("damp") || lowerIcon.includes("tool") || lowerIcon.includes("sand")) icon = <Brush size={14} color="#0d9488" />;
+                              if (lowerIcon.includes("warranty") || lowerIcon.includes("durability") || lowerIcon.includes("award")) icon = <ShieldCheck size={14} color="#16a34a" />;
 
-                            return (
-                              <div key={i} style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyVertical: 'flex-start',
-                                padding: '8px 4px',
-                                background: '#f8fafc',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '10px',
-                                textAlign: 'center',
-                                gap: '6px'
-                              }}>
-                                <div style={{
-                                  width: '26px',
-                                  height: '26px',
-                                  borderRadius: '50%',
-                                  background: '#ffffff',
+                              return (
+                                <div key={i} style={{
                                   display: 'flex',
+                                  flexDirection: 'column',
                                   alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                  flexShrink: 0
+                                  justifyVertical: 'flex-start',
+                                  padding: '8px 4px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '10px',
+                                  textAlign: 'center',
+                                  gap: '6px'
                                 }}>
-                                  {icon}
+                                  <div style={{
+                                    width: '26px',
+                                    height: '26px',
+                                    borderRadius: '50%',
+                                    background: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                    flexShrink: 0
+                                  }}>
+                                    {icon}
+                                  </div>
+                                  <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#334155', lineHeight: 1.2 }}>{label}</span>
                                 </div>
-                                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#334155', lineHeight: 1.2 }}>{label}</span>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
                         </div>
 
                         {/* STARTING PRICE */}
@@ -13193,11 +13055,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   categoryName: "Painting"
                                 };
                                 updatedCart.push(newItem);
-                                  setCart(prev => {
-                                    const hasIt = prev.some(c => c.id === cartId);
-                                    if (hasIt) return prev;
-                                    return [...prev, newItem];
-                                  });
+                                setCart(prev => {
+                                  const hasIt = prev.some(c => c.id === cartId);
+                                  if (hasIt) return prev;
+                                  return [...prev, newItem];
+                                });
                               }
                               if (onGetEstimate) {
                                 onGetEstimate(updatedCart);
@@ -13530,7 +13392,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [expanded, setExpanded] = useState({});
   const [activeDetailService, setActiveDetailService] = useState(null);
   const [showLocSearchModal, setShowLocSearchModal] = useState(false);
-  const [masonLocation, setMasonLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu");
+  const [masonLocation, setMasonLocation] = useState(() => getCustomerLocation(user?.id) || "Hosur, Tamil Nadu");
   const [masonSearchRotateIdx, setMasonSearchRotateIdx] = useState(0);
   const [expandedFaq, setExpandedFaq] = useState(null);
   const { user } = useAuth();
@@ -13563,10 +13425,10 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -13591,8 +13453,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
     setCart(prev => prev.map(c => {
       if (c.id === "serv-mason-bathroom-tile-fixing") {
-        return { 
-          ...c, 
+        return {
+          ...c,
           selectedBathroomSize: bathroomSize,
           predefinedPrice: price
         };
@@ -14274,7 +14136,6 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
                 if (addrStr) {
                   setMasonLocation(addrStr);
-                  localStorage.setItem("calservice_user_location", addrStr);
                   if (typeof setLocation === "function") {
                     setLocation(addrStr);
                   }
@@ -14301,7 +14162,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     if (data?.features?.[0]?.properties) {
                       const p = data.features[0].properties;
                       const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
-                      if (display) { setMasonLocation(display); localStorage.setItem("calservice_user_location", display); }
+                      if (display) { setMasonLocation(display); }
                     }
                   } catch (e) { }
                 });
@@ -14535,7 +14396,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                   style={{
                                     width: "100%",
                                     padding: "8px 12px",
-                                    border: `1.5px solid ${ (selectedArea && Number(selectedArea) < 500) ? '#fca5a5' : '#cbd5e1' }`,
+                                    border: `1.5px solid ${(selectedArea && Number(selectedArea) < 500) ? '#fca5a5' : '#cbd5e1'}`,
                                     borderRadius: "8px",
                                     fontSize: "0.8rem",
                                     outline: "none",
@@ -14544,9 +14405,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 />
                                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "0.7rem" }}>
                                   <span style={{ color: "#64748b", fontWeight: 650 }}>Rate: ₹120/sq.ft (Combined Material & Labour)</span>
-                                  <span style={{ 
-                                    color: (Number(selectedArea) < 500) ? "#dc2626" : "#059669", 
-                                    fontWeight: 800 
+                                  <span style={{
+                                    color: (Number(selectedArea) < 500) ? "#dc2626" : "#059669",
+                                    fontWeight: 800
                                   }}>
                                     {Number(selectedArea) < 500 ? "⚠️ Minimum: 500 sq.ft" : "✓ Meets Minimum"}
                                   </span>
@@ -14825,8 +14686,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 Area must be 500 sq.ft or more for Minor Masonry work.
                               </div>
                             )}
-                            <button 
-                              className="uc-paint-cart-checkout-btn" 
+                            <button
+                              className="uc-paint-cart-checkout-btn"
                               onClick={onCheckout}
                               disabled={isAreaInvalid}
                               style={{
@@ -15500,14 +15361,15 @@ function getCategoryFaqsAndReviews(pkg) {
 }
 
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, packagesData, isFullPage = false }) {
-  const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
+  const rawCatKey = (category?.id || category?.slug || category?.name || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
-  if (["hvac", "ac"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
-  else if (["tv_display", "tv"].some(k => rawCatKey.includes(k))) normalizedKey = "tv_display";
-  else if (["washing_machine", "washing", "washer"].some(k => rawCatKey.includes(k))) normalizedKey = "washing_machine";
+  if (["washing_machine", "washing", "washer", "wm"].some(k => rawCatKey.includes(k))) normalizedKey = "washing_machine";
   else if (["refrigerator", "fridge"].some(k => rawCatKey.includes(k))) normalizedKey = "refrigerator";
-  else if (["microwave", "purifier"].some(k => rawCatKey.includes(k))) normalizedKey = "microwave";
-  else if (["appliance", "appliance_repair"].some(k => rawCatKey.includes(k))) normalizedKey = "appliance_repair";
+  else if (["tv_display", "tv"].some(k => rawCatKey.includes(k))) normalizedKey = "tv_display";
+  else if (["water_purifier", "ro_purifier", "purifier"].some(k => rawCatKey.includes(k))) normalizedKey = "water_purifier";
+  else if (["microwave", "oven"].some(k => rawCatKey.includes(k))) normalizedKey = "microwave";
+  else if (["appliance_repair", "appliance"].some(k => rawCatKey.includes(k))) normalizedKey = "appliance_repair";
+  else if (["hvac", "air_conditioner", "air conditioner", "heating"].some(k => rawCatKey.includes(k)) || /\bac\b/.test(rawCatKey) || rawCatKey === "ac" || rawCatKey.startsWith("ac-") || rawCatKey.startsWith("ac_")) normalizedKey = "hvac";
   else if (["electrical", "electricity", "elec"].some(k => rawCatKey.includes(k))) normalizedKey = "electrical";
   else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
   else if (["carpentry", "carpenter", "carp"].some(k => rawCatKey.includes(k))) normalizedKey = "carpentry";
@@ -15520,25 +15382,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
   let customerLat = 12.7409;
   let customerLng = 77.8253;
   try {
-    const savedAddressStr = localStorage.getItem("calservices_customer_address") || sessionStorage.getItem("calservices_customer_address");
-    if (savedAddressStr) {
-      const parsed = JSON.parse(savedAddressStr);
-      if (parsed?.latitude && parsed?.longitude) {
-        customerLat = parseFloat(parsed.latitude);
-        customerLng = parseFloat(parsed.longitude);
-      }
+    const coords = getCustomerCoordinates(user?.id);
+    if (coords?.lat && coords?.lng) {
+      customerLat = coords.lat;
+      customerLng = coords.lng;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const distanceKm = getHaversineDistance(12.7409, 77.8253, customerLat, customerLng);
   const currentFee = distanceKm > 15 ? 300 : 0;
@@ -15734,18 +15593,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "/mockups/refrigerator/icon_ref_service.jpg" },
-      { name: "Refrigerator Installation", image: "/mockups/refrigerator/icon_ref_installation.jpg" },
-      { name: "Refrigerator Cooling", image: "/mockups/refrigerator/icon_ref_cooling.jpg" },
-      { name: "Refrigerator Gas & Compressor", image: "/mockups/refrigerator/icon_ref_gas_compressor.jpg" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "/mockups/refrigerator/icon_ref_cleaning.jpg" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "/mockups/refrigerator/icon_ref_parts.jpg" }
+      { name: "Refrigerator Service & Repair", image: imgRefSubServiceRepair },
+      { name: "Refrigerator Installation", image: imgRefSubInstallation },
+      { name: "Refrigerator Cooling", image: imgRefSubCooling },
+      { name: "Refrigerator Gas & Compressor", image: imgRefSubGasCompressor },
+      { name: "Refrigerator Cleaning & Maintenance", image: imgRefSubCleaning },
+      { name: "Refrigerator Parts & Electrical Repair", image: imgRefSubPartsElectrical }
     ],
     microwave: [
-      { name: "Microwave Repair", image: "/mockups/microwave_clean.png" },
-      { name: "Microwave Check-up", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-      { name: "Keypad & Display Fix", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Cavity Deep Cleaning", image: "/mockups/otg_clean.png" }
+      { name: "Microwave Repair", image: imgMicroRepair },
+      { name: "Microwave Check-up", image: imgMicroCheckup },
+      { name: "Keypad & Display Fix", image: imgMicroKeypadDisplay },
+      { name: "Cavity Deep Cleaning", image: imgMicroCavityCleaning }
     ],
     water_purifier: [
       { name: "RO Water Purifier Servicing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
@@ -15754,61 +15613,61 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Purifier Repair & Pump Fix", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
     ],
     appliance_repair: [
-      { name: "Microwave Oven", catId: "microwave", image: "/mockups/microwave_clean.png" },
+      { name: "Microwave Oven", catId: "microwave", image: imgMicroRepair },
       { name: "Washing Machine", catId: "washing_machine", image: "/assets/icon_3d_appliance.jpg" },
       { name: "Refrigerator & Fridge", catId: "refrigerator", image: "/mockups/refrigerator/icon_ref_service.jpg" },
       { name: "Water Purifier & RO", catId: "water_purifier", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "TV & Display", catId: "tv_display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV & Display", catId: "tv_display", image: imgTvSubServiceRepair },
       { name: "AC & Heating", catId: "hvac", image: "/assets/icon_3d_ac.jpg" }
     ],
     tv_display: [
-      { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" },
-      { name: "TV Screen & Display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Sound & Speaker", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-      { name: "TV Software & Smart Features", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Parts & Electrical Repair", image: "/assets/icon_3d_electrical.jpg" }
+      { name: "TV Service & Repair", image: imgTvSubServiceRepair },
+      { name: "TV Installation & Setup", image: imgTvSubInstallationSetup },
+      { name: "TV Screen & Display", image: imgTvSubScreenDisplay },
+      { name: "TV Sound & Speaker", image: imgTvSubSoundSpeaker },
+      { name: "TV Software & Smart Features", image: imgTvSubSoftwareSmartFeatures },
+      { name: "TV Parts & Electrical Repair", image: imgTvSubPartsElectricalRepair }
     ],
     hvac: [
-      { name: "AC Service & Cleaning", image: "/assets/icon_3d_ac.jpg" },
-      { name: "AC Repair", image: "/mockups/AC Repair - Split Window.png" },
-      { name: "AC Gas & Refrigerant", image: "/mockups/Gas Leak Fix & Refill.png" },
-      { name: "AC Installation & Uninstallation", image: "/mockups/Split AC Installation.png" },
-      { name: "AC PCB & Electrical", image: "/mockups/Inverter PCB Repair.png" },
-      { name: "AC Parts & Accessories", image: "/mockups/Heavy-Duty Outdoor AC Wall Stand Fit.png" }
+      { name: "AC Service & Cleaning", image: imgAcSubServiceCleaning },
+      { name: "AC Repair & Diagnostics", image: imgAcSubRepairDiagnostics },
+      { name: "AC Gas & Refrigerant", image: imgAcSubGasRefrigerant },
+      { name: "AC Installation & Uninstallation", image: imgAcSubInstallationUninstallation },
+      { name: "AC PCB & Electrical", image: imgAcSubPcbElectrical },
+      { name: "AC Parts & Accessories", image: imgAcSubPartsAccessories }
     ],
     washing_machine: [
-      { name: "Washing Machine Jet Service", image: "/assets/icon_3d_appliance.jpg" },
-      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
-      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Repair", image: "/assets/icon_3d_appliance.jpg" }
+      { name: "Washing Machine Jet Service", image: imgWmSubJetService },
+      { name: "Washing Machine Check-up", image: imgWmSubCheckup },
+      { name: "Installation & Uninstallation", image: imgWmSubInstallation },
+      { name: "Washing Machine Repair", image: imgWmSubRepair }
     ],
     electrical: [
-      { name: "Switches & Sockets", image: "/assets/icon_3d_electrical.jpg" },
-      { name: "Fan & Lighting", image: "/mockups/ceiling_fan.png" },
-      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
+      { name: "Switches & Sockets", image: imgElecSwitchesSockets },
+      { name: "Fan & Lighting", image: imgElecFanLighting },
+      { name: "MCB & Wiring", image: imgElecMcbWiring },
+      { name: "Inverter & Heavy Appliance", image: imgElecInverterHeavy }
     ],
     plumbing: [
-      { name: "Tap & Mixer", image: "/assets/icon_3d_plumbing.jpg" },
-      { name: "Toilet", image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=300&q=80&fit=crop" },
-      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=300&q=80&fit=crop" },
-      { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" },
-      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-      { name: "Water Filter", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Grouting", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Plumber On-Demand", image: "/mockups/service_plumbing.png" }
+      { name: "Tap & Mixer", image: imgPlumbTapMixer },
+      { name: "Toilet", image: imgPlumbToilet },
+      { name: "Basin & Sink", image: imgPlumbSink },
+      { name: "Bath Fittings", image: imgPlumbShower },
+      { name: "Water Tank & Motor", image: imgPlumbWaterHeater },
+      { name: "Drainage", image: imgPlumbPipeLeakage },
+      { name: "Water Filter", image: imgPlumbKitchen },
+      { name: "Grouting", image: imgPlumbPipeLeakage },
+      { name: "Plumber On-Demand", image: imgPlumbDrainage }
     ],
     carpentry: [
-      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=300&q=80&fit=crop" },
-      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80&fit=crop" },
-      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=300&q=80&fit=crop" },
-      { name: "Hangers & Drying Solutions", image: "/mockups/balcony_cleaning.png" },
-      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" },
-      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
-      { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Carpenter On-Demand", image: "/mockups/service_maintenance.png" }
+      { name: "Lock & Handle", image: imgCarpLockHandle },
+      { name: "Cupboard & Drawer", image: imgCarpCupboardDrawer },
+      { name: "Kitchen Fittings", image: imgCarpKitchenFittings },
+      { name: "Hangers & Drying Solutions", image: imgCarpHangersDrying },
+      { name: "Furniture Services", image: imgCarpFurnitureServices },
+      { name: "Doors & Windows", image: imgCarpDoorsWindows },
+      { name: "Drill & Hanging", image: imgCarpDrillHanging },
+      { name: "Carpenter On-Demand", image: imgCarpCarpenterOnDemand }
     ],
     painting: [
       { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -15966,7 +15825,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "microwave" || cn.includes("microwave") || cn.includes("oven")) return "Microwave Repair";
     if (nk === "water_purifier" || cn.includes("purifier") || cn.includes("ro")) return "RO Water Purifier Servicing";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
-    if (nk === "hvac" || cn.includes("ac") || cn.includes("heating") || cn.includes("air conditioner")) return "AC Service & Cleaning";
+    if (nk === "hvac" || /\bac\b/.test(cn) || cn.includes("air conditioner") || cn.includes("heating")) return "AC Service & Cleaning";
     if (nk === "cleaning" || cn.includes("clean")) return "Occupied Apartment";
 
     if (cart && cart.length > 0) {
@@ -15976,7 +15835,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       if (itemStr.includes("plumb") || itemStr.includes("tap") || itemStr.includes("drain")) return "Tap & Mixer";
       if (itemStr.includes("micro") || itemStr.includes("oven")) return "Microwave Repair";
       if (itemStr.includes("purifier") || itemStr.includes("ro")) return "RO Water Purifier Servicing";
-      if (itemStr.includes("ac") || itemStr.includes("foam") || itemStr.includes("jet") || itemStr.includes("hvac")) return "AC Service & Cleaning";
+      if (/\bac\b/.test(itemStr) || itemStr.includes("hvac") || itemStr.includes("air conditioner")) return "AC Service & Cleaning";
     }
     return "Lock & Handle";
   });
@@ -16051,53 +15910,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const subCategories = React.useMemo(() => {
     const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
 
-    const dynamicKey = Object.keys(packagesData || {}).find(k => {
-      const list = packagesData[k];
-      if (!Array.isArray(list)) return false;
-      return list.some(p =>
-        p.category_slug === effectiveKey ||
-        String(p.category) === effectiveKey ||
-        (effectiveKey === "mason" && (p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "11" || (p.category_name && p.category_name.toLowerCase().includes("mason"))))
-      );
-    });
-
-    const pkgsList = dynamicKey ? (packagesData[dynamicKey] || []) : [];
-    const directServices = dbServicesList.filter(s =>
-      s.category_slug === effectiveKey ||
-      String(s.category) === effectiveKey ||
-      (effectiveKey === "mason" && (s.category_slug === "mason" || String(s.category) === "11"))
-    );
-    const combinedDb = [...pkgsList, ...(Array.isArray(dbCatalogPackages) ? dbCatalogPackages : []), ...directServices];
-
-    if (combinedDb.length > 0) {
-      return staticList.map(tab => {
-        const matched = combinedDb.find(p =>
-          (p.service_name && p.service_name.toLowerCase() === tab.name.toLowerCase()) ||
-          (p.name && p.name.toLowerCase() === tab.name.toLowerCase()) ||
-          (p.service_slug && tab.name.toLowerCase().includes(p.service_slug.replace(/-/g, " "))) ||
-          (p.slug && tab.name.toLowerCase().includes(p.slug.replace(/-/g, " ")))
-        );
-        if (matched) {
-          const rawImg = matched.service_image || matched.image;
-          const dynamicImg = (rawImg && rawImg.trim()) ? resolveImageUrl(rawImg, tab.image) : resolveImageUrl(tab.image, tab.image);
-          return {
-            ...tab,
-            name: matched.service_name || matched.name || tab.name,
-            image: dynamicImg
-          };
-        }
-        return {
-          ...tab,
-          image: resolveImageUrl(tab.image, tab.image)
-        };
-      });
+    if (CATEGORY_SUBCATEGORIES[effectiveKey]) {
+      return staticList;
     }
 
     return staticList.map(tab => ({
       ...tab,
       image: resolveImageUrl(tab.image, tab.image)
     }));
-  }, [effectiveKey, packagesData, dbCatalogPackages, dbServicesList]);
+  }, [effectiveKey]);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -16106,39 +15927,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (param === "Full apartment" || param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") param = "Occupied Apartment";
     if (param === "Full bungalow/duplex") param = "Occupied Bungalow/duplex";
 
-    if (param) {
-      if (param === "TV & Display") {
-        setActiveSubTab("TV Service & Repair");
-      } else if (param === "Washing Machine" || param === "Washing Machine Service & Repair") {
-        setActiveSubTab("Washing Machine Jet Service");
-      } else if (param === "Refrigerator & Fridge" || param === "Refrigerator" || param === "Refrigerator Repair") {
-        setActiveSubTab("Refrigerator Service & Repair");
-      } else if (param === "Microwave & Purifier" || param === "Microwave Repair" || param === "microwave" || param === "Microwave" || param === "Microwave Oven") {
-        setActiveSubTab("Microwave Repair");
-      } else if (param === "Water Purifier & RO" || param === "water_purifier" || param === "Water Purifier" || param === "RO Water Purifier") {
-        setActiveSubTab("RO Water Purifier Servicing");
-      } else if (param === "AC Service & Repair" || param === "AC Repair & Service" || param === "AC & Heating" || param === "hvac" || param === "Air Conditioner" || param === "Air Conditioner Services" || param === "AC Service") {
-        setActiveSubTab("AC Service & Cleaning");
-      } else if (param === "Electrician" || param === "electrical" || param === "Electrician Services") {
-        setActiveSubTab("Switches & Sockets");
-      } else if (param === "Plumber" || param === "plumbing" || param === "Plumber Services" || param === "Taps & Mixers") {
-        setActiveSubTab("Tap & Mixer");
-      } else if (param === "Carpentry" || param === "carpentry" || param === "Carpenter Services") {
-        setActiveSubTab("Lock & Handle");
-      } else if (param === "Mason" || param === "mason") {
-        setActiveSubTab("Minor Masonry / Small Construction Work");
-      } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
-        setActiveSubTab("Occupied Apartment");
-      } else {
-        setActiveSubTab(param);
-      }
-    } else if (subCategories && subCategories.length > 0) {
-      const matched = subCategories.find(c => c.name === activeSubTab);
-      if (!matched && subCategories[0]) {
-        setActiveSubTab(subCategories[0].name);
+    const currentSubCategories = CATEGORY_SUBCATEGORIES[effectiveKey] || [];
+    const isValidTabForCategory = currentSubCategories.some(c => c.name === param);
+
+    if (param && isValidTabForCategory) {
+      setActiveSubTab(param);
+    } else if (currentSubCategories.length > 0) {
+      const isCurrentActiveValid = currentSubCategories.some(c => c.name === activeSubTab);
+      if (!isCurrentActiveValid) {
+        setActiveSubTab(currentSubCategories[0].name);
       }
     }
-  }, [normalizedKey, searchParams, subCategories]);
+  }, [normalizedKey, effectiveKey, searchParams]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -16382,19 +16182,19 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     washing_machine: {
       "Washing Machine Jet Service": [
-        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: imgWmSubJetService }
       ],
       "Washing Machine Check-up": [
-        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: imgWmSubCheckup }
       ],
       "Installation & Uninstallation": [
-        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: imgWmSubInstallation },
+        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: imgWmSubInstallation }
       ],
       "Washing Machine Repair": [
-        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: imgWmSubRepair },
+        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: imgWmSubRepair },
+        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: imgWmSubRepair }
       ]
     },
     hvac: {
@@ -16576,52 +16376,52 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     tv_display: {
       "TV Service & Repair": [
-        { id: "tv-srv-1", name: "TV General Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 21-point TV diagnostic test, panel dust cleaning, port cleaning & voltage stability check.", includes: ["21-point TV audit", "Port & panel cleaning", "Voltage stability check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-srv-2", name: "TV Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Comprehensive diagnosis and repair for LED/OLED/QLED TV audio, display or power board issues.", includes: ["Full TV diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-srv-3", name: "TV Not Turning On", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Power supply board test, standby red light audit, fuse replacement & main PCB power fix.", includes: ["SMPS power board test", "Fuse & diode replace", "Standby circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "tv-srv-4", name: "No Picture Problem", price: 699, duration: "1 hr", badge: "Display Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dark screen with audio diagnostic, LED backlight voltage check, T-Con board test & panel ribbon audit.", includes: ["LED backlight voltage check", "T-Con board test", "Panel ribbon audit"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-srv-5", name: "No Sound Problem", price: 449, duration: "45 mins", badge: "Audio Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Internal speaker coil test, audio IC audit, auxiliary jack & optical audio output repair.", includes: ["Speaker coil test", "Audio IC testing", "Aux/Optical jack check"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-srv-6", name: "Screen Flickering Problem", price: 599, duration: "45 mins", badge: "Flicker Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel ribbon connector cleaning, COF IC test, voltage regulator check & flickering fix.", includes: ["COF IC diagnostic", "Ribbon connector clean", "Voltage regulator fix"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+        { id: "tv-srv-1", name: "TV General Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 21-point TV diagnostic test, panel dust cleaning, port cleaning & voltage stability check.", includes: ["21-point TV audit", "Port & panel cleaning", "Voltage stability check"], image: imgTvSubServiceRepair },
+        { id: "tv-srv-2", name: "TV Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Comprehensive diagnosis and repair for LED/OLED/QLED TV audio, display or power board issues.", includes: ["Full TV diagnostic", "Faulty component fix", "Safety circuit check"], image: imgTvSubServiceRepair },
+        { id: "tv-srv-3", name: "TV Not Turning On", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Power supply board test, standby red light audit, fuse replacement & main PCB power fix.", includes: ["SMPS power board test", "Fuse & diode replace", "Standby circuit fix"], image: imgTvSubServiceRepair },
+        { id: "tv-srv-4", name: "No Picture Problem", price: 699, duration: "1 hr", badge: "Display Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dark screen with audio diagnostic, LED backlight voltage check, T-Con board test & panel ribbon audit.", includes: ["LED backlight voltage check", "T-Con board test", "Panel ribbon audit"], image: imgTvSubScreenDisplay },
+        { id: "tv-srv-5", name: "No Sound Problem", price: 449, duration: "45 mins", badge: "Audio Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Internal speaker coil test, audio IC audit, auxiliary jack & optical audio output repair.", includes: ["Speaker coil test", "Audio IC testing", "Aux/Optical jack check"], image: imgTvSubSoundSpeaker },
+        { id: "tv-srv-6", name: "Screen Flickering Problem", price: 599, duration: "45 mins", badge: "Flicker Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel ribbon connector cleaning, COF IC test, voltage regulator check & flickering fix.", includes: ["COF IC diagnostic", "Ribbon connector clean", "Voltage regulator fix"], image: imgTvSubScreenDisplay }
       ],
       "TV Installation & Setup": [
-        { id: "tv-inst-1", name: "TV Installation", price: 399, duration: "45 mins", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fixed / Tilt wall bracket installation, drill mounting, level verification & cable connections.", includes: ["Wall drilling & bracket fit", "Level balance verification", "HDMI & power setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-inst-2", name: "TV Wall Mounting", price: 449, duration: "45 mins", badge: "Heavy Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy-duty drill wall mounting for 32\" to 75\" TVs, heavy anchor fit & wire concealing.", includes: ["Heavy anchor drilling", "Up to 75\" TV support", "Wire layout setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-inst-3", name: "TV Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe removal of TV from wall bracket, wire detachment & bracket dismounting.", includes: ["Wall bracket unmounting", "Cable detachment", "Packaging prep"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-inst-4", name: "TV Reinstallation", price: 599, duration: "1 hr", badge: "Relocate", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Safe dismounting from old location and new wall bracket drill installation at new spot.", includes: ["Dismount from old spot", "New wall drill installation", "Cable connection & test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-inst-5", name: "TV Stand Installation", price: 299, duration: "30 mins", badge: "Table Stand", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Table top glass / metal leg stand assembly & rubber foot grip fitting.", includes: ["Leg stand screws fit", "Rubber pad alignment", "Table balance check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-inst-6", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Setup", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Wi-Fi setup, OTT app login, HDMI ARC / eARC setup & voice remote pairing.", includes: ["Wi-Fi network connection", "OTT apps login", "ARC audio link"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+        { id: "tv-inst-1", name: "TV Installation", price: 399, duration: "45 mins", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fixed / Tilt wall bracket installation, drill mounting, level verification & cable connections.", includes: ["Wall drilling & bracket fit", "Level balance verification", "HDMI & power setup"], image: imgTvSubInstallationSetup },
+        { id: "tv-inst-2", name: "TV Wall Mounting", price: 449, duration: "45 mins", badge: "Heavy Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy-duty drill wall mounting for 32\" to 75\" TVs, heavy anchor fit & wire concealing.", includes: ["Heavy anchor drilling", "Up to 75\" TV support", "Wire layout setup"], image: imgTvSubInstallationSetup },
+        { id: "tv-inst-3", name: "TV Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe removal of TV from wall bracket, wire detachment & bracket dismounting.", includes: ["Wall bracket unmounting", "Cable detachment", "Packaging prep"], image: imgTvSubInstallationSetup },
+        { id: "tv-inst-4", name: "TV Reinstallation", price: 599, duration: "1 hr", badge: "Relocate", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Safe dismounting from old location and new wall bracket drill installation at new spot.", includes: ["Dismount from old spot", "New wall drill installation", "Cable connection & test"], image: imgTvSubInstallationSetup },
+        { id: "tv-inst-5", name: "TV Stand Installation", price: 299, duration: "30 mins", badge: "Table Stand", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Table top glass / metal leg stand assembly & rubber foot grip fitting.", includes: ["Leg stand screws fit", "Rubber pad alignment", "Table balance check"], image: imgTvSubInstallationSetup },
+        { id: "tv-inst-6", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Setup", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Wi-Fi setup, OTT app login, HDMI ARC / eARC setup & voice remote pairing.", includes: ["Wi-Fi network connection", "OTT apps login", "ARC audio link"], image: imgTvSubSoftwareSmartFeatures }
       ],
       "TV Screen & Display": [
-        { id: "tv-scr-1", name: "Screen Replacement", price: 1499, duration: "2 hrs", badge: "Major Panel", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Original LED/OLED panel assembly replacement with COF bonding & color calibration.", includes: ["Original panel fit", "COF bonding check", "Color & gamma test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-scr-2", name: "Display Panel Repair", price: 999, duration: "1.5 hrs", badge: "Panel Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Panel T-Con logic board repair, ribbon COF bonding repair & display driver IC fix.", includes: ["T-Con board repair", "COF ribbon bonding", "Display driver IC swap"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-scr-3", name: "Backlight Repair", price: 899, duration: "1.5 hrs", badge: "Brightness", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full set replacement of burnt LED backlight strips to restore uniform 100% screen brightness.", includes: ["Diffuser removal", "Full LED strip swap", "Uniform brightness check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-scr-4", name: "Screen Flickering Repair", price: 699, duration: "1 hr", badge: "Flicker Free", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix display flickering, horizontal jitter lines, backlight voltage drop & panel refresh fix.", includes: ["Backlight driver test", "Jitter filter fix", "Panel refresh test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-scr-5", name: "Vertical/Horizontal Line Repair", price: 799, duration: "1.5 hrs", badge: "Line Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix single or multiple vertical/horizontal lines on screen via tab bonding & COF fix.", includes: ["Tab bonding repair", "COF IC bonding", "Line removal verification"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-scr-6", name: "Display Color Problem", price: 599, duration: "45 mins", badge: "Color Tuning", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix inverted colors, negative screen display, magenta tint, or gamma voltage IC repair.", includes: ["Gamma IC voltage check", "Inverted screen code fix", "Color balance calibration"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+        { id: "tv-scr-1", name: "Screen Replacement", price: 1499, duration: "2 hrs", badge: "Major Panel", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Original LED/OLED panel assembly replacement with COF bonding & color calibration.", includes: ["Original panel fit", "COF bonding check", "Color & gamma test"], image: imgTvSubScreenDisplay },
+        { id: "tv-scr-2", name: "Display Panel Repair", price: 999, duration: "1.5 hrs", badge: "Panel Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Panel T-Con logic board repair, ribbon COF bonding repair & display driver IC fix.", includes: ["T-Con board repair", "COF ribbon bonding", "Display driver IC swap"], image: imgTvSubScreenDisplay },
+        { id: "tv-scr-3", name: "Backlight Repair", price: 899, duration: "1.5 hrs", badge: "Brightness", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full set replacement of burnt LED backlight strips to restore uniform 100% screen brightness.", includes: ["Diffuser removal", "Full LED strip swap", "Uniform brightness check"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-scr-4", name: "Screen Flickering Repair", price: 699, duration: "1 hr", badge: "Flicker Free", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix display flickering, horizontal jitter lines, backlight voltage drop & panel refresh fix.", includes: ["Backlight driver test", "Jitter filter fix", "Panel refresh test"], image: imgTvSubScreenDisplay },
+        { id: "tv-scr-5", name: "Vertical/Horizontal Line Repair", price: 799, duration: "1.5 hrs", badge: "Line Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix single or multiple vertical/horizontal lines on screen via tab bonding & COF fix.", includes: ["Tab bonding repair", "COF IC bonding", "Line removal verification"], image: imgTvSubScreenDisplay },
+        { id: "tv-scr-6", name: "Display Color Problem", price: 599, duration: "45 mins", badge: "Color Tuning", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix inverted colors, negative screen display, magenta tint, or gamma voltage IC repair.", includes: ["Gamma IC voltage check", "Inverted screen code fix", "Color balance calibration"], image: imgTvSubScreenDisplay }
       ],
       "TV Sound & Speaker": [
-        { id: "tv-snd-1", name: "Speaker Repair", price: 499, duration: "45 mins", badge: "Speaker Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Internal stereo speaker coil repair, paper cone replacement or new speaker unit fit.", includes: ["Speaker coil rewinding", "Paper cone replace", "Stereo balance test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-snd-2", name: "No Sound Repair", price: 449, duration: "45 mins", badge: "Audio Restore", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Audio amplifier IC replacement, mute circuit reset & audio line trace repair.", includes: ["Audio amp IC replace", "Mute switch reset", "Line trace repair"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-snd-3", name: "Distorted Sound Repair", price: 449, duration: "45 mins", badge: "Clarity Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix cracking/buzzing audio, speaker vibration dampening & voice coil alignment.", includes: ["Vibration pad damping", "Voice coil centering", "High volume test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-snd-4", name: "Audio Port Repair", price: 399, duration: "45 mins", badge: "Port Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "3.5mm Aux jack solder repair, Optical TOSLINK port swap & HDMI ARC audio fix.", includes: ["3.5mm Aux jack solder", "Optical port swap", "ARC signal check"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-snd-5", name: "Sound System Setup", price: 499, duration: "45 mins", badge: "Soundbar Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Soundbar wall mounting, optical / HDMI eARC cable setup, subwoofer placement & surround tuning.", includes: ["Soundbar wall fit", "Optical / eARC setup", "Surround sound test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
-        { id: "tv-snd-6", name: "Bluetooth Audio Setup", price: 249, duration: "20 mins", badge: "Wireless", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Pairing wireless Bluetooth headphones / soundbars & low latency audio sync.", includes: ["Bluetooth pairing", "Latency sync check", "Multi-device test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" }
+        { id: "tv-snd-1", name: "Speaker Repair", price: 499, duration: "45 mins", badge: "Speaker Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Internal stereo speaker coil repair, paper cone replacement or new speaker unit fit.", includes: ["Speaker coil rewinding", "Paper cone replace", "Stereo balance test"], image: imgTvSubSoundSpeaker },
+        { id: "tv-snd-2", name: "No Sound Repair", price: 449, duration: "45 mins", badge: "Audio Restore", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Audio amplifier IC replacement, mute circuit reset & audio line trace repair.", includes: ["Audio amp IC replace", "Mute switch reset", "Line trace repair"], image: imgTvSubSoundSpeaker },
+        { id: "tv-snd-3", name: "Distorted Sound Repair", price: 449, duration: "45 mins", badge: "Clarity Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix cracking/buzzing audio, speaker vibration dampening & voice coil alignment.", includes: ["Vibration pad damping", "Voice coil centering", "High volume test"], image: imgTvSubSoundSpeaker },
+        { id: "tv-snd-4", name: "Audio Port Repair", price: 399, duration: "45 mins", badge: "Port Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "3.5mm Aux jack solder repair, Optical TOSLINK port swap & HDMI ARC audio fix.", includes: ["3.5mm Aux jack solder", "Optical port swap", "ARC signal check"], image: imgTvSubSoundSpeaker },
+        { id: "tv-snd-5", name: "Sound System Setup", price: 499, duration: "45 mins", badge: "Soundbar Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Soundbar wall mounting, optical / HDMI eARC cable setup, subwoofer placement & surround tuning.", includes: ["Soundbar wall fit", "Optical / eARC setup", "Surround sound test"], image: imgTvSubSoundSpeaker },
+        { id: "tv-snd-6", name: "Bluetooth Audio Setup", price: 249, duration: "20 mins", badge: "Wireless", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Pairing wireless Bluetooth headphones / soundbars & low latency audio sync.", includes: ["Bluetooth pairing", "Latency sync check", "Multi-device test"], image: imgTvSubSoundSpeaker }
       ],
       "TV Software & Smart Features": [
-        { id: "tv-soft-1", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Features", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete Android TV / Tizen / WebOS setup, account sync & picture mode tuning.", includes: ["OS initial configuration", "Account sign in", "Picture mode tuning"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-soft-2", name: "Software Update", price: 299, duration: "25 mins", badge: "Firmware", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Firmware flashing via USB/OTA to fix app crashes, boot loops & sluggish OS.", includes: ["Latest OS firmware flash", "Cache wipe", "Boot speed test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-soft-3", name: "App Installation", price: 249, duration: "20 mins", badge: "App Store", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Installation & configuration of Netflix, Prime, YouTube, Hotstar & IPTV streaming apps.", includes: ["OTT apps install", "Sideloading support", "4K playback test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-soft-4", name: "Wi-Fi Connection Setup", price: 249, duration: "20 mins", badge: "Network", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Dual band 2.4GHz / 5GHz Wi-Fi connection fix, DNS configuration & network speed test.", includes: ["Wi-Fi module test", "Custom DNS config", "Bandwidth speed check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-soft-5", name: "Remote Pairing", price: 199, duration: "15 mins", badge: "Remote Pair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Smart Bluetooth / RF voice remote pairing & IR blaster universal code setup.", includes: ["Bluetooth remote sync", "Voice search config", "IR code programming"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-soft-6", name: "Factory Reset & Configuration", price: 299, duration: "30 mins", badge: "Master Reset", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Full factory master reset, memory cache clearing & user preferences setup.", includes: ["Master system reset", "Memory wipe", "Initial wizard setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+        { id: "tv-soft-1", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Features", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete Android TV / Tizen / WebOS setup, account sync & picture mode tuning.", includes: ["OS initial configuration", "Account sign in", "Picture mode tuning"], image: imgTvSubSoftwareSmartFeatures },
+        { id: "tv-soft-2", name: "Software Update", price: 299, duration: "25 mins", badge: "Firmware", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Firmware flashing via USB/OTA to fix app crashes, boot loops & sluggish OS.", includes: ["Latest OS firmware flash", "Cache wipe", "Boot speed test"], image: imgTvSubSoftwareSmartFeatures },
+        { id: "tv-soft-3", name: "App Installation", price: 249, duration: "20 mins", badge: "App Store", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Installation & configuration of Netflix, Prime, YouTube, Hotstar & IPTV streaming apps.", includes: ["OTT apps install", "Sideloading support", "4K playback test"], image: imgTvSubSoftwareSmartFeatures },
+        { id: "tv-soft-4", name: "Wi-Fi Connection Setup", price: 249, duration: "20 mins", badge: "Network", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Dual band 2.4GHz / 5GHz Wi-Fi connection fix, DNS configuration & network speed test.", includes: ["Wi-Fi module test", "Custom DNS config", "Bandwidth speed check"], image: imgTvSubSoftwareSmartFeatures },
+        { id: "tv-soft-5", name: "Remote Pairing", price: 199, duration: "15 mins", badge: "Remote Pair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Smart Bluetooth / RF voice remote pairing & IR blaster universal code setup.", includes: ["Bluetooth remote sync", "Voice search config", "IR code programming"], image: imgTvSubSoftwareSmartFeatures },
+        { id: "tv-soft-6", name: "Factory Reset & Configuration", price: 299, duration: "30 mins", badge: "Master Reset", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Full factory master reset, memory cache clearing & user preferences setup.", includes: ["Master system reset", "Memory wipe", "Initial wizard setup"], image: imgTvSubSoftwareSmartFeatures }
       ],
       "TV Parts & Electrical Repair": [
-        { id: "tv-prt-1", name: "Power Supply Repair", price: 799, duration: "1 hr", badge: "SMPS Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "SMPS power supply board repair, burst capacitor replacement, diode & fuse fix.", includes: ["SMPS board repair", "High voltage diode replace", "Voltage regulator fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "tv-prt-2", name: "Motherboard Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Main logic board BGA CPU reballing, HDMI controller IC swap & EEPROM firmware fix.", includes: ["CPU BGA check", "HDMI controller swap", "EEPROM IC flash"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "tv-prt-3", name: "HDMI Port Repair", price: 599, duration: "1 hr", badge: "HDMI Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Desoldering broken 4K HDMI port connector & soldering brand new gold-plated female jack.", includes: ["Broken port desolder", "4K HDMI jack solder", "Signal continuity test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "tv-prt-4", name: "USB Port Repair", price: 399, duration: "45 mins", badge: "USB Swap", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing damaged USB 2.0 / 3.0 ports on TV mainboard for media playback.", includes: ["USB jack replacement", "Power pin solder", "Flash drive test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "tv-prt-5", name: "Remote Repair", price: 249, duration: "20 mins", badge: "Remote Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Remote keypad membrane cleaning, IR transmitter LED solder & battery terminal fix.", includes: ["Keypad carbon clean", "IR LED resolder", "Battery terminal descaling"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-        { id: "tv-prt-6", name: "Capacitor & Component Replacement", price: 399, duration: "45 mins", badge: "Component Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Metalized film & electrolytic capacitor replacement on TV boards.", includes: ["Capacitor microfarad audit", "Low-ESR capacitor swap", "Circuit stress test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "tv-prt-1", name: "Power Supply Repair", price: 799, duration: "1 hr", badge: "SMPS Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "SMPS power supply board repair, burst capacitor replacement, diode & fuse fix.", includes: ["SMPS board repair", "High voltage diode replace", "Voltage regulator fix"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-prt-2", name: "Motherboard Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Main logic board BGA CPU reballing, HDMI controller IC swap & EEPROM firmware fix.", includes: ["CPU BGA check", "HDMI controller swap", "EEPROM IC flash"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-prt-3", name: "HDMI Port Repair", price: 599, duration: "1 hr", badge: "HDMI Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Desoldering broken 4K HDMI port connector & soldering brand new gold-plated female jack.", includes: ["Broken port desolder", "4K HDMI jack solder", "Signal continuity test"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-prt-4", name: "USB Port Repair", price: 399, duration: "45 mins", badge: "USB Swap", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing damaged USB 2.0 / 3.0 ports on TV mainboard for media playback.", includes: ["USB jack replacement", "Power pin solder", "Flash drive test"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-prt-5", name: "Remote Repair", price: 249, duration: "20 mins", badge: "Remote Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Remote keypad membrane cleaning, IR transmitter LED solder & battery terminal fix.", includes: ["Keypad carbon clean", "IR LED resolder", "Battery terminal descaling"], image: imgTvSubPartsElectricalRepair },
+        { id: "tv-prt-6", name: "Capacitor & Component Replacement", price: 399, duration: "45 mins", badge: "Component Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Metalized film & electrolytic capacitor replacement on TV boards.", includes: ["Capacitor microfarad audit", "Low-ESR capacitor swap", "Circuit stress test"], image: imgTvSubPartsElectricalRepair }
       ]
     },
     plumbing: {
@@ -17304,22 +17104,31 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 }}
                 className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group"
               >
-                <img
-                  src={resolveImageUrl(tab.image, "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")}
-                  alt={tab.name}
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
-                  }}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 border-2 ${isSelected
-                    ? "scale-[1.05] shadow-md border-emerald-500"
-                    : "border-transparent opacity-80 group-hover:opacity-100 group-hover:scale-105 group-hover:border-emerald-500/50"
-                    }`}
-                />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-emerald-600 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={typeof tab.image === "string" ? resolveImageUrl(tab.image, tab.image) : (tab.image || "")}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      if (typeof tab.image === "string" && !tab.image.includes("unsplash")) {
+                        e.target.src = tab.image;
+                      }
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${isSelected
+                      ? "scale-110 drop-shadow-md"
+                      : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                      }`}
+                  />
+                </div>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                   }`}>
                   {tab.name}
                 </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
               </button>
             );
           })}
@@ -17567,22 +17376,30 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
-                        <div className="w-full aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
+                        <div className="w-full aspect-[16/6] sm:aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
                             src={
-                              normalizedKey === "hvac"
+                              normalizedKey === "hvac" || isHvacTab
                                 ? acServiceImg
-                                : (normalizedKey === "refrigerator" || isRefTab)
-                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
-                                : p.image
+                                : (normalizedKey === "tv_display" || isTvTab)
+                                  ? imgTvServiceHero
+                                  : (normalizedKey === "refrigerator" || isRefTab)
+                                    ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                    : (normalizedKey === "washing_machine" || isWmTab)
+                                      ? "/mockups/appliance_cleaning_hero.png"
+                                      : p.image
                             }
                             alt={p.name}
                             className="w-full h-full object-cover object-center"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = (normalizedKey === "refrigerator" || isRefTab)
-                                ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
-                                : "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
+                              e.target.src = (normalizedKey === "tv_display" || isTvTab)
+                                ? "/mockups/tv_service_hero.jpg"
+                                : (normalizedKey === "refrigerator" || isRefTab)
+                                  ? "/mockups/refrigerator/refrigerator_service_hero.jpg"
+                                  : (normalizedKey === "washing_machine" || isWmTab)
+                                    ? "/mockups/appliance_cleaning_hero.png"
+                                    : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
                             }}
                           />
                         </div>
@@ -17717,7 +17534,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                         {/* Right side image & floating ADD button */}
                         <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
-                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50 flex items-center justify-center p-1">
+                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50 flex items-center justify-center p-1.5">
                             <img
                               src={p.image}
                               alt={p.name}
@@ -17725,7 +17542,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                                 e.target.onerror = null;
                                 e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                               }}
-                              className="w-full h-full object-cover object-center rounded-xl transition-transform duration-300 hover:scale-105"
+                              className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
+                                normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                  ? "object-contain p-1"
+                                  : "object-cover"
+                              }`}
                             />
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {
@@ -23249,7 +23070,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) 
+            item.includes = Array.isArray(dbMatch.includes)
               ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
               : item.includes;
             item.tag = dbMatch.tag || "";

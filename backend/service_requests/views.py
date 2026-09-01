@@ -515,83 +515,6 @@ class BookingCreateView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST
                             )
 
-        # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
-        # This is the authoritative zone check. It runs on EVERY booking API
-        # call regardless of what the frontend did or did not validate.
-        # A customer cannot bypass this by calling the API directly.
-        #
-        # Uses the current DB state (race-condition safe — if admin disabled a
-        # zone between the frontend check and submission, this will catch it).
-        from settings_hub.service_zone_engine import check_booking_eligibility
-
-        _lat = serializer.validated_data.get("latitude")
-        _lng = serializer.validated_data.get("longitude")
-        if _lat is None or _lng is None:
-            _lat = 12.7409
-            _lng = 77.8253
-        _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
-
-        zone_result = check_booking_eligibility(
-            lat=_lat,
-            lng=_lng,
-            service_slug=_service_slug,
-            company=company,
-        )
-
-        if not zone_result.allowed:
-            return Response(
-                {
-                    "success": False,
-                    "error_code": zone_result.error_code,
-                    "message": zone_result.message,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        # ── END ZONE GATE ─────────────────────────────────────────────────────
-
-        corrected_fare = resolve_logistics_fare(
-            service_category=serializer.validated_data.get("service_category", ""),
-            logistics_tier=serializer.validated_data.get("logistics_tier"),
-            logistics_lane=serializer.validated_data.get("logistics_lane"),
-            submitted_amount=serializer.validated_data.get("total_amount", 0),
-        )
-
-        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
-        is_painting_booking = False
-        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
-            is_painting_booking = True
-        else:
-            if any(it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id")) for it in cart_data):
-                is_painting_booking = True
-
-        is_mason_booking = False
-        if _service_category in ["mason", "masonry"]:
-            is_mason_booking = True
-        else:
-            if any(it.get("categoryName") == "Mason" or "mason" in str(it.get("id")) for it in cart_data):
-                is_mason_booking = True
-
-        if is_painting_booking or is_mason_booking:
-            dist_km = 0.0
-            if _lat is not None and _lng is not None:
-                dist_m = _haversine_meters(12.7409, 77.8253, _lat, _lng)
-                if dist_m is not None:
-                    dist_km = dist_m / 1000.0
-            if dist_km > 15.0:
-                corrected_fare = Decimal("300.00")
-            else:
-                corrected_fare = Decimal("0.00")
-
-        payment_method = (request.data.get("payment_method") or "COD").upper()
-        if payment_method == "ONLINE":
-            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
-            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
-        else:
-            payment_method = "COD"
-            initial_status = ServiceRequest.Status.CONFIRMED
-            initial_payment_status = ServiceRequest.PaymentStatus.PENDING
-
-
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
@@ -644,6 +567,199 @@ class BookingCreateView(APIView):
                     if not customer_user and email_clean:
                         customer_user = User.objects.filter(email__iexact=email_clean).first()
 
+        # Address, Coordinates & Location Snapshot Resolution
+        saved_address_id = request.data.get("saved_address_id") or serializer.validated_data.get("saved_address_id")
+        saved_addr = None
+        if saved_address_id:
+            from accounts.models import SavedAddress
+            saved_addr = SavedAddress.objects.filter(id=saved_address_id).first()
+            if not saved_addr:
+                return Response({"success": False, "message": "Saved address not found."}, status=status.HTTP_404_NOT_FOUND)
+            if customer_user and saved_addr.user_id != customer_user.id:
+                return Response({"success": False, "message": "You do not have permission to use this saved address."}, status=status.HTTP_403_FORBIDDEN)
+
+        final_lat = serializer.validated_data.get("latitude")
+        final_lng = serializer.validated_data.get("longitude")
+        final_address = serializer.validated_data.get("address", "").strip()
+        flat_house_no = str(request.data.get("flat_house_no") or "").strip()
+        landmark = str(request.data.get("landmark") or "").strip()
+        location_snapshot = {}
+
+        if saved_addr:
+            if saved_addr.latitude is not None and saved_addr.longitude is not None:
+                final_lat = Decimal(str(saved_addr.latitude))
+                final_lng = Decimal(str(saved_addr.longitude))
+            if not final_address or final_address == "Address":
+                final_address = saved_addr.formatted_address or f"{saved_addr.address_line1}, {saved_addr.city}, {saved_addr.state} {saved_addr.pincode}"
+            location_snapshot = {
+                "saved_address_id": saved_addr.id,
+                "street_address": saved_addr.address_line1,
+                "address_line1": saved_addr.address_line1,
+                "flat_house_no": saved_addr.flat_house_no or flat_house_no or "",
+                "landmark": saved_addr.landmark or landmark or "",
+                "city": saved_addr.city,
+                "state": saved_addr.state,
+                "pincode": saved_addr.pincode,
+                "country": saved_addr.country or "India",
+                "formatted_address": saved_addr.formatted_address or final_address,
+                "latitude": float(saved_addr.latitude) if saved_addr.latitude is not None else None,
+                "longitude": float(saved_addr.longitude) if saved_addr.longitude is not None else None,
+                "location_available": bool(saved_addr.latitude is not None and saved_addr.longitude is not None),
+                "location_source": saved_addr.location_source or "saved_address",
+                "geocoding_status": saved_addr.geocoding_status or "verified",
+                "confirmed_at": timezone.now().isoformat(),
+            }
+        else:
+            # If coordinates not supplied, geocode the address
+            if (final_lat is None or final_lng is None) and final_address:
+                from service_requests.services.address_service import AddressService
+                geo = AddressService.resolve_address_coordinates(street_address=final_address)
+                if geo.get("location_available"):
+                    final_lat = Decimal(str(geo["latitude"]))
+                    final_lng = Decimal(str(geo["longitude"]))
+                    location_snapshot = {
+                        "saved_address_id": None,
+                        "street_address": final_address,
+                        "address_line1": final_address,
+                        "flat_house_no": flat_house_no,
+                        "landmark": landmark,
+                        "city": geo.get("city", ""),
+                        "state": geo.get("state", ""),
+                        "pincode": geo.get("pincode", ""),
+                        "country": geo.get("country", "India"),
+                        "formatted_address": geo.get("formatted_address", final_address),
+                        "latitude": float(geo["latitude"]),
+                        "longitude": float(geo["longitude"]),
+                        "location_available": True,
+                        "location_source": "geocoding",
+                        "geocoding_status": geo.get("geocoding_status", "verified"),
+                        "confirmed_at": timezone.now().isoformat(),
+                    }
+                else:
+                    location_snapshot = {
+                        "saved_address_id": None,
+                        "street_address": final_address,
+                        "address_line1": final_address,
+                        "flat_house_no": flat_house_no,
+                        "landmark": landmark,
+                        "city": "",
+                        "state": "",
+                        "pincode": "",
+                        "country": "India",
+                        "formatted_address": final_address,
+                        "latitude": None,
+                        "longitude": None,
+                        "location_available": False,
+                        "location_source": "geocoding",
+                        "geocoding_status": "failed",
+                        "confirmed_at": timezone.now().isoformat(),
+                    }
+            elif final_lat is not None and final_lng is not None:
+                location_snapshot = {
+                    "saved_address_id": None,
+                    "street_address": final_address,
+                    "address_line1": final_address,
+                    "flat_house_no": flat_house_no,
+                    "landmark": landmark,
+                    "city": str(request.data.get("city") or ""),
+                    "state": str(request.data.get("state") or ""),
+                    "pincode": str(request.data.get("pincode") or ""),
+                    "country": "India",
+                    "formatted_address": final_address,
+                    "latitude": float(final_lat),
+                    "longitude": float(final_lng),
+                    "location_available": True,
+                    "location_source": request.data.get("location_source") or "map_picker",
+                    "geocoding_status": "verified",
+                    "confirmed_at": timezone.now().isoformat(),
+                }
+
+        # Validate coordinate numerical bounds
+        if final_lat is not None and final_lng is not None:
+            try:
+                lat_f = float(final_lat)
+                lng_f = float(final_lng)
+                if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lng_f <= 180.0):
+                    return Response(
+                        {"success": False, "message": "Invalid latitude or longitude coordinate bounds."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {"success": False, "message": "Latitude and longitude must be valid numbers."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
+        from settings_hub.service_zone_engine import check_booking_eligibility
+
+        _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
+
+        if final_lat is not None and final_lng is not None:
+            zone_result = check_booking_eligibility(
+                lat=float(final_lat),
+                lng=float(final_lng),
+                service_slug=_service_slug,
+                company=company,
+            )
+            if not zone_result.allowed:
+                return Response(
+                    {
+                        "success": False,
+                        "error_code": zone_result.error_code,
+                        "message": zone_result.message,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            zone_id_snapshot = zone_result.zone_id
+            zone_name_snapshot = zone_result.zone_name or ""
+        else:
+            zone_id_snapshot = None
+            zone_name_snapshot = ""
+        # ── END ZONE GATE ─────────────────────────────────────────────────────
+
+        corrected_fare = resolve_logistics_fare(
+            service_category=serializer.validated_data.get("service_category", ""),
+            logistics_tier=serializer.validated_data.get("logistics_tier"),
+            logistics_lane=serializer.validated_data.get("logistics_lane"),
+            submitted_amount=serializer.validated_data.get("total_amount", 0),
+        )
+
+        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
+        is_painting_booking = False
+        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
+            is_painting_booking = True
+        else:
+            if any(it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id")) for it in cart_data):
+                is_painting_booking = True
+
+        is_mason_booking = False
+        if _service_category in ["mason", "masonry"]:
+            is_mason_booking = True
+        else:
+            if any(it.get("categoryName") == "Mason" or "mason" in str(it.get("id")) for it in cart_data):
+                is_mason_booking = True
+
+        if is_painting_booking or is_mason_booking:
+            dist_km = 0.0
+            if final_lat is not None and final_lng is not None:
+                dist_m = _haversine_meters(12.7409, 77.8253, float(final_lat), float(final_lng))
+                if dist_m is not None:
+                    dist_km = dist_m / 1000.0
+            if dist_km > 15.0:
+                corrected_fare = Decimal("300.00")
+            else:
+                corrected_fare = Decimal("0.00")
+
+        payment_method = (request.data.get("payment_method") or "COD").upper()
+        if payment_method == "ONLINE":
+            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
+            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
+        else:
+            payment_method = "COD"
+            initial_status = ServiceRequest.Status.CONFIRMED
+            initial_payment_status = ServiceRequest.PaymentStatus.PENDING
+
         # Resolve email if missing in validated_data but present on customer_user
         final_email = serializer.validated_data.get("email")
         if not final_email:
@@ -656,14 +772,19 @@ class BookingCreateView(APIView):
             company=company,
             customer=customer_user,
             email=final_email,
+            address=final_address,
+            latitude=final_lat,
+            longitude=final_lng,
+            saved_address_id=saved_addr.id if saved_addr else None,
+            service_location_snapshot=location_snapshot,
             status=initial_status,
             payment_method=payment_method,
             payment_status=initial_payment_status,
             total_amount=corrected_fare,
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
-            service_zone_id_snapshot=zone_result.zone_id,
-            service_zone_name_snapshot=zone_result.zone_name or "",
+            service_zone_id_snapshot=zone_id_snapshot,
+            service_zone_name_snapshot=zone_name_snapshot,
         )
 
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
@@ -907,10 +1028,11 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
 def _resolve_customer_location(sr):
     """
     Authoritative customer location resolver in strict compliance with production hierarchy:
-    1. ServiceRequest latitude + longitude (if already stored & valid)
-    2. Customer's selected saved address coordinates (if available)
-    3. Server-side geocoding of the real booking address
-    4. Explicit location_unavailable (NEVER silently substitute fake or default coordinates)
+    1. Booking service_location_snapshot coordinates
+    2. ServiceRequest latitude + longitude (if already stored & valid)
+    3. Customer's selected saved address coordinates (if available)
+    4. Server-side geocoding of the real booking address
+    5. Explicit location_unavailable (NEVER silently substitute fake or default coordinates)
 
     Returns dict:
     {
@@ -918,26 +1040,49 @@ def _resolve_customer_location(sr):
         "latitude": float | None,
         "longitude": float | None,
         "address": str,
-        "source": "booking" | "saved_address" | "geocoded" | None
+        "pincode": str,
+        "source": "booking_snapshot" | "booking" | "saved_address" | "geocoded" | None
     }
     """
-    # 1. Stored coordinates on ServiceRequest
-    if sr.latitude is not None and sr.longitude is not None:
+    # 1. Booking location snapshot (immutable snapshot taken at creation time)
+    snapshot = getattr(sr, "service_location_snapshot", None)
+    if isinstance(snapshot, dict) and snapshot.get("location_available") and snapshot.get("latitude") is not None and snapshot.get("longitude") is not None:
         try:
-            lat = float(sr.latitude)
-            lng = float(sr.longitude)
+            lat = float(snapshot["latitude"])
+            lng = float(snapshot["longitude"])
             if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
                 return {
                     "available": True,
                     "latitude": lat,
                     "longitude": lng,
+                    "address": snapshot.get("formatted_address") or sr.address or "",
+                    "pincode": snapshot.get("pincode") or "",
+                    "source": "booking_snapshot",
+                }
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Stored coordinates on ServiceRequest
+    if sr.latitude is not None and sr.longitude is not None:
+        try:
+            lat = float(sr.latitude)
+            lng = float(sr.longitude)
+            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
+                import re
+                pincode_match = re.search(r"\b(\d{6})\b", sr.address or "")
+                pincode = pincode_match.group(1) if pincode_match else ""
+                return {
+                    "available": True,
+                    "latitude": lat,
+                    "longitude": lng,
                     "address": sr.address or "",
+                    "pincode": pincode,
                     "source": "booking",
                 }
         except (ValueError, TypeError):
             pass
 
-    # 2. Coordinates from selected saved address
+    # 3. Coordinates from selected saved address (for legacy records)
     saved_addr = None
     if getattr(sr, "saved_address_id", None):
         try:
@@ -969,12 +1114,13 @@ def _resolve_customer_location(sr):
                     "latitude": lat,
                     "longitude": lng,
                     "address": sr.address or saved_addr.formatted_address or "",
+                    "pincode": saved_addr.pincode or "",
                     "source": "saved_address",
                 }
         except (ValueError, TypeError):
             pass
 
-    # 3. Server-side forward geocoding of the real booking address
+    # 4. Server-side forward geocoding of the real booking address
     if sr.address and sr.address.strip():
         try:
             from .services.address_service import AddressService
@@ -988,22 +1134,27 @@ def _resolve_customer_location(sr):
                     sr.save(update_fields=["latitude", "longitude"])
                 except Exception:
                     pass
+                import re
+                pincode_match = re.search(r"\b(\d{6})\b", sr.address or "")
+                pincode = pincode_match.group(1) if pincode_match else ""
                 return {
                     "available": True,
                     "latitude": lat,
                     "longitude": lng,
                     "address": sr.address,
+                    "pincode": pincode,
                     "source": "geocoded",
                 }
         except Exception as e:
             logger.warning("_resolve_customer_location geocoding error: %s", e)
 
-    # 4. Explicitly unavailable (NEVER use fallback default coordinates)
+    # 5. Explicitly unavailable (NEVER use fallback default coordinates)
     return {
         "available": False,
         "latitude": None,
         "longitude": None,
         "address": sr.address or "",
+        "pincode": "",
         "source": None,
     }
 
@@ -1181,12 +1332,6 @@ def _build_tracking_payload(sr, has_full_access):
             resolved_accuracy = float(sr.technician_accuracy) if getattr(sr, "technician_accuracy", None) is not None else None
             loc_time = sr.technician_location_updated_at or timezone.now()
             loc_updated_at = loc_time.isoformat()
-        elif sr.status == "arrived" and dest_lat is not None and dest_lng is not None:
-            tech_lat = float(dest_lat)
-            tech_lng = float(dest_lng)
-            resolved_speed = 0.0
-            loc_time = getattr(sr, "technician_arrived_at", None) or getattr(sr, "updated_at", None) or timezone.now()
-            loc_updated_at = loc_time.isoformat()
         else:
             loc_time = None
 
@@ -1213,6 +1358,53 @@ def _build_tracking_payload(sr, has_full_access):
     eta_seconds = None
     eta_minutes = None
 
+    # Check external workforce tracking if available
+    try:
+        from workforce_integration.services import WorkforceIntegrationService
+        is_mocked = hasattr(WorkforceIntegrationService.get_technician_tracking, "mock") or hasattr(WorkforceIntegrationService.get_technician_tracking, "return_value")
+        if sr.workforce_job_id or sr.external_assignment_id or is_mocked:
+            wf_tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id)
+            if wf_tracking and isinstance(wf_tracking, dict):
+                if wf_tracking.get("technician"):
+                    wf_tech = wf_tracking["technician"]
+                    if not emp_payload:
+                        emp_payload = {
+                            "assigned": True,
+                            "id": sr.technician_id or sr.external_assignment_id or "WF-TECH",
+                            "job_id": sr.workforce_job_id or sr.external_assignment_id or f"SR-{sr.request_id}",
+                            "name": wf_tech.get("name") or "Assigned Service Professional",
+                            "photo": wf_tech.get("photo") or None,
+                            "phone": wf_tech.get("phone") if has_full_access else None,
+                            "rating": float(wf_tech.get("rating")) if wf_tech.get("rating") is not None else None,
+                            "jobs_completed": wf_tech.get("jobs_completed"),
+                            "verified": True,
+                            "service_category": sr.service_category or "",
+                        }
+                    else:
+                        if wf_tech.get("phone") and has_full_access:
+                            emp_payload["phone"] = wf_tech["phone"]
+                        if wf_tech.get("name"):
+                            emp_payload["name"] = wf_tech["name"]
+                        if wf_tech.get("rating") is not None:
+                            emp_payload["rating"] = float(wf_tech["rating"])
+                if wf_tracking.get("location") and tech_lat is None:
+                    wf_loc = wf_tracking["location"]
+                    if wf_loc.get("latitude") is not None and wf_loc.get("longitude") is not None:
+                        tech_lat = float(wf_loc["latitude"])
+                        tech_lng = float(wf_loc["longitude"])
+                        resolved_heading = float(wf_loc.get("heading") or 0.0)
+                        resolved_speed = float(wf_loc.get("speed") or 0.0)
+                        freshness = "LIVE"
+                        loc_updated_at = timezone.now().isoformat()
+                if wf_tracking.get("eta_minutes") is not None:
+                    eta_minutes = int(wf_tracking["eta_minutes"])
+                    eta_seconds = eta_minutes * 60
+                if wf_tracking.get("distance_km") is not None:
+                    distance_km = float(wf_tracking["distance_km"])
+                    distance_m = int(distance_km * 1000)
+    except Exception:
+        pass
+
     if sr.status == "arrived":
         distance_m = 0
         distance_km = 0.0
@@ -1223,7 +1415,7 @@ def _build_tracking_payload(sr, has_full_access):
         distance_km = 0.0
         eta_seconds = 0
         eta_minutes = 0
-    elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
+    elif eta_minutes is None and tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
         raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
         if raw_meters is not None:
             distance_m = int(round(raw_meters))
@@ -1245,6 +1437,7 @@ def _build_tracking_payload(sr, has_full_access):
             "accuracy": resolved_accuracy,
             "freshness": freshness,
             "updated_at": loc_updated_at,
+            "source": "employee_database_gps",
         }
     else:
         live_loc_payload = {
@@ -1257,6 +1450,7 @@ def _build_tracking_payload(sr, has_full_access):
             "accuracy": None,
             "freshness": freshness,
             "updated_at": loc_updated_at,
+            "source": None,
         }
 
     # 7. Vendor details
@@ -1341,6 +1535,15 @@ def _build_tracking_payload(sr, has_full_access):
             quote_remaining_amount = max(0.0, quote_grand_total - quote_paid_amount)
             advance_paid = bool(quote_paid_amount >= quote_advance_amount)
             balance_paid = bool(quote_paid_amount >= quote_grand_total)
+
+    service_title = (
+        getattr(sr, "service_name", None)
+        or (sr.service.name if getattr(sr, "service", None) else None)
+        or (sr.package.name if getattr(sr, "package", None) else None)
+        or sr.issue_title
+        or sr.service_category
+        or "Service"
+    )
 
     return {
         "booking_id": sr.id,
