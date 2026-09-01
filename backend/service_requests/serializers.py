@@ -817,13 +817,19 @@ class RescheduleRequestSerializer(serializers.ModelSerializer):
         )
 
     def get_requested_by_name(self, obj):
-        if obj.requested_by:
-            return obj.requested_by.get_full_name() or obj.requested_by.username
+        try:
+            if obj.requested_by_id and obj.requested_by:
+                return obj.requested_by.get_full_name() or obj.requested_by.username
+        except Exception:
+            pass
         return "Unknown"
 
     def get_admin_reviewed_by_name(self, obj):
-        if obj.admin_reviewed_by:
-            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        try:
+            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
+                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        except Exception:
+            pass
         return None
 
 
@@ -861,18 +867,28 @@ class AdminRescheduleListSerializer(serializers.ModelSerializer):
 
     def get_customer_email(self, obj):
         try:
-            return obj.requested_by.email or obj.booking.email
+            if obj.requested_by_id and obj.requested_by and obj.requested_by.email:
+                return obj.requested_by.email
+            if obj.booking and obj.booking.email:
+                return obj.booking.email
         except Exception:
-            return None
+            pass
+        return None
 
     def get_requested_by_name(self, obj):
-        if obj.requested_by:
-            return obj.requested_by.get_full_name() or obj.requested_by.username
+        try:
+            if obj.requested_by_id and obj.requested_by:
+                return obj.requested_by.get_full_name() or obj.requested_by.username
+        except Exception:
+            pass
         return "Customer"
 
     def get_admin_reviewed_by_name(self, obj):
-        if obj.admin_reviewed_by:
-            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        try:
+            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
+                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        except Exception:
+            pass
         return None
 
     def get_rejection_reason_display(self, obj):
@@ -916,8 +932,8 @@ class CustomerRefundRequestSerializer(serializers.ModelSerializer):
 class AdminRefundRequestSerializer(serializers.ModelSerializer):
     booking_id = serializers.PrimaryKeyRelatedField(source="booking", read_only=True)
     booking_request_id = serializers.CharField(source="booking.request_id", read_only=True)
-    customer_name = serializers.CharField(source="customer.get_full_name", read_only=True)
-    customer_email = serializers.CharField(source="customer.email", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
     evidence = RefundEvidenceSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
@@ -930,6 +946,26 @@ class AdminRefundRequestSerializer(serializers.ModelSerializer):
             "internal_notes", "status", "status_display", "info_requested_from",
             "gateway_reference", "evidence", "created_at", "updated_at"
         )
+
+    def get_customer_name(self, obj):
+        try:
+            if obj.customer_id and obj.customer:
+                return obj.customer.get_full_name() or obj.customer.username
+        except Exception:
+            pass
+        if obj.booking and obj.booking.customer_name:
+            return obj.booking.customer_name
+        return "Customer"
+
+    def get_customer_email(self, obj):
+        try:
+            if obj.customer_id and obj.customer and obj.customer.email:
+                return obj.customer.email
+        except Exception:
+            pass
+        if obj.booking and obj.booking.email:
+            return obj.booking.email
+        return None
 
 
 # ─── Painting Rate Card & Quote Serializers ───────────────────────────────────

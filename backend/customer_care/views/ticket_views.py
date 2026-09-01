@@ -73,6 +73,10 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
         if status_param:
             if status_param == "open_all":
                 qs = qs.exclude(status__in=["resolved", "closed"])
+            elif status_param == "resolved_today":
+                from django.utils import timezone
+                today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                qs = qs.filter(status="resolved", resolved_at__gte=today_start)
             else:
                 qs = qs.filter(status=status_param)
         if priority_param:
@@ -519,15 +523,16 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
 
 
 class CareAgentProfileViewSet(StandardResponseMixin, CompanyScopedViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsCareAgent]
     serializer_class = CareAgentProfileSerializer
 
     def get_queryset(self):
-        # Enforce that only admins/managers can manage profiles
+        # Allow listing agents for all care team members; restrict mutating actions to admins/managers
         user = self.request.user
-        if not (user.role in ["admin", "manager"] or user.is_superuser or user.is_staff):
-            raise PermissionDenied("Only administrators can manage care profiles.")
-        return super().get_queryset()
+        if self.action not in ["list", "retrieve"]:
+            if not (user.role in ["admin", "manager"] or user.is_superuser or user.is_staff):
+                raise PermissionDenied("Only administrators can manage care profiles.")
+        return CareAgentProfile.objects.filter(is_active=True).select_related("user").order_by("id")
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
