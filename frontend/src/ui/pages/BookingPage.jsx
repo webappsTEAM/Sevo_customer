@@ -4404,8 +4404,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [bookingsLoading, setBookingsLoading] = useState(false)
 
   const [profileName, setProfileName] = useState('')
+  const [initialProfileName, setInitialProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [initialProfileEmail, setInitialProfileEmail] = useState('')
   const [profileCustomerId, setProfileCustomerId] = useState(user?.customer_id || user?.customerId || '')
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
@@ -4413,12 +4415,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileSuccess, setProfileSuccess] = useState('')
   const avatarInputRef = useRef(null)
 
+  const hasProfileChanges = Boolean(
+    (profileName.trim() !== initialProfileName.trim()) ||
+    (profileEmail.trim() !== initialProfileEmail.trim())
+  )
+
   useEffect(() => {
     if (user) {
       const uFullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '')
-      setProfileName(uFullName && uFullName !== 'Customer' ? uFullName : (user?.username && user.username !== 'Customer' ? user.username : ''))
+      const initName = uFullName && uFullName !== 'Customer' ? uFullName : (user?.username && user.username !== 'Customer' ? user.username : '')
+      const initEmail = user?.email || ''
+      setProfileName(initName)
+      setInitialProfileName(initName)
       setProfilePhone(user?.phone || '')
-      setProfileEmail(user?.email || '')
+      setProfileEmail(initEmail)
+      setInitialProfileEmail(initEmail)
       setProfileCustomerId(user?.customer_id || user?.customerId || '')
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
@@ -4433,8 +4444,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           if (data?.first_name || data?.name || data?.full_name) {
             const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
             if (fetchedName && fetchedName !== 'Customer') {
-              setProfileName(prev => prev || fetchedName)
+              setProfileName(fetchedName)
+              setInitialProfileName(fetchedName)
             }
+          }
+          if (data?.email) {
+            setProfileEmail(data.email)
+            setInitialProfileEmail(data.email)
           }
         })
         .catch(() => {
@@ -4526,6 +4542,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       }
 
       if (res?.success || res?.id || res?.data) {
+        setInitialProfileName(trimmedName)
+        setInitialProfileEmail(trimmedEmail)
         if (refreshMe) await refreshMe()
         setProfileSuccess("Changes saved successfully!")
         setTimeout(() => setProfileSuccess(''), 4000)
@@ -8274,6 +8292,10 @@ function StepWorkflowCheckout({
   setFormData,
   setLocation
 }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const routerLocation = useLocation()
+  const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
   const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
   const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
   const [avoidCalling, setAvoidCalling] = useState(true)
