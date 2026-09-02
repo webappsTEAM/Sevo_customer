@@ -283,8 +283,12 @@ export function NotificationCenter() {
     setError("")
     try {
       // Core CalServices notifications: Pending complaints and new service requests
-      let srRes = null; try { srRes = await apiRequest("/admin/service-requests/") } catch(e) {}
-      let careRes = null; try { careRes = await apiRequest("/customer-care/tickets/") } catch(e) {}
+      let srRes = null;
+      if (role === 'admin' || role === 'super_admin' || user?.is_staff || user?.is_superuser) {
+        try { srRes = await apiRequest("/admin/service-requests/") } catch(e) {}
+      }
+      let careRes = null;
+      try { careRes = await apiRequest("/customer-care/tickets/") } catch(e) {}
 
       const srs = Array.isArray(srRes?.data) ? srRes.data : Array.isArray(srRes?.results) ? srRes.results : []
       const tickets = Array.isArray(careRes?.data) ? careRes.data : Array.isArray(careRes?.results) ? careRes.results : []

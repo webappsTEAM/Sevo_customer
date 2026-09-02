@@ -1626,7 +1626,15 @@ class AdminSRListView(APIView):
             )
 
         paginator = PageNumberPagination()
-        paginator.page_size = 20
+        page_size_param = request.query_params.get("page_size")
+        if page_size_param:
+            try:
+                paginator.page_size = min(int(page_size_param), 1000)
+            except Exception:
+                paginator.page_size = 100
+        else:
+            paginator.page_size = 100
+
         paginated_qs = paginator.paginate_queryset(qs, request, view=self)
         serializer = ServiceRequestListSerializer(paginated_qs, many=True, context={"request": request})
         return _success(data={
