@@ -12,10 +12,18 @@ export function VegetableProductCard({
   onUpdateQty,
   onOpenOptions,
   onDiscoverRecipes,
+  onSelectProduct,
   deliveryBadge = "8 MINS",
   fallbackPhoto = "/mockups/vegetables_realistic.png",
 }) {
   const hasOptions = item.options && item.options.length > 0
+  const handleCardClick = () => {
+    if (onSelectProduct) {
+      onSelectProduct(item)
+    } else if (onDiscoverRecipes) {
+      onDiscoverRecipes(item)
+    }
+  }
 
   return (
     <div
@@ -26,14 +34,14 @@ export function VegetableProductCard({
       }}
     >
       <div
-        onClick={() => onDiscoverRecipes && onDiscoverRecipes(item)}
+        onClick={handleCardClick}
         className="cursor-pointer"
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
-            onDiscoverRecipes && onDiscoverRecipes(item)
+            handleCardClick()
           }
         }}
       >

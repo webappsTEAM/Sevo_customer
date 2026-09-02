@@ -382,12 +382,11 @@ export function CatalogDashboardPage() {
               <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Quick Navigation</span>
               <span className="text-[10px] font-black px-2.5 py-0.5 rounded-lg border border-slate-200 bg-white text-slate-500 uppercase tracking-wider ml-auto">Manage components</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5 p-5">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 p-5">
               <QuickNav label="Categories"  sub={`${counts.totalCategories} configured`}    icon={FolderOpen}   color="#4F46E5" onClick={() => navigate(routes.catalog_categories)} />
               <QuickNav label="Services"    sub={`${counts.totalServices} total`}            icon={Wrench}       color="#10B981" onClick={() => navigate(routes.catalog_services)} />
               <QuickNav label="Packages"    sub={`${counts.totalPackages} total`}            icon={Package}      color="#2563EB" onClick={() => navigate(routes.catalog_packages)} />
               <QuickNav label="Add-ons"     sub={`${counts.totalAddOns} configured`}        icon={CheckSquare}  color="#7C3AED" onClick={() => navigate(routes.catalog_addons)} />
-              <QuickNav label="Veg Recipes" sub="What can I make?"                          icon={ChefHat}      color="#059669" onClick={() => navigate(routes.catalog_recipes)} />
               <QuickNav label="Smart Recs"  sub="Goes well with"                            icon={Sparkles}     color="#D97706" onClick={() => navigate(routes.catalog_recommendations)} />
               <QuickNav label="Change Log"  sub="View audit trail"                          icon={FileText}     color="#64748B" onClick={() => navigate(routes.catalog_change_log)} />
             </div>
