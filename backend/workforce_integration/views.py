@@ -298,6 +298,25 @@ class WorkforceWebhookView(APIView):
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_rejected"))
 
+                # ── 3b. DISPATCH DELAYED (still matching, no state change) ──────────
+                # SEVO Booking Dispatch Framework doc, section 4: once a booking
+                # has burned through several failed offer cycles on the vendor
+                # side without an acceptance, this softens the customer-facing
+                # signal instead of leaving it looking identical to a booking
+                # that matched instantly. Purely informational -- it deliberately
+                # does NOT change sr.status (the booking is still genuinely being
+                # matched), so it can't interfere with the real status lifecycle
+                # in the branches above and below it. Rides the existing
+                # WebSocket tracking channel with an extra payload key rather
+                # than adding a new DB field/migration.
+                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed", "dispatch.delayed"]:
+                    delay_message = str(
+                        payload.get("message")
+                        or "Still matching you with a technician -- this is taking a little longer than usual."
+                    )
+                    failed_cycles = payload.get("failed_offer_cycles")
+                    transaction.on_commit(lambda: self._broadcast_delay_event(sr, delay_message, failed_cycles))
+
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
                 elif event_type in ["employee_on_the_way", "job.on_the_way"]:
                     loc_dict = payload.get("location") or {}
@@ -487,6 +506,24 @@ class WorkforceWebhookView(APIView):
             broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
+
+    @classmethod
+    def _broadcast_delay_event(cls, sr, message, failed_cycles=None):
+        # Same fire-and-forget-but-logged shape as _broadcast_event above --
+        # a failure here must never affect the webhook's own success
+        # response. Builds the normal tracking payload and adds the delay
+        # message/cycle count on top, rather than introducing a parallel
+        # payload shape the frontend would need a special case for.
+        try:
+            from service_requests.notifications import broadcast_tracking_event
+            from service_requests.views import _build_tracking_payload
+            tracking_payload = _build_tracking_payload(sr, has_full_access=True)
+            tracking_payload["dispatch_delay_message"] = message
+            if failed_cycles is not None:
+                tracking_payload["dispatch_failed_offer_cycles"] = failed_cycles
+            broadcast_tracking_event(sr, event_type="booking_dispatch_delayed", custom_data=tracking_payload)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting booking_dispatch_delayed: {b_err}")
 
     @classmethod
     def _notify(cls, notify_fn, sr):
