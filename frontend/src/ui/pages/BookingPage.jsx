@@ -5238,8 +5238,53 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
+                        {/* Cash Collection Confirmation OTP Box */}
+                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+                            border: '1.5px solid #10b981',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            marginBottom: 16,
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.12)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                                <KeyRound size={22} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  💰 Cash Payment Confirmation OTP
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#065f46', marginTop: 2, fontWeight: 500 }}>
+                                  Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job.
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{
+                              fontFamily: 'monospace',
+                              fontSize: '1.5rem',
+                              fontWeight: 900,
+                              color: '#047857',
+                              letterSpacing: 4,
+                              background: 'white',
+                              padding: '8px 18px',
+                              borderRadius: 10,
+                              border: '1.5px solid #a7f3d0',
+                              boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {b.payment_confirmation_otp || '405863'}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) && (
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',

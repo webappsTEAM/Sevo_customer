@@ -372,6 +372,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     customer_id            = serializers.SerializerMethodField()
     customer_user_id       = serializers.IntegerField(source="customer.id", read_only=True)
     start_otp              = serializers.SerializerMethodField()
+    payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
     base_amount            = serializers.SerializerMethodField()
@@ -397,7 +398,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "total_amount", "base_amount", "extension_amount", "cart_data", "transaction_id", "invoice_id",
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
-            "start_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
+            "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
             "parent_request", "request_kind", "quote_number", "child_requests",
             # GT-C-03: so the customer-facing bookings list can tell which
             # completed bookings are eligible to file an insurance claim
@@ -548,6 +549,25 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             obj.start_otp = _generate_secure_start_otp()
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
+
+    def get_payment_confirmation_otp(self, obj):
+        if obj.payment_status in ["cash_pending", "pending", "collected"]:
+            try:
+                import re
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification WHERE related_object_id = %s AND notification_type = 'PAYMENT_CONFIRMATION_OTP' ORDER BY created_at DESC LIMIT 1;",
+                        [str(obj.id)]
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            return m.group(1)
+            except Exception:
+                pass
+        return None
 
     def get_extension_amount(self, obj):
         try:
