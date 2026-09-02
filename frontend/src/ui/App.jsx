@@ -113,10 +113,6 @@ const FeedbackManagementPage = lazy(() =>
   import("./pages/FeedbackManagementPage.jsx").then(m => ({ default: m.FeedbackManagementPage || m.default }))
 )
 
-const TechnicianAppPage = lazy(() =>
-  import("./pages/TechnicianAppPage.jsx").then(m => ({ default: m.TechnicianAppPage || m.default }))
-)
-
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage || m.default }))
 )
@@ -349,12 +345,6 @@ export function App() {
           <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
           <Route path="/track/:jobId" element={<LiveTrackingPage />} />
           <Route path="/tracking/:token" element={<LiveTrackingPage />} />
-
-          {/* ── Technician Partner App & GPS Telemetry ── */}
-          <Route path={routes.technician_app} element={<TechnicianAppPage />} />
-          <Route path={routes.technician_jobs} element={<TechnicianAppPage />} />
-          <Route path="/technician" element={<Navigate to="/technician/app" replace />} />
-          <Route path="/partner/app" element={<TechnicianAppPage />} />
 
           {/* ── Public Legal & Customer Policy Routes ── */}
           <Route path={routes.terms} element={<TermsPage />} />

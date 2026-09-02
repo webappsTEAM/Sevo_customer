@@ -1494,7 +1494,7 @@ def _build_tracking_payload(sr, has_full_access):
     quote_data = None
     if local_quote:
         quote_data = PaintingQuoteSerializer(local_quote).data
-    else:
+    elif (sr.service_category in ["painting", "masonry", "carpentry", "waterproofing", "renovation"] or getattr(sr, "request_kind", "") == "quoted_work"):
         quote_res = WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id)
         if quote_res.get("success"):
             quote_data = quote_res.get("quote")
