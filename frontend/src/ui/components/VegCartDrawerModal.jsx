@@ -58,6 +58,16 @@ export function VegCartDrawerModal({
           }
         }
         if (matchedItem) break
+
+        if (nameWithUnit.includes(" (2 x ") && nameWithUnit.startsWith(it.name)) {
+          matchedItem = it
+          unit = `2 × ${it.unit || "500 g"}`
+          price = Math.round((it.price || 20) * 1.9)
+          mrp = (it.mrp || (it.price > 20 ? it.price + 8 : it.price + 5)) * 2
+          baseName = it.name
+          break
+        }
+
         if (it.name === nameWithUnit) {
           matchedItem = it
           unit = it.unit || "500 g"

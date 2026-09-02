@@ -5,7 +5,8 @@ import {
   Clock, ShieldCheck, ChevronDown, ChevronUp, FolderOpen,
   Package as PackageIcon, Check, ArrowRight, Sparkle,
   Bike, Boxes, Zap, Droplets, ShoppingBag, CheckCircle2,
-  SlidersHorizontal, ArrowUpRight, Trash2, ChefHat, Utensils
+  SlidersHorizontal, ArrowUpRight, Trash2, ChefHat, Utensils,
+  ShoppingCart, Leaf
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
@@ -2691,6 +2692,9 @@ export function CatalogPackagesPage() {
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
+      offer_price: pkg.offer_price ? Math.round(Number(pkg.offer_price)) : "",
+      product_title_enabled: true,
+      custom_packs: Array.isArray(pkg.custom_packs) && pkg.custom_packs.length > 0 ? pkg.custom_packs : [],
       gst_rate: pkg.gst_rate !== undefined && pkg.gst_rate !== null ? parseFloat(pkg.gst_rate) : 18,
       platform_fee: pkg.platform_fee !== undefined && pkg.platform_fee !== null ? parseFloat(pkg.platform_fee) : 29,
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
@@ -2762,7 +2766,9 @@ export function CatalogPackagesPage() {
         duration: quickPriceEditing.duration || "",
         includes: finalIncludes,
         image: quickPriceEditing.image || "",
-        offer_price: null,
+        offer_price: quickPriceEditing.offer_price !== undefined && quickPriceEditing.offer_price !== null && quickPriceEditing.offer_price !== ""
+          ? Math.round(Number(quickPriceEditing.offer_price))
+          : null,
         excludes: Array.isArray(quickPriceEditing.excludesRates) ? quickPriceEditing.excludesRates : [],
         tools: Array.isArray(vd.tools)
           ? vd.tools
@@ -2804,6 +2810,11 @@ export function CatalogPackagesPage() {
         sort_order: parseInt(quickPriceEditing.sort_order) || 0,
         button_text: quickPriceEditing.button_text || "Add",
         icon: quickPriceEditing.icon || "",
+        custom_packs: Array.isArray(quickPriceEditing.custom_packs) ? quickPriceEditing.custom_packs : [],
+        product_title_enabled: quickPriceEditing.product_title_enabled !== false,
+        standard_pack_enabled: quickPriceEditing.standard_pack_enabled !== false,
+        show_net_price_bar: quickPriceEditing.show_net_price_bar !== false,
+        show_add_to_basket_cta: quickPriceEditing.show_add_to_basket_cta !== false,
       }
 
       // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
@@ -3357,20 +3368,44 @@ export function CatalogPackagesPage() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditing({
-                        ...EMPTY_PACKAGE,
-                        service: String(svcItem.service.realServiceId || svcItem.service.id),
-                        virtualSlug: svcItem.service.virtualSlug || "",
-                      })
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Option</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Search Input in Service Bar */}
+                    <div className="relative w-56 sm:w-72">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder={`Search in ${svcItem.displayName}...`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full h-8 pl-8 pr-7 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition-all"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer text-xs font-bold"
+                          title="Clear search"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing({
+                          ...EMPTY_PACKAGE,
+                          service: String(svcItem.service.realServiceId || svcItem.service.id),
+                          virtualSlug: svcItem.service.virtualSlug || "",
+                        })
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Option</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Packages Table Under this Sub-Service */}
@@ -5151,324 +5186,840 @@ export function CatalogPackagesPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Package Heading / Vehicle Name"
-                required
-                placeholder="e.g. 1.7 ton (1700 kg), 2 Wheeler Electric / Express"
-                value={quickPriceEditing.name || ""}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, name: e.target.value })
-                }
-              />
-              <Input
-                label="Starting Fare / Base Price (₹)"
-                type="number"
-                required
-                placeholder="e.g. 380"
-                value={quickPriceEditing.base_price}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, base_price: e.target.value })
-                }
-              />
-              <Input
-                label="Time / Duration"
-                required
-                placeholder="e.g. 1.5 hrs, 2 hrs, 45 mins"
-                value={quickPriceEditing.duration || ""}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
-                }
-              />
-            </div>
-
-            {/* GST & Platform Fee Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="GST Percentage (%)"
-                type="number"
-                step="0.01"
-                placeholder="e.g. 18"
-                value={quickPriceEditing.gst_rate ?? 18}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, gst_rate: e.target.value })
-                }
-              />
-              <Input
-                label="Platform / Convenience Fee (₹)"
-                type="number"
-                step="0.01"
-                placeholder="e.g. 29"
-                value={quickPriceEditing.platform_fee ?? 29}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, platform_fee: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Customer Price Calculation Live Preview Card */}
-            <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 rounded-xl border border-indigo-100/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <span className="font-bold text-indigo-950">Customer Bill Preview:</span>
-                <div className="text-[11px] text-slate-600 font-medium flex items-center gap-2 flex-wrap">
-                  <span>Base: ₹{Math.round(Number(quickPriceEditing.base_price) || 0)}</span>
-                  <span>+</span>
-                  <span className="text-indigo-700 font-bold">GST ({Number(quickPriceEditing.gst_rate) || 18}%): ₹{Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100))}</span>
-                  <span>+</span>
-                  <span className="text-emerald-700 font-bold">Platform Fee: ₹{Math.round(Number(quickPriceEditing.platform_fee) || 29)}</span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 block">Total Customer Price</span>
-                <span className="text-sm font-black text-indigo-900">
-                  ₹{Math.round(Number(quickPriceEditing.base_price) || 0) + Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100)) + Math.round(Number(quickPriceEditing.platform_fee) || 29)}
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <TextArea
-                label="Description (shown on customer booking cards & info modals)"
-                placeholder="Describe this vehicle payload, bed dimensions, or service details..."
-                value={quickPriceEditing.description || ""}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, description: e.target.value })
-                }
-              />
-            </div>
-
-            {quickPriceEditing.excludesRates && quickPriceEditing.excludesRates.length > 0 && (
-              <div className="bg-gradient-to-b from-indigo-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-indigo-100/90 space-y-3">
-                <span className="text-xs font-bold text-slate-800">Select Requirements / Multi-unit Rates (e.g. BHK / Bathroom prices)</span>
-                <p className="text-[11px] text-slate-500 mt-0.5">Customize the label and price for each option tier.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {quickPriceEditing.excludesRates.map((rate, rIdx) => (
-                    <div key={rIdx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-3xs">
-                      <input
-                        type="text"
-                        placeholder="Label"
-                        value={rate.label || rate.name || ""}
-                        onChange={(e) => {
-                          const updated = quickPriceEditing.excludesRates.map((r, i) =>
-                            i === rIdx ? { ...r, label: e.target.value, name: e.target.value } : r
-                          );
-                          setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
-                        }}
-                        className="w-24 sm:w-28 text-xs font-bold text-slate-700 bg-slate-50/80 border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Price"
-                        value={rate.price}
-                        onChange={(e) => {
-                          const updated = quickPriceEditing.excludesRates.map((r, i) =>
-                            i === rIdx ? { ...r, price: parseInt(e.target.value) || 0 } : r
-                          );
-                          setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
-                        }}
-                        className="flex-1 text-xs font-semibold text-slate-800 bg-white border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
-                      />
+            {/* Dynamic Fields: Tailored for Vegetables vs General Services */}
+            {activeCategoryKey === "vegetables" ||
+             quickPriceEditing?.category_slug === "vegetables" ||
+             /vegetable|farm|fresh produce/i.test(quickPriceEditing?.service_name || quickPriceEditing?.serviceSlug || "") ? (
+              <>
+                {/* ── Realistic Product Page Preview (Editable Checklist Format matching Customer Application) ── */}
+                <div className="bg-white border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                        Interactive Vegetable Customizer &amp; Checklist
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
-                  label="Display Order (sort_order)"
-                  type="number"
-                  placeholder="e.g. 1"
-                  value={quickPriceEditing.sort_order || 0}
-                  onChange={(e) =>
-                    setQuickPriceEditing({ ...quickPriceEditing, sort_order: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <Input
-                  label="Button Text"
-                  placeholder="e.g. Add"
-                  value={quickPriceEditing.button_text || "Add"}
-                  onChange={(e) =>
-                    setQuickPriceEditing({ ...quickPriceEditing, button_text: e.target.value })
-                  }
-                />
-                <Input
-                  label="Icon (e.g. paint-roller, check-circle)"
-                  placeholder="e.g. paint-roller"
-                  value={quickPriceEditing.icon || ""}
-                  onChange={(e) =>
-                    setQuickPriceEditing({ ...quickPriceEditing, icon: e.target.value })
-                  }
-                />
-              </div>
-            )}
-
-            {/* ── Suitable for / Know More Checklist Section (Blue Shade Theme) ── */}
-            <div className="bg-gradient-to-b from-blue-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-blue-100/90 space-y-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-800">
-                      Suitable for / &ldquo;Know More&rdquo; Checklist
-                    </span>
-                    <span className="px-2 py-0.5 text-[10px] font-extrabold bg-blue-100 text-blue-800 rounded-full border border-blue-200/90 shadow-2xs">
-                      {quickPriceEditing.checklist?.filter((i) => i.checked).length || 0} Ticked
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Matches Customer Screen Exactly
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tick items to display in the customer &ldquo;Know More&rdquo; modal. Untick to hide. Add custom items below.
-                  </p>
-                </div>
-              </div>
 
-              {/* Items List */}
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
-                {quickPriceEditing.checklist && quickPriceEditing.checklist.length > 0 ? (
-                  quickPriceEditing.checklist.map((item, idx) => (
-                    <div
-                      key={item.id || idx}
-                      className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all ${
-                        item.checked
-                          ? "bg-white border-blue-200 hover:border-blue-300 shadow-2xs"
-                          : "bg-slate-50 border-slate-200 opacity-80"
-                      }`}
-                    >
-                      <label className="flex items-center gap-2.5 flex-1 cursor-pointer select-none">
+                  {/* 1. Product Title */}
+                  <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={quickPriceEditing.product_title_enabled !== false}
+                        onChange={(e) =>
+                          setQuickPriceEditing({ ...quickPriceEditing, product_title_enabled: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        title="Enable / Show Produce Name"
+                      />
+                      <div className="flex-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                          Produce / Product Title
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={item.checked}
-                          onChange={() => {
-                            const updated = quickPriceEditing.checklist.map((ci) =>
-                              ci.id === item.id ? { ...ci, checked: !ci.checked } : ci
-                            )
-                            setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
-                          }}
-                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                          type="text"
+                          required
+                          placeholder="e.g. Tomato (Thakkali)"
+                          value={quickPriceEditing.name || ""}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, name: e.target.value })
+                          }
+                          className="w-full text-base sm:text-lg font-black text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                         />
-                        {quickPriceEditing.editingItemId === item.id ? (
-                          <input
-                            type="text"
-                            value={item.text}
-                            onChange={(e) => {
-                              const updated = quickPriceEditing.checklist.map((ci) =>
-                                ci.id === item.id ? { ...ci, text: e.target.value } : ci
-                              )
-                              setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
-                            }}
-                            onBlur={() => setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })
-                              }
-                            }}
-                            autoFocus
-                            className="bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1.5 py-0.5 text-xs font-semibold flex-1 text-slate-800"
-                          />
-                        ) : (
-                          <span
-                            onClick={() => {
-                              // By request, clicking the row text directly does not trigger edit, must click the edit icon.
-                              // Clicking the checkbox still toggles, but span does nothing.
-                            }}
-                            className={`text-xs font-semibold px-1.5 py-0.5 flex-1 select-none ${
-                              item.checked ? "text-slate-800" : "text-slate-400"
-                            }`}
-                          >
-                            {item.text}
-                          </span>
-                        )}
-                      </label>
+                      </div>
+                    </div>
+                  </div>
 
-                      <div className="flex items-center gap-1">
-                        {/* Edit indicator/button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQuickPriceEditing({
-                              ...quickPriceEditing,
-                              editingItemId: item.id
-                            })
-                          }}
-                          title="Rename item"
-                          className={`p-1 rounded-lg transition-colors cursor-pointer ${
-                            quickPriceEditing.editingItemId === item.id
-                              ? "text-blue-600 bg-blue-50"
-                              : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                          }`}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                  {/* 2. Choose Pack Size (Editable Matrix + Add Custom Pack / Grams Option) */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <span>Choose Pack Size (Editable Matrix)</span>
+                      </span>
 
-                      {/* Remove item button */}
+                      {/* + Add New Pack Option / Grams Button */}
                       <button
                         type="button"
                         onClick={() => {
-                          const updated = quickPriceEditing.checklist.filter((ci) => ci.id !== item.id)
-                          setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                          const existingPacks = Array.isArray(quickPriceEditing.custom_packs) ? quickPriceEditing.custom_packs : []
+                          const newPack = {
+                            id: `pack-${Date.now()}`,
+                            title: "Pack Size",
+                            unit: "250 g",
+                            price: Math.max(1, Math.round((Number(quickPriceEditing.base_price) || 20) * 0.5)),
+                            mrp: quickPriceEditing.offer_price ? Math.round(Number(quickPriceEditing.offer_price) * 0.5) : "",
+                            tag: "",
+                            enabled: true,
+                          }
+                          setQuickPriceEditing({
+                            ...quickPriceEditing,
+                            custom_packs: [...existingPacks, newPack],
+                          })
                         }}
-                        title="Remove item"
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Pack Option</span>
                       </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Pack 1: Standard Pack Card */}
+                      <div className="p-3.5 rounded-2xl border-2 border-emerald-600 bg-emerald-50/40 relative space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={quickPriceEditing.standard_pack_enabled !== false}
+                              onChange={(e) =>
+                                setQuickPriceEditing({ ...quickPriceEditing, standard_pack_enabled: e.target.checked })
+                              }
+                              className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              title="Toggle Standard Pack"
+                            />
+                            <span className="text-xs font-black text-slate-900">
+                              Standard Pack
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              placeholder="e.g. 23% OFF"
+                              value={quickPriceEditing.tag || ""}
+                              onChange={(e) =>
+                                setQuickPriceEditing({ ...quickPriceEditing, tag: e.target.value })
+                              }
+                              className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1.5 py-0.5 w-20 text-center outline-none focus:ring-1 focus:ring-emerald-500"
+                              title="Offer Badge Text"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 block">Unit Weight</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="500 g"
+                              value={quickPriceEditing.duration || ""}
+                              onChange={(e) =>
+                                setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
+                              }
+                              className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 block">Selling Price (₹)</label>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-bold text-slate-500">₹</span>
+                              <input
+                                type="number"
+                                required
+                                placeholder="14"
+                                value={quickPriceEditing.base_price}
+                                onChange={(e) =>
+                                  setQuickPriceEditing({ ...quickPriceEditing, base_price: e.target.value })
+                                }
+                                className="w-full text-sm font-black text-emerald-900 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-1 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">MRP (₹) (Optional):</span>
+                          <input
+                            type="number"
+                            placeholder="e.g. 19"
+                            value={quickPriceEditing.offer_price ?? ""}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, offer_price: e.target.value })
+                            }
+                            className="w-20 text-xs text-slate-400 line-through bg-white border border-slate-200 rounded px-1.5 py-0.5 outline-none focus:border-emerald-500 text-right"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pack 2: Family Saver Pack Card (2x) */}
+                      <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 relative space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={quickPriceEditing.enable_family_saver !== false}
+                              onChange={(e) =>
+                                setQuickPriceEditing({ ...quickPriceEditing, enable_family_saver: e.target.checked })
+                              }
+                              className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              title="Toggle Family Saver Option"
+                            />
+                            <span className="text-xs font-black text-slate-900">
+                              2 × {quickPriceEditing.duration || "500 g"}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-black uppercase text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-2xs">
+                            Family Saver
+                          </span>
+                        </div>
+
+                        <div className="pt-1 flex items-baseline justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Automatic Saver Price</span>
+                            <span className="text-base font-black text-slate-900">
+                              ₹{Math.max(1, Math.round((Number(quickPriceEditing.base_price) || 0) * 2 - 1))}
+                            </span>
+                          </div>
+                          {quickPriceEditing.offer_price && (
+                            <span className="text-xs text-slate-400 line-through">
+                              ₹{Math.round(Number(quickPriceEditing.offer_price) * 2)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium italic">
+                          Auto-calculated 2x saver pack with extra discount
+                        </p>
+                      </div>
+
+                      {/* Additional Custom Packs / Grams Options */}
+                      {Array.isArray(quickPriceEditing.custom_packs) && quickPriceEditing.custom_packs.map((cp, cIdx) => (
+                        <div key={cp.id || cIdx} className="p-3.5 rounded-2xl border border-emerald-300 bg-white relative space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={cp.enabled !== false}
+                                onChange={(e) => {
+                                  const updated = [...quickPriceEditing.custom_packs]
+                                  updated[cIdx] = { ...updated[cIdx], enabled: e.target.checked }
+                                  setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                }}
+                                className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={cp.title || `Pack (${cp.unit || "250 g"})`}
+                                onChange={(e) => {
+                                  const updated = [...quickPriceEditing.custom_packs]
+                                  updated[cIdx] = { ...updated[cIdx], title: e.target.value }
+                                  setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                }}
+                                className="text-xs font-black text-slate-900 bg-transparent border-b border-slate-200 outline-none w-28"
+                                placeholder="Pack Name"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="Offer Badge"
+                                value={cp.tag || ""}
+                                onChange={(e) => {
+                                  const updated = [...quickPriceEditing.custom_packs]
+                                  updated[cIdx] = { ...updated[cIdx], tag: e.target.value }
+                                  setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                }}
+                                className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 w-18 text-center outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = quickPriceEditing.custom_packs.filter((_, i) => i !== cIdx)
+                                  setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                }}
+                                className="p-1 rounded text-rose-500 hover:bg-rose-50 cursor-pointer"
+                                title="Delete this Pack Option"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 block">Unit / Grams</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. 250 g, 1 kg"
+                                value={cp.unit || ""}
+                                onChange={(e) => {
+                                  const updated = [...quickPriceEditing.custom_packs]
+                                  updated[cIdx] = { ...updated[cIdx], unit: e.target.value }
+                                  setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                }}
+                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 block">Price (₹)</label>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-slate-500">₹</span>
+                                <input
+                                  type="number"
+                                  placeholder="20"
+                                  value={cp.price ?? ""}
+                                  onChange={(e) => {
+                                    const updated = [...quickPriceEditing.custom_packs]
+                                    updated[cIdx] = { ...updated[cIdx], price: e.target.value }
+                                    setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                                  }}
+                                  className="w-full text-sm font-black text-emerald-900 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-emerald-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-1 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400 font-medium">MRP (₹):</span>
+                            <input
+                              type="number"
+                              placeholder="e.g. 25"
+                              value={cp.mrp ?? ""}
+                              onChange={(e) => {
+                                const updated = [...quickPriceEditing.custom_packs]
+                                updated[cIdx] = { ...updated[cIdx], mrp: e.target.value }
+                                setQuickPriceEditing({ ...quickPriceEditing, custom_packs: updated })
+                              }}
+                              className="w-20 text-xs text-slate-400 line-through bg-white border border-slate-200 rounded px-1.5 py-0.5 outline-none focus:border-emerald-500 text-right"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 3. Bottom Net Price Bar with Add to Basket (All Checkable) */}
+                  <div className="p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={quickPriceEditing.show_net_price_bar !== false}
+                        onChange={(e) =>
+                          setQuickPriceEditing({ ...quickPriceEditing, show_net_price_bar: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        title="Toggle Net Price Display"
+                      />
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xl sm:text-2xl font-black text-slate-900">
+                            ₹{Math.round(Number(quickPriceEditing.base_price) || 0)}
+                          </span>
+                          {quickPriceEditing.offer_price && Number(quickPriceEditing.offer_price) > Number(quickPriceEditing.base_price) && (
+                            <span className="text-xs text-slate-400 line-through font-semibold">
+                              ₹{Math.round(Number(quickPriceEditing.offer_price))}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 block">
+                          Net Price per {quickPriceEditing.duration || "500 g"}
+                        </span>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-400 italic py-2 text-center">No checklist items added yet.</p>
-                )}
-              </div>
 
-              {/* Add New Item Row */}
-              <div className="flex items-center gap-2 pt-2 border-t border-blue-100">
-                <input
-                  type="text"
-                  placeholder="Type new item (e.g. Fragile glassware, Heavy pallet items)..."
-                  value={newItemText}
-                  onChange={(e) => setNewItemText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      if (newItemText.trim()) {
-                        const newItem = {
-                          id: `custom-${Date.now()}`,
-                          text: newItemText.trim(),
-                          checked: true,
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={quickPriceEditing.show_add_to_basket_cta !== false}
+                        onChange={(e) =>
+                          setQuickPriceEditing({ ...quickPriceEditing, show_add_to_basket_cta: e.target.checked })
                         }
-                        setQuickPriceEditing({
-                          ...quickPriceEditing,
-                          checklist: [...(quickPriceEditing.checklist || []), newItem],
-                        })
-                        setNewItemText("")
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        title="Toggle Add to Basket CTA"
+                      />
+                      <div className="px-5 py-2 rounded-xl bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 shadow-sm opacity-90 select-none">
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Add to Basket</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Calservices Freshness & Quality Promise Cards (Checklist format) */}
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">
+                      Trust &amp; Freshness Promise Cards (Checklist)
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {/* Card 1 */}
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.promise_farm !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, promise_farm: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 mt-1 cursor-pointer"
+                        />
+                        <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <Leaf className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_farm_title || "Direct From Farm"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_farm_title: e.target.value })
+                            }
+                            className="text-[11px] font-bold text-slate-900 bg-transparent border-b border-slate-200 outline-none w-full"
+                          />
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_farm_sub || "Zero cold storage"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_farm_sub: e.target.value })
+                            }
+                            className="text-[9px] text-slate-500 bg-transparent outline-none w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card 2 */}
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.promise_express !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, promise_express: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 mt-1 cursor-pointer"
+                        />
+                        <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <Clock className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_express_title || "Express Delivery"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_express_title: e.target.value })
+                            }
+                            className="text-[11px] font-bold text-slate-900 bg-transparent border-b border-slate-200 outline-none w-full"
+                          />
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_express_sub || "Guaranteed slot"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_express_sub: e.target.value })
+                            }
+                            className="text-[9px] text-slate-500 bg-transparent outline-none w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card 3 */}
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.promise_quality !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, promise_quality: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 mt-1 cursor-pointer"
+                        />
+                        <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_quality_title || "100% Quality"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_quality_title: e.target.value })
+                            }
+                            className="text-[11px] font-bold text-slate-900 bg-transparent border-b border-slate-200 outline-none w-full"
+                          />
+                          <input
+                            type="text"
+                            value={quickPriceEditing.promise_quality_sub || "Instant replacement"}
+                            onChange={(e) =>
+                              setQuickPriceEditing({ ...quickPriceEditing, promise_quality_sub: e.target.value })
+                            }
+                            className="text-[9px] text-slate-500 bg-transparent outline-none w-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. Product Details ("About This Produce" & Quality Highlights Checklist) */}
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+                      Product Details (Shown under &ldquo;About This Produce&rdquo; on Customer Page)
+                    </label>
+                    <TextArea
+                      placeholder="e.g. Farm-fresh Tomato (Thakkali) harvested daily from verified local farms. Rich in natural vitamins, dietary fiber, and essential minerals..."
+                      value={quickPriceEditing.description || ""}
+                      rows={3}
+                      onChange={(e) =>
+                        setQuickPriceEditing({ ...quickPriceEditing, description: e.target.value })
                       }
+                    />
+
+                    {/* Quality Highlights Checklist */}
+                    <div className="pt-1.5 flex flex-wrap gap-4 text-xs font-semibold text-slate-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.pesticide_free !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, pesticide_free: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>100% Pesticide Screened</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.ro_washed !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, ro_washed: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Washed with Clean RO Water</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={quickPriceEditing.handpicked !== false}
+                          onChange={(e) =>
+                            setQuickPriceEditing({ ...quickPriceEditing, handpicked: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Handpicked Daily</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="Package Heading / Vehicle Name"
+                    required
+                    placeholder="e.g. 1.7 ton (1700 kg), 2 Wheeler Electric / Express"
+                    value={quickPriceEditing.name || ""}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, name: e.target.value })
                     }
-                  }}
-                  className="flex-1 h-9 px-3 rounded-xl border border-blue-200/80 bg-white text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (newItemText.trim()) {
-                      const newItem = {
-                        id: `custom-${Date.now()}`,
-                        text: newItemText.trim(),
-                        checked: true,
+                  />
+                  <Input
+                    label="Starting Fare / Base Price (₹)"
+                    type="number"
+                    required
+                    placeholder="e.g. 380"
+                    value={quickPriceEditing.base_price}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, base_price: e.target.value })
+                    }
+                  />
+                  <Input
+                    label="Time / Duration"
+                    required
+                    placeholder="e.g. 1.5 hrs, 2 hrs, 45 mins"
+                    value={quickPriceEditing.duration || ""}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* GST & Platform Fee Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="GST Percentage (%)"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 18"
+                    value={quickPriceEditing.gst_rate ?? 18}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, gst_rate: e.target.value })
+                    }
+                  />
+                  <Input
+                    label="Platform / Convenience Fee (₹)"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 29"
+                    value={quickPriceEditing.platform_fee ?? 29}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, platform_fee: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* Customer Price Calculation Live Preview Card */}
+                <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 rounded-xl border border-indigo-100/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-indigo-950">Customer Bill Preview:</span>
+                    <div className="text-[11px] text-slate-600 font-medium flex items-center gap-2 flex-wrap">
+                      <span>Base: ₹{Math.round(Number(quickPriceEditing.base_price) || 0)}</span>
+                      <span>+</span>
+                      <span className="text-indigo-700 font-bold">GST ({Number(quickPriceEditing.gst_rate) || 18}%): ₹{Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100))}</span>
+                      <span>+</span>
+                      <span className="text-emerald-700 font-bold">Platform Fee: ₹{Math.round(Number(quickPriceEditing.platform_fee) || 29)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 block">Total Customer Price</span>
+                    <span className="text-sm font-black text-indigo-900">
+                      ₹{Math.round(Number(quickPriceEditing.base_price) || 0) + Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100)) + Math.round(Number(quickPriceEditing.platform_fee) || 29)}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <TextArea
+                    label="Description (shown on customer booking cards & info modals)"
+                    placeholder="Describe this vehicle payload, bed dimensions, or service details..."
+                    value={quickPriceEditing.description || ""}
+                    onChange={(e) =>
+                      setQuickPriceEditing({ ...quickPriceEditing, description: e.target.value })
+                    }
+                  />
+                </div>
+
+                {quickPriceEditing.excludesRates && quickPriceEditing.excludesRates.length > 0 && (
+                  <div className="bg-gradient-to-b from-indigo-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-indigo-100/90 space-y-3">
+                    <span className="text-xs font-bold text-slate-800">Select Requirements / Multi-unit Rates (e.g. BHK / Bathroom prices)</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Customize the label and price for each option tier.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {quickPriceEditing.excludesRates.map((rate, rIdx) => (
+                        <div key={rIdx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-3xs">
+                          <input
+                            type="text"
+                            placeholder="Label"
+                            value={rate.label || rate.name || ""}
+                            onChange={(e) => {
+                              const updated = quickPriceEditing.excludesRates.map((r, i) =>
+                                i === rIdx ? { ...r, label: e.target.value, name: e.target.value } : r
+                              );
+                              setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
+                            }}
+                            className="w-24 sm:w-28 text-xs font-bold text-slate-700 bg-slate-50/80 border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Price"
+                            value={rate.price}
+                            onChange={(e) => {
+                              const updated = quickPriceEditing.excludesRates.map((r, i) =>
+                                i === rIdx ? { ...r, price: parseInt(e.target.value) || 0 } : r
+                              );
+                              setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
+                            }}
+                            className="flex-1 text-xs font-semibold text-slate-800 bg-white border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Input
+                      label="Display Order (sort_order)"
+                      type="number"
+                      placeholder="e.g. 1"
+                      value={quickPriceEditing.sort_order || 0}
+                      onChange={(e) =>
+                        setQuickPriceEditing({ ...quickPriceEditing, sort_order: parseInt(e.target.value) || 0 })
                       }
-                      setQuickPriceEditing({
-                        ...quickPriceEditing,
-                        checklist: [...(quickPriceEditing.checklist || []), newItem],
-                      })
-                      setNewItemText("")
-                    }
-                  }}
-                  className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Item</span>
-                </button>
-              </div>
-            </div>
+                    />
+                    <Input
+                      label="Button Text"
+                      placeholder="e.g. Add"
+                      value={quickPriceEditing.button_text || "Add"}
+                      onChange={(e) =>
+                        setQuickPriceEditing({ ...quickPriceEditing, button_text: e.target.value })
+                      }
+                    />
+                    <Input
+                      label="Icon (e.g. paint-roller, check-circle)"
+                      placeholder="e.g. paint-roller"
+                      value={quickPriceEditing.icon || ""}
+                      onChange={(e) =>
+                        setQuickPriceEditing({ ...quickPriceEditing, icon: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* ── Suitable for / Know More Checklist Section (Blue Shade Theme) ── */}
+                <div className="bg-gradient-to-b from-blue-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-blue-100/90 space-y-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">
+                          Suitable for / &ldquo;Know More&rdquo; Checklist
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-blue-100 text-blue-800 rounded-full border border-blue-200/90 shadow-2xs">
+                          {quickPriceEditing.checklist?.filter((i) => i.checked).length || 0} Ticked
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Tick items to display in the customer &ldquo;Know More&rdquo; modal. Untick to hide. Add custom items below.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
+                    {quickPriceEditing.checklist && quickPriceEditing.checklist.length > 0 ? (
+                      quickPriceEditing.checklist.map((item, idx) => (
+                        <div
+                          key={item.id || idx}
+                          className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all ${
+                            item.checked
+                              ? "bg-white border-blue-200 hover:border-blue-300 shadow-2xs"
+                              : "bg-slate-50 border-slate-200 opacity-80"
+                          }`}
+                        >
+                          <label className="flex items-center gap-2.5 flex-1 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={item.checked}
+                              onChange={() => {
+                                const updated = quickPriceEditing.checklist.map((ci) =>
+                                  ci.id === item.id ? { ...ci, checked: !ci.checked } : ci
+                                )
+                                setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                            />
+                            {quickPriceEditing.editingItemId === item.id ? (
+                              <input
+                                type="text"
+                                value={item.text}
+                                onChange={(e) => {
+                                  const updated = quickPriceEditing.checklist.map((ci) =>
+                                    ci.id === item.id ? { ...ci, text: e.target.value } : ci
+                                  )
+                                  setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                                }}
+                                onBlur={() => setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })
+                                  }
+                                }}
+                                autoFocus
+                                className="bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1.5 py-0.5 text-xs font-semibold flex-1 text-slate-800"
+                              />
+                            ) : (
+                              <span
+                                onClick={() => {
+                                  // By request, clicking the row text directly does not trigger edit, must click the edit icon.
+                                }}
+                                className={`text-xs font-semibold px-1.5 py-0.5 flex-1 select-none ${
+                                  item.checked ? "text-slate-800" : "text-slate-400"
+                                }`}
+                              >
+                                {item.text}
+                              </span>
+                            )}
+                          </label>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQuickPriceEditing({
+                                  ...quickPriceEditing,
+                                  editingItemId: item.id
+                                })
+                              }}
+                              title="Rename item"
+                              className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                                quickPriceEditing.editingItemId === item.id
+                                  ? "text-blue-600 bg-blue-50"
+                                  : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                              }`}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = quickPriceEditing.checklist.filter((ci) => ci.id !== item.id)
+                                setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                              }}
+                              title="Remove item"
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 italic py-2 text-center">No checklist items added yet.</p>
+                    )}
+                  </div>
+
+                  {/* Add New Item Row */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-blue-100">
+                    <input
+                      type="text"
+                      placeholder="Type new item (e.g. Fragile glassware, Heavy pallet items)..."
+                      value={newItemText}
+                      onChange={(e) => setNewItemText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          if (newItemText.trim()) {
+                            const newItem = {
+                              id: `custom-${Date.now()}`,
+                              text: newItemText.trim(),
+                              checked: true,
+                            }
+                            setQuickPriceEditing({
+                              ...quickPriceEditing,
+                              checklist: [...(quickPriceEditing.checklist || []), newItem],
+                            })
+                            setNewItemText("")
+                          }
+                        }
+                      }}
+                      className="flex-1 h-9 px-3 rounded-xl border border-blue-200/80 bg-white text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newItemText.trim()) {
+                          const newItem = {
+                            id: `custom-${Date.now()}`,
+                            text: newItemText.trim(),
+                            checked: true,
+                          }
+                          setQuickPriceEditing({
+                            ...quickPriceEditing,
+                            checklist: [...(quickPriceEditing.checklist || []), newItem],
+                          })
+                          setNewItemText("")
+                        }
+                      }}
+                      className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Item</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* ── Highlight / Popularity Badge Customization Section ── */}
             <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
