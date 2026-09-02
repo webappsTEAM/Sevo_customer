@@ -82,6 +82,12 @@ const CatalogChangeLogPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const AdminRecipesPage = lazy(() =>
+  import("./pages/catalog/AdminRecipesPage.jsx").then(m => ({ default: m.AdminRecipesPage || m.default }))
+)
+const AdminRecommendationsPage = lazy(() =>
+  import("./pages/catalog/AdminRecommendationsPage.jsx").then(m => ({ default: m.AdminRecommendationsPage || m.default }))
+)
 
 const CustomersDashboardPage = lazy(() => import("./pages/CustomersDashboardPage.jsx").then(m => ({ default: m.CustomersDashboardPage })))
 const CustomersListPage = lazy(() => import("./pages/CustomersListPage.jsx").then(m => ({ default: m.CustomersListPage })))
@@ -113,6 +119,9 @@ const TechnicianAppPage = lazy(() =>
 
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage || m.default }))
+)
+const VegetableFullScreenPage = lazy(() =>
+  import("./pages/VegetableFullScreenPage.jsx").then(m => ({ default: m.VegetableFullScreenPage || m.default }))
 )
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
@@ -307,6 +316,10 @@ export function App() {
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
+          <Route path={routes.vegetables} element={<VegetableFullScreenPage />} />
+          <Route path="/vegetables" element={<VegetableFullScreenPage />} />
+          <Route path="/vegetable" element={<VegetableFullScreenPage />} />
+          <Route path="/fresh-vegetables" element={<VegetableFullScreenPage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
@@ -421,6 +434,8 @@ export function App() {
               <Route path={routes.catalog_services} element={<CatalogServicesPage />} />
               <Route path={routes.catalog_packages} element={<CatalogPackagesPage />} />
               <Route path={routes.catalog_addons} element={<CatalogAddOnsPage />} />
+              <Route path={routes.catalog_recipes} element={<AdminRecipesPage />} />
+              <Route path={routes.catalog_recommendations} element={<AdminRecommendationsPage />} />
               <Route path={routes.catalog_change_log} element={<CatalogChangeLogPage />} />
               <Route path={routes.catalog_painting_rates} element={<PaintingRateCardPage />} />
               <Route path={routes.marketing_coupons} element={<CouponsPage />} />

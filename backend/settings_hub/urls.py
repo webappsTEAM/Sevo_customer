@@ -6,6 +6,8 @@ from .views_catalog_v2 import (
     AdminPackageListView, AdminPackageDetailView, AdminPackageTransitionView,
     AdminAddOnListView, AdminAddOnDetailView,
     AdminCatalogChangeLogView,
+    AdminRecipeListView, AdminRecipeDetailView,
+    AdminRecommendationListView, AdminRecommendationDetailView,
     PublicPackageListView,
 )
 from .views import (
@@ -79,6 +81,10 @@ urlpatterns = [
     path("catalog/v2/packages/<str:pk>/transition/", AdminPackageTransitionView.as_view(), name="settings-catalog-v2-packages-transition"),
     path("catalog/v2/addons/", AdminAddOnListView.as_view(), name="settings-catalog-v2-addons-list"),
     path("catalog/v2/addons/<str:pk>/", AdminAddOnDetailView.as_view(), name="settings-catalog-v2-addons-detail"),
+    path("catalog/v2/recipes/", AdminRecipeListView.as_view(), name="settings-catalog-v2-recipes-list"),
+    path("catalog/v2/recipes/<str:pk>/", AdminRecipeDetailView.as_view(), name="settings-catalog-v2-recipes-detail"),
+    path("catalog/v2/recommendations/", AdminRecommendationListView.as_view(), name="settings-catalog-v2-recommendations-list"),
+    path("catalog/v2/recommendations/<str:pk>/", AdminRecommendationDetailView.as_view(), name="settings-catalog-v2-recommendations-detail"),
     path("catalog/v2/change-log/", AdminCatalogChangeLogView.as_view(), name="settings-catalog-v2-change-log"),
 
     # Public (no-auth) read-only catalog — used by customer-facing booking UI

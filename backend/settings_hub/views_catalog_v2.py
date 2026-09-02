@@ -14,10 +14,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole
-from service_requests.models import CatalogCategory, Service, Package, AddOn, CatalogChangeLog
+from service_requests.models import (
+    CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
+    VegetableRecipe, RecipeIngredient, VegetableRecommendation
+)
 from service_requests.serializers import (
     CatalogCategorySerializer, ServiceSerializer, PackageSerializer,
     AddOnSerializer, CatalogChangeLogSerializer,
+    VegetableRecipeListSerializer, VegetableRecipeDetailSerializer,
+    RecipeIngredientSerializer, VegetableRecommendationSerializer
 )
 from service_requests.services import catalog as catalog_service
 
@@ -343,3 +348,128 @@ class AdminCatalogChangeLogView(APIView):
         qs = qs[:200]  # simple cap instead of full pagination for Phase 1
         data = CatalogChangeLogSerializer(qs, many=True).data
         return Response({"success": True, "data": data})
+
+
+# ── Admin Recipes & Recommendations ──────────────────────────────────────────
+
+class AdminRecipeListView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        qs = VegetableRecipe.objects.select_related("package").prefetch_related("ingredients__package").all().order_by("sort_order", "id")
+        package_id = request.GET.get("package_id")
+        if package_id:
+            qs = qs.filter(package_id=package_id)
+        data = VegetableRecipeDetailSerializer(qs, many=True).data
+        return Response({"success": True, "data": data})
+
+    def post(self, request):
+        data = request.data.copy()
+        ingredients_data = data.pop("ingredients", None)
+        serializer = VegetableRecipeDetailSerializer(data=data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
+        
+        recipe = serializer.save()
+        
+        if ingredients_data and isinstance(ingredients_data, list):
+            for idx, ing in enumerate(ingredients_data):
+                pkg_id = ing.get("package") or ing.get("package_id")
+                RecipeIngredient.objects.create(
+                    recipe=recipe,
+                    package_id=pkg_id if pkg_id else None,
+                    name=ing.get("name") or "",
+                    quantity=ing.get("quantity") or 1,
+                    unit=ing.get("unit") or "pieces",
+                    notes=ing.get("notes") or "",
+                    is_catalog_vegetable=bool(pkg_id),
+                    sort_order=ing.get("sort_order", idx)
+                )
+
+        clear_catalog_cache()
+        recipe.refresh_from_db()
+        return Response({"success": True, "data": VegetableRecipeDetailSerializer(recipe).data})
+
+
+class AdminRecipeDetailView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def get(self, request, pk):
+        recipe = get_object_or_404(VegetableRecipe.objects.select_related("package").prefetch_related("ingredients__package"), pk=pk)
+        return Response({"success": True, "data": VegetableRecipeDetailSerializer(recipe).data})
+
+    def put(self, request, pk):
+        recipe = get_object_or_404(VegetableRecipe, pk=pk)
+        data = request.data.copy()
+        ingredients_data = data.pop("ingredients", None)
+
+        serializer = VegetableRecipeDetailSerializer(recipe, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
+
+        recipe = serializer.save()
+
+        if ingredients_data is not None and isinstance(ingredients_data, list):
+            recipe.ingredients.all().delete()
+            for idx, ing in enumerate(ingredients_data):
+                pkg_id = ing.get("package") or ing.get("package_id")
+                RecipeIngredient.objects.create(
+                    recipe=recipe,
+                    package_id=pkg_id if pkg_id else None,
+                    name=ing.get("name") or "",
+                    quantity=ing.get("quantity") or 1,
+                    unit=ing.get("unit") or "pieces",
+                    notes=ing.get("notes") or "",
+                    is_catalog_vegetable=bool(pkg_id),
+                    sort_order=ing.get("sort_order", idx)
+                )
+
+        clear_catalog_cache()
+        recipe.refresh_from_db()
+        return Response({"success": True, "data": VegetableRecipeDetailSerializer(recipe).data})
+
+    def delete(self, request, pk):
+        recipe = get_object_or_404(VegetableRecipe, pk=pk)
+        recipe.delete()
+        clear_catalog_cache()
+        return Response({"success": True, "message": "Recipe deleted"})
+
+
+class AdminRecommendationListView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        qs = VegetableRecommendation.objects.select_related("source_product", "recommended_product").all().order_by("-priority", "display_order")
+        source_id = request.GET.get("source_id")
+        if source_id:
+            qs = qs.filter(source_product_id=source_id)
+        data = VegetableRecommendationSerializer(qs, many=True).data
+        return Response({"success": True, "data": data})
+
+    def post(self, request):
+        serializer = VegetableRecommendationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
+        rec = serializer.save()
+        clear_catalog_cache()
+        return Response({"success": True, "data": VegetableRecommendationSerializer(rec).data})
+
+
+class AdminRecommendationDetailView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def put(self, request, pk):
+        rec = get_object_or_404(VegetableRecommendation, pk=pk)
+        serializer = VegetableRecommendationSerializer(rec, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
+        rec = serializer.save()
+        clear_catalog_cache()
+        return Response({"success": True, "data": VegetableRecommendationSerializer(rec).data})
+
+    def delete(self, request, pk):
+        rec = get_object_or_404(VegetableRecommendation, pk=pk)
+        rec.delete()
+        clear_catalog_cache()
+        return Response({"success": True, "message": "Recommendation deleted"})
+
