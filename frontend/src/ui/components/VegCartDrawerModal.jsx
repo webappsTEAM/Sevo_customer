@@ -2,10 +2,11 @@ import React, { useState } from "react"
 import { motion } from "framer-motion"
 import {
   X, ShoppingCart, ArrowLeft, Trash2, Heart,
-  MapPin, ChevronRight, Share2, Info, Plus, Minus
+  MapPin, ChevronRight, Share2, Info, Plus, Minus, Clock
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { useNavigate } from "react-router-dom"
+import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 
 /**
  * Blinkit / Quick Commerce Style Cart Drawer for Farm-Fresh Vegetables & Groceries
@@ -19,11 +20,13 @@ export function VegCartDrawerModal({
   getFoodItemPhoto,
   deliveryAddress = "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu",
   onChangeAddress,
+  isServiceAvailable = true,
 }) {
   const navigate = useNavigate()
   const [selectedTip, setSelectedTip] = useState(0)
   const [includeDonation, setIncludeDonation] = useState(false)
   const [copiedShare, setCopiedShare] = useState(false)
+  const vegTiming = getVegetableTimingInfo()
 
   if (!isOpen) return null
 
@@ -131,8 +134,9 @@ export function VegCartDrawerModal({
           id: "vegetables_quick_delivery",
           name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
           isQuickCommerce: true,
-          deliveryTime: "8-15 mins",
+          deliveryTime: vegTiming.deliverySlot,
           foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+          vegTiming: vegTiming,
         },
         cart: itemsList.map((item) => ({
           ...item,
@@ -140,7 +144,7 @@ export function VegCartDrawerModal({
           category: "vegetables_quick_delivery",
           categoryName: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
           isQuickCommerce: true,
-          deliveryTime: "8-15 mins",
+          deliveryTime: vegTiming.deliverySlot,
         })),
         isQuickCommerce: true,
         foodCart: foodCart,
@@ -148,6 +152,7 @@ export function VegCartDrawerModal({
         grandTotal: grandTotal,
         selectedTip: selectedTip,
         deliveryAddress: deliveryAddress,
+        vegTiming: vegTiming,
       },
     })
   }
@@ -210,17 +215,31 @@ export function VegCartDrawerModal({
           ) : (
             <>
               {/* Delivery Partner Status Card */}
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 font-extrabold text-base">
-                  ⚡
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-slate-900">Hosur Quick Hub Delivery</p>
-                  <p className="text-[11px] font-semibold text-slate-500">
-                    Shipment of {totalCount} {totalCount === 1 ? "item" : "items"} • Arriving in 8-15 Mins
+              {vegTiming.afterTwelveNotice ? (
+                <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 shadow-2xs space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-800 font-extrabold text-xs flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-700" />
+                      Booking Notice (After 12:00 PM)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
+                    Same-day booking is open 6:00 AM – 12:00 PM. Booking is not available for same-day delivery right now — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
                   </p>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-emerald-50 rounded-2xl p-3.5 border border-emerald-200 shadow-2xs flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 font-extrabold text-base">
+                    🚚
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-emerald-950">Delivered Today: 6:00 PM – 8:00 PM</p>
+                    <p className="text-[11px] font-semibold text-emerald-800">
+                      Shipment of {totalCount} {totalCount === 1 ? "item" : "items"} • Morning booking window (6 AM – 12 PM)
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Items List Card */}
               <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs space-y-3.5">
@@ -396,6 +415,22 @@ export function VegCartDrawerModal({
               )}
             </div>
 
+            {/* Out-of-zone warning if vegetables not allowed in current area */}
+            {!isServiceAvailable && (
+              <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200 text-rose-800 flex items-center justify-between gap-2 text-xs font-bold animate-in fade-in">
+                <span>🚫 Vegetables delivery is unavailable at this address.</span>
+                {onChangeAddress && (
+                  <button
+                    type="button"
+                    onClick={onChangeAddress}
+                    className="text-rose-900 underline font-black hover:text-rose-950 cursor-pointer shrink-0"
+                  >
+                    Change Area
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Pay Button Bar */}
             <div className="p-3.5 flex items-center justify-between gap-3">
               <div>
@@ -405,11 +440,20 @@ export function VegCartDrawerModal({
 
               <button
                 type="button"
+                disabled={!isServiceAvailable}
                 onClick={handleProceedToPay}
-                className="flex-1 py-3 px-5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+                className={`flex-1 py-3 px-4 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all ${
+                  isServiceAvailable
+                    ? "bg-emerald-700 hover:bg-emerald-800 shadow-emerald-700/20 cursor-pointer active:scale-98"
+                    : "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                }`}
               >
-                <span>Proceed To Pay</span>
-                <ChevronRight className="w-4 h-4" />
+                <span>
+                  {isServiceAvailable
+                    ? `Proceed To Pay • ${vegTiming.deliveryDay} (6-8 PM)`
+                    : "Unavailable at This Location"}
+                </span>
+                {isServiceAvailable && <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>

@@ -509,56 +509,91 @@ class CustomerPaymentsView(APIView):
         if company:
             bookings_qs = bookings_qs.filter(company=company)
 
-        # 1. Owes: completed/closed/verified, payment pending/failed, no collection recorded
+        # 1. Owes: completed/closed/verified, payment pending/failed, no collection recorded, amount > 0
         owes_qs = bookings_qs.filter(
             status__in=["completed", "closed", "verified"],
             payment_status__in=["pending", "failed"],
-            payment_collected_at__isnull=True
-        ).order_by("-created_at")
+            payment_collected_at__isnull=True,
+            total_amount__gt=0
+        ).select_related("customer").order_by("-created_at")
 
         owes_list = []
-        for b in owes_qs[:20]:
+        for b in owes_qs[:100]:
+            cname = b.customer_name or (b.customer.get_full_name() if b.customer else "") or (b.customer.username if b.customer else "") or "Customer"
             owes_list.append({
+                "id": b.id,
                 "booking_id": b.request_id,
-                "customer_name": b.customer_name,
+                "customer_name": cname,
+                "phone": b.phone or (b.customer.phone if b.customer else "") or "",
+                "service_title": b.issue_title or b.service_category or "Service Request",
                 "amount": float(b.total_amount),
                 "status": b.status,
-                "created_at": b.created_at.isoformat()
+                "payment_status": b.payment_status,
+                "payment_method": b.payment_method or "COD",
+                "created_at": b.created_at.isoformat() if b.created_at else None
             })
 
-        # 2. Technician holds cash: payment_status is collected, COD
+        # 2. Technician holds cash: payment_status is collected, amount > 0
         technician_holds_qs = bookings_qs.filter(
-            payment_status="collected"
-        ).order_by("-created_at")
+            payment_status="collected",
+            total_amount__gt=0
+        ).select_related("customer", "technician").order_by("-created_at")
 
         technician_holds_list = []
-        for b in technician_holds_qs[:20]:
+        for b in technician_holds_qs[:100]:
+            cname = b.customer_name or (b.customer.get_full_name() if b.customer else "") or (b.customer.username if b.customer else "") or "Customer"
+            tech_name = b.payment_collected_by_name or (b.technician.get_full_name() if b.technician else "") or "Assigned Technician"
             technician_holds_list.append({
+                "id": b.id,
                 "booking_id": b.request_id,
-                "customer_name": b.customer_name,
+                "customer_name": cname,
+                "phone": b.phone or (b.customer.phone if b.customer else "") or "",
+                "service_title": b.issue_title or b.service_category or "Service Request",
                 "amount": float(b.total_amount),
-                "technician_name": b.payment_collected_by_name or "Technician",
+                "payment_method": b.payment_method or "COD",
+                "payment_status": b.payment_status,
+                "technician_name": tech_name,
                 "collected_at": b.payment_collected_at.isoformat() if b.payment_collected_at else None,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
             })
 
-        # 3. Settled: paid or refunded
+        # 3. Settled: paid or refunded, amount > 0
         settled_qs = bookings_qs.filter(
-            payment_status__in=["paid", "refunded"]
-        ).order_by("-created_at")
+            payment_status__in=["paid", "refunded"],
+            total_amount__gt=0
+        ).select_related("customer").order_by("-created_at")
 
         settled_list = []
-        for b in settled_qs[:20]:
+        for b in settled_qs[:100]:
+            cname = b.customer_name or (b.customer.get_full_name() if b.customer else "") or (b.customer.username if b.customer else "") or "Customer"
             settled_list.append({
+                "id": b.id,
                 "booking_id": b.request_id,
-                "customer_name": b.customer_name,
+                "customer_name": cname,
+                "phone": b.phone or (b.customer.phone if b.customer else "") or "",
+                "service_title": b.issue_title or b.service_category or "Service Request",
                 "amount": float(b.total_amount),
-                "payment_method": b.payment_method,
+                "payment_method": b.payment_method or "ONLINE",
+                "payment_status": b.payment_status,
                 "transaction_id": b.transaction_id or "",
+                "created_at": b.created_at.isoformat() if b.created_at else None,
             })
+
+        # Summary KPIs
+        summary = {
+            "total_settled_amount": float(bookings_qs.filter(payment_status__in=["paid", "refunded"]).aggregate(s=Sum("total_amount"))["s"] or 0),
+            "settled_count": bookings_qs.filter(payment_status__in=["paid", "refunded"]).count(),
+            "total_outstanding_amount": float(owes_qs.aggregate(s=Sum("total_amount"))["s"] or 0),
+            "outstanding_count": owes_qs.count(),
+            "total_technician_holds": float(technician_holds_qs.aggregate(s=Sum("total_amount"))["s"] or 0),
+            "technician_holds_count": technician_holds_qs.count(),
+            "total_processed_transactions": bookings_qs.filter(payment_status__in=["paid", "refunded", "collected", "pending"]).count()
+        }
 
         return Response({
             "success": True,
             "data": {
+                "summary": summary,
                 "owes": owes_list,
                 "technician_holds": technician_holds_list,
                 "settled": settled_list

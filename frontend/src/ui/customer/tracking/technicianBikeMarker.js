@@ -216,38 +216,23 @@ export function createServiceVehicleMarker({
     cleanEta = "< 1 min"
   }
 
-  // Display name formatted (First name + Last initial or full short name)
-  const displayName = techName ? techName.trim() : "Technician"
-
-  const tagContent = isArrived
-    ? `<div class="ltp-bike-tag-badge ltp-tag-arrived">
-         <span class="ltp-tag-dot pulse-emerald"></span>
-         <span class="ltp-tag-name">${displayName}</span>
-         <span class="ltp-tag-sep">•</span>
-         <span class="ltp-tag-txt">Arrived at Site</span>
-       </div>`
-    : isInProgress
-    ? `<div class="ltp-bike-tag-badge ltp-tag-inprogress">
-         <span class="ltp-tag-dot pulse-blue"></span>
-         <span class="ltp-tag-name">${displayName}</span>
-         <span class="ltp-tag-sep">•</span>
-         <span class="ltp-tag-txt">Service in Progress</span>
-       </div>`
-    : `<div class="ltp-bike-tag-badge">
-         ${isLive ? '<span class="ltp-tag-dot pulse-cyan"></span>' : '<span class="ltp-tag-dot dot-amber"></span>'}
-         <span class="ltp-tag-name">${displayName}</span>
-         ${distText || cleanEta ? `<span class="ltp-tag-sep">•</span>` : ""}
-         ${distText ? `<span class="ltp-tag-dist">${distText}</span>` : ""}
-         ${distText && cleanEta ? `<span class="ltp-tag-sep">(${cleanEta})</span>` : cleanEta ? `<span class="ltp-tag-eta">${cleanEta}</span>` : ""}
-         ${speed && speed > 2 ? `<span class="ltp-tag-speed">⚡ ${Math.round(speed * 3.6 > 100 ? speed : speed * 3.6)} km/h</span>` : ""}
-       </div>`
+  // Compact bottom pill — only distance + ETA, no name cluttering the map
+  let pillContent = ""
+  if (isArrived) {
+    pillContent = `<div class="ltp-bike-pill ltp-pill-arrived"><span class="ltp-pill-dot pulse-emerald"></span>Arrived</div>`
+  } else if (isInProgress) {
+    pillContent = `<div class="ltp-bike-pill ltp-pill-inprogress"><span class="ltp-pill-dot pulse-blue"></span>In Progress</div>`
+  } else if (distText || cleanEta) {
+    const etaPart = cleanEta ? `<strong>${cleanEta}</strong>` : ""
+    const distPart = distText ? `${distText}` : ""
+    const sep = distText && cleanEta ? " · " : ""
+    pillContent = `<div class="ltp-bike-pill">${isLive ? '<span class="ltp-pill-dot pulse-cyan"></span>' : '<span class="ltp-pill-dot dot-amber"></span>'} ${distPart}${sep}${etaPart}</div>`
+  }
 
   const vehicleSvg = renderVehicleSvg(category, bearing)
 
   const html = `
     <div class="ltp-bike-container ${isArrived ? "is-arrived" : ""} ${isInProgress ? "is-inprogress" : ""}">
-      ${showTag && tagContent ? `<div class="ltp-bike-floating-tag">${tagContent}</div>` : ""}
-      
       <!-- Ground Radar Pulse & Location Halo -->
       <div class="ltp-bike-halo-glow"></div>
       <div class="ltp-bike-pulse-ring"></div>
@@ -256,15 +241,18 @@ export function createServiceVehicleMarker({
       <div class="ltp-bike-rotator" style="transform: rotate(${Math.round(bearing)}deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);">
         ${vehicleSvg}
       </div>
+
+      <!-- Compact ETA pill below the bike only -->
+      ${pillContent}
     </div>
   `
 
   return L.divIcon({
     className: "ltp-technician-bike-icon",
     html: html,
-    iconSize: [64, 64],
-    iconAnchor: [32, 32],
-    popupAnchor: [0, -36],
+    iconSize: [64, 80],
+    iconAnchor: [32, 40],
+    popupAnchor: [0, -48],
   })
 }
 
@@ -292,7 +280,7 @@ export function createCustomerDestinationIcon() {
         </div>
       </div>
       <div class="ltp-dest-label">
-        <span class="ltp-dest-label-txt">🏠 Service Location</span>
+        <span class="ltp-dest-label-txt">🏠 Your Service Location</span>
       </div>
     </div>
   `

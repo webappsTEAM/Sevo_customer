@@ -5,7 +5,7 @@ import {
   Clock, ShieldCheck, ChevronDown, ChevronUp, FolderOpen,
   Package as PackageIcon, Check, ArrowRight, Sparkle,
   Bike, Boxes, Zap, Droplets, ShoppingBag, CheckCircle2,
-  SlidersHorizontal, ArrowUpRight, Trash2
+  SlidersHorizontal, ArrowUpRight, Trash2, ChefHat, Utensils
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
@@ -1717,19 +1717,24 @@ export function CatalogPackagesPage() {
   const [toast, showToast] = useToast()
   const [serviceCustomizing, setServiceCustomizing] = useState(null)
   const [customizerTab, setCustomizerTab] = useState("general")
+  const [recipes, setRecipes] = useState([])
+  const [selectedVegForRecipes, setSelectedVegForRecipes] = useState(null)
+  const [editingRecipe, setEditingRecipe] = useState(null)
   const [editingField, setEditingField] = useState({ field: null, index: null })
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const [catRes, svcRes, pkgRes] = await Promise.all([
+      const [catRes, svcRes, pkgRes, recRes] = await Promise.all([
         apiRequest("/settings/catalog/v2/categories/"),
         apiRequest("/settings/catalog/v2/services/"),
         apiRequest("/settings/catalog/v2/packages/"),
+        apiRequest("/settings/catalog/v2/recipes/"),
       ])
       if (catRes && catRes.success) setCategories(catRes.data)
       if (svcRes && svcRes.success) setServices(svcRes.data)
       if (pkgRes && pkgRes.success) setPackages(pkgRes.data)
+      if (recRes && recRes.success) setRecipes(recRes.data || [])
       // Warn if any response indicates failure
       if (!catRes?.success || !svcRes?.success || !pkgRes?.success) {
         console.warn("Catalog load partial failure:", { catRes, svcRes, pkgRes })
@@ -2007,6 +2012,16 @@ export function CatalogPackagesPage() {
               p.slug.startsWith("addon-"),
           },
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["packages", "appliance", "cabinet_tile", "addons"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const KITCHEN_SLUG_ORDER = [
           "occ-basic",
@@ -2092,6 +2107,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug === "quick-balcony-upto-4ft" || p.slug === "quick-balcony-above-4ft" || p.slug === "window-clean-under-4" || p.slug === "window-clean-above-4" || p.slug === "quick-dining-table" || p.slug === "kitchen-microwave-clean",
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["full_apartment", "unoccupied_apartment", "full_bungalow", "unoccupied_bungalow", "partial_home"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const HOUSE_SLUG_ORDER = [
           "classic-apt-deep",
@@ -2195,6 +2220,16 @@ export function CatalogPackagesPage() {
             }
           },
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["sofa", "mattress", "carpet", "addons"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const SOFA_SLUG_ORDER = [
           "fabric-sofa-clean",
@@ -2253,6 +2288,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug.includes("termite"),
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["cockroach", "termite"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const PEST_SLUG_ORDER = [
           "pest-kb-main",
@@ -2301,6 +2346,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => p.slug.includes("bedbug"),
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["ants", "bedbugs"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const PEST_SLUG_ORDER = [
           "pest-ant-kb",
@@ -2352,6 +2407,16 @@ export function CatalogPackagesPage() {
             filterFn: (p) => !p.slug.includes("sub-bath") && p.slug !== "bath-deep-clean" && p.slug !== "bath-intense-clean",
           }
         ]
+        const customTabs = svc.customization?.subtabs || [];
+        customTabs.forEach((tab) => {
+          if (tab.enabled !== false && !["packages", "subscription", "minis"].includes(tab.id)) {
+            groups.push({
+              subSlug: tab.id,
+              displayName: tab.label,
+              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+            });
+          }
+        });
 
         const BATHROOM_SLUG_ORDER = [
           "bath-deep-clean",
@@ -2489,6 +2554,9 @@ export function CatalogPackagesPage() {
             ? editing.excludes.split(",").map((s) => s.trim()).filter(Boolean)
             : editing.excludes,
         offer_price: null,
+      }
+      if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
+        payload.tag = editing.virtualSlug
       }
       const res = editing.id
         ? await apiRequest(`/settings/catalog/v2/packages/${editing.id}/`, {
@@ -2898,6 +2966,8 @@ export function CatalogPackagesPage() {
     try {
       const payload = {
         name: serviceCustomizing.name,
+        slug: serviceCustomizing.slug,
+        category: serviceCustomizing.category,
         description: serviceCustomizing.description || "",
         image: serviceCustomizing.image || "",
         is_active: serviceCustomizing.is_active,
@@ -3242,7 +3312,7 @@ export function CatalogPackagesPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs sm:text-sm font-bold text-slate-900">
-                          {svcItem.displayName}
+                          {svcItem.service.slug === "kitchen-cleaning" && svcItem.service.virtualSlug === "packages" ? "Full Kitchen packages" : svcItem.displayName}
                         </span>
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
@@ -3378,16 +3448,21 @@ export function CatalogPackagesPage() {
                                 {pkg.tag || pkg.popular ? (
                                   <span
                                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
-                                      (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
+                                      (pkg.tag || "").toLowerCase().includes("coming")
+                                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                                        : (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
                                         ? "bg-amber-50 text-amber-700 border-amber-200/90"
                                         : (pkg.tag || "").toLowerCase().includes("rare")
                                         ? "bg-slate-100 text-slate-700 border-slate-200"
                                         : (pkg.tag || "").toLowerCase().includes("best")
                                         ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                        : (pkg.tag || "").toLowerCase().includes("trend")
+                                        ? "bg-rose-50 text-rose-700 border-rose-200"
                                         : "bg-blue-50 text-blue-700 border-blue-200"
                                     }`}
                                   >
-                                    ★ {pkg.tag || "Popular"}
+                                    {(pkg.tag || "").toLowerCase().includes("coming") ? "" : "★ "}
+                                    {pkg.tag || "Popular"}
                                   </span>
                                 ) : (
                                   <span className="text-slate-300 text-xs font-medium">—</span>
@@ -3441,6 +3516,17 @@ export function CatalogPackagesPage() {
                                   </div>
                                 ) : (
                                   <div className="inline-flex items-center justify-end gap-2">
+                                    {(activeCategoryKey === "vegetables_groceries" || (pkg.service_slug && pkg.service_slug.includes("veg"))) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedVegForRecipes(pkg)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-bold border border-emerald-200/80 shadow-xs transition-all cursor-pointer"
+                                        title="Customize What Can I Make Recipes"
+                                      >
+                                        <ChefHat className="w-3.5 h-3.5" />
+                                        <span>Recipes ({recipes.filter(r => String(r.package) === String(pkg.id) || String(r.package_id) === String(pkg.id)).length})</span>
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => openQuickPriceEdit(pkg)}
@@ -5411,6 +5497,7 @@ export function CatalogPackagesPage() {
               {/* Quick Select Pills */}
               <div className="flex flex-wrap gap-2 pt-1">
                 {[
+                  { label: "⏳ Coming Soon", val: "Coming Soon", tone: "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200" },
                   { label: "★ Popular", val: "Popular", tone: "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100" },
                   { label: "📦 Rarely Used", val: "Rarely Used", tone: "bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200" },
                   { label: "⚡ Best Seller", val: "Best Seller", tone: "bg-indigo-50 text-indigo-800 border-indigo-300 hover:bg-indigo-100" },
@@ -5786,6 +5873,546 @@ export function CatalogPackagesPage() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* ── Dedicated Vegetable Recipes Customizer Modal in /catalog/packages ── */}
+      {selectedVegForRecipes && (
+        <Modal
+          maxWidth="max-w-4xl"
+          title={`Recipes for ${selectedVegForRecipes.name} ("What Can I Make?")`}
+          onClose={() => {
+            setSelectedVegForRecipes(null)
+            setEditingRecipe(null)
+          }}
+        >
+          <div className="space-y-5 text-left font-sans">
+            {/* Header info banner */}
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black">
+                  <ChefHat className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-emerald-950">{selectedVegForRecipes.name}</h4>
+                  <p className="text-xs text-emerald-700">
+                    Customers who click &quot;What Can I Make?&quot; on {selectedVegForRecipes.name} see these recipes.
+                  </p>
+                </div>
+              </div>
+
+              {!editingRecipe && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingRecipe({
+                      name: "",
+                      slug: "",
+                      package: selectedVegForRecipes.id,
+                      image: selectedVegForRecipes.image || "/mockups/vegetables_realistic.png",
+                      short_description: `Delicious recipe featuring fresh ${selectedVegForRecipes.name}.`,
+                      prep_time_minutes: 10,
+                      cook_time_minutes: 15,
+                      total_time_minutes: 25,
+                      difficulty: "Easy",
+                      servings: 2,
+                      calories: 110,
+                      protein: "3g",
+                      carbohydrates: "15g",
+                      fat: "2g",
+                      fiber: "4g",
+                      health_benefits: [`Rich in nutrients from fresh ${selectedVegForRecipes.name}.`],
+                      health_tips: [`Wash ${selectedVegForRecipes.name} thoroughly before slicing.`],
+                      instructions: [
+                        `1. Prepare fresh ${selectedVegForRecipes.name} and ingredients.`,
+                        "2. Sauté with seasoning and simmer until tender."
+                      ],
+                      tags: ["Quick Recipes", "Easy Recipes"],
+                      is_active: true,
+                      is_popular: true,
+                      sort_order: 10,
+                      ingredients: [
+                        {
+                          package: selectedVegForRecipes.id,
+                          name: selectedVegForRecipes.name,
+                          quantity: 1,
+                          unit: selectedVegForRecipes.duration || "500 g",
+                          notes: "Fresh produce",
+                          is_catalog_vegetable: true,
+                          sort_order: 0
+                        }
+                      ]
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Recipe</span>
+                </button>
+              )}
+            </div>
+
+            {/* List Mode or Edit Mode */}
+            {editingRecipe ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  try {
+                    const payload = {
+                      ...editingRecipe,
+                      package: selectedVegForRecipes.id,
+                      slug: editingRecipe.slug || `${selectedVegForRecipes.id}-${editingRecipe.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+                      total_time_minutes: (parseInt(editingRecipe.prep_time_minutes) || 0) + (parseInt(editingRecipe.cook_time_minutes) || 0),
+                    }
+                    let res
+                    if (editingRecipe.id) {
+                      res = await apiRequest(`/settings/catalog/v2/recipes/${editingRecipe.id}/`, { method: "PUT", json: payload })
+                    } else {
+                      res = await apiRequest("/settings/catalog/v2/recipes/", { method: "POST", json: payload })
+                    }
+                    if (res && res.success) {
+                      showToast(editingRecipe.id ? "Recipe updated successfully" : "Recipe created successfully")
+                      setEditingRecipe(null)
+                      loadData()
+                    } else {
+                      showToast(res?.message || "Failed to save recipe", "error")
+                    }
+                  } catch {
+                    showToast("Failed to save recipe", "error")
+                  }
+                }}
+                className="space-y-4 border border-slate-200 rounded-2xl p-5 bg-white shadow-2xs"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <span className="text-xs font-black uppercase text-slate-700 tracking-wider">
+                    {editingRecipe.id ? `Edit Recipe: ${editingRecipe.name}` : "Create New Recipe"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingRecipe(null)}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+
+                {/* 1. Recipe Name & Short Description */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <Input
+                    label="Recipe Name"
+                    required
+                    placeholder="e.g. Tomato Rasam, Crispy Fry"
+                    value={editingRecipe.name || ""}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, name: e.target.value })}
+                  />
+                  <Input
+                    label="Short Description"
+                    placeholder="Crisp garden salad with fresh produce..."
+                    value={editingRecipe.short_description || ""}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, short_description: e.target.value })}
+                  />
+                </div>
+
+                {/* 2. Quick Metadata Strip (Prep, Cook, Servings, Energy/Calories) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Input
+                    label="Prep Time (mins)"
+                    type="number"
+                    value={editingRecipe.prep_time_minutes || 10}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, prep_time_minutes: parseInt(e.target.value) || 0 })}
+                  />
+                  <Input
+                    label="Cook Time (mins)"
+                    type="number"
+                    value={editingRecipe.cook_time_minutes || 15}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, cook_time_minutes: parseInt(e.target.value) || 0 })}
+                  />
+                  <Input
+                    label="Servings"
+                    type="number"
+                    value={editingRecipe.servings || 2}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, servings: parseInt(e.target.value) || 0 })}
+                  />
+                  <Input
+                    label="Energy / Calories (kcal)"
+                    type="number"
+                    value={editingRecipe.calories || 110}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+
+                {/* 3. Required Ingredients Checklist (Complete Your Recipe produce cards) */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-black uppercase text-slate-800 tracking-wider block">
+                        🥗 Required Ingredients Checklist (&quot;Complete Your Recipe&quot;)
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        Ingredients linked to catalog vegetables appear in the customer 1-click cart checklist.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newIng = {
+                          package: selectedVegForRecipes.id,
+                          name: selectedVegForRecipes.name,
+                          quantity: 1,
+                          unit: "500 g",
+                          notes: "",
+                          is_catalog_vegetable: true,
+                          sort_order: (editingRecipe.ingredients || []).length
+                        }
+                        setEditingRecipe({
+                          ...editingRecipe,
+                          ingredients: [...(editingRecipe.ingredients || []), newIng]
+                        })
+                      }}
+                      className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-lg hover:bg-emerald-200 cursor-pointer"
+                    >
+                      + Add Ingredient
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {(editingRecipe.ingredients || []).map((ing, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200">
+                        <select
+                          value={ing.package || ""}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            const updated = [...editingRecipe.ingredients]
+                            if (val) {
+                              const found = packages.find(p => String(p.id) === String(val))
+                              updated[idx] = {
+                                ...updated[idx],
+                                package: Number(val),
+                                name: found ? found.name : updated[idx].name,
+                                is_catalog_vegetable: true
+                              }
+                            } else {
+                              updated[idx] = {
+                                ...updated[idx],
+                                package: null,
+                                is_catalog_vegetable: false
+                              }
+                            }
+                            setEditingRecipe({ ...editingRecipe, ingredients: updated })
+                          }}
+                          className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 max-w-[200px]"
+                        >
+                          <option value="">Non-catalog (Pantry)</option>
+                          {packages
+                            .filter(p => p.service_slug === "vegetables" || (p.service && p.service.slug === "vegetables"))
+                            .map(vp => (
+                              <option key={vp.id} value={vp.id}>{vp.name}</option>
+                            ))}
+                        </select>
+
+                        <input
+                          type="text"
+                          placeholder="Ingredient Name"
+                          value={ing.name || ""}
+                          onChange={(e) => {
+                            const updated = [...editingRecipe.ingredients]
+                            updated[idx] = { ...updated[idx], name: e.target.value }
+                            setEditingRecipe({ ...editingRecipe, ingredients: updated })
+                          }}
+                          className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200"
+                        />
+
+                        <input
+                          type="text"
+                          placeholder="Qty / Unit"
+                          value={ing.unit || ""}
+                          onChange={(e) => {
+                            const updated = [...editingRecipe.ingredients]
+                            updated[idx] = { ...updated[idx], unit: e.target.value }
+                            setEditingRecipe({ ...editingRecipe, ingredients: updated })
+                          }}
+                          className="w-20 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = editingRecipe.ingredients.filter((_, i) => i !== idx)
+                            setEditingRecipe({ ...editingRecipe, ingredients: updated })
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Nutritional Value (Per Serving) Macros */}
+                <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/80 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-amber-900 tracking-wider">
+                      🔥 Nutritional Value (Per Serving)
+                    </span>
+                    <span className="text-[11px] text-amber-700">Displayed in Recipe Detail Popup</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Input
+                      label="Protein"
+                      placeholder="e.g. 3g"
+                      value={editingRecipe.protein || "3g"}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, protein: e.target.value })}
+                    />
+                    <Input
+                      label="Carbs"
+                      placeholder="e.g. 15g"
+                      value={editingRecipe.carbohydrates || "15g"}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, carbohydrates: e.target.value })}
+                    />
+                    <Input
+                      label="Dietary Fiber"
+                      placeholder="e.g. 4g"
+                      value={editingRecipe.fiber || "4g"}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, fiber: e.target.value })}
+                    />
+                    <Input
+                      label="Fat"
+                      placeholder="e.g. 2g"
+                      value={editingRecipe.fat || "2g"}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, fat: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Nutritional Benefits & Freshness Tips */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Nutritional Benefits */}
+                  <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase text-emerald-900 tracking-wider">
+                        💚 Nutritional Benefits
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = Array.isArray(editingRecipe.health_benefits) ? [...editingRecipe.health_benefits] : []
+                          list.push("")
+                          setEditingRecipe({ ...editingRecipe, health_benefits: list })
+                        }}
+                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                      >
+                        + Add Benefit
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                      {(Array.isArray(editingRecipe.health_benefits) ? editingRecipe.health_benefits : []).map((b, bIdx) => (
+                        <div key={bIdx} className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="e.g. Rich in dietary fiber, vitamins, and antioxidants."
+                            value={b || ""}
+                            onChange={(e) => {
+                              const list = [...editingRecipe.health_benefits]
+                              list[bIdx] = e.target.value
+                              setEditingRecipe({ ...editingRecipe, health_benefits: list })
+                            }}
+                            className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const list = editingRecipe.health_benefits.filter((_, i) => i !== bIdx)
+                              setEditingRecipe({ ...editingRecipe, health_benefits: list })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Freshness & Cooking Tips */}
+                  <div className="p-4 rounded-xl bg-orange-50/50 border border-orange-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase text-orange-900 tracking-wider">
+                        🛡️ Freshness & Cooking Tips
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = Array.isArray(editingRecipe.health_tips) ? [...editingRecipe.health_tips] : []
+                          list.push("")
+                          setEditingRecipe({ ...editingRecipe, health_tips: list })
+                        }}
+                        className="text-[10px] font-bold text-orange-700 hover:text-orange-900 cursor-pointer"
+                      >
+                        + Add Tip
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                      {(Array.isArray(editingRecipe.health_tips) ? editingRecipe.health_tips : []).map((t, tIdx) => (
+                        <div key={tIdx} className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="e.g. Cook on medium flame to retain crispness."
+                            value={t || ""}
+                            onChange={(e) => {
+                              const list = [...editingRecipe.health_tips]
+                              list[tIdx] = e.target.value
+                              setEditingRecipe({ ...editingRecipe, health_tips: list })
+                            }}
+                            className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-orange-200 bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const list = editingRecipe.health_tips.filter((_, i) => i !== tIdx)
+                              setEditingRecipe({ ...editingRecipe, health_tips: list })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Step-by-Step Cooking Instructions */}
+                <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-indigo-900 tracking-wider">
+                      👨‍🍳 Step-by-Step Cooking Instructions
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const list = Array.isArray(editingRecipe.instructions) ? [...editingRecipe.instructions] : []
+                        list.push(`${list.length + 1}. `)
+                        setEditingRecipe({ ...editingRecipe, instructions: list })
+                      }}
+                      className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 cursor-pointer"
+                    >
+                      + Add Step
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {(Array.isArray(editingRecipe.instructions) ? editingRecipe.instructions : []).map((step, sIdx) => (
+                      <div key={sIdx} className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                          {sIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          placeholder={`Step ${sIdx + 1} instruction...`}
+                          value={step || ""}
+                          onChange={(e) => {
+                            const list = [...editingRecipe.instructions]
+                            list[sIdx] = e.target.value
+                            setEditingRecipe({ ...editingRecipe, instructions: list })
+                          }}
+                          className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = editingRecipe.instructions.filter((_, i) => i !== sIdx)
+                            setEditingRecipe({ ...editingRecipe, instructions: list })
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRecipe(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Recipe</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                {(() => {
+                  const vegRecipes = recipes.filter(r => String(r.package) === String(selectedVegForRecipes.id) || String(r.package_id) === String(selectedVegForRecipes.id))
+                  if (vegRecipes.length === 0) {
+                    return (
+                      <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                        <ChefHat className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-500">No recipes configured for {selectedVegForRecipes.name} yet.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Click &quot;+ Add Recipe&quot; above to create one.</p>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                      {vegRecipes.map((r) => (
+                        <div key={r.id} className="p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-300 shadow-2xs flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <h5 className="text-xs font-black text-slate-900 line-clamp-1">{r.name}</h5>
+                              <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                                {r.total_time_minutes || 25}m
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">{r.short_description}</p>
+                            <div className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-2">
+                              <span>🔥 {r.calories || 110} kcal</span>
+                              <span>•</span>
+                              <span>🥗 {(r.ingredients || []).length} ingredients</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => setEditingRecipe({ ...r })}
+                              className="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm(`Delete recipe "${r.name}"?`)) {
+                                  await apiRequest(`/settings/catalog/v2/recipes/${r.id}/`, { method: "DELETE" })
+                                  showToast("Recipe deleted")
+                                  loadData()
+                                }
+                              }}
+                              className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
         </Modal>
       )}
     </div>

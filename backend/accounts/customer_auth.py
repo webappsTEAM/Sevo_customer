@@ -175,6 +175,8 @@ class CustomerGoogleLoginView(APIView):
             response = Response({
                 "success": True, 
                 "detail": "Google login successful",
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
                 "user": {
                     "username": user.username,
                     "name": full_name,

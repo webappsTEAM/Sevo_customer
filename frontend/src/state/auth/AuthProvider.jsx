@@ -7,22 +7,22 @@
  *   - If it returns a user   → authenticated
  *   - If it returns null/401 → not authenticated, redirect to /login
  */
-import { useCallback, useEffect, useMemo, useState } from "react"
-
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
+  apiFetchMe,
   apiLogin,
   apiVerify2FA,
-  apiFetchMe,
+  apiLogout,
   apiRegister,
   apiGoogleLogin,
   apiCustomerGoogleLogin,
-  apiLogout,
 } from "../../api/authService.js"
+import { clearLegacyLocationStorage, clearAllCustomerLocationState } from "../../utils/customerLocationStorage.js"
 import { AuthContext } from "./AuthContext.js"
 
 export function AuthProvider({ children }) {
   const formatUser = (data) => {
-    if (!data?.username || !data?.role) return null
+    if (!data?.username) return null
     return {
       id:        data.id         ?? null,
       customer_id: data.customer_id ?? data.customer_code ?? "",
@@ -111,8 +111,12 @@ export function AuthProvider({ children }) {
     async (identifier, password) => {
       const res = await apiLogin(identifier, password)
       if (res?.requires_2fa) return { requires2FA: true }
-      const meUser = await refreshMe()
-      if (meUser) return meUser
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
       if (res?.user) {
         const u = formatUser(res.user)
         if (u) {
@@ -127,6 +131,8 @@ export function AuthProvider({ children }) {
           return u
         }
       }
+      const meUser = await refreshMe()
+      if (meUser) return meUser
       return null
     },
     [refreshMe]
@@ -153,7 +159,27 @@ export function AuthProvider({ children }) {
   // ── Google OAuth (Staff) ──────────────────────────────────────────────────
   const loginWithGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiGoogleLogin(googleAccessToken)
+      const res = await apiGoogleLogin(googleAccessToken)
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
+      if (res?.user) {
+        const u = formatUser(res.user)
+        if (u) {
+          setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
+          if (res.user.company_name) {
+            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            window.dispatchEvent(new CustomEvent("quicktims:orgName"))
+          }
+          return u
+        }
+      }
       return await refreshMe()
     },
     [refreshMe]
@@ -162,7 +188,23 @@ export function AuthProvider({ children }) {
   // ── Customer Google OAuth ─────────────────────────────────────────────────
   const loginWithCustomerGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiCustomerGoogleLogin(googleAccessToken)
+      const res = await apiCustomerGoogleLogin(googleAccessToken)
+      if (res?.access) {
+        try {
+          localStorage.setItem("caltrack_access_token", res.access)
+          localStorage.setItem("qt_access", res.access)
+        } catch (_) {}
+      }
+      if (res?.user) {
+        const u = formatUser(res.user)
+        if (u) {
+          setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
+          return u
+        }
+      }
       return await refreshMe()
     },
     [refreshMe]
@@ -170,7 +212,10 @@ export function AuthProvider({ children }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    await apiLogout()
+    try {
+      await apiLogout()
+    } catch (_) {}
+    clearLegacyLocationStorage()
     localStorage.removeItem("quicktims.orgName")
     localStorage.removeItem("caltrack_activation_dossier")
     localStorage.removeItem("caltrack_access_token")
@@ -178,7 +223,21 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("caltrack_user")
     localStorage.removeItem("caltrack_customer_phone")
     setUser(null)
+    window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
+    window.dispatchEvent(new Event("calservice_address_changed"))
   }, [])
+
+  // ── Track previous user ID for customer-switch detection ──────────────────
+  const prevUserIdRef = useRef(user?.id || null)
+  useEffect(() => {
+    const currentId = user?.id || null
+    if (prevUserIdRef.current !== currentId) {
+      clearLegacyLocationStorage()
+      prevUserIdRef.current = currentId
+      window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user } }))
+      window.dispatchEvent(new Event("calservice_address_changed"))
+    }
+  }, [user?.id, user])
 
   // ── Bootstrap on mount ────────────────────────────────────────────────────
   useEffect(() => {
@@ -218,7 +277,10 @@ export function AuthProvider({ children }) {
   // ── Session expiry event ──────────────────────────────────────────────────
   useEffect(() => {
     const handle = async () => {
-      await apiLogout()
+      try {
+        await apiLogout()
+      } catch (_) {}
+      clearLegacyLocationStorage()
       localStorage.removeItem("quicktims.orgName")
       localStorage.removeItem("caltrack_activation_dossier")
       localStorage.removeItem("caltrack_access_token")
@@ -226,6 +288,8 @@ export function AuthProvider({ children }) {
       localStorage.removeItem("caltrack_user")
       localStorage.removeItem("caltrack_customer_phone")
       setUser(null)
+      window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
+      window.dispatchEvent(new Event("calservice_address_changed"))
     }
     window.addEventListener("quicktims:session-expired", handle)
     return () => window.removeEventListener("quicktims:session-expired", handle)

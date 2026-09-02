@@ -114,7 +114,7 @@ export const SEVO_CORE_SERVICES = {
   painting: {
     id: "painting",
     name: "Painting & Waterproofing",
-    image: "/mockups/occupied_apartment_diamond.png",
+    image: "/assets/Painting/Interior.webp",
     alt: "Professional painter applying smooth fresh emulsion coat with paint roller on wall",
     desc: "Interior, exterior wall painting, waterproofing & textures"
   },

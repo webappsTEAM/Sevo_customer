@@ -379,7 +379,10 @@ function AdminDashboard() {
         ])
         if (!cancelled) {
           setAnalytics(data)
-          if (srRes?.success) setServiceRequests(srRes.data || [])
+          if (srRes?.success) {
+            const raw = srRes.data
+            setServiceRequests(Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : []))
+          }
           if (fbRes?.success) setFeedbackList(fbRes.data || [])
           if (fbMetRes?.success) setFeedbackMetrics(fbMetRes.data || null)
         }

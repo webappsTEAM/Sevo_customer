@@ -285,9 +285,10 @@ export function ServiceRequestsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await apiRequest("/admin/service-requests/")
+      const res = await apiRequest("/admin/service-requests/?page_size=200")
       if (res?.success) {
-        const data = Array.isArray(res.data) ? res.data : []
+        const raw = res.data
+        const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : [])
         setAllRequests(data)
         setRequests(data)
       } else setError(res?.message || "Failed to load requests.")
@@ -372,11 +373,12 @@ export function ServiceRequestsPage() {
   const refreshAll = async () => {
     const [detRes, listRes] = await Promise.all([
       apiRequest(`/admin/service-requests/${selectedId}/`),
-      apiRequest("/admin/service-requests/"),
+      apiRequest("/admin/service-requests/?page_size=200"),
     ])
     if (detRes?.success) setDetail(detRes.data)
     if (listRes?.success) {
-      const data = Array.isArray(listRes.data) ? listRes.data : []
+      const raw = listRes.data
+      const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : [])
       setAllRequests(data)
       setRequests(data)
     }
@@ -506,13 +508,13 @@ export function ServiceRequestsPage() {
   }
 
   if (path === "/customers/payments") {
-    const getItemTotal = (r) => (r.request_id === "SR-0002" || r.id === 2 || r.customer_name === "Sathish") ? 2799 : parseFloat(r.total_amount || 0)
-    const getItemBase = (r) => (r.request_id === "SR-0002" || r.id === 2 || r.customer_name === "Sathish") ? 599 : parseFloat(r.base_amount || r.total_amount || 0)
-    const getItemExt = (r) => (r.request_id === "SR-0002" || r.id === 2 || r.customer_name === "Sathish") ? 2200 : parseFloat(r.approved_extension_amount || 0)
+    const getItemTotal = (r) => parseFloat(r.total_amount || 0)
+    const getItemBase = (r) => parseFloat(r.base_amount || r.total_amount || 0)
+    const getItemExt = (r) => parseFloat(r.approved_extension_amount || 0)
 
-    const paidRequests = allRequests.filter(r => r.payment_status === "paid" || r.request_id === "SR-0002" || r.customer_name === "Sathish")
+    const paidRequests = allRequests.filter(r => r.payment_status === "paid" || r.payment_status === "collected")
     const totalCollected = paidRequests.reduce((sum, r) => sum + getItemTotal(r), 0)
-    const totalPending = allRequests.filter(r => ["pending", "processing"].includes(r.payment_status) && r.request_id !== "SR-0002" && r.customer_name !== "Sathish").reduce((sum, r) => sum + getItemTotal(r), 0)
+    const totalPending = allRequests.filter(r => ["pending", "processing"].includes(r.payment_status)).reduce((sum, r) => sum + getItemTotal(r), 0)
 
     return (
       <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
@@ -559,11 +561,10 @@ export function ServiceRequestsPage() {
             <tbody className="divide-y divide-stroke dark:divide-slate-800">
               {allRequests.length > 0 ? (
                 allRequests.map((r, i) => {
-                  const isSathish = r.request_id === "SR-0002" || r.id === 2 || r.customer_name === "Sathish"
-                  const baseAmt = isSathish ? 599 : getItemBase(r)
-                  const extAmt = isSathish ? 2200 : getItemExt(r)
-                  const totAmt = isSathish ? 2799 : getItemTotal(r)
-                  const isPaid = r.payment_status === "paid" || r.payment_status === "collected" || isSathish
+                  const baseAmt = getItemBase(r)
+                  const extAmt = getItemExt(r)
+                  const totAmt = getItemTotal(r)
+                  const isPaid = r.payment_status === "paid" || r.payment_status === "collected"
 
                   return (
                     <tr key={i} className="hover:bg-bg/20 dark:hover:bg-slate-800/10 transition-colors">
@@ -1423,15 +1424,16 @@ function SrStyles() {
 
       /* ── Left Pane ── */
       .sr-left {
-        width: 340px;
-        min-width: 280px;
+        width: 380px;
+        min-width: 320px;
+        max-width: 420px;
         border-right: 1px solid #e2e8f0;
         display: flex;
         flex-direction: column;
         background: white;
         overflow: hidden;
       }
-      @media (max-width: 768px) { .sr-left { width: 100%; } }
+      @media (max-width: 768px) { .sr-left { width: 100%; max-width: 100%; } }
 
       .sr-left-header {
         display: flex;
@@ -1466,36 +1468,76 @@ function SrStyles() {
       /* ── Pipeline Lanes ── */
       .sr-pipeline {
         display: flex;
-        gap: 0;
+        gap: 0.45rem;
         overflow-x: auto;
-        padding: 0.5rem 0.75rem;
+        padding: 0.6rem 0.75rem;
         border-bottom: 1px solid #f1f5f9;
-        scrollbar-width: none;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
         flex-shrink: 0;
       }
-      .sr-pipeline::-webkit-scrollbar { display: none; }
+      .sr-pipeline::-webkit-scrollbar {
+        height: 4px;
+      }
+      .sr-pipeline::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
       .sr-lane {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.1rem;
-        padding: 0.3rem 0.5rem;
-        border-radius: 8px;
-        border: none;
-        background: none;
+        justify-content: center;
+        gap: 0.15rem;
+        padding: 0.35rem 0.6rem;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
         cursor: pointer;
         white-space: nowrap;
-        transition: all 0.15s ease;
-        min-width: 50px;
+        flex-shrink: 0;
+        min-width: 58px;
         font-family: inherit;
+        transition: all 0.15s ease;
       }
-      .sr-lane:hover { background: #f8fafc; }
-      .sr-lane--active { background: rgba(var(--lc-r, 124), var(--lc-g, 58), var(--lc-b, 237), 0.08); }
-      .sr-lane--urgent { animation: srPulse 1.5s ease-in-out infinite; }
-      .sr-lane-count { font-size: 1rem; font-weight: 800; color: #1e293b; line-height: 1; }
-      .sr-lane--active .sr-lane-count { color: var(--lc, #7C3AED); }
-      .sr-lane-label { font-size: 0.58rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
-      .sr-lane--active .sr-lane-label { color: var(--lc, #7C3AED); }
+      .sr-lane:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+      }
+      .sr-lane--active {
+        background: #eff6ff;
+        border-color: var(--lc, #3B82F6);
+        box-shadow: 0 1px 3px rgba(59, 130, 246, 0.15);
+      }
+      .sr-lane--urgent {
+        background: #fef2f2;
+        border-color: #fecaca;
+        animation: srPulse 1.5s ease-in-out infinite;
+      }
+      .sr-lane--urgent:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+      }
+      .sr-lane-count {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #1e293b;
+        line-height: 1;
+      }
+      .sr-lane--active .sr-lane-count {
+        color: var(--lc, #3B82F6);
+      }
+      .sr-lane-label {
+        font-size: 0.62rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .sr-lane--active .sr-lane-label {
+        color: var(--lc, #3B82F6);
+        font-weight: 800;
+      }
 
       /* ── Filters ── */
       .sr-filters {

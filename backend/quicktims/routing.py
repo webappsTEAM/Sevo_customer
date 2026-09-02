@@ -11,9 +11,9 @@ from service_requests.consumers import TrackingConsumer
 from accounts.consumers import AuthOtpConsumer
 
 websocket_urlpatterns = [
-    re_path(r"^ws/tracking/(?P<identifier>[\w-]+)/?$", TrackingConsumer.as_asgi()),
-    re_path(r"^ws/live/booking/(?P<identifier>[\w-]+)/?$", TrackingConsumer.as_asgi()),
-    re_path(r"^ws/live/(?P<identifier>[\w-]+)/?$", TrackingConsumer.as_asgi()),
+    re_path(r"^ws/tracking/(?P<identifier>[^/]+)/?$", TrackingConsumer.as_asgi()),
+    re_path(r"^ws/live/booking/(?P<identifier>[^/]+)/?$", TrackingConsumer.as_asgi()),
+    re_path(r"^ws/live/(?P<identifier>[^/]+)/?$", TrackingConsumer.as_asgi()),
     re_path(r"^ws/live-location/?$", TrackingConsumer.as_asgi()),
     re_path(r"^ws/auth/otp/?$", AuthOtpConsumer.as_asgi()),
 ]

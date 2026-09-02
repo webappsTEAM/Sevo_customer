@@ -20,7 +20,16 @@ from .views import (
     CatalogCategoryListView,
     CatalogServiceListView,
     CatalogSubServiceListView,
+    VegetableRecipeListView,
+    VegetableRecipeDetailView,
+    VegetableRecommendationListView,
     CustomerQuoteDetailView,
+    CustomerQuoteDecideView,
+    CustomerQuotePDFView,
+    AdminPaintingRateCardListView,
+    AdminPaintingRateCardDetailView,
+    AdminQuoteCreateView,
+    AdminQuoteActionView,
 
     # Admin — Service Requests
     AdminSRListView,
@@ -110,18 +119,30 @@ from .payment_views import (
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
+from .technician_views import (
+    TechnicianAvailableBookingsView,
+    TechnicianAcceptBookingView,
+    TechnicianUpdateLocationView,
+    TechnicianStatusUpdateView,
+    TechnicianVerifyStartOTPView,
+)
 
 urlpatterns = [
     # ── Public & Customer ─────────────────────────────────────────────────────
     path("catalog/categories/",              CatalogCategoryListView.as_view(), name="catalog-categories"),
     path("catalog/services/",                CatalogServiceListView.as_view(),  name="catalog-services"),
     path("catalog/sub-services/",            CatalogSubServiceListView.as_view(), name="catalog-sub-services"),
+    path("catalog/vegetables/recipes/",      VegetableRecipeListView.as_view(), name="catalog-vegetables-recipes"),
+    path("catalog/vegetables/recipes/<str:pk>/", VegetableRecipeDetailView.as_view(), name="catalog-vegetables-recipe-detail"),
+    path("catalog/vegetables/<int:product_id>/recommendations/", VegetableRecommendationListView.as_view(), name="catalog-vegetables-recommendations"),
     path("booking/",                         BookingCreateView.as_view(),    name="sr-booking"),
     path("booking/my-bookings/",             CustomerMyBookingsView.as_view(), name="sr-my-bookings"),
     path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("booking/<int:pk>/live-location/",  CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location"),
     path("booking/<str:identifier>/live-location/", CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location-identifier"),
+    path("customer/bookings/<int:pk>/tracking/", CustomerBookingLiveLocationView.as_view(), name="customer-booking-tracking"),
+    path("customer/bookings/<str:identifier>/tracking/", CustomerBookingLiveLocationView.as_view(), name="customer-booking-tracking-identifier"),
     path("workforce/jobs/<int:pk>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking"),
     path("workforce/jobs/<str:identifier>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking-str"),
     path("tracking/<str:tracking_token>/",   CustomerPublicTrackingView.as_view(), name="sr-public-tracking-token"),
@@ -244,7 +265,26 @@ urlpatterns = [
     path('admin/coupons/',                               CouponListCreateView.as_view(),               name='admin-coupon-list-create'),
     path('admin/coupons/analytics/',                     AdminCouponAnalyticsView.as_view(),           name='admin-coupon-analytics'),
     path('admin/coupons/<int:pk>/',                      CouponDetailView.as_view(),                   name='admin-coupon-detail'),
-    path('admin/coupons/<int:pk>/status/',               CouponDetailView.as_view(),                   name='admin-coupon-status'),
     path('customer/coupons/',                            CustomerCouponListView.as_view(),             name='customer-coupon-list'),
     path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
+
+    # ── Painting & Waterproofing Quotes & Rate Card ──────────────────────────
+    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),            name='customer-quote-decide'),
+    path('booking/quote/<str:token>/pdf/',               CustomerQuotePDFView.as_view(),               name='customer-quote-pdf'),
+    path('admin/painting/rate-card/',                    AdminPaintingRateCardListView.as_view(),       name='admin-painting-rate-card-list'),
+    path('admin/painting/rate-card/<int:pk>/',           AdminPaintingRateCardDetailView.as_view(),     name='admin-painting-rate-card-detail'),
+    path('admin/painting/quotes/create/',                AdminQuoteCreateView.as_view(),                name='admin-painting-quote-create'),
+    path('admin/painting/quotes/<int:pk>/action/',       AdminQuoteActionView.as_view(),                name='admin-painting-quote-action'),
+    path('admin/mason/quotes/create/',                   AdminQuoteCreateView.as_view(),                name='admin-mason-quote-create'),
+    path('admin/mason/quotes/<int:pk>/action/',          AdminQuoteActionView.as_view(),                name='admin-mason-quote-action'),
+    # ── Technician Portal / App Endpoints ─────────────────────────────────────
+    path('technician/bookings/',                         TechnicianAvailableBookingsView.as_view(),    name='technician-bookings-list'),
+    path('technician/bookings/<int:pk>/accept/',         TechnicianAcceptBookingView.as_view(),        name='technician-booking-accept'),
+    path('technician/bookings/<str:identifier>/accept/', TechnicianAcceptBookingView.as_view(),        name='technician-booking-accept-str'),
+    path('technician/bookings/<int:pk>/location/',       TechnicianUpdateLocationView.as_view(),       name='technician-booking-location'),
+    path('technician/bookings/<str:identifier>/location/', TechnicianUpdateLocationView.as_view(),     name='technician-booking-location-str'),
+    path('technician/bookings/<int:pk>/status/',         TechnicianStatusUpdateView.as_view(),         name='technician-booking-status'),
+    path('technician/bookings/<str:identifier>/status/', TechnicianStatusUpdateView.as_view(),         name='technician-booking-status-str'),
+    path('technician/bookings/<int:pk>/verify-otp/',     TechnicianVerifyStartOTPView.as_view(),       name='technician-booking-verify-otp'),
+    path('technician/bookings/<str:identifier>/verify-otp/', TechnicianVerifyStartOTPView.as_view(),   name='technician-booking-verify-otp-str'),
 ]

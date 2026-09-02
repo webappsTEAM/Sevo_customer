@@ -1,14 +1,11 @@
-/**
- * CustomerTrackingHeader.jsx — CalTrack Customer Live Tracking Header
- */
-
 import React from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, RefreshCw, WifiOff } from "lucide-react"
+import { ArrowLeft, X, RefreshCw, WifiOff, ExternalLink } from "lucide-react"
 import { getFreshnessBadge } from "./trackingUtils.js"
 
 export function CustomerTrackingHeader({
   requestId,
+  trackingToken,
   serviceCategory,
   issueTitle,
   freshness = "LIVE",
@@ -17,6 +14,8 @@ export function CustomerTrackingHeader({
   online = true,
   lastUpdated,
   onRefresh,
+  onClose,
+  isModal = false,
 }) {
   const navigate = useNavigate()
   const freshnessBadge = getFreshnessBadge(freshness, status)
@@ -24,16 +23,30 @@ export function CustomerTrackingHeader({
   // Service icon / category label
   const serviceLabel = issueTitle || serviceCategory || "Service Request"
 
+  const handleBackOrClose = () => {
+    if (onClose) {
+      onClose()
+    } else {
+      navigate(-1)
+    }
+  }
+
+  const handleOpenFullPage = () => {
+    if (!requestId) return
+    const tokenQuery = trackingToken ? `?token=${encodeURIComponent(trackingToken)}` : ""
+    window.open(`/track/${encodeURIComponent(requestId)}${tokenQuery}`, "_blank")
+  }
+
   return (
     <header className="ltp-header">
       <div className="ltp-hdr-left">
         <button
           className="ltp-hdr-back-btn"
-          onClick={() => navigate(-1)}
-          aria-label="Back"
-          title="Back to bookings"
+          onClick={handleBackOrClose}
+          aria-label={isModal ? "Close live tracking" : "Back"}
+          title={isModal ? "Close live tracking (Esc)" : "Back to bookings"}
         >
-          <ArrowLeft size={18} color="white" />
+          {isModal ? <X size={18} color="white" /> : <ArrowLeft size={18} color="white" />}
         </button>
 
         <div>
@@ -65,12 +78,33 @@ export function CustomerTrackingHeader({
         {connectionState === "POLLING" && online && (
           <span className="ltp-polling-badge">🟡 Polling</span>
         )}
-        <button className="ltp-hdr-btn" onClick={onRefresh} aria-label="Refresh tracking">
+        <button className="ltp-hdr-btn" onClick={onRefresh} aria-label="Refresh tracking" title="Refresh live status">
           <RefreshCw size={13} /> Refresh
         </button>
+        {isModal && requestId && (
+          <button
+            className="ltp-hdr-btn"
+            onClick={handleOpenFullPage}
+            aria-label="Open full tracking in new tab"
+            title="Open tracking page in new tab so you can view other pages simultaneously"
+          >
+            <ExternalLink size={13} /> Full Page
+          </button>
+        )}
+        {isModal && onClose && (
+          <button
+            className="ltp-hdr-btn ltp-modal-close-btn"
+            onClick={onClose}
+            aria-label="Close tracking popup"
+            title="Close popup (Esc)"
+          >
+            <X size={14} /> Close
+          </button>
+        )}
       </div>
     </header>
   )
 }
 
 export default CustomerTrackingHeader
+

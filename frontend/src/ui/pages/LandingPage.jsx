@@ -9,25 +9,37 @@ import {
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
-  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug
+  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug, Utensils
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
+import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
+import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { usePendingIntent } from "../../hooks/usePendingIntent.js"
 import { ThemeToggle } from "../shell/ThemeToggle.jsx"
 import { apiUpdateCustomerLastLocation, apiFetchCustomerBookings } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
+import {
+  getCustomerLocation,
+  setCustomerLocation,
+  getCustomerSelectedAddress,
+  setCustomerSelectedAddress,
+  clearCustomerLocation,
+  clearLegacyLocationStorage
+} from "../../utils/customerLocationStorage.js"
 import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
@@ -715,57 +727,69 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
 
   // 100% Accurate Verified Photographic Matches for Tamil & English Vegetable Names
   if (n.includes("basket") || n.includes("essential")) return "/mockups/vegetables_realistic.png"
-  if (n.includes("exotic") || n.includes("gourds pack")) return "/mockups/category_food_health.png"
-  if (n.includes("leafy & salad") || n.includes("leafy box") || n.includes("leafy & salad box")) return "/mockups/veg_coriander.png"
-
-  if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
-  if (n.includes("curry") || n.includes("karuveppilai") || n.includes("kadi patta")) return "/mockups/veg/curry_leaves.jpg"
-  if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
-  if (n.includes("ginger") || n.includes("inji") || n.includes("adrak")) return "/mockups/veg_ginger.png"
-  if (n.includes("mushroom") || n.includes("kaalan")) return "/mockups/veg_mushroom.png"
-  if (n.includes("bottle gourd") || n.includes("suraikkai") || n.includes("lauki")) return "/mockups/veg_lauki.png"
-  if (n.includes("french beans") || n.includes("beans")) return "/mockups/veg_french_beans.png"
   if (n.includes("tomato") || n.includes("thakkali") || n.includes("tamatar") || n.includes("cherry")) return "/mockups/veg_tomato.png"
-  if (n.includes("lady finger") || n.includes("vendakkai") || n.includes("bhindi") || n.includes("okra")) return "/mockups/veg_bhindi.png"
-  if (n.includes("brinjal") || n.includes("kathirikai") || n.includes("baingan")) return "/mockups/veg_brinjal.png"
-  if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg/karela.jpg"
-  if (n.includes("drumstick") || n.includes("murungakkai") || n.includes("sahjan")) return "/mockups/veg/drumstick.jpg"
-  if (n.includes("peas") || n.includes("pattani") || n.includes("matar")) return "/mockups/veg/peas.jpg"
+
+  // Spring Onion MUST precede general onion
+  if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
+  if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
 
   if (n.includes("peeled garlic") || n.includes("uricha poondu")) return "/mockups/veg/peeled_garlic.jpg"
   if (n.includes("garlic") || n.includes("poondu") || n.includes("lehsun")) return "/mockups/veg/garlic.jpg"
-  if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
-  if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
 
-  // Spring Onion MUST be checked before general onion
-  if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
-  if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
-  if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
+  if (n.includes("ginger") || n.includes("inji") || n.includes("adrak")) return "/mockups/veg_ginger.png"
 
-  // Specific Bell Peppers & Capsicum MUST be checked before general chilli
+  if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("chakkara") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
+  if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("urulaikizhangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
+
   if (n.includes("red bell pepper") || n.includes("sigappu")) return "/mockups/veg/red_bell_pepper.jpg"
-  if (n.includes("yellow bell pepper") || n.includes("manjal")) return "/mockups/veg/yellow_bell_pepper.jpg"
-  if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
-  if (n.includes("chilli") || n.includes("milagai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
+  if (n.includes("yellow bell pepper") || n.includes("manjal kuda")) return "/mockups/veg/yellow_bell_pepper.jpg"
+  if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("kudai milagaai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
+  if (n.includes("chilli") || n.includes("milagai") || n.includes("milagaai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
 
-  if (n.includes("cauliflower") || n.includes("kooliflower") || n.includes("phool gobhi")) return "/mockups/veg/cauliflower.jpg"
-  if (n.includes("cabbage") || n.includes("muttakose") || n.includes("patta gobhi")) return "/mockups/veg/cabbage.jpg"
-  if (n.includes("corn") || n.includes("solam") || n.includes("bhutta")) return "/mockups/veg/corn.jpg"
-  if (n.includes("radish") || n.includes("mullangi") || n.includes("mooli")) return "/mockups/veg/radish.jpg"
-  if (n.includes("lettuce") || n.includes("keerai") || n.includes("palak") || n.includes("spinach")) return "/mockups/veg/lettuce.jpg"
+  if (n.includes("curry") || n.includes("karuveppilai") || n.includes("karuvepillai") || n.includes("kadi patta")) return "/mockups/veg_curry_leaves.png"
+  if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
+  if (n.includes("lady finger") || n.includes("vendakkai") || n.includes("vendaikkai") || n.includes("bhindi") || n.includes("okra")) return "/mockups/veg_bhindi.png"
+  if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
+
+  if (n.includes("spinach") || n.includes("palak") || n.includes("keerai") || n.includes("amaranthus")) return "/mockups/veg/spinach.jpg"
+  if (n.includes("carrot")) return "/mockups/veg/carrot.jpg"
+  if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("vellarikai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
+  if (n.includes("mushroom") || n.includes("kaalan")) return "/mockups/veg_mushroom.png"
+  if (n.includes("brinjal") || n.includes("kathirikai") || n.includes("kathirikkai") || n.includes("baingan")) return "/mockups/veg_brinjal.png"
+  if (n.includes("cauliflower") || n.includes("pookosu")) return "/mockups/veg/cauliflower.jpg"
+  if (n.includes("cabbage") || n.includes("muttaikose")) return "/mockups/veg/cabbage.jpg"
+  if (n.includes("baby corn")) return "/mockups/veg/baby_corn.jpg"
+  if (n.includes("corn") || n.includes("cholam") || n.includes("solam")) return "/mockups/veg/corn.jpg"
+  if (n.includes("broad beans") || n.includes("avarakkai") || n.includes("sem fali")) return "/mockups/veg_broad_beans.png"
+  if (n.includes("cluster beans") || n.includes("kothavarangai") || n.includes("guar")) return "/mockups/veg_cluster_beans.png"
+  if (n.includes("french beans") || n.includes("beans")) return "/mockups/veg_french_beans.png"
+  if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg_bitter_gourd.png"
+  if (n.includes("bottle gourd") || n.includes("surakkai") || n.includes("lauki")) return "/mockups/veg_lauki.png"
+  if (n.includes("snake gourd") || n.includes("pudalangai")) return "/mockups/veg_snake_gourd.png"
+  if (n.includes("ridge gourd") || n.includes("peerangai") || n.includes("peerkangai")) return "/mockups/veg/ridge_gourd.jpg"
   if (n.includes("beetroot")) return "/mockups/veg/beetroot.jpg"
-  if (n.includes("pumpkin") || n.includes("parangikkai") || n.includes("kaddu")) return "/mockups/veg/pumpkin.jpg"
-  if (n.includes("mint") || n.includes("pudhina")) return "/mockups/veg/mint.jpg"
-  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/rosemary.png"
-  if (n.includes("turmeric") || n.includes("manjal") || n.includes("haldi")) return "/mockups/veg/turmeric.jpg"
-  if (n.includes("amla") || n.includes("nellikai")) return "/mockups/veg/amla.jpg"
-  if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
-  if (n.includes("papaya") || n.includes("pappalikkai")) return "/mockups/veg/raw_papaya.jpg"
-  if (n.includes("zucchini")) return "/mockups/veg/zucchini.jpg"
-  if (n.includes("ridge gourd") || n.includes("peerkangai") || n.includes("torai")) return "/mockups/veg/ridge_gourd.jpg"
+  if (n.includes("radish") || n.includes("mullangi")) return "/mockups/veg/radish.jpg"
+  if (n.includes("mint") || n.includes("pudina")) return "/mockups/veg/mint.jpg"
+  if (n.includes("drumstick leaves") || n.includes("moringa") || n.includes("murungai keerai")) return "/mockups/veg_moringa_leaves.png"
+  if (n.includes("drumstick") || n.includes("murungakkai")) return "/mockups/veg_drumstick.png"
+  if (n.includes("fenugreek") || n.includes("methi") || n.includes("vendhaya keerai")) return "/mockups/veg_methi.png"
+  if (n.includes("peas") || n.includes("pattani")) return "/mockups/veg/peas.jpg"
+  if (n.includes("lettuce")) return "/mockups/veg/lettuce.jpg"
+  if (n.includes("sprouts")) return "/mockups/veg/sprouts.jpg"
   if (n.includes("broccoli")) return "/mockups/veg/broccoli.jpg"
+  if (n.includes("ash gourd") || n.includes("sambal pusanikkai") || n.includes("winter melon") || n.includes("petha")) return "/mockups/veg_ash_gourd.png"
+  if (n.includes("pumpkin") || n.includes("parangikkai")) return "/mockups/veg/pumpkin.jpg"
+  if (n.includes("chow chow") || n.includes("chayote")) return "/mockups/veg_chow_chow.png"
+  if (n.includes("ivy gourd") || n.includes("kovakkai") || n.includes("tindora") || n.includes("dondakaya")) return "/mockups/veg_ivy_gourd.png"
+  if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
+  if (n.includes("turmeric") || n.includes("manjal")) return "/mockups/veg/turmeric.jpg"
+  if (n.includes("amla") || n.includes("nellikai") || n.includes("nellikaai")) return "/mockups/veg/amla.jpg"
+  if (n.includes("zucchini")) return "/mockups/veg/zucchini.jpg"
+  if (n.includes("papaya") || n.includes("pappalikkai")) return "/mockups/veg/raw_papaya.jpg"
+  if (n.includes("banana") || n.includes("vazhai") || n.includes("vazhakkai") || n.includes("thandu")) return "/mockups/veg_lauki.png"
+  if (n.includes("rosemary") || n.includes("basil") || n.includes("neem") || n.includes("veppilai")) return "/mockups/veg/rosemary.png"
 
-  return "/mockups/veg_coriander.png"
+  return "/mockups/vegetables_realistic.png"
 }
 
 function HomeCombinedGraphic({ className = "w-16 h-16" }) {
@@ -820,53 +844,213 @@ const MAIN_CATEGORIES = [
   },
 ]
 
+// ── Curated Multi-Pack & Weight Variants for Top High-Demand Vegetables ──
+const VEGETABLE_VARIANTS_MAP = {
+  onion: [
+    { unit: "2 x 1 kg", price: 103, mrp: 121, discount: "14% OFF", badge: ".2" },
+    { unit: "1 kg", price: 52, mrp: 60, discount: "13% OFF" },
+  ],
+  tomato: [
+    { unit: "2 x 500 g", price: 27, mrp: 36, discount: "25% OFF", badge: ".2" },
+    { unit: "500 g", price: 14, mrp: 18, discount: "22% OFF" },
+  ],
+  potato: [
+    { unit: "2 x 1 kg", price: 52, mrp: 62, discount: "16% OFF", badge: ".2" },
+    { unit: "1 kg", price: 27, mrp: 31, discount: "12% OFF" },
+  ],
+  ooty_potato: [
+    { unit: "2 x 1 kg", price: 87, mrp: 114, discount: "24% OFF", badge: ".2" },
+    { unit: "1 kg", price: 45, mrp: 57, discount: "21% OFF" },
+  ],
+  "lady finger": [
+    { unit: "2 x 250 g", price: 27, mrp: 34, discount: "20% OFF", badge: ".2" },
+    { unit: "250 g", price: 14, mrp: 17, discount: "17% OFF" },
+  ],
+  spinach: [
+    { unit: "2 x 200 g", price: 39, mrp: 50, discount: "22% OFF", badge: "Pack of 2" },
+    { unit: "200 g", price: 20, mrp: 25, discount: "20% OFF" },
+  ],
+  garlic: [
+    { unit: "2 x 100 g", price: 72, mrp: 88, discount: "18% OFF", badge: ".2" },
+    { unit: "100 g", price: 38, mrp: 44, discount: "13% OFF" },
+  ],
+}
+
+const getVegetableOptions = (name) => {
+  const lower = (name || "").toLowerCase()
+  if (lower.includes("spring onion") || lower.includes("sambhar onion")) return null
+  if (lower.includes("sweet potato")) return null
+
+  if (lower.includes("onion") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.onion
+  if (lower.includes("tomato") && !lower.includes("hybrid") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.tomato
+  if (lower.includes("ooty potato")) return VEGETABLE_VARIANTS_MAP.ooty_potato
+  if (lower.includes("potato") && !lower.includes("organic")) return VEGETABLE_VARIANTS_MAP.potato
+  if (lower.includes("lady finger") || lower.includes("vendaikkai") || lower.includes("vendakkai") || lower.includes("ladies finger")) {
+    if (!lower.includes("organic")) return VEGETABLE_VARIANTS_MAP["lady finger"]
+  }
+  if (lower.includes("spinach") || lower.includes("palak")) return VEGETABLE_VARIANTS_MAP.spinach
+  if (lower.includes("garlic") && !lower.includes("peeled")) return VEGETABLE_VARIANTS_MAP.garlic
+  return null
+}
+
+const getProducePriority = (name = "") => {
+  const lower = name.toLowerCase()
+  if (lower.includes("spring onion") || lower.includes("sambhar onion")) return 80
+  if (lower.includes("sweet potato") || lower.includes("baby potato")) return 80
+
+  if (lower.includes("tomato") && !lower.includes("organic")) return 1
+  if (lower.includes("onion") && !lower.includes("organic")) return 2
+  if (lower.includes("garlic") && !lower.includes("peeled")) return 3
+  if (lower.includes("ginger") && !lower.includes("organic")) return 4
+  if (lower.includes("potato") && !lower.includes("organic") && !lower.includes("ooty")) return 5
+  if (lower.includes("green chilli") || lower.includes("pachai milagaai")) return 6
+  if (lower.includes("curry leaves") || lower.includes("karuveppilai") || lower.includes("karuvepillai")) return 7
+  if (lower.includes("coriander") || lower.includes("kothamalli")) return 8
+  if (lower.includes("lady finger") || lower.includes("vendaikkai") || lower.includes("vendakkai")) return 9
+  if (lower.includes("lemon") || lower.includes("elumichai")) return 10
+  if (lower.includes("spinach") || lower.includes("palak")) return 11
+  if (lower.includes("carrot")) return 12
+  if (lower.includes("cucumber")) return 13
+
+  return 50
+}
+
 // ── Curated Vegetables & Groceries Data with Tamil Names ────────
 const VEGETABLE_ITEMS = [
-  // Daily Essentials
-  { name: "Coriander Leaves (Kothamalli)", unit: "100 g", price: 25, mrp: 31, discount: "19% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Onion (Vengayam)", unit: "1 kg", price: 41, mrp: 50, discount: "18% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Tomato (Thakkali)", unit: "1 kg", price: 58, mrp: 70, discount: "17% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Potato (Urulaikilangu)", unit: "1 kg", price: 22, mrp: 25, discount: "12% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Lady Finger (Vendakkai)", unit: "1 kg", price: 54, mrp: 70, discount: "23% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Ginger (Inji)", unit: "200 g", price: 75, mrp: 88, discount: "15% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Garlic (Poondu)", unit: "200 g", price: 68, mrp: 85, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Peeled Garlic (Uricha Poondu)", unit: "100 g", price: 54, mrp: 65, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Lemon (Elumichai)", unit: "200 g", price: 41, mrp: 48, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  { name: "Cucumber (Vellarikkai)", unit: "500 g", price: 52, mrp: 61, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
-  // Herbs & Leafy
-  { name: "Curry Leaves (Karuveppilai)", unit: "50 g", price: 15, mrp: 18, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Mint Leaves (Pudhina)", unit: "100 g", price: 26, mrp: 32, discount: "19% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Spring Onion (Vengaya Thaal)", unit: "150 g", price: 36, mrp: 42, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Green Lettuce (Salad Keerai)", unit: "100 g", price: 56, mrp: 64, discount: "13% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Fresh Rosemary & Herbs", unit: "10 g", price: 20, mrp: 25, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  { name: "Drumstick (Murungakkai)", unit: "250 g", price: 35, mrp: 42, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
-  // Gourds & Roots
-  { name: "Bitter Gourd (Pavakkai)", unit: "250 g", price: 17, mrp: 19, discount: "11% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Bottle Gourd (Suraikkai)", unit: "400 g", price: 21, mrp: 24, discount: "13% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Ridge Gourd (Peerkangai)", unit: "500 g", price: 38, mrp: 48, discount: "21% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Radish (Mullangi)", unit: "500 g", price: 52, mrp: 63, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Beetroot (Beetroot)", unit: "500 g", price: 37, mrp: 44, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Sweet Potato (Sakkaraivalli Kizhangu)", unit: "500 g", price: 69, mrp: 84, discount: "18% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Raw Turmeric (Manjal Kizhangu)", unit: "200 g", price: 38, mrp: 43, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
-  { name: "Colocasia (Seppankizhangu)", unit: "250 g", price: 19, mrp: 21, discount: "10% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  // Organic & Exotic
-  { name: "Brinjal (Kathirikai)", unit: "500 g", price: 25, mrp: 29, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Chilli (Pachai Milagai)", unit: "100 g", price: 18, mrp: 22, discount: "18% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Capsicum (Kuda Milagai)", unit: "250 g", price: 28, mrp: 35, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Red Bell Pepper (Sigappu Kuda Milagai)", unit: "125 g", price: 45, mrp: 58, discount: "22% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Yellow Bell Pepper (Manjal Kuda Milagai)", unit: "125 g", price: 61, mrp: 70, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  // ── Top Daily Essentials (Priority Top) ──
+  {
+    name: "Tomato (Thakkali)",
+    unit: "500 g",
+    price: 14,
+    mrp: 18,
+    discount: "22% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.tomato,
+  },
+  {
+    name: "Onion (Vengayam)",
+    unit: "1 kg",
+    price: 52,
+    mrp: 60,
+    discount: "13% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.onion,
+  },
+  {
+    name: "Garlic (Poondu)",
+    unit: "100 g",
+    price: 38,
+    mrp: 44,
+    discount: "13% OFF",
+    delivery: "8 MINS",
+    category: "Herbs & Seasoning",
+    options: VEGETABLE_VARIANTS_MAP.garlic,
+  },
+  { name: "Ginger", unit: "100 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  {
+    name: "Potato (Urulaikizhangu)",
+    unit: "1 kg",
+    price: 27,
+    mrp: 31,
+    discount: "12% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.potato,
+  },
+  { name: "Green Chilli (Pachai Milagaai)", unit: "100 g", price: 10, mrp: 11, discount: "9% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Curry Leaves (Karuvepillai)", unit: "50 g", price: 7, mrp: 9, discount: "22% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Coriander Bunch (Kothamalli)", unit: "100 g", price: 12, mrp: 15, discount: "20% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Lady Finger (Vendaikkai)",
+    unit: "250 g",
+    price: 14,
+    mrp: 17,
+    discount: "17% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP["lady finger"],
+  },
+  { name: "Lemon (Elumichai Pazham)", unit: "200 g", price: 44, mrp: 53, discount: "16% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Spinach (Palak Keerai)",
+    unit: "200 g",
+    price: 20,
+    mrp: 25,
+    discount: "20% OFF",
+    delivery: "8 MINS",
+    category: "Herbs & Leafy",
+    options: VEGETABLE_VARIANTS_MAP.spinach,
+  },
+  { name: "Orange Carrot (Local Carrot)", unit: "500 g", price: 41, mrp: 49, discount: "18% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Green Cucumber (Vellarikai)", unit: "500 g", price: 21, mrp: 26, discount: "19% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+
+  // ── High Demand Kitchen Produce ──
+  { name: "Brinjal (Vari Kathirikkai)", unit: "250 g", price: 18, mrp: 23, discount: "21% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Button Mushroom (Kaalan)", unit: "180 g", price: 65, mrp: 78, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Capsicum (Kudai Milagaai)", unit: "250 g", price: 17, mrp: 19, discount: "10% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cauliflower (Pookosu)", unit: "300 g", price: 29, mrp: 37, discount: "21% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cabbage (Muttaikose)", unit: "400 g", price: 19, mrp: 23, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Sweet Corn Cob (Cholam)", unit: "1 pc", price: 20, mrp: 24, discount: "18% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "French Beans (Beans)", unit: "250 g", price: 31, mrp: 36, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Cauliflower (Kooliflower)", unit: "1 pc (500g)", price: 38, mrp: 45, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Cabbage (Muttakose)", unit: "400 g", price: 37, mrp: 44, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Broccoli", unit: "300 g", price: 133, mrp: 167, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Button Mushroom (Kaalan)", unit: "180 g", price: 47, mrp: 56, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Pumpkin (Parangikkai)", unit: "500 g", price: 46, mrp: 50, discount: "8% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Green Peas (Pattani)", unit: "250 g", price: 67, mrp: 81, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Amla (Nellikai)", unit: "250 g", price: 64, mrp: 73, discount: "12% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Bitter Gourd (Pavakkai)", unit: "500 g", price: 24, mrp: 28, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Bottle Gourd (Surakkai)", unit: "400 g", price: 20, mrp: 24, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Snake Gourd (Pudalangai)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Ridge Gourd (Peerangai)", unit: "500 g", price: 21, mrp: 25, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Beetroot", unit: "500 g", price: 31, mrp: 37, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Radish (Mullangi)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Mint Leaves (Pudina)", unit: "100 g", price: 12, mrp: 15, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Drumstick (Murungakkai)", unit: "2 pcs", price: 16, mrp: 18, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Drumstick Leaves (Moringa)", unit: "100 g", price: 15, mrp: 17, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Baby Potato (Urulaikizhangu)", unit: "500 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  {
+    name: "Ooty Potato",
+    unit: "1 kg",
+    price: 45,
+    mrp: 57,
+    discount: "21% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: VEGETABLE_VARIANTS_MAP.ooty_potato,
+  },
+  { name: "Sambhar Onion (Vengayam)", unit: "250 g", price: 27, mrp: 31, discount: "13% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Spring Onion (Vengaya Thaal)", unit: "250 g", price: 17, mrp: 20, discount: "15% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Sweet Potato (Chakkara Valli)", unit: "450 g", price: 34, mrp: 39, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Peeled Garlic (Uricha Poondu)", unit: "100 g", price: 54, mrp: 65, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Fenugreek (Methi)", unit: "250 g", price: 25, mrp: 30, discount: "17% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Peas (Pachai Pattani)", unit: "250 g", price: 63, mrp: 76, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Lettuce", unit: "100 g", price: 24, mrp: 27, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Broccoli", unit: "200 g", price: 33, mrp: 40, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Ash Gourd (Sambal Pusanikkai)", unit: "1.5 kg", price: 46, mrp: 55, discount: "16% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Chow Chow", unit: "400 g", price: 29, mrp: 35, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Ivy Gourd (Kovakkai)", unit: "250 g", price: 9, mrp: 11, discount: "18% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Broad Beans (Avarakkai)", unit: "250 g", price: 16, mrp: 19, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cluster Beans (Kothavarangai)", unit: "250 g", price: 14, mrp: 16, discount: "12% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Cowpea Beans (Karamani)", unit: "250 g", price: 24, mrp: 28, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Colocasia (Seppankizhangu)", unit: "250 g", price: 19, mrp: 22, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Raw Banana (Vazhakkai)", unit: "3 pcs", price: 42, mrp: 49, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Banana Stem (Vazhai Thandu)", unit: "800 g", price: 15, mrp: 18, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Green Zucchini", unit: "200 g", price: 30, mrp: 35, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Yellow Bell Pepper (Manjal Kuda Milagai)", unit: "125 g", price: 61, mrp: 70, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Red Bell Pepper", unit: "125 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Baby Corn - Packet", unit: "200 g", price: 30, mrp: 35, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Green Amaranthus Leaves", unit: "250 g", price: 18, mrp: 22, discount: "18% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Red Amaranthus Leaves", unit: "250 g", price: 19, mrp: 24, discount: "21% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Moong Sprouts", unit: "150 g", price: 45, mrp: 58, discount: "22% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Raw Turmeric (Manjal)", unit: "250 g", price: 67, mrp: 78, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Amla (Nellikaai)", unit: "250 g", price: 31, mrp: 36, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Raw Papaya (Pappalikkai)", unit: "400 g", price: 39, mrp: 45, discount: "13% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Sweet Corn (Solam)", unit: "1 pc", price: 24, mrp: 30, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  // Gourds & Roots (continued)
-  { name: "Green Zucchini", unit: "200 g", price: 30, mrp: 38, discount: "21% OFF", delivery: "8 MINS", category: "Gourds & Roots" }
+  { name: "Knol Khol (Nookal)", unit: "500 g", price: 22, mrp: 26, discount: "15% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Neem Leaves (Veppilai)", unit: "1 pack", price: 19, mrp: 22, discount: "13% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Fresh Rosemary", unit: "10 g", price: 16, mrp: 18, discount: "11% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Italian Basil Leaves", unit: "50 g", price: 35, mrp: 43, discount: "18% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Pumpkin (Pusanikkai)", unit: "400 g", price: 40, mrp: 48, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pumpkin Yellow (Cut)", unit: "200 g", price: 42, mrp: 50, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Disco Pumpkin", unit: "500 g", price: 48, mrp: 58, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Brinjal - Bharta", unit: "500 g", price: 26, mrp: 31, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Assorted Capsicum (R/Y/G)", unit: "3 pcs", price: 59, mrp: 70, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
 ]
 
 const GROCERY_ITEMS = [
@@ -1616,6 +1800,7 @@ const ALL_SEARCHABLE_SERVICES = [
 
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
+  const { save: savePendingIntent, restore: restorePendingIntent } = usePendingIntent()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -1628,16 +1813,16 @@ export function LandingPage() {
       apiFetchCustomerBookings()
         .then(res => {
           if (res?.data && Array.isArray(res.data)) {
-            const activeBookingsCount = res.data.filter(b => 
-              b.status === "PENDING" || 
-              b.status === "ASSIGNED" || 
-              b.status === "ACCEPTED" || 
+            const activeBookingsCount = res.data.filter(b =>
+              b.status === "PENDING" ||
+              b.status === "ASSIGNED" ||
+              b.status === "ACCEPTED" ||
               b.status === "IN_PROGRESS"
             ).length
             setNotificationCount(activeBookingsCount)
           }
         })
-        .catch(() => {})
+        .catch(() => { })
     } else {
       setNotificationCount(0)
     }
@@ -1802,7 +1987,11 @@ export function LandingPage() {
     }
 
     if (item.action === "food_health") {
-      setSelectedFoodSubModuleId(item.subId || "vegetables")
+      if ((item.subId || "vegetables") === "vegetables") {
+        navigate(routes.vegetables)
+        return
+      }
+      setSelectedFoodSubModuleId(item.subId || "groceries")
       setIsFoodHealthModalOpen(true)
       return
     }
@@ -1839,7 +2028,32 @@ export function LandingPage() {
     }
   }
 
-  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
+  const [modalCart, setModalCart] = useState(() => {
+    const stateCart = location.state?.cart;
+    if (stateCart && stateCart.length > 0) {
+      return stateCart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
+    }
+    try {
+      const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse saved cart in LandingPage:", e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("calservices_customer_cart", JSON.stringify(modalCart));
+    } catch (e) {
+      console.error("Failed to save modalCart to localStorage:", e);
+    }
+  }, [modalCart]);
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -1855,7 +2069,7 @@ export function LandingPage() {
     return foodHealthSub.find((sub) => sub.id === selectedFoodSubModuleId) || null
   }, [foodHealthSub, selectedFoodSubModuleId])
   const [foodCart, setFoodCart] = useState(() => {
-    if (location.state?.foodCart && Object.keys(location.state.foodCart).length > 0) {
+    if (location.state?.foodCart !== undefined) {
       return location.state.foodCart
     }
     try {
@@ -1865,6 +2079,7 @@ export function LandingPage() {
     return {}
   })
   const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
+  const [variantModalItem, setVariantModalItem] = useState(null)
 
   // Persist vegetable cart state so items remain visible when closing/reopening
   useEffect(() => {
@@ -1874,36 +2089,121 @@ export function LandingPage() {
   }, [foodCart])
 
   useEffect(() => {
-    if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
+    if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId === "vegetables") {
+      navigate(routes.vegetables, { replace: true })
+      return
+    }
+    if (location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
       setIsFoodHealthModalOpen(true)
-      setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "vegetables")
-      if (location.state?.foodCart) {
+      setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "groceries")
+      if (location.state?.foodCart !== undefined) {
         setFoodCart(location.state.foodCart)
+        try {
+          localStorage.setItem("calservice_veg_food_cart", JSON.stringify(location.state.foodCart || {}))
+        } catch {}
       }
       // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
       navigate(".", { replace: true, state: {} })
     }
   }, [location.state, navigate])
-  const [variantModalItem, setVariantModalItem] = useState(null)
   const [vegCategoryFilter, setVegCategoryFilter] = useState("All")
   const [vegSearchQuery, setVegSearchQuery] = useState("")
   const [vegApiItems, setVegApiItems] = useState(VEGETABLE_ITEMS)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [showCartDrawer, setShowCartDrawer] = useState(false)
   const [showVegCartDrawer, setShowVegCartDrawer] = useState(false)
+  const [selectedRecipeVegetable, setSelectedRecipeVegetable] = useState(null)
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false)
+  const vegTiming = getVegetableTimingInfo()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
-  const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
-    return localStorage.getItem("calservice_user_location") || null;
-  })
-  const [zoneCheckResult, setZoneCheckResult] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("calservice_zone_result") || "null")
-    } catch { return null }
-  })
+  const [activeLocationLabel, setActiveLocationLabel] = useState(null)
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false)
+  const [zoneCheckResult, setZoneCheckResult] = useState(null)
   const [serviceAlertMessage, setServiceAlertMessage] = useState("")
   const [activeNav, setActiveNav] = useState("home")
+
+  // Customer-scoped location synchronization
+  useEffect(() => {
+    let isMounted = true
+
+    const syncLocationForCustomer = async () => {
+      if (!user?.id) {
+        // Guest user: reset customer location state
+        setActiveLocationLabel(null)
+        setZoneCheckResult(null)
+        return
+      }
+
+      setIsLoadingLocation(true)
+      try {
+        // 1. Read customer-scoped selected address first
+        const currentSelected = getCustomerSelectedAddress(user.id)
+        const scopedLoc = getCustomerLocation(user.id)
+        if (scopedLoc && isMounted) {
+          setActiveLocationLabel(scopedLoc)
+        }
+
+        // 2. Query backend for this customer's saved addresses
+        const res = await apiRequest("/auth/customer/addresses/")
+        const addresses = res?.data || (Array.isArray(res) ? res : [])
+        if (!isMounted) return
+
+        if (Array.isArray(addresses) && addresses.length > 0) {
+          // Find matching address for current selection, or fall back to default, or first
+          let activeAddr = null
+          if (currentSelected?.id) {
+            activeAddr = addresses.find((a) => Number(a.id) === Number(currentSelected.id))
+          }
+          if (!activeAddr) {
+            activeAddr = addresses.find((a) => a.is_default) || addresses[0]
+          }
+
+          const label = activeAddr.formatted_address || activeAddr.address_line1 || activeAddr.locality || ""
+          if (label && isMounted) {
+            setActiveLocationLabel(label)
+            setCustomerSelectedAddress(user.id, activeAddr)
+            setCustomerLocation(user.id, label)
+            if (activeAddr.latitude && activeAddr.longitude) {
+              verifyServiceZone(Number(activeAddr.latitude), Number(activeAddr.longitude), label)
+            }
+          }
+        } else if (scopedLoc && isMounted) {
+          setActiveLocationLabel(scopedLoc)
+        } else {
+          // No saved addresses for this customer: check customer profile last known location
+          const lastLoc = user?.last_known_location || user?.lastKnownLocation
+          const lastLocStr = typeof lastLoc === "string" ? lastLoc : (lastLoc?.label || "")
+          if (lastLocStr && isMounted) {
+            setActiveLocationLabel(lastLocStr)
+            setCustomerLocation(user.id, lastLocStr)
+          } else if (isMounted) {
+            setActiveLocationLabel(null)
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to sync customer location from backend:", err)
+      } finally {
+        if (isMounted) setIsLoadingLocation(false)
+      }
+    }
+
+    syncLocationForCustomer()
+
+    const handleAuthOrAddressChange = () => {
+      syncLocationForCustomer()
+    }
+
+    window.addEventListener("calservice_auth_changed", handleAuthOrAddressChange)
+    window.addEventListener("calservice_address_changed", handleAuthOrAddressChange)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener("calservice_auth_changed", handleAuthOrAddressChange)
+      window.removeEventListener("calservice_address_changed", handleAuthOrAddressChange)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -1945,26 +2245,12 @@ export function LandingPage() {
         json: { lat, lng }
       })
       setZoneCheckResult(zoneRes)
-      localStorage.setItem("calservice_zone_result", JSON.stringify(zoneRes))
     } catch (e) {
       // Fail open if endpoint is down
       const openRes = { in_zone: true, open_access: true, zone: null, available_services: [] }
       setZoneCheckResult(openRes)
     }
   }
-
-  // Initial zone check on mount - only if user previously selected/detected coordinates
-  useEffect(() => {
-    const storedCoords = localStorage.getItem("calservice_user_coords")
-    if (storedCoords) {
-      try {
-        const parsed = JSON.parse(storedCoords)
-        if (parsed?.lat && parsed?.lng) {
-          verifyServiceZone(parsed.lat, parsed.lng)
-        }
-      } catch (e) { }
-    }
-  }, [])
 
   // Check if a service is enabled in customer's current zone
   // Check if a service is enabled in customer's current zone
@@ -2081,12 +2367,21 @@ export function LandingPage() {
       "truck": ["truck"],
       "mini-truck-transport": ["truck"],
       "mini-truck-(hosur)": ["truck"],
+      "goods-transport-truck": ["truck"],
       "two-wheeler": ["two-wheeler"],
       "instant-bike-courier": ["two-wheeler"],
+      "goods-transport-bike": ["two-wheeler"],
       "2-wheeler-(hosur)": ["two-wheeler"],
       "packers-and-movers": ["packers-movers"],
+      "packers-movers": ["packers-movers"],
+      "goods-transport-packers": ["packers-movers"],
       "packers-and-movers-(hosur)": ["packers-movers"],
-      "vegetables": ["vegetables"],
+      "vegetables": ["vegetables", "farm-fresh-vegetable"],
+      "vegetable": ["vegetables", "farm-fresh-vegetable"],
+      "vegetables-quick-delivery": ["vegetables", "farm-fresh-vegetable"],
+      "fresh-vegetables": ["vegetables", "farm-fresh-vegetable"],
+      "farm-fresh-vegetable": ["vegetables", "farm-fresh-vegetable"],
+      "farm-fresh-vegetables": ["vegetables", "farm-fresh-vegetable"],
       "groceries": ["groceries"],
     }
 
@@ -2099,11 +2394,11 @@ export function LandingPage() {
     )
     if (directMatch) return true
 
-    // Fallback: general alphanumeric substring check between normalized slug & allowed slugs
-    const cleanSlug = slug.replace(/[^a-z0-9]/g, "")
+    // Safe token matching with minimum token length 4 (prevents 'ac' matching inside 'packers')
+    const rTokens = slug.split("-").filter(t => t.length >= 4)
     return allowed.some(allowedSlug => {
-      const cleanAllowed = allowedSlug.toLowerCase().replace(/[^a-z0-9]/g, "")
-      return cleanAllowed && cleanSlug && (cleanAllowed.includes(cleanSlug) || cleanSlug.includes(cleanAllowed))
+      const aTokens = allowedSlug.toLowerCase().replace(/_/g, "-").split("-").filter(t => t.length >= 4)
+      return rTokens.some(rt => aTokens.includes(rt))
     })
   }, [zoneCheckResult])
 
@@ -2132,7 +2427,7 @@ export function LandingPage() {
               priceStr: "₹" + s.price,
               duration: s.duration || "1 hr",
               payment_policy: s.payment_policy,
-              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              image: s.image || "",
               includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
               excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
@@ -2150,6 +2445,9 @@ export function LandingPage() {
   }, [])
 
   useEffect(() => {
+    // Only detect live GPS for guest users who do not have an active location set yet
+    if (user?.id || activeLocationLabel) return
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
@@ -2157,20 +2455,19 @@ export function LandingPage() {
           const lng = parseFloat(pos.coords.longitude.toFixed(6))
           try {
             const display = await getAddress(lat, lng)
-            if (display) {
+            if (display && !activeLocationLabel) {
               setActiveLocationLabel(display)
-              localStorage.setItem("calservice_user_location", display)
             }
             await verifyServiceZone(lat, lng, display)
           } catch (e) { }
         },
-        (err) => {
-          console.warn("Live location detection warning:", err)
+        () => {
+          // Graceful fallback for location denial/timeout
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       )
     }
-  }, [])
+  }, [user?.id, activeLocationLabel])
 
   // Helper to dynamically categorize vegetable items based on their names
   const getVegetableCategory = (pkgName) => {
@@ -2178,50 +2475,105 @@ export function LandingPage() {
     if (
       lowerName.includes("coriander") ||
       lowerName.includes("curry leaves") ||
+      lowerName.includes("karuvepillai") ||
       lowerName.includes("mint") ||
+      lowerName.includes("pudina") ||
+      lowerName.includes("pudhina") ||
       lowerName.includes("lettuce") ||
       lowerName.includes("rosemary") ||
-      lowerName.includes("drumstick")
+      lowerName.includes("drumstick") ||
+      lowerName.includes("spinach") ||
+      lowerName.includes("keerai") ||
+      lowerName.includes("palak") ||
+      lowerName.includes("amaranthus") ||
+      lowerName.includes("methi") ||
+      lowerName.includes("fenugreek") ||
+      lowerName.includes("neem") ||
+      lowerName.includes("veppilai") ||
+      lowerName.includes("basil") ||
+      lowerName.includes("sprouts") ||
+      lowerName.includes("moringa") ||
+      lowerName.includes("spring onion")
     ) {
-      return "Herbs & Leafy"
-    }
-    if (lowerName.includes("spring onion")) {
       return "Herbs & Leafy"
     }
     if (
       lowerName.includes("ginger") ||
+      lowerName.includes("inji") ||
       lowerName.includes("garlic") ||
-      lowerName.includes("turmeric")
+      lowerName.includes("poondu") ||
+      lowerName.includes("turmeric") ||
+      lowerName.includes("manjal") ||
+      lowerName.includes("green chilli") ||
+      lowerName.includes("pachai milaga")
     ) {
       return "Herbs & Seasoning"
     }
     if (
       lowerName.includes("bitter gourd") ||
+      lowerName.includes("pavakkai") ||
       lowerName.includes("bottle gourd") ||
+      lowerName.includes("surakkai") ||
+      lowerName.includes("suraikkai") ||
       lowerName.includes("ridge gourd") ||
+      lowerName.includes("peerangai") ||
+      lowerName.includes("snake gourd") ||
+      lowerName.includes("pudalangai") ||
+      lowerName.includes("ash gourd") ||
+      lowerName.includes("pusanikkai") ||
+      lowerName.includes("pointed gourd") ||
+      lowerName.includes("ivy gourd") ||
+      lowerName.includes("kovakkai") ||
       lowerName.includes("radish") ||
+      lowerName.includes("mullangi") ||
       lowerName.includes("beetroot") ||
       lowerName.includes("sweet potato") ||
+      lowerName.includes("chakkara") ||
+      lowerName.includes("sakkaraivalli") ||
       lowerName.includes("colocasia") ||
-      lowerName.includes("zucchini")
+      lowerName.includes("seppankizhangu") ||
+      lowerName.includes("zucchini") ||
+      lowerName.includes("chow chow") ||
+      lowerName.includes("knol khol") ||
+      lowerName.includes("nookal") ||
+      lowerName.includes("banana stem") ||
+      lowerName.includes("vazhai") ||
+      lowerName.includes("vazhakkai")
     ) {
       return "Gourds & Roots"
     }
     if (
+      lowerName.includes("organic") ||
       lowerName.includes("brinjal") ||
+      lowerName.includes("kathirikkai") ||
+      lowerName.includes("kathirikai") ||
       lowerName.includes("chilli") ||
       lowerName.includes("capsicum") ||
+      lowerName.includes("milagai") ||
+      lowerName.includes("milagaai") ||
       lowerName.includes("bell pepper") ||
       lowerName.includes("beans") ||
+      lowerName.includes("avarakkai") ||
+      lowerName.includes("kothavarangai") ||
+      lowerName.includes("karamani") ||
       lowerName.includes("cauliflower") ||
+      lowerName.includes("pookosu") ||
       lowerName.includes("cabbage") ||
+      lowerName.includes("muttaikose") ||
+      lowerName.includes("muttakose") ||
       lowerName.includes("broccoli") ||
       lowerName.includes("mushroom") ||
+      lowerName.includes("kaalan") ||
       lowerName.includes("pumpkin") ||
+      lowerName.includes("disco") ||
       lowerName.includes("peas") ||
+      lowerName.includes("pattani") ||
       lowerName.includes("amla") ||
+      lowerName.includes("nellika") ||
       lowerName.includes("papaya") ||
-      lowerName.includes("sweet corn")
+      lowerName.includes("sweet corn") ||
+      lowerName.includes("baby corn") ||
+      lowerName.includes("cholam")
     ) {
       return "Organic & Exotic"
     }
@@ -2248,17 +2600,24 @@ export function LandingPage() {
           apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
             .then((pkgRes) => {
               if (pkgRes.success && Array.isArray(pkgRes.data) && pkgRes.data.length > 0) {
-                const apiVegs = pkgRes.data.map((pkg) => ({
-                  id: pkg.id,
-                  name: pkg.name,
-                  unit: pkg.duration || "1 unit",
-                  price: Math.round(Number(pkg.price || pkg.base_price) || 0),
-                  mrp: pkg.offer_price ? Math.round(Number(pkg.price || pkg.base_price) || 0) : null,
-                  discount: pkg.tag || "",
-                  delivery: pkg.duration || "8 MINS",
-                  category: getVegetableCategory(pkg.name),
-                  image: pkg.image || null,
-                }))
+                const apiVegs = pkgRes.data.map((pkg) => {
+                  const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
+                  const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price) || 0) : null
+                  const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
+                  const opts = getVegetableOptions(pkg.name)
+                  return {
+                    id: pkg.id,
+                    name: pkg.name,
+                    unit: pkg.duration || "1 unit",
+                    price: price,
+                    mrp: mrp,
+                    discount: discount,
+                    delivery: "8 MINS",
+                    category: getVegetableCategory(pkg.name),
+                    image: pkg.image || null,
+                    options: opts || undefined,
+                  }
+                })
                 setVegApiItems(apiVegs)
                 setFoodHealthSub(
                   apiServices.map((sub) =>
@@ -2327,6 +2686,8 @@ export function LandingPage() {
       navigate("/home", { state: { openElecModal: true } })
     } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openGoodsModal: true } })
+    } else if (["cleaning", "pest"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openHomePestModal: true } })
     } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
       navigate("/home")
     } else {
@@ -2611,7 +2972,11 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(finalCart);
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
                 <BathroomCleaningModal
@@ -2619,7 +2984,11 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(finalCart);
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
                 <PaintingPackageModal
@@ -2639,6 +3008,7 @@ export function LandingPage() {
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
                 />
+
 
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
@@ -2671,6 +3041,7 @@ export function LandingPage() {
                   category={activeCategory}
                   cart={modalCart}
                   setCart={setModalCart}
+                  packagesData={packagesData}
                   isFullPage={true}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
@@ -2686,24 +3057,29 @@ export function LandingPage() {
         <BkStyles />
 
         {showLocationPickerModal && (
-          <AddAddressSearchModal
+          <SelectServiceAddressDrawer
+            isOpen={showLocationPickerModal}
             onClose={() => setShowLocationPickerModal(false)}
-            onSelectLocation={async (locStr, coords) => {
+            currentAddress={activeLocationLabel}
+            onSelectAddress={async (locObj) => {
               setShowLocationPickerModal(false)
-              if (locStr) {
-                const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+              if (locObj) {
+                const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
                 setActiveLocationLabel(labelStr)
-                localStorage.setItem("calservice_user_location", labelStr)
-                if (coords?.lat && coords?.lng) {
-                  localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+                if (user?.id) {
+                  setCustomerLocation(user.id, labelStr)
+                  setCustomerSelectedAddress(user.id, locObj)
+                }
+                if (locObj.latitude && locObj.longitude) {
+                  const coords = { lat: Number(locObj.latitude), lng: Number(locObj.longitude) }
                   await verifyServiceZone(coords.lat, coords.lng, labelStr)
                 }
                 if (user) {
                   try {
                     await apiUpdateCustomerLastLocation({
                       label: labelStr,
-                      latitude: coords?.lat,
-                      longitude: coords?.lng,
+                      latitude: locObj.latitude,
+                      longitude: locObj.longitude,
                       detected_at: new Date().toISOString()
                     })
                   } catch (e) { }
@@ -2754,11 +3130,10 @@ export function LandingPage() {
                     key={item.id}
                     href={`#${item.id}`}
                     onClick={(e) => handleNavClick(e, item.id)}
-                    className={`py-1 transition-all cursor-pointer ${
-                      isActive
+                    className={`py-1 transition-all cursor-pointer ${isActive
                         ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
                         : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </a>
@@ -2778,6 +3153,7 @@ export function LandingPage() {
                 <MapPin className="w-3.5 h-3.5 shrink-0 text-[var(--sevo-primary)]" />
                 <span className="truncate">
                   {(() => {
+                    if (isLoadingLocation) return "Loading your location..."
                     if (activeLocationLabel) return activeLocationLabel
                     const locObj = user?.last_known_location || user?.lastKnownLocation
                     if (locObj) {
@@ -2785,7 +3161,7 @@ export function LandingPage() {
                       if (locObj.label) return locObj.label
                     }
                     if (user?.address) return user.address
-                    return "Hosur, Tamil Nadu"
+                    return "Select your location"
                   })()}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[var(--sevo-text-muted)] shrink-0 ml-auto" />
@@ -2910,9 +3286,8 @@ export function LandingPage() {
             <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
               <form
                 onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${
-                  isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
-                }`}
+                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
+                  }`}
               >
                 <div className="pl-3 pr-2 text-[var(--sevo-text-muted)]">
                   <Search className="w-4.5 h-4.5" />
@@ -3340,10 +3715,7 @@ export function LandingPage() {
                 image: "/mockups/category_home_repair_3d.jpg",
                 fallbackIcon: PaintRoller,
                 color: "bg-[#DCFCE7] text-[#16A34A]",
-                onClick: () => {
-                  setActiveCategory({ id: "paintings", name: "Paintings" })
-                  setIsPaintingModalOpen(true)
-                }
+                onClick: () => navigate("?category=painting")
               },
               {
                 name: "Appliance Repair",
@@ -3619,9 +3991,8 @@ export function LandingPage() {
               window.scrollTo({ top: 0, behavior: "smooth" })
               setActiveNav("home")
             }}
-            className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${
-              activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-            }`}
+            className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
+              }`}
           >
             <Home className="w-5 h-5" />
             <span>Home</span>
@@ -4219,7 +4590,13 @@ export function LandingPage() {
                       </button>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                          <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                          {selectedFoodSubModule?.id === "vegetables" ? (
+                            <span>{vegTiming.headerBadge}</span>
+                          ) : (
+                            <>
+                              <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                            </>
+                          )}
                         </span>
                         {/* Top Right Quick Commerce Cart Button matching Image 3 */}
                         {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 && (
@@ -4369,6 +4746,12 @@ export function LandingPage() {
                               key={sub.id}
                               type="button"
                               onClick={() => {
+                                if (sub.id === "vegetables") {
+                                  setIsFoodHealthModalOpen(false)
+                                  setSelectedFoodSubModuleId(null)
+                                  navigate(routes.vegetables)
+                                  return
+                                }
                                 setSelectedFoodSubModuleId(sub.id)
                                 setFoodOrderPlaced(false)
                                 setVegSearchQuery("")
@@ -4482,17 +4865,37 @@ export function LandingPage() {
                         </div>
                       ) : (
                         <>
+                          {/* Booking Notice Banner for Fresh Vegetables (After 12 PM / Outside 6 AM - 12 PM Window) */}
+                          {selectedFoodSubModule?.id === "vegetables" && vegTiming.afterTwelveNotice && (
+                            <div className="mb-4 p-3.5 sm:p-4 bg-amber-50 border border-amber-300/80 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
+                              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                                <Clock className="w-4 h-4 text-amber-700" />
+                              </div>
+                              <div className="flex-1 text-xs">
+                                <div className="font-extrabold text-amber-900 text-xs sm:text-sm mb-0.5 flex items-center gap-2">
+                                  <span>Booking Notice (After 12:00 PM)</span>
+                                  <span className="text-[10px] font-black bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full uppercase">Next-Day Delivery</span>
+                                </div>
+                                <p className="font-semibold text-amber-900 leading-relaxed">
+                                  Same-day vegetable booking is open from <strong>6:00 AM to 12:00 PM</strong>. Same-day booking is not available at the moment — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Products Grid matching Quick Commerce Layout */}
-                          {(selectedFoodSubModule?.items || []).filter((item) => {
-                            const q = vegSearchQuery.toLowerCase()
-                            const matchesSearch =
-                              !vegSearchQuery ||
-                              item.name.toLowerCase().includes(q) ||
-                              (item.category && item.category.toLowerCase().includes(q))
-                            const matchesCat =
-                              vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                            return matchesSearch && matchesCat
-                          }).length === 0 ? (
+                          {([...(selectedFoodSubModule?.items || [])])
+                            .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
+                            .filter((item) => {
+                              const q = vegSearchQuery.toLowerCase()
+                              const matchesSearch =
+                                !vegSearchQuery ||
+                                item.name.toLowerCase().includes(q) ||
+                                (item.category && item.category.toLowerCase().includes(q))
+                              const matchesCat =
+                                vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                              return matchesSearch && matchesCat
+                            }).length === 0 ? (
                             <div className="py-12 text-center">
                               <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                               <button
@@ -4508,7 +4911,8 @@ export function LandingPage() {
                             </div>
                           ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
-                              {selectedFoodSubModule.items
+                              {([...(selectedFoodSubModule.items || [])])
+                                .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
                                 .filter((item) => {
                                   const q = vegSearchQuery.toLowerCase()
                                   const matchesSearch =
@@ -4533,7 +4937,15 @@ export function LandingPage() {
                                         containIntrinsicSize: "0 230px",
                                       }}
                                     >
-                                      <div>
+                                      <div
+                                        onClick={() => {
+                                          if (selectedFoodSubModule?.id === "vegetables") {
+                                            setSelectedRecipeVegetable(item)
+                                            setIsRecipeModalOpen(true)
+                                          }
+                                        }}
+                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                      >
                                         {/* Real Studio Photographic Product Image */}
                                         <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                           <img
@@ -4551,9 +4963,13 @@ export function LandingPage() {
                                               }
                                             }}
                                           />
-                                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
                                             <Clock className="w-2.5 h-2.5 text-emerald-600" />
-                                            <span>{item.delivery || "8 MINS"}</span>
+                                            <span>
+                                              {selectedFoodSubModule.id === "vegetables"
+                                                ? vegTiming.cardDeliveryBadge
+                                                : (item.delivery || "8 MINS")}
+                                            </span>
                                           </div>
                                           {item.discount && (
                                             <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -4564,7 +4980,7 @@ export function LandingPage() {
 
                                         {/* Details */}
                                         <div className="p-2.5">
-                                          <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px]" title={item.name}>
+                                          <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px] group-hover:text-emerald-700 transition-colors" title={item.name}>
                                             {item.name}
                                           </h5>
                                           <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
@@ -4766,6 +5182,21 @@ export function LandingPage() {
                                             </button>
                                           )}
                                         </div>
+
+                                        {/* What Can I Make CTA */}
+                                        <div className="px-2.5 pb-2.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedRecipeVegetable(item)
+                                              setIsRecipeModalOpen(true)
+                                            }}
+                                            className="w-full py-1.5 px-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer active:scale-98"
+                                          >
+                                            <Utensils className="w-3 h-3 text-amber-600 shrink-0" />
+                                            <span className="truncate">🍳 What Can I Make?</span>
+                                          </button>
+                                        </div>
                                       </div>
                                     )
                                   })}
@@ -4813,9 +5244,18 @@ export function LandingPage() {
                               return sum + matchedPrice * qty
                             }, 0)}
                           </span>
+                          <span className="text-[11px] font-semibold text-emerald-800 hidden sm:inline">
+                            • {vegTiming.deliverySlot}
+                          </span>
                         </div>
                       ) : (
-                        <span>Select vegetables above for instant Hosur door delivery</span>
+                        <span>
+                          {selectedFoodSubModule.id === "vegetables"
+                            ? (vegTiming.afterTwelveNotice
+                              ? "⚠️ Orders placed now will be delivered Tomorrow (6:00 PM – 8:00 PM)"
+                              : "🥦 Order Window: 6:00 AM – 12:00 PM • Delivery Today: 6:00 PM – 8:00 PM")
+                            : "Select vegetables above for instant Hosur door delivery"}
+                        </span>
                       )}
                     </div>
 
@@ -4826,8 +5266,8 @@ export function LandingPage() {
                         disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                         onClick={() => setShowVegCartDrawer(true)}
                         className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
-                            : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
                           }`}
                       >
                         <ShoppingCart className="w-4 h-4" />
@@ -4899,22 +5339,28 @@ export function LandingPage() {
                                 id: "vegetables_quick_delivery",
                                 name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                                 isQuickCommerce: true,
-                                deliveryTime: "15-25 mins",
+                                deliveryTime: vegTiming.deliverySlot,
                                 foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                                vegTiming: vegTiming,
                               },
-                              cart: itemsList,
+                              cart: itemsList.map(it => ({ ...it, deliveryTime: vegTiming.deliverySlot })),
                               isQuickCommerce: true,
                               foodCart: foodCart,
                               foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                              vegTiming: vegTiming,
                             }
                           })
                         }}
                         className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                            : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
                           }`}
                       >
-                        <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                        <span>
+                          {selectedFoodSubModule.id === "vegetables"
+                            ? vegTiming.cartButtonText
+                            : `Confirm & Schedule ${selectedFoodSubModule.name} Delivery`}
+                        </span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -5841,7 +6287,13 @@ export function LandingPage() {
                     </button>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                        <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                        {selectedFoodSubModule?.id === "vegetables" ? (
+                          <span>{vegTiming.headerBadge}</span>
+                        ) : (
+                          <>
+                            <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -5893,8 +6345,8 @@ export function LandingPage() {
                               type="button"
                               onClick={() => setVegCategoryFilter(cat)}
                               className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${vegCategoryFilter === cat
-                                  ? "bg-emerald-600 text-white shadow-xs"
-                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 }`}
                             >
                               {cat}
@@ -5951,6 +6403,12 @@ export function LandingPage() {
                             key={sub.id}
                             type="button"
                             onClick={() => {
+                              if (sub.id === "vegetables") {
+                                setIsFoodHealthModalOpen(false)
+                                setSelectedFoodSubModuleId(null)
+                                navigate(routes.vegetables)
+                                return
+                              }
                               setSelectedFoodSubModuleId(sub.id)
                               setFoodOrderPlaced(false)
                               setVegSearchQuery("")
@@ -6064,17 +6522,63 @@ export function LandingPage() {
                       </div>
                     ) : (
                       <>
+                        {/* Out of Zone Notice Banner for Fresh Vegetables */}
+                        {selectedFoodSubModule?.id === "vegetables" && !isServiceAvailableInZone("vegetables") && (
+                          <div className="mb-4 p-3.5 sm:p-4 bg-rose-50 border border-rose-200 text-rose-950 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-rose-100 border border-rose-300 text-rose-700 flex items-center justify-center shrink-0 font-black text-base">
+                                🚫
+                              </div>
+                              <div className="text-xs">
+                                <div className="font-black text-rose-900 text-xs sm:text-sm mb-0.5">
+                                  Farm-Fresh Vegetables Delivery Unavailable in Your Area
+                                </div>
+                                <p className="font-medium text-rose-800 leading-snug">
+                                  Doorstep delivery for fresh produce is only available inside marked service zones (e.g. Vassuthaa Garden, KCC Nagar).
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowLocationPickerModal(true)}
+                              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shrink-0 cursor-pointer shadow-xs transition-all"
+                            >
+                              Change Address
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Booking Notice Banner for Fresh Vegetables (After 12 PM / Outside 6 AM - 12 PM Window) */}
+                        {selectedFoodSubModule?.id === "vegetables" && isServiceAvailableInZone("vegetables") && vegTiming.afterTwelveNotice && (
+                          <div className="mb-4 p-3.5 sm:p-4 bg-amber-50 border border-amber-300/80 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
+                            <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                              <Clock className="w-4 h-4 text-amber-700" />
+                            </div>
+                            <div className="flex-1 text-xs">
+                              <div className="font-extrabold text-amber-900 text-xs sm:text-sm mb-0.5 flex items-center gap-2">
+                                <span>Booking Notice (After 12:00 PM)</span>
+                                <span className="text-[10px] font-black bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full uppercase">Next-Day Delivery</span>
+                              </div>
+                              <p className="font-semibold text-amber-900 leading-relaxed">
+                                Same-day vegetable booking is open from <strong>6:00 AM to 12:00 PM</strong>. Same-day booking is not available at the moment — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Products Grid matching Quick Commerce Layout */}
-                        {(selectedFoodSubModule?.items || []).filter((item) => {
-                          const q = vegSearchQuery.toLowerCase()
-                          const matchesSearch =
-                            !vegSearchQuery ||
-                            item.name.toLowerCase().includes(q) ||
-                            (item.category && item.category.toLowerCase().includes(q))
-                          const matchesCat =
-                            vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                          return matchesSearch && matchesCat
-                        }).length === 0 ? (
+                        {([...(selectedFoodSubModule?.items || [])])
+                          .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
+                          .filter((item) => {
+                            const q = vegSearchQuery.toLowerCase()
+                            const matchesSearch =
+                              !vegSearchQuery ||
+                              item.name.toLowerCase().includes(q) ||
+                              (item.category && item.category.toLowerCase().includes(q))
+                            const matchesCat =
+                              vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                            return matchesSearch && matchesCat
+                          }).length === 0 ? (
                           <div className="py-12 text-center">
                             <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                             <button
@@ -6090,7 +6594,8 @@ export function LandingPage() {
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
-                            {selectedFoodSubModule.items
+                            {([...(selectedFoodSubModule.items || [])])
+                              .sort((a, b) => getProducePriority(a.name) - getProducePriority(b.name))
                               .filter((item) => {
                                 const q = vegSearchQuery.toLowerCase()
                                 const matchesSearch =
@@ -6102,9 +6607,10 @@ export function LandingPage() {
                                 return matchesSearch && matchesCat
                               })
                               .map((item, idx) => {
-                                const hasOptions = item.options && item.options.length > 0
+                                const opts = item.options || getVegetableOptions(item.name)
+                                const hasOptions = opts && opts.length > 0
                                 const count = hasOptions
-                                  ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                  ? opts.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
                                   : (foodCart[item.name] || 0)
                                 return (
                                   <div
@@ -6115,7 +6621,15 @@ export function LandingPage() {
                                       containIntrinsicSize: "0 230px",
                                     }}
                                   >
-                                    <div>
+                                      <div
+                                        onClick={() => {
+                                          if (selectedFoodSubModule?.id === "vegetables") {
+                                            setSelectedRecipeVegetable(item)
+                                            setIsRecipeModalOpen(true)
+                                          }
+                                        }}
+                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                      >
                                       {/* Real Studio Photographic Product Image */}
                                       <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                         <img
@@ -6133,9 +6647,13 @@ export function LandingPage() {
                                             }
                                           }}
                                         />
-                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
                                           <Clock className="w-2.5 h-2.5 text-emerald-600" />
-                                          <span>{item.delivery || "8 MINS"}</span>
+                                          <span>
+                                            {selectedFoodSubModule.id === "vegetables"
+                                              ? vegTiming.cardDeliveryBadge
+                                              : (item.delivery || "8 MINS")}
+                                          </span>
                                         </div>
                                         {item.discount && (
                                           <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -6174,8 +6692,8 @@ export function LandingPage() {
                                         count > 0 ? (
                                           <button
                                             type="button"
-                                            onClick={() => setVariantModalItem(item)}
-                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                                            onClick={() => setVariantModalItem({ ...item, options: opts })}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer hover:bg-emerald-700 transition-all active:scale-95"
                                           >
                                             <span>{count} in Cart</span>
                                             <ChevronDown className="w-2.5 h-2.5" />
@@ -6183,8 +6701,8 @@ export function LandingPage() {
                                         ) : (
                                           <button
                                             type="button"
-                                            onClick={() => setVariantModalItem(item)}
-                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                            onClick={() => setVariantModalItem({ ...item, options: opts })}
+                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1 shadow-2xs"
                                           >
                                             <span>ADD</span>
                                             <ChevronDown className="w-2.5 h-2.5" />
@@ -6234,6 +6752,21 @@ export function LandingPage() {
                                           ADD
                                         </button>
                                       )}
+                                    </div>
+
+                                    {/* What Can I Make CTA */}
+                                    <div className="px-2.5 pb-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedRecipeVegetable(item)
+                                          setIsRecipeModalOpen(true)
+                                        }}
+                                        className="w-full py-1.5 px-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer active:scale-98"
+                                      >
+                                        <Utensils className="w-3 h-3 text-amber-600 shrink-0" />
+                                        <span className="truncate">🍳 What Can I Make?</span>
+                                      </button>
                                     </div>
                                   </div>
                                 )
@@ -6395,9 +6928,18 @@ export function LandingPage() {
                             return sum + matchedPrice * qty
                           }, 0)}
                         </span>
+                        <span className="text-[11px] font-semibold text-emerald-800 hidden sm:inline">
+                          • {vegTiming.deliverySlot}
+                        </span>
                       </div>
                     ) : (
-                      <span>Select vegetables above for instant Hosur door delivery</span>
+                      <span>
+                        {selectedFoodSubModule.id === "vegetables"
+                          ? (vegTiming.afterTwelveNotice
+                            ? "⚠️ Orders placed now will be delivered Tomorrow (6:00 PM – 8:00 PM)"
+                            : "🥦 Order Window: 6:00 AM – 12:00 PM • Delivery Today: 6:00 PM – 8:00 PM")
+                          : "Select vegetables above for instant Hosur door delivery"}
+                      </span>
                     )}
                   </div>
 
@@ -6408,8 +6950,8 @@ export function LandingPage() {
                       disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
                       onClick={() => setShowVegCartDrawer(true)}
                       className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
-                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                        : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <ShoppingCart className="w-4 h-4" />
@@ -6472,6 +7014,11 @@ export function LandingPage() {
 
                         if (itemsList.length === 0) return
 
+                        if (selectedFoodSubModule?.id === "vegetables" && !isServiceAvailableInZone("vegetables")) {
+                          showUnavailableServiceAlert("Farm-Fresh Vegetables")
+                          return
+                        }
+
                         document.body.style.overflow = ""
                         setIsFoodHealthModalOpen(false)
                         setSelectedFoodSubModuleId(null)
@@ -6481,27 +7028,174 @@ export function LandingPage() {
                               id: "vegetables_quick_delivery",
                               name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                               isQuickCommerce: true,
-                              deliveryTime: "15-25 mins",
+                              deliveryTime: vegTiming.deliverySlot,
                               foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                              vegTiming: vegTiming,
                             },
-                            cart: itemsList,
+                            cart: itemsList.map(it => ({ ...it, deliveryTime: vegTiming.deliverySlot })),
                             isQuickCommerce: true,
                             foodCart: foodCart,
                             foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                            vegTiming: vegTiming,
                           }
                         })
                       }}
                       className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                          ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
+                            ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
-                      <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                      <span>
+                        {selectedFoodSubModule.id === "vegetables"
+                          ? !isServiceAvailableInZone("vegetables")
+                            ? "Unavailable in Your Area"
+                            : vegTiming.cartButtonText
+                          : `Confirm & Schedule ${selectedFoodSubModule.name} Delivery`}
+                      </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               )}
+
+              {/* ── Vegetable Multi-Pack Variant Selection Modal matching Image 1 & 2 ── */}
+              <AnimatePresence>
+                {variantModalItem && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) setVariantModalItem(null)
+                    }}
+                  >
+                    <div className="relative w-full max-w-sm bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-150">
+                      {/* Floating Close Button matching circle with X */}
+                      <button
+                        type="button"
+                        onClick={() => setVariantModalItem(null)}
+                        className="absolute -top-12 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-black cursor-pointer shadow-xl transition-transform active:scale-95"
+                      >
+                        <X className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+
+                      {/* Title */}
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 mb-3 px-1">
+                        {variantModalItem.name?.toLowerCase().includes("spinach")
+                          ? "Spinach Pack"
+                          : variantModalItem.name?.split("(")[0].trim() || variantModalItem.name}
+                      </h3>
+
+                      {/* Options List */}
+                      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-0.5">
+                        {variantModalItem.options?.map((opt, oIdx) => {
+                          const optCartKey = `${variantModalItem.name} (${opt.unit})`
+                          const optCount = foodCart[optCartKey] || 0
+                          return (
+                            <div
+                              key={oIdx}
+                              className="p-3 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 flex items-center justify-between gap-3 shadow-2xs transition-all"
+                            >
+                              {/* Left: Thumbnail with blue discount badges */}
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-xl overflow-hidden bg-[#f5f1eb] shrink-0 border border-slate-100">
+                                  <img
+                                    src={variantModalItem.image || getFoodItemPhoto(variantModalItem.name)}
+                                    alt={variantModalItem.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {opt.discount && (
+                                    <span className="absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-xs leading-none">
+                                      {opt.discount.replace(" OFF", "")} OFF
+                                    </span>
+                                  )}
+                                  {opt.badge && (
+                                    <span className="absolute top-1 right-1 bg-blue-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-2xs">
+                                      {opt.badge}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Unit & Pricing */}
+                                <div className="min-w-0">
+                                  <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                                    {opt.unit}
+                                  </p>
+                                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                                    <span className="text-sm sm:text-base font-black text-slate-900">
+                                      ₹{opt.price}
+                                    </span>
+                                    {opt.mrp && (
+                                      <span className="text-xs text-slate-400 line-through">
+                                        ₹{opt.mrp}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right: ADD CTA or Quantity Controller */}
+                              <div className="shrink-0">
+                                {optCount > 0 ? (
+                                  <div className="flex items-center bg-emerald-600 text-white rounded-xl px-2 py-1 shadow-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFoodCart((prev) => {
+                                          const cur = prev[optCartKey] || 0
+                                          if (cur <= 1) {
+                                            const copy = { ...prev }
+                                            delete copy[optCartKey]
+                                            return copy
+                                          }
+                                          return { ...prev, [optCartKey]: cur - 1 }
+                                        })
+                                      }
+                                      className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1.5"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="text-xs font-extrabold min-w-[16px] text-center px-1">
+                                      {optCount}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFoodCart((prev) => ({
+                                          ...prev,
+                                          [optCartKey]: (prev[optCartKey] || 0) + 1,
+                                        }))
+                                      }
+                                      className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1.5"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFoodCart((prev) => ({
+                                        ...prev,
+                                        [optCartKey]: 1,
+                                      }))
+                                    }
+                                    className="px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs sm:text-sm transition-all cursor-pointer active:scale-95 bg-white shadow-2xs"
+                                  >
+                                    ADD
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </AnimatePresence>
             </div>
           </div>,
           document.body
@@ -6770,6 +7464,13 @@ export function LandingPage() {
         onComplete={() => {
           setShowCustomerEntryModal(false)
           if (typeof refreshMe === "function") refreshMe()
+          // Restore any pending booking intent (e.g. customer pressed "View Cart" while logged out)
+          const intent = restorePendingIntent()
+          if (intent?.type === "GO_TO_CHECKOUT" && intent.cart?.length) {
+            navigate(routes.booking_checkout, {
+              state: { category: intent.category, cart: intent.cart }
+            })
+          }
         }}
       />
 
@@ -6801,9 +7502,44 @@ export function LandingPage() {
             getFoodItemPhoto={getFoodItemPhoto}
             deliveryAddress={activeLocationLabel || "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu"}
             onChangeAddress={() => setShowLocationPickerModal(true)}
+            isServiceAvailable={isServiceAvailableInZone("vegetables")}
           />
         )}
       </AnimatePresence>
+
+      {/* Vegetable Recipe Modal / Drawer */}
+      <VegetableRecipeModal
+        isOpen={isRecipeModalOpen}
+        onClose={() => {
+          setIsRecipeModalOpen(false)
+          setSelectedRecipeVegetable(null)
+        }}
+        selectedVegetable={selectedRecipeVegetable}
+        foodCart={foodCart}
+        setFoodCart={setFoodCart}
+        onAddAvailableVegetables={(missingVegs) => {
+          setFoodCart((prev) => {
+            const copy = { ...prev }
+            missingVegs.forEach((v) => {
+              const name = v.package_name || v.name
+              if (!copy[name]) {
+                copy[name] = 1
+              }
+            })
+            return copy
+          })
+        }}
+        onUpdateCartQty={(name, delta) => {
+          setFoodCart((prev) => {
+            const cur = prev[name] || 0
+            const next = Math.max(0, cur + delta)
+            const copy = { ...prev }
+            if (next === 0) delete copy[name]
+            else copy[name] = next
+            return copy
+          })
+        }}
+      />
 
       <AnimatePresence>
         {showAccountPortal && (
@@ -6845,7 +7581,17 @@ export function LandingPage() {
           {/* View Cart / Proceed Action Button */}
           <button
             type="button"
-            onClick={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onClick={() => {
+              // If not logged in, save GO_TO_CHECKOUT intent so cart is restored after auth
+              if (!user && modalCart?.length) {
+                savePendingIntent({
+                  type: "GO_TO_CHECKOUT",
+                  cart: modalCart,
+                  category: activeCategory,
+                })
+              }
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
+            }}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer active:scale-95 shrink-0 uppercase tracking-wider"
           >
             <span>View Cart</span>
@@ -6855,24 +7601,29 @@ export function LandingPage() {
       )}
 
       {showLocationPickerModal && (
-        <AddAddressSearchModal
+        <SelectServiceAddressDrawer
+          isOpen={showLocationPickerModal}
           onClose={() => setShowLocationPickerModal(false)}
-          onSelectLocation={async (locStr, coords) => {
+          currentAddress={activeLocationLabel}
+          onSelectAddress={async (locObj) => {
             setShowLocationPickerModal(false)
-            if (locStr) {
-              const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+            if (locObj) {
+              const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
               setActiveLocationLabel(labelStr)
-              localStorage.setItem("calservice_user_location", labelStr)
-              if (coords?.lat && coords?.lng) {
-                localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+              if (user?.id) {
+                setCustomerLocation(user.id, labelStr)
+                setCustomerSelectedAddress(user.id, locObj)
+              }
+              if (locObj.latitude && locObj.longitude) {
+                const coords = { lat: Number(locObj.latitude), lng: Number(locObj.longitude) }
                 await verifyServiceZone(coords.lat, coords.lng, labelStr)
               }
               if (user) {
                 try {
                   await apiUpdateCustomerLastLocation({
                     label: labelStr,
-                    latitude: coords?.lat,
-                    longitude: coords?.lng,
+                    latitude: locObj.latitude,
+                    longitude: locObj.longitude,
                     detected_at: new Date().toISOString()
                   })
                 } catch (e) { }

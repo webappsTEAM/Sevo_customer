@@ -18,7 +18,7 @@ import {
   User, Phone, Navigation, CheckCircle2, AlertCircle, Loader2, Lock,
 } from "lucide-react"
 import { useAuth } from "../../../state/auth/useAuth.js"
-import { apiCreateSavedAddress } from "../../../api/addressService.js"
+import { apiCreateSavedAddress, apiUpdateSavedAddress } from "../../../api/addressService.js"
 import { CustomerEntryFlowModal } from "../CustomerEntryFlowModal.jsx"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -43,23 +43,24 @@ function validate(state) {
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
-const INIT = (addressData, user) => ({
-  flat_house_no:   addressData?.flat_house_no ?? addressData?.flat ?? "",
-  landmark:        addressData?.landmark      ?? "",
-  locality:        addressData?.locality      ?? "",
-  city:            addressData?.city          ?? "",
-  state:           addressData?.state         ?? "",
-  pincode:         addressData?.pincode       ?? "",
-  label:           addressData?.label         ?? null,         // "home" | "work" | "other"
-  receiver_name:   addressData?.receiver_name ?? (user
-    ? [user.firstName, user.lastName].filter(Boolean).join(" ")
-    : ""),
-  receiver_phone:  addressData?.receiver_phone ?? user?.phone ?? "",
-  // Track which fields have been "touched" (blurred) so we only show errors after interaction
-  touched: {},
-  // Field-level errors (computed on submit or blur)
-  errors: {},
-})
+const INIT = (addressData, user) => {
+  const rawLabel = addressData?.label || addressData?.address_type || addressData?.tag || "home"
+  return {
+    flat_house_no:   addressData?.flat_house_no ?? addressData?.house_number ?? addressData?.flat ?? "",
+    landmark:        addressData?.landmark      ?? "",
+    locality:        addressData?.locality      ?? "",
+    city:            addressData?.city          ?? "",
+    state:           addressData?.state         ?? "",
+    pincode:         addressData?.pincode       ?? "",
+    label:           typeof rawLabel === "string" ? rawLabel.toLowerCase() : "home",
+    receiver_name:   addressData?.receiver_name ?? addressData?.contact_name ?? (user
+      ? [user.firstName, user.lastName].filter(Boolean).join(" ")
+      : ""),
+    receiver_phone:  addressData?.receiver_phone ?? addressData?.receiver_mobile ?? addressData?.contact_phone ?? user?.phone ?? "",
+    touched: {},
+    errors: {},
+  }
+}
 
 function reducer(state, action) {
   switch (action.type) {
@@ -185,12 +186,17 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
     try {
       let saved = null
       try {
-        const res = await apiCreateSavedAddress(payload)
-        saved = res?.data ?? res
+        if (addressData?.id && !String(addressData.id).startsWith("local_") && !String(addressData.id).startsWith("search-")) {
+          const res = await apiUpdateSavedAddress(addressData.id, payload)
+          saved = res?.data ?? res
+        } else {
+          const res = await apiCreateSavedAddress(payload)
+          saved = res?.data ?? res
+        }
         console.log("[AddressDetailsForm] saved address:", saved)
       } catch (err) {
         console.warn("[AddressDetailsForm] API save address warning, falling back:", err)
-        saved = { ...payload, id: `local_${Date.now()}` }
+        saved = { ...payload, id: addressData?.id || `local_${Date.now()}` }
       }
 
       if (typeof onSubmit === "function") {
@@ -263,14 +269,16 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
           <button style={s.backBtn} onClick={onBack} id="adf-back-btn" disabled={saving}>
             <ArrowLeft size={18} />
           </button>
-          <span style={s.topBarTitle}>Enter Address Details</span>
+          <span style={s.topBarTitle}>
+            {addressData?.id && !addressData?.isNew ? "Edit Address Details" : "Enter Address Details"}
+          </span>
           <div style={{ width: 36 }} />
         </div>
 
       {/* Read-only location summary */}
       <div style={s.locationSummary}>
         <div style={s.locationIconWrap}>
-          <MapPin size={16} style={{ color: "#6366f1" }} />
+          <MapPin size={16} style={{ color: "#00875A" }} />
         </div>
         <div style={s.locationText}>
           <span style={s.locationLabel}>Delivering to</span>
@@ -467,7 +475,10 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
             <input
               id="adf-receiver-phone"
               value={state.receiver_phone}
-              onChange={field("receiver_phone")}
+              onChange={(e) => {
+                const digitsOnly = e.target.value.replace(/\D/g, "");
+                dispatch({ type: "FIELD", name: "receiver_phone", value: digitsOnly });
+              }}
               onBlur={touch("receiver_phone")}
               placeholder='10-digit mobile'
               inputMode="tel"
@@ -501,9 +512,9 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
           id="adf-save-btn"
         >
           {saving ? (
-            <><Loader2 size={17} style={{ animation: "spin 1s linear infinite" }} /> Saving Address…</>
+            <><Loader2 size={17} style={{ animation: "spin 1s linear infinite" }} /> {addressData?.id && !addressData?.isNew ? "Saving Changes…" : "Saving Address…"}</>
           ) : isFormValid ? (
-            <><CheckCircle2 size={17} /> Save Address</>
+            <><CheckCircle2 size={17} /> {addressData?.id && !addressData?.isNew ? "Save Changes" : "Save Address"}</>
           ) : (
             "Fill required fields to save"
           )}
@@ -566,7 +577,7 @@ const s = {
   },
   locationIconWrap: {
     width: 32, height: 32, borderRadius: "50%",
-    background: "#ede9fe",
+    background: "#ecfdf5",
     display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   },
@@ -583,7 +594,7 @@ const s = {
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   },
   changeBtn: {
-    fontSize: "0.8rem", fontWeight: 800, color: "#6366f1",
+    fontSize: "0.8rem", fontWeight: 800, color: "#00875A",
     background: "none", border: "none", cursor: "pointer", flexShrink: 0,
   },
   // ── Form body ──
@@ -622,7 +633,7 @@ const s = {
     background: "#f8fafc", color: "#475569",
   },
   inputError: {
-    borderColor: "#ef4444",
+    border: "1.5px solid #ef4444",
     background: "#fff1f2",
   },
   errorRow: {
@@ -643,7 +654,7 @@ const s = {
     fontFamily: "inherit",
   },
   chipActive: {
-    borderColor: "#6366f1", background: "#ede9fe", color: "#4f46e5",
+    border: "1.5px solid #00875A", background: "#ecfdf5", color: "#065f46",
   },
   // ── Phone field ──
   phoneWrap: {
@@ -677,9 +688,9 @@ const s = {
     fontFamily: "inherit",
   },
   saveBtnActive: {
-    background: "linear-gradient(135deg, #6366f1, #4f46e5)",
+    background: "linear-gradient(135deg, #00875A, #059669)",
     color: "#fff",
-    boxShadow: "0 4px 16px rgba(99,102,241,0.35)",
+    boxShadow: "0 4px 16px rgba(0, 135, 90, 0.35)",
   },
   saveBtnDisabled: {
     background: "#e2e8f0",

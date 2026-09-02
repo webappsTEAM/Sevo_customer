@@ -965,9 +965,6 @@ export function MiniTruckBookingHosurPage() {
     } else if (norm.includes("yr") || norm.includes("year")) {
       const num = parseInt(norm) || 0
       durationMs = num * 365 * 24 * 60 * 60 * 1000
-    } else if (norm.includes("min")) {
-      const num = parseInt(norm) || 0
-      durationMs = num * 60 * 1000
     } else {
       return true
     }
@@ -1737,28 +1734,35 @@ export function MiniTruckBookingHosurPage() {
         return (
           <div className={`grid ${currentVehicles.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-8 items-stretch`}>
             {currentVehicles.map((vehicle) => {
-              const isHeavyVehicle = activeTab === "heavy" || vehicle.name?.toLowerCase().includes("pickup") || vehicle.name?.toLowerCase().includes("1.7")
+              const isComingSoon = Boolean(
+                (vehicle.badge && vehicle.badge.toLowerCase().includes("coming")) ||
+                (!vehicle.badge && (activeTab === "heavy" || vehicle.name?.toLowerCase().includes("pickup") || vehicle.name?.toLowerCase().includes("1.7")))
+              )
+              const badgeToShow = vehicle.badge || (isComingSoon ? "Coming Soon" : "")
               return (
                 <div
                   key={vehicle.id}
-                  className={`bg-white rounded-xl border ${isHeavyVehicle ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
+                  className={`bg-white rounded-xl border ${isComingSoon ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
                 >
                   {/* Coming Soon or Highlight Badge */}
-                  {isHeavyVehicle ? (
-                    <span className="absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs uppercase tracking-wider">
-                      Coming Soon
-                    </span>
-                  ) : vehicle.badge ? (
+                  {badgeToShow ? (
                     <span
-                      className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
-                        vehicle.badge.toLowerCase().includes("popular")
+                      className={`absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                        badgeToShow.toLowerCase().includes("coming")
+                          ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider"
+                          : badgeToShow.toLowerCase().includes("popular")
                           ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : vehicle.badge.toLowerCase().includes("rare")
+                          : badgeToShow.toLowerCase().includes("rare")
                           ? "bg-slate-100 text-slate-700 border-slate-200"
+                          : badgeToShow.toLowerCase().includes("best")
+                          ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                          : badgeToShow.toLowerCase().includes("trend")
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
                           : "bg-blue-50 text-blue-700 border-blue-200"
                       }`}
                     >
-                      ★ {vehicle.badge}
+                      {badgeToShow.toLowerCase().includes("coming") ? "" : "★ "}
+                      {badgeToShow}
                     </span>
                   ) : null}
 
@@ -1796,7 +1800,7 @@ export function MiniTruckBookingHosurPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (vehicle.name?.toLowerCase()?.includes("pickup") || vehicle.name?.toLowerCase()?.includes("1.7") || activeTab === "heavy") {
+                        if (vehicle.badge?.toLowerCase()?.includes("coming") || vehicle.name?.toLowerCase()?.includes("pickup") || vehicle.name?.toLowerCase()?.includes("1.7") || activeTab === "heavy") {
                           alert("This vehicle is coming soon! Tata Ace and 3-Wheeler are currently available.")
                           return
                         }

@@ -8,10 +8,33 @@
  */
 
 export function getWebSocketBaseUrl() {
-  const isSecure = window.location.protocol === "https:"
-  const host = window.location.host
-  // In development Vite proxy handles /ws or direct ws://127.0.0.1:8000/ws
-  return `${isSecure ? "wss" : "ws"}://${host}/ws`
+  // 1. Explicit environment variable override (if configured)
+  if (import.meta.env.VITE_WS_BASE_URL) {
+    const raw = import.meta.env.VITE_WS_BASE_URL.replace(/\/+$/, "")
+    return raw.endsWith("/ws") ? raw : `${raw}/ws`
+  }
+
+  // 2. Derive from VITE_API_BASE_URL if configured as absolute URL
+  if (import.meta.env.VITE_API_BASE_URL && !import.meta.env.VITE_API_BASE_URL.startsWith("/")) {
+    const apiUrl = import.meta.env.VITE_API_BASE_URL
+    const wsProto = apiUrl.startsWith("https") ? "wss" : "ws"
+    const host = apiUrl.replace(/^https?:\/\//, "").split("/")[0]
+    return `${wsProto}://${host}/ws`
+  }
+
+  // 3. Connect via current window origin in production, direct to 127.0.0.1:8000 in local dev
+  if (typeof window !== "undefined") {
+    const isSecure = window.location.protocol === "https:"
+    const hostname = window.location.hostname
+    // If in local development, connect directly to Django ASGI on 127.0.0.1:8000
+    if ((hostname === "localhost" || hostname === "127.0.0.1") && window.location.port !== "8000") {
+      return `${isSecure ? "wss" : "ws"}://127.0.0.1:8000/ws`
+    }
+    const host = window.location.host
+    return `${isSecure ? "wss" : "ws"}://${host}/ws`
+  }
+
+  return "ws://127.0.0.1:8000/ws"
 }
 
 /**
@@ -36,52 +59,49 @@ export function verifyOtpViaWebSocket(phone, otp) {
     }, 3500)
 
     try {
-      const wsUrl = `${getWebSocketBaseUrl()}/auth/otp/`
-      ws = new WebSocket(wsUrl)
+      const baseUrl = getWebSocketBaseUrl()
+      const url = `${baseUrl}/auth/otp/`
+      ws = new WebSocket(url)
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({
-          action: "verify_otp",
-          phone: phone,
-          otp: otp,
-        }))
-      }
-
-      ws.onmessage = (event) => {
         try {
-          const payload = JSON.parse(event.data)
-          if (payload.event === "otp_verification_success") {
-            if (!hasResolved) {
-              hasResolved = true
-              clearTimeout(timeoutId)
-              try { ws.close() } catch {}
-              resolve({ success: true, data: payload.data })
-            }
-          } else if (payload.event === "otp_verification_failed") {
-            if (!hasResolved) {
-              hasResolved = true
-              clearTimeout(timeoutId)
-              try { ws.close() } catch {}
-              resolve({
-                success: false,
-                error: {
-                  message: payload.error || "Invalid OTP",
-                  code: payload.code,
-                  attempts_remaining: payload.attempts_remaining,
-                }
-              })
-            }
-          }
+          ws.send(JSON.stringify({
+            action: "verify_otp",
+            phone: phone,
+            otp: otp,
+          }))
         } catch (e) {
-          // ignore parse errors
+          if (!hasResolved) {
+            hasResolved = true
+            clearTimeout(timeoutId)
+            reject(e)
+          }
         }
       }
 
-      ws.onerror = () => {
+      ws.onmessage = (event) => {
+        if (hasResolved) return
+        hasResolved = true
+        clearTimeout(timeoutId)
+        try {
+          const data = JSON.parse(event.data)
+          if (data.event === "otp_verification_success" || data.success) {
+            resolve(data)
+          } else {
+            reject(new Error(data.error || "OTP verification failed"))
+          }
+        } catch (err) {
+          reject(err)
+        } finally {
+          try { ws.close() } catch {}
+        }
+      }
+
+      ws.onerror = (err) => {
         if (!hasResolved) {
           hasResolved = true
           clearTimeout(timeoutId)
-          reject(new Error("WS_ERROR"))
+          reject(err)
         }
       }
 
@@ -103,37 +123,75 @@ export function verifyOtpViaWebSocket(phone, otp) {
 }
 
 /**
- * Creates a managed real-time live tracking connection for a customer booking.
- * @param {string} identifier - request_id (e.g. SR-0299), ID, or tracking_token UUID
- * @param {string|null} token - secure tracking token
- * @param {Function} onEvent - callback(eventName, data)
- * @param {Function} onStatusChange - callback(isConnected)
- * @returns {Object} - { close(), send(action, data) }
+ * Create an authoritative live tracking WebSocket connection.
+ * @param {string|number} identifier - ServiceRequest.id or request_id (e.g. 'PL4479')
+ * @param {string|null} token - Optional public tracking_token UUID
+ * @param {Function} onEvent - Callback for incoming tracking payloads
+ * @param {Function} onConnectionState - Callback with connection state ('connecting' | 'connected' | 'reconnecting' | 'disconnected')
+ * @returns {{ send: Function, close: Function }}
  */
-export function createTrackingWebSocket(identifier, token, onEvent, onStatusChange) {
+export function createTrackingWebSocket(identifier, token, onEvent, onConnectionState) {
   let ws = null
   let isClosedManually = false
   let reconnectTimeout = null
   let pingInterval = null
   let retryCount = 0
+  const maxRetries = 6
+  const retryDelays = [1000, 2000, 3000, 5000, 8000, 12000]
+
+  function notifyState(state) {
+    if (typeof onConnectionState === "function") {
+      onConnectionState(state)
+    }
+  }
+
+  function clearTimers() {
+    if (pingInterval) {
+      clearInterval(pingInterval)
+      pingInterval = null
+    }
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout)
+      reconnectTimeout = null
+    }
+  }
 
   function connect() {
     if (isClosedManually) return
 
+    if (retryCount >= maxRetries) {
+      console.warn(`[TRACKING] Maximum WebSocket reconnect attempts (${maxRetries}) reached. Continuing with REST fallback.`)
+      notifyState("disconnected")
+      return
+    }
+
     try {
+      const cleanId = String(identifier || "").trim()
       const query = token ? `?token=${encodeURIComponent(token)}` : ""
-      const url = `${getWebSocketBaseUrl()}/tracking/${encodeURIComponent(identifier)}/${query}`
+      const baseUrl = getWebSocketBaseUrl()
+      const url = `${baseUrl}/tracking/${encodeURIComponent(cleanId)}/${query}`
+
+      // Safe structured logs without exposing raw tokens
+      console.log(`[TRACKING] booking: ${cleanId}`)
+      console.log(`[TRACKING] connecting to backend: ${baseUrl}/tracking/${encodeURIComponent(cleanId)}/`)
+      console.log(`[TRACKING] WebSocket connecting (attempt ${retryCount + 1}/${maxRetries})`)
+
+      notifyState(retryCount > 0 ? "reconnecting" : "connecting")
+
       ws = new WebSocket(url)
 
       ws.onopen = () => {
         retryCount = 0
-        if (typeof onStatusChange === "function") onStatusChange(true)
+        console.log(`[TRACKING] WebSocket opened: connected to ${cleanId}`)
+        notifyState("connected")
 
-        // Keepalive ping every 25 seconds
+        // Heartbeat ping every 25s
         if (pingInterval) clearInterval(pingInterval)
         pingInterval = setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: "ping" }))
+            try {
+              ws.send(JSON.stringify({ action: "ping" }))
+            } catch {}
           }
         }, 25000)
       }
@@ -145,34 +203,51 @@ export function createTrackingWebSocket(identifier, token, onEvent, onStatusChan
           const data = payload.data || payload
 
           if (eventType && eventType !== "pong") {
+            console.log(`[TRACKING] Message received: event=${eventType}`)
             if (typeof onEvent === "function") {
               onEvent(eventType, data)
             }
           }
         } catch (err) {
-          console.warn("[Tracking WS] Parse error:", err)
+          // ignore parse errors
         }
       }
 
-      ws.onerror = (err) => {
-        console.warn("[Tracking WS] Error:", err)
-        if (typeof onStatusChange === "function") onStatusChange(false)
+      ws.onerror = () => {
+        // Handled cleanly via onclose
       }
 
-      ws.onclose = () => {
-        if (pingInterval) clearInterval(pingInterval)
-        if (typeof onStatusChange === "function") onStatusChange(false)
+      ws.onclose = (evt) => {
+        clearTimers()
+        console.log(`[TRACKING] WebSocket closed (code: ${evt.code})`)
 
-        if (!isClosedManually) {
-          // Exponential backoff reconnect: 1s, 2s, 4s, max 8s
-          const delay = Math.min(1000 * Math.pow(1.5, retryCount), 8000)
+        if (isClosedManually) {
+          notifyState("disconnected")
+          return
+        }
+
+        if (retryCount < maxRetries) {
+          const delay = retryDelays[Math.min(retryCount, retryDelays.length - 1)]
+          console.log(`[TRACKING] reconnect attempt: ${retryCount + 1}/${maxRetries} in ${delay}ms...`)
+          notifyState("reconnecting")
           retryCount++
+          if (reconnectTimeout) clearTimeout(reconnectTimeout)
           reconnectTimeout = setTimeout(connect, delay)
+        } else {
+          console.warn(`[TRACKING] WebSocket disconnected permanently for this session. REST polling active.`)
+          notifyState("disconnected")
         }
       }
     } catch (e) {
-      if (!isClosedManually) {
-        reconnectTimeout = setTimeout(connect, 3000)
+      clearTimers()
+      if (!isClosedManually && retryCount < maxRetries) {
+        const delay = retryDelays[Math.min(retryCount, retryDelays.length - 1)]
+        notifyState("reconnecting")
+        retryCount++
+        if (reconnectTimeout) clearTimeout(reconnectTimeout)
+        reconnectTimeout = setTimeout(connect, delay)
+      } else {
+        notifyState("disconnected")
       }
     }
   }
@@ -182,15 +257,29 @@ export function createTrackingWebSocket(identifier, token, onEvent, onStatusChan
   return {
     send(action, payload = {}) {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ action, ...payload }))
+        try {
+          ws.send(JSON.stringify({ action, ...payload }))
+        } catch {}
       }
     },
     close() {
       isClosedManually = true
-      if (pingInterval) clearInterval(pingInterval)
-      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+      clearTimers()
+      notifyState("disconnected")
       if (ws) {
-        try { ws.close() } catch {}
+        const currentWs = ws
+        ws = null
+        try {
+          if (currentWs.readyState === WebSocket.CONNECTING) {
+            currentWs.onopen = () => {
+              try { currentWs.close(1000, "Clean Unmount") } catch {}
+            }
+            currentWs.onerror = () => {}
+            currentWs.onclose = () => {}
+          } else if (currentWs.readyState === WebSocket.OPEN) {
+            currentWs.close(1000, "Clean Unmount")
+          }
+        } catch {}
       }
     }
   }

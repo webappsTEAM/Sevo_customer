@@ -37,22 +37,25 @@ export function resolveImageUrl(path, fallback = "") {
     return trimmed
   }
 
-  // 2. Static bundled assets & mockups
+  // 2. Vite dev server / bundled assets / mockups / media
   if (
+    trimmed.startsWith("/src/") ||
+    trimmed.startsWith("src/") ||
+    trimmed.startsWith("/@fs/") ||
+    trimmed.startsWith("@fs/") ||
+    trimmed.startsWith("/@id/") ||
+    trimmed.startsWith("/assets/") ||
+    trimmed.startsWith("assets/") ||
     trimmed.startsWith("/mockups/") ||
     trimmed.startsWith("mockups/") ||
-    trimmed.startsWith("/assets/") ||
-    trimmed.startsWith("assets/")
+    trimmed.startsWith("/media/") ||
+    trimmed.startsWith("media/") ||
+    trimmed.startsWith("/")
   ) {
     return trimmed.startsWith("/") ? trimmed : `/${trimmed}`
   }
 
-  // 3. Local Django media storage
-  if (trimmed.startsWith("/media/") || trimmed.startsWith("media/")) {
-    return trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-  }
-
-  // 4. Clean storage path (e.g. "catalog/packages/uuid.webp" or "homepage/hero/uuid.webp")
+  // 3. Clean storage path (e.g. "catalog/packages/uuid.webp" or "homepage/hero/uuid.webp")
   const cleanPath = trimmed.replace(/^\/+/, "")
   return `${SUPABASE_STORAGE_BASE}${cleanPath}`
 }
