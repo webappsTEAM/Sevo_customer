@@ -3047,3 +3047,705 @@ class CustomerBookingSeriesStatusView(APIView):
         except ValueError as e:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
         return _standard_response(success=True, data=BookingSeriesSerializer(series).data)
+
+
+from service_requests.models import (
+    VegetableRecipe,
+    RecipeIngredient,
+    VegetableRecommendation,
+    PaintingRateCard,
+    PaintingRateCardSlab,
+    PaintingQuote,
+    PaintingQuoteItem,
+    PaintingMeasurement,
+    PaintingMaterial,
+    QuotePhoto,
+)
+from service_requests.serializers import (
+    VegetableRecipeListSerializer,
+    VegetableRecipeDetailSerializer,
+    VegetableRecommendationSerializer,
+    PaintingRateCardSerializer,
+    PaintingRateCardSlabSerializer,
+    PaintingQuoteSerializer,
+    PaintingQuoteItemSerializer,
+    PaintingMeasurementSerializer,
+    PaintingMaterialSerializer,
+)
+
+
+class VegetableRecipeListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/
+    Supports filtering by:
+    - package_id / product_id / vegetable_name
+    - search
+    - difficulty (Easy, Medium, Hard)
+    - tag (quick, easy, low_calorie, high_fiber, popular)
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeListSerializer
+
+        package_id = request.GET.get("package_id") or request.GET.get("product_id")
+        veg_query = request.GET.get("vegetable") or ""
+        search = request.GET.get("search") or ""
+        difficulty = request.GET.get("difficulty") or ""
+        tag = request.GET.get("tag") or ""
+        is_popular = request.GET.get("popular")
+
+        qs = VegetableRecipe.objects.filter(is_active=True).select_related("package")
+
+        if package_id:
+            # Check if any recipes have this vegetable as the primary featured package
+            primary_matches = qs.filter(package_id=package_id)
+            if primary_matches.exists():
+                qs = primary_matches
+            else:
+                qs = qs.filter(
+                    Q(package_id=package_id) | Q(ingredients__package_id=package_id)
+                ).distinct()
+        elif veg_query:
+            primary_name_matches = qs.filter(package__name__icontains=veg_query)
+            if primary_name_matches.exists():
+                qs = primary_name_matches
+            else:
+                qs = qs.filter(
+                    Q(package__name__icontains=veg_query) |
+                    Q(ingredients__name__icontains=veg_query) |
+                    Q(ingredients__package__name__icontains=veg_query)
+                ).distinct()
+
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search) |
+                Q(short_description__icontains=search) |
+                Q(ingredients__name__icontains=search)
+            ).distinct()
+
+        if difficulty:
+            qs = qs.filter(difficulty__iexact=difficulty)
+
+        if is_popular and is_popular.lower() in ("true", "1", "yes"):
+            qs = qs.filter(is_popular=True)
+
+        if tag:
+            # Matches against tags JSON field or preset filters
+            tag_clean = tag.lower().replace("-", " ").replace("_", " ")
+            if "quick" in tag_clean:
+                qs = qs.filter(total_time_minutes__lte=20)
+            elif "easy" in tag_clean:
+                qs = qs.filter(difficulty="Easy")
+            elif "low calorie" in tag_clean or "low_calorie" in tag:
+                qs = qs.filter(calories__lte=150)
+            elif "high fiber" in tag_clean or "high_fiber" in tag:
+                qs = qs.filter(fiber__icontains="g")
+            else:
+                qs = qs.filter(tags__icontains=tag)
+
+        data = VegetableRecipeListSerializer(qs.order_by("sort_order", "id"), many=True).data
+        return Response({"success": True, "data": data, "count": len(data)})
+
+
+class VegetableRecipeDetailView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/<id_or_slug>/
+    Returns full recipe details, nutrition, health tips, numbered cooking steps,
+    and separated ingredients (Calservices vegetable catalog products vs pantry items).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeDetailSerializer
+
+        recipe = None
+        if str(pk).isdigit():
+            recipe = VegetableRecipe.objects.filter(id=int(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+        if not recipe:
+            recipe = VegetableRecipe.objects.filter(slug=str(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+
+        if not recipe:
+            return Response({"success": False, "message": "Recipe not found"}, status=404)
+
+        data = VegetableRecipeDetailSerializer(recipe).data
+        return Response({"success": True, "data": data})
+
+
+class VegetableRecommendationListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/<product_id>/recommendations/
+    Returns database-configured and recipe-derived recommendations for a vegetable product.
+    Only returns active Calservices vegetable products.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, product_id):
+        from .models import Package, VegetableRecommendation, VegetableRecipe, RecipeIngredient
+        from .serializers import VegetableRecommendationSerializer
+
+        # 1. Fetch direct DB-configured recommendations
+        db_recs = VegetableRecommendation.objects.filter(
+            source_product_id=product_id,
+            is_active=True,
+            recommended_product__status="ACTIVE"
+        ).select_related("source_product", "recommended_product").order_by("-priority", "display_order")
+
+        rec_data = list(VegetableRecommendationSerializer(db_recs, many=True).data)
+        seen_recommended_ids = {r["recommended_product"] for r in rec_data}
+        seen_recommended_ids.add(int(product_id))
+
+        # 2. If fewer than 6, derive recipe-based co-occurring vegetables from DB
+        if len(rec_data) < 8:
+            co_occurring_pkg_ids = RecipeIngredient.objects.filter(
+                recipe__in=VegetableRecipe.objects.filter(
+                    Q(package_id=product_id) | Q(ingredients__package_id=product_id),
+                    is_active=True
+                ),
+                package__isnull=False,
+                package__status="ACTIVE"
+            ).exclude(
+                package_id__in=seen_recommended_ids
+            ).values_list("package_id", flat=True).distinct()[:8]
+
+            for pkg_id in co_occurring_pkg_ids:
+                pkg = Package.objects.filter(id=pkg_id, status="ACTIVE").first()
+                if pkg:
+                    seen_recommended_ids.add(pkg.id)
+                    rec_data.append({
+                        "id": None,
+                        "source_product": int(product_id),
+                        "source_name": "",
+                        "recommended_product": pkg.id,
+                        "recommended_name": pkg.name,
+                        "recommended_price": str(pkg.base_price),
+                        "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                        "recommended_unit": pkg.duration or "1 unit",
+                        "recommended_image": pkg.image or "",
+                        "recommended_status": pkg.status,
+                        "recommendation_type": "RECIPE_BASED",
+                        "priority": 5,
+                        "display_order": len(rec_data) + 1,
+                        "is_active": True,
+                    })
+
+        # 3. If still fewer, fill with active popular vegetables
+        if len(rec_data) < 4:
+            fallback_pkgs = Package.objects.filter(
+                service__slug="vegetables",
+                status="ACTIVE"
+            ).exclude(
+                id__in=seen_recommended_ids
+            ).order_by("-popular", "sort_order")[: (4 - len(rec_data))]
+
+            for pkg in fallback_pkgs:
+                rec_data.append({
+                    "id": None,
+                    "source_product": int(product_id),
+                    "source_name": "",
+                    "recommended_product": pkg.id,
+                    "recommended_name": pkg.name,
+                    "recommended_price": str(pkg.base_price),
+                    "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                    "recommended_unit": pkg.duration or "1 unit",
+                    "recommended_image": pkg.image or "",
+                    "recommended_status": pkg.status,
+                    "recommendation_type": "YOU_MAY_ALSO_LIKE",
+                    "priority": 1,
+                    "display_order": len(rec_data) + 1,
+                    "is_active": True,
+                })
+
+        return Response({"success": True, "data": rec_data, "count": len(rec_data)})
+
+
+
+class CustomerQuoteDecideView(APIView):
+    """
+    POST /api/booking/quote/<str:token>/decide/
+    Accepts, declines, or requests changes for the quote.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, token):
+        try:
+            quote = PaintingQuote.objects.get(customer_decision_token=token)
+        except PaintingQuote.DoesNotExist:
+            return _error("Quotation not found.", 404)
+
+        if quote.status in [PaintingQuote.Status.APPROVED, PaintingQuote.Status.SUPERSEDED, PaintingQuote.Status.DECLINED]:
+            return _error(f"Cannot perform decision. Quotation is already in state: {quote.status}.", 400)
+
+        decision = (request.data.get("decision") or "").strip().upper()
+        if decision == "CUSTOMER_ACCEPTED":
+            with transaction.atomic():
+                quote.status = PaintingQuote.Status.APPROVED
+                quote.save(update_fields=["status"])
+
+                parent_sr = quote.service_request
+
+                # Transition parent request (inspection) to completed
+                apply_transition(parent_sr, ServiceRequest.Status.COMPLETED, actor=request.user)
+                parent_sr.save()
+
+                # Create child quoted_work booking
+                existing_child = ServiceRequest.objects.filter(
+                    parent_request=parent_sr,
+                    request_kind="quoted_work",
+                    quote_number=quote.quote_number
+                ).first()
+
+                if not existing_child:
+                    cart_data = []
+                    for item in quote.items.all():
+                        cart_data.append({
+                            "id": f"quote-item-{item.id}",
+                            "name": item.description,
+                            "price": float(item.final_rate),
+                            "quantity": float(item.quantity),
+                            "categoryName": item.category,
+                            "warranty_months": int(quote.warranty.split()[0]) if (quote.warranty and quote.warranty.split()[0].isdigit()) else 0
+                        })
+
+                    # If inspection fee was paid, deduct it from advance/total!
+                    inspection_deduction = Decimal("0.00")
+                    if parent_sr.payment_status in [ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED]:
+                        inspection_deduction = parent_sr.total_amount
+                        if inspection_deduction > Decimal("49.00"):
+                            inspection_deduction = Decimal("49.00")
+
+                    final_amount = max(Decimal("0.00"), quote.grand_total - inspection_deduction)
+
+                    if inspection_deduction > 0:
+                        cart_data.append({
+                            "id": "adjust-inspection-fee",
+                            "name": "Inspection Fee Adjusted",
+                            "price": -float(inspection_deduction),
+                            "quantity": 1,
+                            "categoryName": "Adjustment"
+                        })
+
+                    new_sr = ServiceRequest.objects.create(
+                        parent_request=parent_sr,
+                        request_kind="quoted_work",
+                        quote_number=quote.quote_number,
+                        company=parent_sr.company,
+                        customer=parent_sr.customer,
+                        customer_name=parent_sr.customer_name,
+                        phone=parent_sr.phone,
+                        email=parent_sr.email,
+                        service_category=parent_sr.service_category,
+                        issue_title=f"Painting Work for {parent_sr.request_id}",
+                        description=f"Quoted painting execution based on {quote.quote_number}",
+                        address=parent_sr.address,
+                        latitude=parent_sr.latitude,
+                        longitude=parent_sr.longitude,
+                        preferred_date=timezone.now().date(),
+                        preferred_time=parent_sr.preferred_time,
+                        total_amount=final_amount,
+                        cart_data=cart_data,
+                        status=ServiceRequest.Status.CONFIRMED,
+                        payment_method="ONLINE",
+                        payment_status=ServiceRequest.PaymentStatus.PENDING
+                    )
+
+                    # Dispatch job to workforce management system
+                    WorkforceIntegrationService.dispatch_job(new_sr.id)
+
+                    # Log analytics event
+                    from customer_analytics.models import BookingStatusEvent
+                    BookingStatusEvent.objects.create(
+                        service_request_id=new_sr.id,
+                        from_status="",
+                        to_status=new_sr.status,
+                        actor_persona="system",
+                        actor=None,
+                        reason_note=f"Booking created from Quote {quote.quote_number}"
+                    )
+
+            return _success(message="Quotation approved and painting booking created successfully.")
+
+        elif decision == "DECLINED" or decision == "CUSTOMER_DECLINED":
+            with transaction.atomic():
+                quote.status = PaintingQuote.Status.DECLINED
+                quote.decline_reason = request.data.get("reason_notes") or request.data.get("decline_reason") or "Customer declined"
+                quote.save(update_fields=["status", "decline_reason"])
+
+                parent_sr = quote.service_request
+                # Transition parent request (inspection) to closed
+                apply_transition(parent_sr, ServiceRequest.Status.CLOSED, actor=request.user)
+                parent_sr.save()
+
+            return _success(message="Quotation declined successfully.")
+
+        elif decision == "CHANGE_REQUESTED" or decision == "REQUESTED_CHANGES":
+            quote.status = PaintingQuote.Status.REQUESTED_CHANGES
+            quote.customer_notes = request.data.get("reason_notes") or request.data.get("customer_notes") or "Please adjust quotation items"
+            quote.save(update_fields=["status", "customer_notes"])
+
+            return _success(message="Changes requested successfully.")
+
+        return _error("Invalid decision option. Use CUSTOMER_ACCEPTED, DECLINED, or CHANGE_REQUESTED.", 400)
+
+
+class AdminPaintingRateCardListView(APIView):
+    """
+    GET /api/admin/painting/rate-card/
+    POST /api/admin/painting/rate-card/
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        rates = PaintingRateCard.objects.all().order_by("category", "sub_service")
+        serializer = PaintingRateCardSerializer(rates, many=True)
+        return _success(data=serializer.data)
+
+    def post(self, request):
+        serializer = PaintingRateCardSerializer(data=request.data)
+        if serializer.is_valid():
+            rate_card = serializer.save()
+            slabs_data = request.data.get("slabs", [])
+            for slab in slabs_data:
+                PaintingRateCardSlab.objects.create(
+                    rate_card=rate_card,
+                    slab_key=slab.get("slab_key"),
+                    rate=Decimal(str(slab.get("rate"))),
+                    unit=slab.get("unit", "")
+                )
+            return _success(data=PaintingRateCardSerializer(rate_card).data, status_code=201)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+
+class AdminPaintingRateCardDetailView(APIView):
+    """
+    PUT /api/admin/painting/rate-card/<int:pk>/
+    DELETE /api/admin/painting/rate-card/<int:pk>/
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def put(self, request, pk):
+        try:
+            rate = PaintingRateCard.objects.get(pk=pk)
+        except PaintingRateCard.DoesNotExist:
+            return _error("Rate card item not found.", 404)
+
+        serializer = PaintingRateCardSerializer(rate, data=request.data, partial=True)
+        if serializer.is_valid():
+            rate_card = serializer.save()
+            if "slabs" in request.data:
+                rate_card.slabs.all().delete()
+                for slab in request.data.get("slabs", []):
+                    PaintingRateCardSlab.objects.create(
+                        rate_card=rate_card,
+                        slab_key=slab.get("slab_key"),
+                        rate=Decimal(str(slab.get("rate"))),
+                        unit=slab.get("unit", "")
+                    )
+            return _success(data=PaintingRateCardSerializer(rate_card).data)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+    def delete(self, request, pk):
+        try:
+            rate = PaintingRateCard.objects.get(pk=pk)
+        except PaintingRateCard.DoesNotExist:
+            return _error("Rate card item not found.", 404)
+        rate.delete()
+        return _success(message="Rate card item deleted successfully.")
+
+
+class AdminQuoteCreateView(APIView):
+    """
+    POST /api/admin/painting/quotes/create/
+    Creates a new Quote for a ServiceRequest (shared Painting/Masonry).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return _error("booking_id is required.")
+
+        try:
+            if str(booking_id).isdigit():
+                sr = ServiceRequest.objects.get(pk=int(booking_id))
+            else:
+                sr = ServiceRequest.objects.get(request_id=booking_id)
+        except ServiceRequest.DoesNotExist:
+            return _error("ServiceRequest booking not found.", 404)
+
+        if sr.status != ServiceRequest.Status.ARRIVED:
+            return _error("Arrival Gate active: Cannot prepare quotation before technician reaches the site (Status must be ARRIVED).", 400)
+
+        measurements = request.data.get("measurements", [])
+        if not measurements:
+            return _error("Cannot submit a quote without area measurements.", 400)
+
+        items = request.data.get("items", [])
+        if not items:
+            return _error("Quotation must have at least one line item.", 400)
+
+        is_painting_or_wp = sr.service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]
+        is_mason = sr.service_category in ["mason", "masonry"]
+
+        for item in items:
+            classification = item.get("classification") or ""
+            if item.get("source_type") == "CUSTOMER" or item.get("item_type") == "CUSTOMER" or "customer" in classification.lower():
+                if is_painting_or_wp:
+                    return _error("Customer-supplied paint materials are strictly prohibited in the painting module.", 400)
+                elif is_mason:
+                    return _error("Customer-supplied materials are strictly prohibited in the masonry module.", 400)
+
+        with transaction.atomic():
+            PaintingQuote.objects.filter(service_request=sr).update(status=PaintingQuote.Status.SUPERSEDED)
+
+            prev_quote = PaintingQuote.objects.filter(service_request=sr).order_by("-quote_version").first()
+            version = (prev_quote.quote_version + 1) if prev_quote else 1
+
+            subtotal = Decimal(str(request.data.get("subtotal", 0)))
+            discount = Decimal(str(request.data.get("discount", 0)))
+            tax = Decimal(str(request.data.get("tax", 0)))
+            grand_total = Decimal(str(request.data.get("grand_total", 0)))
+            
+            advance_amount = Decimal("0.00")
+            balance_amount = Decimal("0.00")
+            is_waterproofing = sr.service_category in ["waterproofing", "waterproofing-services"] or any("waterproofing" in str(it.get("category")).lower() for it in items)
+            is_mason_items = sr.service_category in ["mason", "masonry"] or any("mason" in str(it.get("category")).lower() for it in items)
+            
+            if is_mason_items:
+                # Every valid Mason quote must be split 50/50 regardless of quote amount
+                advance_amount = grand_total * Decimal("0.5")
+                balance_amount = grand_total - advance_amount
+            elif is_waterproofing and grand_total >= Decimal("1000.00"):
+                advance_amount = grand_total * Decimal("0.5")
+                balance_amount = grand_total - advance_amount
+            else:
+                advance_amount = grand_total
+                balance_amount = Decimal("0.00")
+
+            initial_status = PaintingQuote.Status.SENT_TO_CUSTOMER
+            if grand_total > Decimal("30000.00"):
+                initial_status = PaintingQuote.Status.PENDING_ADMIN_REVIEW
+
+            quote = PaintingQuote.objects.create(
+                service_request=sr,
+                vendor=sr.company,
+                quote_version=version,
+                status=initial_status,
+                property_type=request.data.get("property_type", "Residential"),
+                total_paintable_area=Decimal(str(request.data.get("total_paintable_area", 0))),
+                subtotal=subtotal,
+                discount=discount,
+                tax=tax,
+                grand_total=grand_total,
+                advance_amount=advance_amount,
+                balance_amount=balance_amount,
+                valid_until=request.data.get("valid_until"),
+                warranty=request.data.get("warranty", ""),
+                created_by=request.user if request.user.is_authenticated else None
+            )
+
+            for m in measurements:
+                PaintingMeasurement.objects.create(
+                    quote=quote,
+                    area_name=m.get("area_name", "Area"),
+                    length=Decimal(str(m.get("length", 0))) if m.get("length") else None,
+                    width=Decimal(str(m.get("width", 0))) if m.get("width") else None,
+                    height=Decimal(str(m.get("height", 0))) if m.get("height") else None,
+                    calculated_area=Decimal(str(m.get("calculated_area", 0))),
+                    deductions=Decimal(str(m.get("deductions", 0))),
+                    final_area=Decimal(str(m.get("final_area", 0))),
+                    notes=m.get("notes", "")
+                )
+
+            for it in items:
+                PaintingQuoteItem.objects.create(
+                    quote=quote,
+                    category=it.get("category", "Painting"),
+                    description=it.get("description", ""),
+                    quantity=Decimal(str(it.get("quantity", 1))),
+                    unit=it.get("unit", "sq.ft"),
+                    base_rate=Decimal(str(it.get("base_rate", 0))),
+                    proposed_rate=Decimal(str(it.get("proposed_rate", 0))),
+                    discount=Decimal(str(it.get("discount", 0))),
+                    final_rate=Decimal(str(it.get("final_rate", 0))),
+                    amount=Decimal(str(it.get("amount", 0))),
+                    classification=it.get("classification", "both"),
+                    included=it.get("included", True),
+                    notes=it.get("notes", ""),
+                    slab_key=it.get("slab_key", "")
+                )
+
+            materials = request.data.get("materials", [])
+            for mat in materials:
+                PaintingMaterial.objects.create(
+                    quote=quote,
+                    brand=mat.get("brand", ""),
+                    product_name=mat.get("product_name", ""),
+                    finish=mat.get("finish", ""),
+                    shade=mat.get("shade", ""),
+                    quantity=Decimal(str(mat.get("quantity", 0))),
+                    unit=mat.get("unit", "litre"),
+                    rate=Decimal(str(mat.get("rate", 0))),
+                    amount=Decimal(str(mat.get("amount", 0)))
+                )
+
+        if quote.status == PaintingQuote.Status.SENT_TO_CUSTOMER:
+            send_quote_notification(quote)
+
+        return _success(
+            data=PaintingQuoteSerializer(quote).data,
+            message="Quotation submitted successfully." + (" Pending admin approval (exceeds ₹30,000)." if quote.status == PaintingQuote.Status.PENDING_ADMIN_REVIEW else "")
+        )
+
+
+class AdminQuoteActionView(APIView):
+    """
+    POST /api/admin/painting/quotes/<int:pk>/action/
+    Allows admin to Review, Adjust, Approve, or Reject a quote (shared Painting/Masonry).
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        try:
+            quote = PaintingQuote.objects.get(pk=pk)
+        except PaintingQuote.DoesNotExist:
+            return _error("Quotation not found.", 404)
+
+        action = (request.data.get("action") or "").strip().upper()
+        if action == "APPROVE_AND_SEND":
+            quote.status = PaintingQuote.Status.SENT_TO_CUSTOMER
+            quote.save(update_fields=["status"])
+            send_quote_notification(quote)
+            return _success(message="Quotation approved and sent to customer.")
+        elif action == "REJECT":
+            quote.status = PaintingQuote.Status.DECLINED
+            quote.decline_reason = request.data.get("reason", "Rejected by Admin")
+            quote.save(update_fields=["status", "decline_reason"])
+            return _success(message="Quotation rejected by Admin.")
+        elif action == "ADJUST":
+            items_data = request.data.get("items", [])
+            with transaction.atomic():
+                for it_data in items_data:
+                    item_id = it_data.get("id")
+                    if item_id:
+                        item = PaintingQuoteItem.objects.get(pk=item_id, quote=quote)
+                        item.proposed_rate = Decimal(str(it_data.get("proposed_rate", item.proposed_rate)))
+                        item.final_rate = Decimal(str(it_data.get("final_rate", item.final_rate)))
+                        item.amount = item.final_rate * item.quantity
+                        item.changed_by = request.user
+                        item.changed_at = timezone.now()
+                        item.save()
+
+                subtotal = sum(i.amount for i in quote.items.all())
+                quote.subtotal = subtotal
+                quote.grand_total = subtotal - quote.discount + quote.tax
+                
+                is_waterproofing = quote.service_request.service_category in ["waterproofing", "waterproofing-services"] or any("waterproofing" in str(it.category).lower() for it in quote.items.all())
+                is_mason = quote.service_request.service_category in ["mason", "masonry"] or any("mason" in str(it.category).lower() for it in quote.items.all())
+                if is_mason:
+                    quote.advance_amount = quote.grand_total * Decimal("0.5")
+                    quote.balance_amount = quote.grand_total - quote.advance_amount
+                elif is_waterproofing and quote.grand_total >= Decimal("1000.00"):
+                    quote.advance_amount = quote.grand_total * Decimal("0.5")
+                    quote.balance_amount = quote.grand_total - quote.advance_amount
+                else:
+                    quote.advance_amount = quote.grand_total
+                    quote.balance_amount = Decimal("0.00")
+
+                quote.save()
+            return _success(data=PaintingQuoteSerializer(quote).data, message="Quotation adjusted successfully.")
+
+        return _error("Invalid action option. Use APPROVE_AND_SEND, REJECT, or ADJUST.", 400)
+
+
+class CustomerQuotePDFView(APIView):
+    """
+    GET /api/booking/quote/<str:token>/pdf/
+    Generates and returns a PDF receipt/quotation for the customer.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        try:
+            quote = PaintingQuote.objects.get(customer_decision_token=token)
+        except PaintingQuote.DoesNotExist:
+            from django.http import HttpResponse
+            return HttpResponse("Quotation not found.", status=404)
+
+        from reportlab.pdfgen import canvas
+        from django.http import HttpResponse
+        import io
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer)
+
+        # Draw header
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(100, 750, "CalTrack Painting Service Quotation")
+        p.setFont("Helvetica", 10)
+        p.drawString(100, 735, f"Date generated: {quote.created_at.strftime('%d/%m/%Y %H:%M')}")
+        
+        # Meta info
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(100, 700, "Quotation Summary")
+        p.setFont("Helvetica", 10)
+        p.drawString(100, 680, f"Quote Number: {quote.quote_number} (v{quote.quote_version})")
+        p.drawString(100, 665, f"Property Type: {quote.property_type or 'Residential'}")
+        p.drawString(100, 650, f"Total Paintable Area: {quote.total_paintable_area} sq.ft")
+        p.drawString(100, 635, f"Warranty: {quote.warranty or 'No Warranty'}")
+        p.drawString(100, 620, f"Validity: {quote.valid_until.strftime('%d/%m/%Y') if quote.valid_until else 'N/A'}")
+        
+        # Draw items header
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(100, 580, "Line Items")
+        y = 560
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(100, y, "Description")
+        p.drawString(350, y, "Qty")
+        p.drawString(400, y, "Rate")
+        p.drawString(480, y, "Amount")
+        
+        p.setFont("Helvetica", 9)
+        for item in quote.items.all():
+            y -= 20
+            p.drawString(100, y, item.description[:45])
+            p.drawString(350, y, str(item.quantity))
+            p.drawString(400, y, f"Rs. {item.final_rate}")
+            p.drawString(480, y, f"Rs. {item.amount}")
+            if y < 100:
+                p.showPage()
+                y = 750
+
+        # Totals
+        y -= 30
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(350, y, "Subtotal:")
+        p.drawString(480, y, f"Rs. {quote.subtotal}")
+        y -= 15
+        p.drawString(350, y, "Discount:")
+        p.drawString(480, y, f"Rs. {quote.discount}")
+        y -= 15
+        p.drawString(350, y, "Tax (GST):")
+        p.drawString(480, y, f"Rs. {quote.tax}")
+        y -= 20
+        p.setFont("Helvetica-Bold", 13)
+        p.drawString(350, y, "Grand Total:")
+        p.drawString(480, y, f"Rs. {quote.grand_total}")
+        
+        # Split details
+        if quote.advance_amount > 0 and quote.balance_amount > 0:
+            y -= 25
+            p.setFont("Helvetica", 10)
+            p.drawString(100, y, f"Payment Split: 50% Advance (Rs. {quote.advance_amount}) + 50% Balance (Rs. {quote.balance_amount})")
+
+        p.showPage()
+        p.save()
+
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="Quote-{quote.quote_number}.pdf"'
+        return response
+
+

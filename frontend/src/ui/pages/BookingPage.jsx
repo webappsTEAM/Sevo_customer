@@ -5671,61 +5671,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                            </button>
-                            {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
-                        {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
-                          <div style={{ marginTop: 8 }}>
-                            <button
-                              onClick={() => toggleStopsEditor(b)}
-                              style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                            >
-                              <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
-                            </button>
-                            {stopsEditorBookingId === b.id && (
-                              <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                {stopsError && (
-                                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
-                                )}
-                                {stopsSavedMsg && (
-                                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
-                                )}
-                                {stopsLoading ? (
-                                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
-                                ) : (
-                                  <>
-                                    {stopsDraft.length === 0 && (
-                                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
-                                    )}
-                                    {stopsDraft.map((s, idx) => (
-                                      <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                                        <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
-                                          <option value="PICKUP">Pickup</option>
-                                          <option value="WAYPOINT">Stop</option>
-                                          <option value="DROP">Drop</option>
-                                        </select>
-                                        <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
-                                          <X size={12} />
-                                        </button>
-                                      </div>
-                                    ))}
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                      <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
-                                        + Add Stop
-                                      </button>
-                                      <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
-                                        {stopsSaving ? 'Saving...' : 'Save Stops'}
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                        )}
+                          </button>
+                        </div>
+
                         {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
                         {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
                           <div style={{ marginTop: 8 }}>
@@ -5777,10 +5725,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               </div>
                             )}
                           </div>
-                        </div>
+                        )}
                       </div>
+                    </div>
 
-                      {b.child_requests && b.child_requests.length > 0 && (
+                    {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

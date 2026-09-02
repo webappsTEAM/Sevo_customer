@@ -1138,3 +1138,177 @@ class BookingMessageSerializer(serializers.ModelSerializer):
             "read_at_customer", "read_at_technician",
         )
         read_only_fields = ("id", "sender_persona", "sender_name", "created_at", "read_at_customer", "read_at_technician")
+
+
+from service_requests.models import (
+    VegetableRecipe,
+    RecipeIngredient,
+    VegetableRecommendation,
+    PaintingRateCard,
+    PaintingRateCardSlab,
+    PaintingQuote,
+    PaintingQuoteItem,
+    PaintingMeasurement,
+    PaintingMaterial,
+    QuotePhoto,
+)
+
+
+
+class PaintingRateCardSlabSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingRateCardSlab
+        fields = ("id", "slab_key", "rate", "unit", "is_active")
+
+
+class PaintingRateCardSerializer(serializers.ModelSerializer):
+    slabs = PaintingRateCardSlabSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PaintingRateCard
+        fields = (
+            "id", "category", "sub_service", "unit", "base_rate", "min_rate",
+            "classification", "warranty", "inclusions", "exclusions",
+            "is_active", "has_slabs", "slabs", "is_confirmed", "comments",
+            "created_at", "updated_at"
+        )
+
+
+class PaintingQuoteItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingQuoteItem
+        fields = (
+            "id", "category", "description", "quantity", "unit", "base_rate",
+            "proposed_rate", "discount", "final_rate", "amount",
+            "classification", "included", "notes", "slab_key"
+        )
+
+
+class PaintingMeasurementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingMeasurement
+        fields = (
+            "id", "area_name", "length", "width", "height",
+            "calculated_area", "deductions", "final_area", "notes"
+        )
+
+
+class PaintingMaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaintingMaterial
+        fields = (
+            "id", "brand", "product_name", "finish", "shade",
+            "quantity", "unit", "rate", "amount"
+        )
+
+
+class QuotePhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuotePhoto
+        fields = ("id", "photo", "caption", "uploaded_at")
+
+
+class PaintingQuoteSerializer(serializers.ModelSerializer):
+    items = PaintingQuoteItemSerializer(many=True, read_only=True)
+    measurements = PaintingMeasurementSerializer(many=True, read_only=True)
+    materials = PaintingMaterialSerializer(many=True, read_only=True)
+    photos = QuotePhotoSerializer(many=True, read_only=True)
+    history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaintingQuote
+        fields = (
+            "id", "quote_number", "quote_version", "status", "property_type",
+            "total_paintable_area", "subtotal", "discount", "tax", "grand_total",
+            "advance_amount", "balance_amount", "valid_until", "warranty",
+            "customer_decision_token", "customer_notes", "decline_reason",
+            "warranty_card", "warranty_certificate", "completion_certificate",
+            "items", "measurements", "materials", "photos", "history", "created_at", "updated_at"
+        )
+
+    def get_history(self, obj):
+        siblings = PaintingQuote.objects.filter(
+            service_request=obj.service_request
+        ).exclude(id=obj.id).order_by("-quote_version")
+        return PaintingQuoteHistorySerializer(siblings, many=True).data
+
+
+class PaintingQuoteHistorySerializer(serializers.ModelSerializer):
+    items = PaintingQuoteItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PaintingQuote
+        fields = (
+            "id", "quote_number", "quote_version", "status", "grand_total",
+            "valid_until", "items", "created_at"
+        )
+
+
+# ── Vegetable Recipes & Recommendations Serializers ──────────────────────────
+
+class RecipeIngredientSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True, default="")
+    package_price = serializers.DecimalField(source="package.base_price", max_digits=10, decimal_places=2, read_only=True, default=0)
+    package_image = serializers.CharField(source="package.image", read_only=True, default="")
+    package_unit = serializers.CharField(source="package.duration", read_only=True, default="")
+    package_status = serializers.CharField(source="package.status", read_only=True, default="ACTIVE")
+
+    class Meta:
+        model = RecipeIngredient
+        fields = [
+            "id", "recipe", "package", "package_name", "package_price", "package_image",
+            "package_unit", "package_status", "name", "quantity", "unit", "notes",
+            "is_catalog_vegetable", "sort_order"
+        ]
+
+
+class VegetableRecipeListSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    package_image = serializers.CharField(source="package.image", read_only=True)
+    ingredients_count = serializers.IntegerField(source="ingredients.count", read_only=True)
+
+    class Meta:
+        model = VegetableRecipe
+        fields = [
+            "id", "package", "package_name", "package_image", "name", "slug", "image",
+            "short_description", "prep_time_minutes", "cook_time_minutes", "total_time_minutes",
+            "difficulty", "servings", "calories", "is_active", "is_popular", "sort_order",
+            "tags", "ingredients_count"
+        ]
+
+
+class VegetableRecipeDetailSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    package_image = serializers.CharField(source="package.image", read_only=True)
+    ingredients = RecipeIngredientSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VegetableRecipe
+        fields = [
+            "id", "package", "package_name", "package_image", "name", "slug", "image",
+            "short_description", "prep_time_minutes", "cook_time_minutes", "total_time_minutes",
+            "difficulty", "servings", "calories", "protein", "carbohydrates", "fat", "fiber",
+            "health_benefits", "health_tips", "instructions", "tags", "is_active", "is_popular",
+            "sort_order", "ingredients", "created_at", "updated_at"
+        ]
+
+
+class VegetableRecommendationSerializer(serializers.ModelSerializer):
+    source_name = serializers.CharField(source="source_product.name", read_only=True)
+    recommended_name = serializers.CharField(source="recommended_product.name", read_only=True)
+    recommended_price = serializers.DecimalField(source="recommended_product.base_price", max_digits=10, decimal_places=2, read_only=True)
+    recommended_offer_price = serializers.DecimalField(source="recommended_product.offer_price", max_digits=10, decimal_places=2, read_only=True, allow_null=True)
+    recommended_unit = serializers.CharField(source="recommended_product.duration", read_only=True)
+    recommended_image = serializers.CharField(source="recommended_product.image", read_only=True)
+    recommended_status = serializers.CharField(source="recommended_product.status", read_only=True)
+
+    class Meta:
+        model = VegetableRecommendation
+        fields = [
+            "id", "source_product", "source_name", "recommended_product", "recommended_name",
+            "recommended_price", "recommended_offer_price", "recommended_unit", "recommended_image",
+            "recommended_status", "recommendation_type", "priority", "display_order", "is_active",
+            "created_at", "updated_at"
+        ]
+
+

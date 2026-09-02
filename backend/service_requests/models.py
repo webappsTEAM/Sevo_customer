@@ -1976,3 +1976,318 @@ class BookingSeries(models.Model):
 
     def __str__(self):
         return f"AMC series #{self.id} ({self.service_category}, {self.frequency}) for {self.customer_name}"
+
+class VegetableRecipe(models.Model):
+    """
+    Recipe discovery model tied to a primary vegetable package.
+    Provides complete cooking instructions, nutrition breakdown, and health tips.
+    """
+    class Difficulty(models.TextChoices):
+        EASY   = "Easy",   "Easy"
+        MEDIUM = "Medium", "Medium"
+        HARD   = "Hard",   "Hard"
+
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recipes",
+        help_text="Primary vegetable product in Calservices catalog"
+    )
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    image = models.CharField(max_length=500, blank=True)
+    short_description = models.TextField(blank=True)
+    prep_time_minutes = models.PositiveIntegerField(default=10)
+    cook_time_minutes = models.PositiveIntegerField(default=15)
+    total_time_minutes = models.PositiveIntegerField(default=25)
+    difficulty = models.CharField(max_length=20, choices=Difficulty.choices, default=Difficulty.EASY)
+    servings = models.PositiveIntegerField(default=2, help_text="Base recipe serving size")
+    calories = models.PositiveIntegerField(default=120, help_text="Calories (kcal) per serving")
+    protein = models.CharField(max_length=50, blank=True, default="3g")
+    carbohydrates = models.CharField(max_length=50, blank=True, default="15g")
+    fat = models.CharField(max_length=50, blank=True, default="2g")
+    fiber = models.CharField(max_length=50, blank=True, default="4g")
+    health_benefits = models.JSONField(default=list, blank=True, help_text="List of informational health points")
+    health_tips = models.JSONField(default=list, blank=True, help_text="List of washing, cooking, or storage tips")
+    instructions = models.JSONField(default=list, blank=True, help_text="List of step-by-step cooking instructions")
+    tags = models.JSONField(default=list, blank=True, help_text="List of tags like Quick Recipes, Low Calorie, etc.")
+    is_active = models.BooleanField(default=True)
+    is_popular = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.package.name})"
+
+
+class RecipeIngredient(models.Model):
+    """
+    Separates ingredients into:
+    1. Calservices Vegetables: Linked to a Package (purchasable, add to cart, recommend).
+    2. Other Cooking Ingredients (Pantry): Plain name/text only (salt, spices, oils, etc., NOT purchasable).
+    """
+    recipe = models.ForeignKey(VegetableRecipe, on_delete=models.CASCADE, related_name="ingredients")
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recipe_ingredients",
+        help_text="Referenced Calservices vegetable package if this is a catalog vegetable"
+    )
+    name = models.CharField(max_length=200, help_text="Ingredient name e.g. Tomato, Salt, Mustard seeds")
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    unit = models.CharField(max_length=50, default="pieces", help_text="e.g. pieces, g, kg, tsp, tbsp, cup, cloves")
+    notes = models.CharField(max_length=200, blank=True, default="", help_text="e.g. Finely chopped, Diced")
+    is_catalog_vegetable = models.BooleanField(default=False, help_text="True if linked to a vegetable sold by Calservices")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def save(self, *args, **kwargs):
+        if self.package_id:
+            self.is_catalog_vegetable = True
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} - {self.recipe.name}"
+
+
+class VegetableRecommendation(models.Model):
+    """
+    Database-driven vegetable recommendations (Goes Well With, Recipe Based, You May Also Like).
+    Both source and recommended products must reference existing Calservices vegetable products.
+    """
+    class RecommendationType(models.TextChoices):
+        GOES_WELL_WITH    = "GOES_WELL_WITH",    "Goes Well With"
+        RECIPE_BASED      = "RECIPE_BASED",      "Recipe Based"
+        YOU_MAY_ALSO_LIKE = "YOU_MAY_ALSO_LIKE", "You May Also Like"
+
+    source_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="source_recommendations",
+        help_text="Primary vegetable"
+    )
+    recommended_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recommended_in",
+        help_text="Vegetable recommended with the primary vegetable"
+    )
+    recommendation_type = models.CharField(
+        max_length=30,
+        choices=RecommendationType.choices,
+        default=RecommendationType.GOES_WELL_WITH
+    )
+    priority = models.PositiveIntegerField(default=10, help_text="Higher priority items appear first")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_product", "recommended_product", "recommendation_type"],
+                name="unique_vegetable_recommendation"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.source_product.name} -> {self.recommended_product.name} ({self.get_recommendation_type_display()})"
+
+
+
+# ─── Slice 2: Reschedule ──────────────────────────────────────────────────────
+
+class PaintingRateCard(models.Model):
+    category = models.CharField(max_length=100) # e.g. "Interior Painting", "Exterior Painting", "Waterproofing", "Wood & Metal", "Texture Decor"
+    sub_service = models.CharField(max_length=100) # e.g. "Single Wall", "Terrace Waterproofing — 4 Coat"
+    unit = models.CharField(max_length=50) # e.g. "sq.ft", "door", "window", "gate", "litre", "point", "job"
+    base_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    min_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    classification = models.CharField(max_length=50, default="both") # "material", "labour", "both"
+    warranty = models.CharField(max_length=100, blank=True, default="")
+    inclusions = models.TextField(blank=True, default="")
+    exclusions = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    has_slabs = models.BooleanField(default=False)
+    is_confirmed = models.BooleanField(default=True)
+    comments = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.category} - {self.sub_service} (₹{self.base_rate}/{self.unit})"
+
+
+class PaintingRateCardSlab(models.Model):
+    rate_card = models.ForeignKey(PaintingRateCard, on_delete=models.CASCADE, related_name="slabs")
+    slab_key = models.CharField(max_length=100) # e.g. "1000", "10000", "Small", "Medium", "Large", "1 mm", "2 mm", "3 mm"
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Slab {self.slab_key} for {self.rate_card.sub_service}: ₹{self.rate}"
+
+
+# ─── Painting Quotation Models ───────────────────────────────────────────────
+
+class PaintingQuote(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        PENDING_ADMIN_REVIEW = "PENDING_ADMIN_REVIEW", "Pending Admin Review"
+        SENT_TO_CUSTOMER = "SENT_TO_CUSTOMER", "Sent to Customer"
+        VIEWED = "VIEWED", "Viewed"
+        APPROVED = "APPROVED", "Approved"
+        REQUESTED_CHANGES = "REQUESTED_CHANGES", "Requested Changes"
+        SUPERSEDED = "SUPERSEDED", "Superseded"
+        DECLINED = "DECLINED", "Declined"
+        EXPIRED = "EXPIRED", "Expired"
+
+    service_request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name="painting_quotes")
+    vendor = models.ForeignKey("companies.Company", on_delete=models.SET_NULL, null=True, blank=True, related_name="painting_quotes")
+    quote_number = models.CharField(max_length=100, unique=True, db_index=True)
+    quote_version = models.IntegerField(default=1)
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.DRAFT)
+    property_type = models.CharField(max_length=100, blank=True, default="")
+    total_paintable_area = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    tax = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    advance_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    balance_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    valid_until = models.DateField(null=True, blank=True)
+    warranty = models.CharField(max_length=200, blank=True, default="")
+    customer_decision_token = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
+    customer_notes = models.TextField(blank=True, default="")
+    decline_reason = models.TextField(blank=True, default="")
+    
+    # Files
+    warranty_card = models.FileField(upload_to="quotes/warranties/", null=True, blank=True)
+    warranty_certificate = models.FileField(upload_to="quotes/warranties/", null=True, blank=True)
+    completion_certificate = models.FileField(upload_to="quotes/warranties/", null=True, blank=True)
+    
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_painting_quotes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.quote_number:
+            import datetime, random
+            stamp = datetime.date.today().strftime("%Y%m%d")
+            rand = random.randint(1000, 9999)
+            self.quote_number = f"PQ-{stamp}-{rand}"
+        if not self.customer_decision_token:
+            import uuid
+            self.customer_decision_token = uuid.uuid4().hex
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.quote_number} (v{self.quote_version}) - {self.status}"
+
+
+class PaintingQuoteItem(models.Model):
+    quote = models.ForeignKey(PaintingQuote, on_delete=models.CASCADE, related_name="items")
+    rate_card_item = models.ForeignKey(PaintingRateCard, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.CharField(max_length=100) # e.g. "Interior Painting", "Waterproofing"
+    description = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    unit = models.CharField(max_length=50)
+    base_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    proposed_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    final_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    classification = models.CharField(max_length=50, default="both") # "material", "labour", "both"
+    included = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, default="")
+    slab_key = models.CharField(max_length=100, blank=True, default="")
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    changed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.description} - Qty: {self.quantity} Amount: {self.amount}"
+
+
+class PaintingMeasurement(models.Model):
+    quote = models.ForeignKey(PaintingQuote, on_delete=models.CASCADE, related_name="measurements")
+    area_name = models.CharField(max_length=100) # e.g. "Living Room", "Walls"
+    length = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    width = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    height = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    calculated_area = models.DecimalField(max_digits=12, decimal_places=2)
+    deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    final_area = models.DecimalField(max_digits=12, decimal_places=2)
+    notes = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return f"{self.area_name}: {self.final_area} sq.ft"
+
+
+class PaintingMaterial(models.Model):
+    quote = models.ForeignKey(PaintingQuote, on_delete=models.CASCADE, related_name="materials")
+    brand = models.CharField(max_length=100)
+    product_name = models.CharField(max_length=150)
+    finish = models.CharField(max_length=100)
+    shade = models.CharField(max_length=100)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50)
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.brand} {self.product_name} - Qty: {self.quantity}"
+
+
+class QuotePhoto(models.Model):
+    quote = models.ForeignKey(PaintingQuote, on_delete=models.CASCADE, related_name="photos")
+    photo = models.ImageField(upload_to="quotes/photos/")
+    caption = models.CharField(max_length=255, blank=True, default="")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Photo for {self.quote.quote_number}"
+
+class TechnicianLocation(models.Model):
+    """
+    High-frequency GPS telemetry point emitted by the Technician App during active service lifecycle.
+    """
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="location_logs",
+        db_index=True,
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="technician_locations",
+    )
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy = models.FloatField(null=True, blank=True)
+    heading = models.FloatField(default=0.0, blank=True)
+    speed = models.FloatField(default=0.0, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["booking", "created_at"]),
+            models.Index(fields=["technician", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
