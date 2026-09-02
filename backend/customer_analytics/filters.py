@@ -221,19 +221,19 @@ def get_annotated_customers(request):
     # Sorting
     sort_param = params.get("sort", "-last_booking_at")
     if sort_param == "bookings":
-        qs = qs.order_by("total_bookings", "display_customer_id")
+        qs = qs.order_by(F("total_bookings").asc(nulls_last=True), "display_customer_id")
     elif sort_param == "-bookings":
-        qs = qs.order_by("-total_bookings", "-display_customer_id")
+        qs = qs.order_by(F("total_bookings").desc(nulls_last=True), "-display_customer_id")
     elif sort_param == "value":
-        qs = qs.order_by("total_spent", "display_customer_id")
+        qs = qs.order_by(F("total_spent").asc(nulls_last=True), "display_customer_id")
     elif sort_param == "-value":
-        qs = qs.order_by("-total_spent", "-display_customer_id")
+        qs = qs.order_by(F("total_spent").desc(nulls_last=True), "-display_customer_id")
     elif sort_param == "last_booking_at":
-        qs = qs.order_by("last_booking_date", "display_customer_id")
+        qs = qs.order_by(F("last_booking_date").asc(nulls_last=True), "display_customer_id")
     elif sort_param == "-last_booking_at":
-        qs = qs.order_by("-last_booking_date", "-display_customer_id")
+        qs = qs.order_by(F("last_booking_date").desc(nulls_last=True), "-display_customer_id")
     else:
         # Default fallback
-        qs = qs.order_by("-last_booking_date", "-display_customer_id")
+        qs = qs.order_by(F("last_booking_date").desc(nulls_last=True), "-display_customer_id")
         
     return qs

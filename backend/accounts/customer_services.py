@@ -205,16 +205,23 @@ def update_customer_profile(user, validated_data):
         setattr(user, field, value)
         update_fields.append(field)
 
-    if "avatar" in validated_data and validated_data["avatar"] is not None:
-        avatar_val = validated_data["avatar"]
-        if isinstance(avatar_val, str):
-            if "/media/" in avatar_val:
-                user.avatar.name = avatar_val.split("/media/")[-1]
+    if "avatar" in validated_data or "remove_avatar" in validated_data:
+        avatar_val = validated_data.get("avatar")
+        remove_flag = str(validated_data.get("remove_avatar", "")).lower() in ("true", "1", "yes")
+        if remove_flag or avatar_val in (None, "", "null"):
+            if user.avatar:
+                user.avatar.delete(save=False)
+            user.avatar = None
+            update_fields.append("avatar")
+        elif avatar_val is not None:
+            if isinstance(avatar_val, str):
+                if "/media/" in avatar_val:
+                    user.avatar.name = avatar_val.split("/media/")[-1]
+                else:
+                    user.avatar.name = avatar_val
             else:
-                user.avatar.name = avatar_val
-        else:
-            user.avatar = avatar_val
-        update_fields.append("avatar")
+                user.avatar = avatar_val
+            update_fields.append("avatar")
 
     if update_fields:
         user.save()

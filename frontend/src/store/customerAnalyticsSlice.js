@@ -144,6 +144,7 @@ const initialState = {
     error: null,
   },
   payments: {
+    summary: {},
     owes: [],
     technicianHolds: [],
     settled: [],
@@ -235,9 +236,10 @@ const customerAnalyticsSlice = createSlice({
       })
       .addCase(fetchCustomerPayments.fulfilled, (state, action) => {
         state.payments.loading = false
-        state.payments.owes = action.payload.owes
-        state.payments.technicianHolds = action.payload.technician_holds
-        state.payments.settled = action.payload.settled
+        state.payments.summary = action.payload.summary || {}
+        state.payments.owes = action.payload.owes || []
+        state.payments.technicianHolds = action.payload.technician_holds || []
+        state.payments.settled = action.payload.settled || []
       })
       .addCase(fetchCustomerPayments.rejected, (state, action) => {
         state.payments.loading = false

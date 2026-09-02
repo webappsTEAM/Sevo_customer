@@ -9,7 +9,7 @@ import {
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
-  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug
+  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug, Utensils
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
@@ -18,6 +18,7 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
+import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
@@ -1986,7 +1987,11 @@ export function LandingPage() {
     }
 
     if (item.action === "food_health") {
-      setSelectedFoodSubModuleId(item.subId || "vegetables")
+      if ((item.subId || "vegetables") === "vegetables") {
+        navigate(routes.vegetables)
+        return
+      }
+      setSelectedFoodSubModuleId(item.subId || "groceries")
       setIsFoodHealthModalOpen(true)
       return
     }
@@ -2064,7 +2069,7 @@ export function LandingPage() {
     return foodHealthSub.find((sub) => sub.id === selectedFoodSubModuleId) || null
   }, [foodHealthSub, selectedFoodSubModuleId])
   const [foodCart, setFoodCart] = useState(() => {
-    if (location.state?.foodCart && Object.keys(location.state.foodCart).length > 0) {
+    if (location.state?.foodCart !== undefined) {
       return location.state.foodCart
     }
     try {
@@ -2084,11 +2089,18 @@ export function LandingPage() {
   }, [foodCart])
 
   useEffect(() => {
-    if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
+    if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId === "vegetables") {
+      navigate(routes.vegetables, { replace: true })
+      return
+    }
+    if (location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
       setIsFoodHealthModalOpen(true)
-      setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "vegetables")
-      if (location.state?.foodCart) {
+      setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "groceries")
+      if (location.state?.foodCart !== undefined) {
         setFoodCart(location.state.foodCart)
+        try {
+          localStorage.setItem("calservice_veg_food_cart", JSON.stringify(location.state.foodCart || {}))
+        } catch {}
       }
       // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
       navigate(".", { replace: true, state: {} })
@@ -2100,6 +2112,8 @@ export function LandingPage() {
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [showCartDrawer, setShowCartDrawer] = useState(false)
   const [showVegCartDrawer, setShowVegCartDrawer] = useState(false)
+  const [selectedRecipeVegetable, setSelectedRecipeVegetable] = useState(null)
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false)
   const vegTiming = getVegetableTimingInfo()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
@@ -4724,6 +4738,12 @@ export function LandingPage() {
                               key={sub.id}
                               type="button"
                               onClick={() => {
+                                if (sub.id === "vegetables") {
+                                  setIsFoodHealthModalOpen(false)
+                                  setSelectedFoodSubModuleId(null)
+                                  navigate(routes.vegetables)
+                                  return
+                                }
                                 setSelectedFoodSubModuleId(sub.id)
                                 setFoodOrderPlaced(false)
                                 setVegSearchQuery("")
@@ -4909,7 +4929,15 @@ export function LandingPage() {
                                         containIntrinsicSize: "0 230px",
                                       }}
                                     >
-                                      <div>
+                                      <div
+                                        onClick={() => {
+                                          if (selectedFoodSubModule?.id === "vegetables") {
+                                            setSelectedRecipeVegetable(item)
+                                            setIsRecipeModalOpen(true)
+                                          }
+                                        }}
+                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                      >
                                         {/* Real Studio Photographic Product Image */}
                                         <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                           <img
@@ -4944,7 +4972,7 @@ export function LandingPage() {
 
                                         {/* Details */}
                                         <div className="p-2.5">
-                                          <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px]" title={item.name}>
+                                          <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px] group-hover:text-emerald-700 transition-colors" title={item.name}>
                                             {item.name}
                                           </h5>
                                           <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
@@ -5145,6 +5173,21 @@ export function LandingPage() {
                                               ADD
                                             </button>
                                           )}
+                                        </div>
+
+                                        {/* What Can I Make CTA */}
+                                        <div className="px-2.5 pb-2.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedRecipeVegetable(item)
+                                              setIsRecipeModalOpen(true)
+                                            }}
+                                            className="w-full py-1.5 px-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer active:scale-98"
+                                          >
+                                            <Utensils className="w-3 h-3 text-amber-600 shrink-0" />
+                                            <span className="truncate">🍳 What Can I Make?</span>
+                                          </button>
                                         </div>
                                       </div>
                                     )
@@ -6352,6 +6395,12 @@ export function LandingPage() {
                             key={sub.id}
                             type="button"
                             onClick={() => {
+                              if (sub.id === "vegetables") {
+                                setIsFoodHealthModalOpen(false)
+                                setSelectedFoodSubModuleId(null)
+                                navigate(routes.vegetables)
+                                return
+                              }
                               setSelectedFoodSubModuleId(sub.id)
                               setFoodOrderPlaced(false)
                               setVegSearchQuery("")
@@ -6564,7 +6613,15 @@ export function LandingPage() {
                                       containIntrinsicSize: "0 230px",
                                     }}
                                   >
-                                    <div>
+                                      <div
+                                        onClick={() => {
+                                          if (selectedFoodSubModule?.id === "vegetables") {
+                                            setSelectedRecipeVegetable(item)
+                                            setIsRecipeModalOpen(true)
+                                          }
+                                        }}
+                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                      >
                                       {/* Real Studio Photographic Product Image */}
                                       <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                         <img
@@ -6687,6 +6744,21 @@ export function LandingPage() {
                                           ADD
                                         </button>
                                       )}
+                                    </div>
+
+                                    {/* What Can I Make CTA */}
+                                    <div className="px-2.5 pb-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedRecipeVegetable(item)
+                                          setIsRecipeModalOpen(true)
+                                        }}
+                                        className="w-full py-1.5 px-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer active:scale-98"
+                                      >
+                                        <Utensils className="w-3 h-3 text-amber-600 shrink-0" />
+                                        <span className="truncate">🍳 What Can I Make?</span>
+                                      </button>
                                     </div>
                                   </div>
                                 )
@@ -7426,6 +7498,40 @@ export function LandingPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Vegetable Recipe Modal / Drawer */}
+      <VegetableRecipeModal
+        isOpen={isRecipeModalOpen}
+        onClose={() => {
+          setIsRecipeModalOpen(false)
+          setSelectedRecipeVegetable(null)
+        }}
+        selectedVegetable={selectedRecipeVegetable}
+        foodCart={foodCart}
+        setFoodCart={setFoodCart}
+        onAddAvailableVegetables={(missingVegs) => {
+          setFoodCart((prev) => {
+            const copy = { ...prev }
+            missingVegs.forEach((v) => {
+              const name = v.package_name || v.name
+              if (!copy[name]) {
+                copy[name] = 1
+              }
+            })
+            return copy
+          })
+        }}
+        onUpdateCartQty={(name, delta) => {
+          setFoodCart((prev) => {
+            const cur = prev[name] || 0
+            const next = Math.max(0, cur + delta)
+            const copy = { ...prev }
+            if (next === 0) delete copy[name]
+            else copy[name] = next
+            return copy
+          })
+        }}
+      />
 
       <AnimatePresence>
         {showAccountPortal && (

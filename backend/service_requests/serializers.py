@@ -9,6 +9,7 @@ from rest_framework import serializers
 
 from .models import (
     ServiceFeedback, ServiceRequest, CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
+    VegetableRecipe, RecipeIngredient, VegetableRecommendation,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RescheduleSuggestedSlot, RescheduleStatusHistory,
@@ -820,13 +821,19 @@ class RescheduleRequestSerializer(serializers.ModelSerializer):
         )
 
     def get_requested_by_name(self, obj):
-        if obj.requested_by:
-            return obj.requested_by.get_full_name() or obj.requested_by.username
+        try:
+            if obj.requested_by_id and obj.requested_by:
+                return obj.requested_by.get_full_name() or obj.requested_by.username
+        except Exception:
+            pass
         return "Unknown"
 
     def get_admin_reviewed_by_name(self, obj):
-        if obj.admin_reviewed_by:
-            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        try:
+            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
+                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        except Exception:
+            pass
         return None
 
 
@@ -864,18 +871,28 @@ class AdminRescheduleListSerializer(serializers.ModelSerializer):
 
     def get_customer_email(self, obj):
         try:
-            return obj.requested_by.email or obj.booking.email
+            if obj.requested_by_id and obj.requested_by and obj.requested_by.email:
+                return obj.requested_by.email
+            if obj.booking and obj.booking.email:
+                return obj.booking.email
         except Exception:
-            return None
+            pass
+        return None
 
     def get_requested_by_name(self, obj):
-        if obj.requested_by:
-            return obj.requested_by.get_full_name() or obj.requested_by.username
+        try:
+            if obj.requested_by_id and obj.requested_by:
+                return obj.requested_by.get_full_name() or obj.requested_by.username
+        except Exception:
+            pass
         return "Customer"
 
     def get_admin_reviewed_by_name(self, obj):
-        if obj.admin_reviewed_by:
-            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        try:
+            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
+                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
+        except Exception:
+            pass
         return None
 
     def get_rejection_reason_display(self, obj):
@@ -919,8 +936,8 @@ class CustomerRefundRequestSerializer(serializers.ModelSerializer):
 class AdminRefundRequestSerializer(serializers.ModelSerializer):
     booking_id = serializers.PrimaryKeyRelatedField(source="booking", read_only=True)
     booking_request_id = serializers.CharField(source="booking.request_id", read_only=True)
-    customer_name = serializers.CharField(source="customer.get_full_name", read_only=True)
-    customer_email = serializers.CharField(source="customer.email", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
     evidence = RefundEvidenceSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
@@ -933,6 +950,26 @@ class AdminRefundRequestSerializer(serializers.ModelSerializer):
             "internal_notes", "status", "status_display", "info_requested_from",
             "gateway_reference", "evidence", "created_at", "updated_at"
         )
+
+    def get_customer_name(self, obj):
+        try:
+            if obj.customer_id and obj.customer:
+                return obj.customer.get_full_name() or obj.customer.username
+        except Exception:
+            pass
+        if obj.booking and obj.booking.customer_name:
+            return obj.booking.customer_name
+        return "Customer"
+
+    def get_customer_email(self, obj):
+        try:
+            if obj.customer_id and obj.customer and obj.customer.email:
+                return obj.customer.email
+        except Exception:
+            pass
+        if obj.booking and obj.booking.email:
+            return obj.booking.email
+        return None
 
 
 # ─── Painting Rate Card & Quote Serializers ───────────────────────────────────
@@ -1033,4 +1070,73 @@ class PaintingQuoteHistorySerializer(serializers.ModelSerializer):
             "id", "quote_number", "quote_version", "status", "grand_total",
             "valid_until", "items", "created_at"
         )
+
+
+# ── Vegetable Recipes & Recommendations Serializers ──────────────────────────
+
+class RecipeIngredientSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True, default="")
+    package_price = serializers.DecimalField(source="package.base_price", max_digits=10, decimal_places=2, read_only=True, default=0)
+    package_image = serializers.CharField(source="package.image", read_only=True, default="")
+    package_unit = serializers.CharField(source="package.duration", read_only=True, default="")
+    package_status = serializers.CharField(source="package.status", read_only=True, default="ACTIVE")
+
+    class Meta:
+        model = RecipeIngredient
+        fields = [
+            "id", "recipe", "package", "package_name", "package_price", "package_image",
+            "package_unit", "package_status", "name", "quantity", "unit", "notes",
+            "is_catalog_vegetable", "sort_order"
+        ]
+
+
+class VegetableRecipeListSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    package_image = serializers.CharField(source="package.image", read_only=True)
+    ingredients_count = serializers.IntegerField(source="ingredients.count", read_only=True)
+
+    class Meta:
+        model = VegetableRecipe
+        fields = [
+            "id", "package", "package_name", "package_image", "name", "slug", "image",
+            "short_description", "prep_time_minutes", "cook_time_minutes", "total_time_minutes",
+            "difficulty", "servings", "calories", "is_active", "is_popular", "sort_order",
+            "tags", "ingredients_count"
+        ]
+
+
+class VegetableRecipeDetailSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    package_image = serializers.CharField(source="package.image", read_only=True)
+    ingredients = RecipeIngredientSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VegetableRecipe
+        fields = [
+            "id", "package", "package_name", "package_image", "name", "slug", "image",
+            "short_description", "prep_time_minutes", "cook_time_minutes", "total_time_minutes",
+            "difficulty", "servings", "calories", "protein", "carbohydrates", "fat", "fiber",
+            "health_benefits", "health_tips", "instructions", "tags", "is_active", "is_popular",
+            "sort_order", "ingredients", "created_at", "updated_at"
+        ]
+
+
+class VegetableRecommendationSerializer(serializers.ModelSerializer):
+    source_name = serializers.CharField(source="source_product.name", read_only=True)
+    recommended_name = serializers.CharField(source="recommended_product.name", read_only=True)
+    recommended_price = serializers.DecimalField(source="recommended_product.base_price", max_digits=10, decimal_places=2, read_only=True)
+    recommended_offer_price = serializers.DecimalField(source="recommended_product.offer_price", max_digits=10, decimal_places=2, read_only=True, allow_null=True)
+    recommended_unit = serializers.CharField(source="recommended_product.duration", read_only=True)
+    recommended_image = serializers.CharField(source="recommended_product.image", read_only=True)
+    recommended_status = serializers.CharField(source="recommended_product.status", read_only=True)
+
+    class Meta:
+        model = VegetableRecommendation
+        fields = [
+            "id", "source_product", "source_name", "recommended_product", "recommended_name",
+            "recommended_price", "recommended_offer_price", "recommended_unit", "recommended_image",
+            "recommended_status", "recommendation_type", "priority", "display_order", "is_active",
+            "created_at", "updated_at"
+        ]
+
 
