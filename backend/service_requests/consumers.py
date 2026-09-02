@@ -201,6 +201,31 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             "timestamp": timezone.now().isoformat(),
         })
 
+    # ── Channel Layer Aliases for Workforce Events ────────────────────────────
+    async def employee_accepted(self, event):
+        await self.technician_accepted(event)
+
+    async def job_accepted(self, event):
+        await self.technician_accepted(event)
+
+    async def employee_on_the_way(self, event):
+        await self.technician_status_updated(event)
+
+    async def employee_arrived(self, event):
+        await self.technician_status_updated(event)
+
+    async def service_started(self, event):
+        await self.technician_status_updated(event)
+
+    async def service_completed(self, event):
+        await self.technician_status_updated(event)
+
+    async def job_dispatched(self, event):
+        await self.technician_assigned(event)
+
+    async def employee_rejected(self, event):
+        await self.technician_status_updated(event)
+
     # ── Helper Methods ────────────────────────────────────────────────────────
 
     @sync_to_async

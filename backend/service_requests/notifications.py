@@ -683,10 +683,6 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     for this service request.
     """
     try:
-        import sys
-        if "test" in sys.argv:
-            return
-
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         channel_layer = get_channel_layer()

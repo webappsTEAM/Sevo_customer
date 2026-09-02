@@ -320,8 +320,76 @@ class WorkforceWebhookView(APIView):
                     if isinstance(loc_dict, dict) and loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
                         sr.technician_longitude = loc_dict.get("longitude")
-                        sr.save(update_fields=["technician_latitude", "technician_longitude", "updated_at"])
-                        transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
+                        if "heading" in loc_dict and loc_dict.get("heading") is not None:
+                            try:
+                                sr.technician_heading = float(loc_dict.get("heading"))
+                            except (ValueError, TypeError):
+                                pass
+                        if "speed" in loc_dict and loc_dict.get("speed") is not None:
+                            try:
+                                sr.technician_speed = float(loc_dict.get("speed"))
+                            except (ValueError, TypeError):
+                                pass
+                        if "accuracy" in loc_dict and loc_dict.get("accuracy") is not None:
+                            try:
+                                sr.technician_accuracy = float(loc_dict.get("accuracy"))
+                            except (ValueError, TypeError):
+                                pass
+
+                        captured_at = loc_dict.get("updated_at") or loc_dict.get("captured_at") or loc_dict.get("timestamp")
+                        new_dt = timezone.now()
+                        if captured_at:
+                            try:
+                                from django.utils.dateparse import parse_datetime
+                                parsed = parse_datetime(str(captured_at))
+                                if parsed:
+                                    if timezone.is_naive(parsed):
+                                        parsed = timezone.make_aware(parsed)
+                                    new_dt = parsed
+                            except Exception:
+                                pass
+
+                        # Stale Location Protection: Prevent out-of-order older telemetry from overwriting newer position
+                        if sr.technician_location_updated_at and new_dt < sr.technician_location_updated_at:
+                            logger.info(f"Ignored stale location update for booking {sr.request_id}: incoming {new_dt} is older than stored {sr.technician_location_updated_at}")
+                        else:
+                            sr.technician_latitude = loc_dict.get("latitude")
+                            sr.technician_longitude = loc_dict.get("longitude")
+                            if "heading" in loc_dict and loc_dict.get("heading") is not None:
+                                try:
+                                    sr.technician_heading = float(loc_dict.get("heading"))
+                                except (ValueError, TypeError):
+                                    pass
+                            if "speed" in loc_dict and loc_dict.get("speed") is not None:
+                                try:
+                                    sr.technician_speed = float(loc_dict.get("speed"))
+                                except (ValueError, TypeError):
+                                    pass
+                            if "accuracy" in loc_dict and loc_dict.get("accuracy") is not None:
+                                try:
+                                    sr.technician_accuracy = float(loc_dict.get("accuracy"))
+                                except (ValueError, TypeError):
+                                    pass
+
+                            sr.technician_location_updated_at = new_dt
+                            sr.save(update_fields=[
+                                "technician_latitude", "technician_longitude",
+                                "technician_heading", "technician_speed",
+                                "technician_accuracy", "technician_location_updated_at",
+                                "updated_at"
+                            ])
+
+                            from service_requests.models import TechnicianLocation
+                            TechnicianLocation.objects.create(
+                                booking=sr,
+                                latitude=sr.technician_latitude,
+                                longitude=sr.technician_longitude,
+                                heading=sr.technician_heading,
+                                speed=sr.technician_speed,
+                                accuracy=sr.technician_accuracy,
+                            )
+
+                            transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
 
                 # ── 9. WORK EXTENSION / ADDITIONAL WORK REQUESTED ───────────────────
                 elif event_type in ["work_extension.created", "additional_work.requested", "job.extension_requested"]:
