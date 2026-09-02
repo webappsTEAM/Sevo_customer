@@ -771,10 +771,12 @@ class CatalogChangeLog(models.Model):
     of a soft reference instead."""
 
     class EntityType(models.TextChoices):
-        CATEGORY = "CATEGORY", "Category"
-        SERVICE  = "SERVICE",  "Service"
-        PACKAGE  = "PACKAGE",  "Package"
-        ADDON    = "ADDON",    "Add-on"
+        CATEGORY       = "CATEGORY", "Category"
+        SERVICE        = "SERVICE",  "Service"
+        PACKAGE        = "PACKAGE",  "Package"
+        ADDON          = "ADDON",    "Add-on"
+        RECIPE         = "RECIPE",   "Recipe"
+        RECOMMENDATION = "RECOMMENDATION", "Recommendation"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"
@@ -803,6 +805,134 @@ class CatalogChangeLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} {self.entity_type} #{self.entity_id} ({self.field_name})"
+
+
+class VegetableRecipe(models.Model):
+    """
+    Recipe discovery model tied to a primary vegetable package.
+    Provides complete cooking instructions, nutrition breakdown, and health tips.
+    """
+    class Difficulty(models.TextChoices):
+        EASY   = "Easy",   "Easy"
+        MEDIUM = "Medium", "Medium"
+        HARD   = "Hard",   "Hard"
+
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recipes",
+        help_text="Primary vegetable product in Calservices catalog"
+    )
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    image = models.CharField(max_length=500, blank=True)
+    short_description = models.TextField(blank=True)
+    prep_time_minutes = models.PositiveIntegerField(default=10)
+    cook_time_minutes = models.PositiveIntegerField(default=15)
+    total_time_minutes = models.PositiveIntegerField(default=25)
+    difficulty = models.CharField(max_length=20, choices=Difficulty.choices, default=Difficulty.EASY)
+    servings = models.PositiveIntegerField(default=2, help_text="Base recipe serving size")
+    calories = models.PositiveIntegerField(default=120, help_text="Calories (kcal) per serving")
+    protein = models.CharField(max_length=50, blank=True, default="3g")
+    carbohydrates = models.CharField(max_length=50, blank=True, default="15g")
+    fat = models.CharField(max_length=50, blank=True, default="2g")
+    fiber = models.CharField(max_length=50, blank=True, default="4g")
+    health_benefits = models.JSONField(default=list, blank=True, help_text="List of informational health points")
+    health_tips = models.JSONField(default=list, blank=True, help_text="List of washing, cooking, or storage tips")
+    instructions = models.JSONField(default=list, blank=True, help_text="List of step-by-step cooking instructions")
+    tags = models.JSONField(default=list, blank=True, help_text="List of tags like Quick Recipes, Low Calorie, etc.")
+    is_active = models.BooleanField(default=True)
+    is_popular = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.package.name})"
+
+
+class RecipeIngredient(models.Model):
+    """
+    Separates ingredients into:
+    1. Calservices Vegetables: Linked to a Package (purchasable, add to cart, recommend).
+    2. Other Cooking Ingredients (Pantry): Plain name/text only (salt, spices, oils, etc., NOT purchasable).
+    """
+    recipe = models.ForeignKey(VegetableRecipe, on_delete=models.CASCADE, related_name="ingredients")
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recipe_ingredients",
+        help_text="Referenced Calservices vegetable package if this is a catalog vegetable"
+    )
+    name = models.CharField(max_length=200, help_text="Ingredient name e.g. Tomato, Salt, Mustard seeds")
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    unit = models.CharField(max_length=50, default="pieces", help_text="e.g. pieces, g, kg, tsp, tbsp, cup, cloves")
+    notes = models.CharField(max_length=200, blank=True, default="", help_text="e.g. Finely chopped, Diced")
+    is_catalog_vegetable = models.BooleanField(default=False, help_text="True if linked to a vegetable sold by Calservices")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def save(self, *args, **kwargs):
+        if self.package_id:
+            self.is_catalog_vegetable = True
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} - {self.recipe.name}"
+
+
+class VegetableRecommendation(models.Model):
+    """
+    Database-driven vegetable recommendations (Goes Well With, Recipe Based, You May Also Like).
+    Both source and recommended products must reference existing Calservices vegetable products.
+    """
+    class RecommendationType(models.TextChoices):
+        GOES_WELL_WITH    = "GOES_WELL_WITH",    "Goes Well With"
+        RECIPE_BASED      = "RECIPE_BASED",      "Recipe Based"
+        YOU_MAY_ALSO_LIKE = "YOU_MAY_ALSO_LIKE", "You May Also Like"
+
+    source_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="source_recommendations",
+        help_text="Primary vegetable"
+    )
+    recommended_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recommended_in",
+        help_text="Vegetable recommended with the primary vegetable"
+    )
+    recommendation_type = models.CharField(
+        max_length=30,
+        choices=RecommendationType.choices,
+        default=RecommendationType.GOES_WELL_WITH
+    )
+    priority = models.PositiveIntegerField(default=10, help_text="Higher priority items appear first")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_product", "recommended_product", "recommendation_type"],
+                name="unique_vegetable_recommendation"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.source_product.name} -> {self.recommended_product.name} ({self.get_recommendation_type_display()})"
+
 
 
 # ─── Slice 2: Reschedule ──────────────────────────────────────────────────────

@@ -226,6 +226,195 @@ class CatalogSubServiceListView(APIView):
         return Response({"success": True, "data": data})
 
 
+# ── Public Vegetable Recipes & Recommendations ──────────────────────────────
+
+class VegetableRecipeListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/
+    Supports filtering by:
+    - package_id / product_id / vegetable_name
+    - search
+    - difficulty (Easy, Medium, Hard)
+    - tag (quick, easy, low_calorie, high_fiber, popular)
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeListSerializer
+
+        package_id = request.GET.get("package_id") or request.GET.get("product_id")
+        veg_query = request.GET.get("vegetable") or ""
+        search = request.GET.get("search") or ""
+        difficulty = request.GET.get("difficulty") or ""
+        tag = request.GET.get("tag") or ""
+        is_popular = request.GET.get("popular")
+
+        qs = VegetableRecipe.objects.filter(is_active=True).select_related("package")
+
+        if package_id:
+            # Check if any recipes have this vegetable as the primary featured package
+            primary_matches = qs.filter(package_id=package_id)
+            if primary_matches.exists():
+                qs = primary_matches
+            else:
+                qs = qs.filter(
+                    Q(package_id=package_id) | Q(ingredients__package_id=package_id)
+                ).distinct()
+        elif veg_query:
+            primary_name_matches = qs.filter(package__name__icontains=veg_query)
+            if primary_name_matches.exists():
+                qs = primary_name_matches
+            else:
+                qs = qs.filter(
+                    Q(package__name__icontains=veg_query) |
+                    Q(ingredients__name__icontains=veg_query) |
+                    Q(ingredients__package__name__icontains=veg_query)
+                ).distinct()
+
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search) |
+                Q(short_description__icontains=search) |
+                Q(ingredients__name__icontains=search)
+            ).distinct()
+
+        if difficulty:
+            qs = qs.filter(difficulty__iexact=difficulty)
+
+        if is_popular and is_popular.lower() in ("true", "1", "yes"):
+            qs = qs.filter(is_popular=True)
+
+        if tag:
+            # Matches against tags JSON field or preset filters
+            tag_clean = tag.lower().replace("-", " ").replace("_", " ")
+            if "quick" in tag_clean:
+                qs = qs.filter(total_time_minutes__lte=20)
+            elif "easy" in tag_clean:
+                qs = qs.filter(difficulty="Easy")
+            elif "low calorie" in tag_clean or "low_calorie" in tag:
+                qs = qs.filter(calories__lte=150)
+            elif "high fiber" in tag_clean or "high_fiber" in tag:
+                qs = qs.filter(fiber__icontains="g")
+            else:
+                qs = qs.filter(tags__icontains=tag)
+
+        data = VegetableRecipeListSerializer(qs.order_by("sort_order", "id"), many=True).data
+        return Response({"success": True, "data": data, "count": len(data)})
+
+
+class VegetableRecipeDetailView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/<id_or_slug>/
+    Returns full recipe details, nutrition, health tips, numbered cooking steps,
+    and separated ingredients (Calservices vegetable catalog products vs pantry items).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeDetailSerializer
+
+        recipe = None
+        if str(pk).isdigit():
+            recipe = VegetableRecipe.objects.filter(id=int(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+        if not recipe:
+            recipe = VegetableRecipe.objects.filter(slug=str(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+
+        if not recipe:
+            return Response({"success": False, "message": "Recipe not found"}, status=404)
+
+        data = VegetableRecipeDetailSerializer(recipe).data
+        return Response({"success": True, "data": data})
+
+
+class VegetableRecommendationListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/<product_id>/recommendations/
+    Returns database-configured and recipe-derived recommendations for a vegetable product.
+    Only returns active Calservices vegetable products.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, product_id):
+        from .models import Package, VegetableRecommendation, VegetableRecipe, RecipeIngredient
+        from .serializers import VegetableRecommendationSerializer
+
+        # 1. Fetch direct DB-configured recommendations
+        db_recs = VegetableRecommendation.objects.filter(
+            source_product_id=product_id,
+            is_active=True,
+            recommended_product__status="ACTIVE"
+        ).select_related("source_product", "recommended_product").order_by("-priority", "display_order")
+
+        rec_data = list(VegetableRecommendationSerializer(db_recs, many=True).data)
+        seen_recommended_ids = {r["recommended_product"] for r in rec_data}
+        seen_recommended_ids.add(int(product_id))
+
+        # 2. If fewer than 6, derive recipe-based co-occurring vegetables from DB
+        if len(rec_data) < 8:
+            co_occurring_pkg_ids = RecipeIngredient.objects.filter(
+                recipe__in=VegetableRecipe.objects.filter(
+                    Q(package_id=product_id) | Q(ingredients__package_id=product_id),
+                    is_active=True
+                ),
+                package__isnull=False,
+                package__status="ACTIVE"
+            ).exclude(
+                package_id__in=seen_recommended_ids
+            ).values_list("package_id", flat=True).distinct()[:8]
+
+            for pkg_id in co_occurring_pkg_ids:
+                pkg = Package.objects.filter(id=pkg_id, status="ACTIVE").first()
+                if pkg:
+                    seen_recommended_ids.add(pkg.id)
+                    rec_data.append({
+                        "id": None,
+                        "source_product": int(product_id),
+                        "source_name": "",
+                        "recommended_product": pkg.id,
+                        "recommended_name": pkg.name,
+                        "recommended_price": str(pkg.base_price),
+                        "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                        "recommended_unit": pkg.duration or "1 unit",
+                        "recommended_image": pkg.image or "",
+                        "recommended_status": pkg.status,
+                        "recommendation_type": "RECIPE_BASED",
+                        "priority": 5,
+                        "display_order": len(rec_data) + 1,
+                        "is_active": True,
+                    })
+
+        # 3. If still fewer, fill with active popular vegetables
+        if len(rec_data) < 4:
+            fallback_pkgs = Package.objects.filter(
+                service__slug="vegetables",
+                status="ACTIVE"
+            ).exclude(
+                id__in=seen_recommended_ids
+            ).order_by("-popular", "sort_order")[: (4 - len(rec_data))]
+
+            for pkg in fallback_pkgs:
+                rec_data.append({
+                    "id": None,
+                    "source_product": int(product_id),
+                    "source_name": "",
+                    "recommended_product": pkg.id,
+                    "recommended_name": pkg.name,
+                    "recommended_price": str(pkg.base_price),
+                    "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                    "recommended_unit": pkg.duration or "1 unit",
+                    "recommended_image": pkg.image or "",
+                    "recommended_status": pkg.status,
+                    "recommendation_type": "YOU_MAY_ALSO_LIKE",
+                    "priority": 1,
+                    "display_order": len(rec_data) + 1,
+                    "is_active": True,
+                })
+
+        return Response({"success": True, "data": rec_data, "count": len(rec_data)})
+
+
 class BookingCreateView(APIView):
     """
     POST /api/booking/

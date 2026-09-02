@@ -5,10 +5,13 @@ import {
   BadgeCheck, Star, HeartPulse, Plus, Trash2, Check, RotateCcw,
   Eye, Save, ArrowUp, ArrowDown, Image as ImageIcon, MessageSquare,
   Users, Gift, Repeat2, BarChart3, FileText, Phone, Mail, ChevronRight,
-  Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight
+  Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight,
+  ChefHat, Utensils
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
+import { AdminRecipesPage } from "./catalog/AdminRecipesPage.jsx"
+import { AdminRecommendationsPage } from "./catalog/AdminRecommendationsPage.jsx"
 
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -117,6 +120,8 @@ export default function HomePageCustomizerPage() {
   const navWorkflowSteps = [
     { id: "hero", label: "Hero Banner", icon: Globe, color: "text-amber-600 bg-amber-50" },
     { id: "categories", label: "Browse Categories", icon: Layers, color: "text-blue-600 bg-blue-50" },
+    { id: "recipes", label: "Vegetable Recipes", icon: ChefHat, color: "text-emerald-600 bg-emerald-50" },
+    { id: "recommendations", label: "Produce Pairings", icon: Utensils, color: "text-green-700 bg-green-50" },
     { id: "vendorBanner", label: "Vendor Hire Banner", icon: Users, color: "text-teal-600 bg-teal-50" },
     { id: "offers", label: "Promotional Offers", icon: Gift, color: "text-pink-600 bg-pink-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
@@ -1511,6 +1516,20 @@ export default function HomePageCustomizerPage() {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: VEGETABLE RECIPES (Smart Cooking / What Can I Make?) */}
+          {activeTab === "recipes" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <AdminRecipesPage />
+            </div>
+          )}
+
+          {/* TAB: PRODUCE PAIRINGS (Smart Vegetable Recommendations) */}
+          {activeTab === "recommendations" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <AdminRecommendationsPage />
             </div>
           )}
         </div>
