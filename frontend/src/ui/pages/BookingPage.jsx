@@ -5805,7 +5805,19 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {b.payment_confirmation_otp || '405863'}
+                              {/* Bug found: this used to fall back to a hardcoded
+                                  '405863' whenever the real OTP wasn't resolved yet
+                                  (this box can render on payment_status === 'cash_pending'
+                                  alone, before payment_confirmation_otp exists) --
+                                  showing a fixed, meaningless code the customer could
+                                  hand to a technician as if it were real, breaking the
+                                  cash-confirmation flow. Show an honest pending state
+                                  instead of fabricating a code. */}
+                              {b.payment_confirmation_otp || (
+                                <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
+                                  Generating OTP...
+                                </span>
+                              )}
                             </div>
                           </div>
                         )}
