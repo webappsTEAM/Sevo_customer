@@ -548,7 +548,25 @@ class BookingCreateView(APIView):
                 sr.subtotal_amount = subtotal
                 sr.discount_amount = disc
                 sr.final_amount = final_tot
-                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount"])
+                # Bug found: total_amount (set a few lines above to the
+                # pre-discount corrected_fare, via serializer.save()) was
+                # never corrected here -- final_amount was computed and
+                # stored but nothing downstream ever reads it (confirmed: no
+                # serializer field, no other view references sr.final_amount).
+                # total_amount IS the field every downstream consumer reads
+                # as the authoritative price -- most importantly the vendor
+                # app's cash-collection flow (JobPayment.amount_due is built
+                # directly from job.total_amount) and wallet settlement gross
+                # calculation. Leaving it un-discounted meant a technician
+                # could be told to collect the full pre-coupon amount in cash
+                # from a customer who was shown (and charged online, where
+                # applicable) the discounted price -- a real overcharge risk.
+                # A sibling booking-creation path elsewhere in this same file
+                # (the inspection/quote flow) already does this correctly
+                # (total_amount=final_amount), confirming this is the
+                # intended pattern.
+                sr.total_amount = final_tot
+                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount", "total_amount"])
 
                 with transaction.atomic():
                     cpn.current_usage += 1
