@@ -769,6 +769,19 @@ class CustomerBookingCancelView(APIView):
             if not (token_matches or phone_matches):
                 return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
 
+        # Fixes idempotency gap: apply_transition() allows CANCELLED ->
+        # CANCELLED as a no-op self-loop rather than rejecting it, and this
+        # view had no "already cancelled" guard of its own -- so a duplicate
+        # POST (double-click, a retried request after a slow/dropped
+        # response) re-ran this entire handler, including auto-creating a
+        # second PENDING RefundRequest for a booking that was already
+        # cancelled and possibly already being refunded.
+        if sr.status == ServiceRequest.Status.CANCELLED:
+            return _success(
+                data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+                message="Booking is already cancelled.",
+            )
+
         reason = request.data.get("reason", "Customer requested cancellation")
         previous_status = sr.status
         
