@@ -18,6 +18,12 @@ logger = logging.getLogger("workforce_integration")
 
 WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce")
 WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default")
+# Used specifically for the internal (non-technician-session) endpoints on
+# the Vendor app, e.g. customer-cancel-sync below -- reuses the same secret
+# already shared with the Vendor app for webhook auth in the other
+# direction, rather than a second key (WORKFORCE_API_KEY above) the Vendor
+# app has never actually been configured to check.
+WORKFORCE_WEBHOOK_SECRET = os.getenv("WORKFORCE_WEBHOOK_SECRET", "")
 
 
 class WorkforceIntegrationService:
@@ -37,6 +43,20 @@ class WorkforceIntegrationService:
     def _headers(cls):
         return {
             "Authorization": f"Bearer {WORKFORCE_API_KEY}",
+            "Content-Type": "application/json",
+            "X-CalServices-Source": "calservices-platform",
+        }
+
+    @classmethod
+    def _internal_headers(cls):
+        """
+        Headers for the Vendor app's internal/service-to-service endpoints
+        (IsInternalWorkforceCaller), which check WORKFORCE_WEBHOOK_SECRET --
+        not the generic _headers() above, whose WORKFORCE_API_KEY the
+        Vendor app has never actually been configured to recognize.
+        """
+        return {
+            "Authorization": f"Bearer {WORKFORCE_WEBHOOK_SECRET}",
             "Content-Type": "application/json",
             "X-CalServices-Source": "calservices-platform",
         }
@@ -126,10 +146,27 @@ class WorkforceIntegrationService:
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/cancel/"
-            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            # Bug found (BLOCKER): this used to POST to "{base}/jobs/{id}/cancel/"
+            # (WorkforceJobTechnicianCancelView on the Vendor app) using
+            # _headers(), whose Bearer key the Vendor app has never
+            # recognized (401 every time), AND that view's semantics are
+            # "the assigned technician is cancelling their own job within a
+            # 5-minute window" -- not "the customer cancelled the whole
+            # booking". Both failures were silently swallowed below and
+            # reported back as success, so the technician was never
+            # actually released on the Vendor side. Fixed to call the
+            # dedicated internal endpoint built for this
+            # (WorkforceJobCustomerCancelSyncView), authenticated with the
+            # shared webhook secret via _internal_headers().
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/customer-cancel-sync/"
+            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 204]:
                 return {"success": True}
+            logger.warning(
+                f"Workforce cancellation sync rejected by vendor app "
+                f"(status {response.status_code}): {response.text[:500]} -- "
+                f"vendor side was NOT told this booking was cancelled."
+            )
         except Exception as e:
             logger.warning(f"Workforce cancellation notification failed -- vendor side was NOT told this booking was cancelled: {e}")
 
