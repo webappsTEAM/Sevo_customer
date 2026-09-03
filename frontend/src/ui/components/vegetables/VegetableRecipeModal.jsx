@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react"
+import React, { useEffect, useState, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   X, ChevronLeft, Search, Utensils, ChefHat,
@@ -33,6 +33,7 @@ export function VegetableRecipeModal({
   const [activeRecipeDetail, setActiveRecipeDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [recommendations, setRecommendations] = useState([])
+  const modalBodyRef = useRef(null)
 
   // Load recipes for the selected vegetable
   useEffect(() => {
@@ -83,6 +84,9 @@ export function VegetableRecipeModal({
   const handleSelectRecipe = async (recipe) => {
     setActiveRecipe(recipe)
     setDetailLoading(true)
+    if (modalBodyRef.current) {
+      modalBodyRef.current.scrollTop = 0
+    }
     try {
       const res = await apiRequest(`/catalog/vegetables/recipes/${recipe.id || recipe.slug}/`)
       if (res.success && res.data) {
@@ -95,6 +99,9 @@ export function VegetableRecipeModal({
       setActiveRecipeDetail(recipe)
     } finally {
       setDetailLoading(false)
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTop = 0
+      }
     }
   }
 
@@ -184,6 +191,7 @@ export function VegetableRecipeModal({
 
         {/* ── Modal Body ── */}
         <div
+          ref={modalBodyRef}
           className="flex-1 overflow-y-auto p-5 sm:p-7 overscroll-contain"
           style={{ WebkitOverflowScrolling: "touch" }}
         >

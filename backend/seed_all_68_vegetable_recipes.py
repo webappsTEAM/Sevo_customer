@@ -94,9 +94,9 @@ def find_veg(query):
 USER_RECIPES_DATA = [
     # 1. Tomato
     ("Tomato", [
-        ("Tomato Rasam", ["Tomato", "Coriander", "Curry Leaves"], 10, 15, 70, "2g", "10g", "2g", "2g"),
-        ("Tomato Onion Curry", ["Tomato", "Onion", "Green Chilli"], 10, 15, 110, "3g", "14g", "3g", "5g"),
-        ("Tomato Vegetable Kurma", ["Tomato", "Potato", "Carrot", "Green Peas", "Onion"], 15, 25, 180, "5g", "22g", "5g", "8g"),
+        ("Tomato Rasam", ["Tomato", "Coriander", "Curry Leaves"], 10, 15, 95, "4g", "14g", "3g", "3g"),
+        ("Tomato Onion Curry", ["Tomato", "Onion", "Green Chilli"], 10, 15, 135, "2g", "15g", "3g", "8g"),
+        ("Tomato Vegetable Kurma", ["Tomato", "Potato", "Carrot", "Green Peas", "Onion"], 15, 25, 215, "5g", "25g", "5g", "11g"),
     ]),
     # 2. Onion
     ("Onion", [
