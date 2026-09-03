@@ -24,23 +24,35 @@ from .services import WorkforceIntegrationService
 
 logger = logging.getLogger("workforce_integration")
 
-WORKFORCE_WEBHOOK_SECRET = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", os.getenv("WORKFORCE_WEBHOOK_SECRET", "wf_webhook_secret_default"))
+_raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
 
-if WORKFORCE_WEBHOOK_SECRET == "wf_webhook_secret_default":
-    # Fixes the webhook-auth bypass flagged during Stage 1 (X-03 reconciliation
-    # pass): this default used to be accepted as valid EVEN WHEN a real secret
-    # was configured (see _verify_webhook_signature and
-    # WorkforceBookingFromQuoteView.post below), which meant anyone who read
-    # this source file could forge webhook calls regardless of the deployed
-    # secret. That bypass is removed below. This warning stays because the
-    # *fallback* value itself is still this well-known string when
-    # WORKFORCE_WEBHOOK_SECRET is never set at all -- set it in the
-    # environment for any non-local deployment.
-    logger.warning(
-        "WORKFORCE_WEBHOOK_SECRET is not configured -- falling back to the "
-        "publicly-known default. Set WORKFORCE_WEBHOOK_SECRET in the "
-        "environment before deploying."
-    )
+if not _raw_webhook_secret:
+    # Fixes: this used to silently fall back to the well-known literal
+    # "wf_webhook_secret_default" whenever the env var was unset -- and
+    # that's confirmed to be exactly what's deployed today (unset in both
+    # apps' live .env files), meaning webhook auth is currently a
+    # publicly-known skeleton key. The unconditional-acceptance bypass this
+    # comment used to describe was already fixed separately (see
+    # _verify_webhook_signature below); this fixes the fallback value
+    # itself. Mirrors this app's own SECRET_KEY convention: usable locally
+    # in DEBUG without extra setup, but fails closed in production so a
+    # real secret (matching value on both apps) must be set before going
+    # live.
+    if settings.DEBUG:
+        WORKFORCE_WEBHOOK_SECRET = "dev-insecure-workforce-webhook-secret-local-testing-only"
+        logger.warning(
+            "WORKFORCE_WEBHOOK_SECRET is not configured -- using a DEBUG-only "
+            "placeholder. Set WORKFORCE_WEBHOOK_SECRET (same value on both "
+            "apps) in the environment before deploying."
+        )
+    else:
+        raise ValueError(
+            "CRITICAL SECURITY ERROR: WORKFORCE_WEBHOOK_SECRET environment "
+            "variable is mandatory in production (DEBUG=False) -- it "
+            "authenticates cross-app webhook calls with the Vendor app."
+        )
+else:
+    WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret
 
 
 def _verify_webhook_signature(request) -> bool:
