@@ -5917,7 +5917,18 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 const tipAmount = Number(b.tip_amount || 0);
                                 const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                                 const rawStored = Number(b.total_amount || 0);
-                                const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                                // Bug found: this heuristic used to override a correctly-
+                                // discounted rawStored (b.total_amount) with a higher,
+                                // discount-blind computedGrand estimate whenever
+                                // rawStored < computedGrand -- which is exactly what
+                                // happens on every coupon booking, since computedGrand
+                                // never subtracted a discount (discount was always 0
+                                // before b.discount_amount existed in the API). Now that
+                                // the backend total_amount is authoritative end-to-end
+                                // (coupon-persistence + serializer fixes), trust it
+                                // directly; only fall back to the local estimate when
+                                // the API sent no usable total at all.
+                                const finalTot = rawStored > 0 ? rawStored : computedGrand;
                                 return Number(finalTot).toLocaleString('en-IN');
                               })()}
                             </div>
@@ -5962,7 +5973,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             const tipAmount = Number(b.tip_amount || 0);
                             const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                             const rawStored = Number(b.total_amount || 0);
-                            const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                            // See the matching comment in the list-total block above --
+                            // trust the now-authoritative rawStored (b.total_amount)
+                            // directly instead of this discount-blind override heuristic.
+                            const finalTot = rawStored > 0 ? rawStored : computedGrand;
 
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>

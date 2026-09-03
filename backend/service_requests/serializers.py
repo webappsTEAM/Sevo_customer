@@ -395,7 +395,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "status", "status_display", "priority", "priority_display",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
-            "total_amount", "base_amount", "extension_amount", "cart_data", "transaction_id", "invoice_id",
+            # discount_amount exposed so the frontend can show a real coupon
+            # discount line and stop assuming it's always 0 (it was never in
+            # this list before, even though ServiceRequest.discount_amount is
+            # a real, populated field once a coupon is applied at booking).
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "transaction_id", "invoice_id",
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
             "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
@@ -585,6 +589,21 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_base_amount(self, obj):
+        # Bug found: this used to sum raw cart_data item prices (name/price/
+        # quantity only, no tax or fee) whenever cart_data was non-empty --
+        # i.e. for essentially every real booking -- and only fell back to
+        # obj.total_amount when cart_data was missing entirely. But
+        # total_amount is the authoritative, already GST- and platform-fee-
+        # inclusive figure captured at booking creation (and, since the
+        # coupon-persistence fix, discount-inclusive too); cart_data's item
+        # prices never carried those on top. That made this "total_amount"
+        # API field understate what the customer was actually charged on
+        # every booking with a non-empty cart, which is why a compensating
+        # (and separately buggy) client-side recompute existed in
+        # BookingPage.jsx. Prefer the authoritative total_amount; only fall
+        # back to summing cart_data if total_amount is genuinely unset.
+        if obj.total_amount:
+            return float(obj.total_amount)
         try:
             cart = obj.cart_data
             if cart:
@@ -595,7 +614,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                     return sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart)
         except Exception:
             pass
-        return float(obj.total_amount or 599.0)
+        return 599.0
 
     def get_total_amount(self, obj):
         base = self.get_base_amount(obj)
@@ -663,7 +682,9 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
-            "total_amount", "base_amount", "extension_amount", "cart_data",
+            # discount_amount exposed for the same reason as in
+            # ServiceRequestListSerializer -- see comment there.
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
             "transaction_id", "payment_gateway",
@@ -805,6 +826,21 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_base_amount(self, obj):
+        # Bug found: this used to sum raw cart_data item prices (name/price/
+        # quantity only, no tax or fee) whenever cart_data was non-empty --
+        # i.e. for essentially every real booking -- and only fell back to
+        # obj.total_amount when cart_data was missing entirely. But
+        # total_amount is the authoritative, already GST- and platform-fee-
+        # inclusive figure captured at booking creation (and, since the
+        # coupon-persistence fix, discount-inclusive too); cart_data's item
+        # prices never carried those on top. That made this "total_amount"
+        # API field understate what the customer was actually charged on
+        # every booking with a non-empty cart, which is why a compensating
+        # (and separately buggy) client-side recompute existed in
+        # BookingPage.jsx. Prefer the authoritative total_amount; only fall
+        # back to summing cart_data if total_amount is genuinely unset.
+        if obj.total_amount:
+            return float(obj.total_amount)
         try:
             cart = obj.cart_data
             if cart:
@@ -815,7 +851,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
                     return sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart)
         except Exception:
             pass
-        return float(obj.total_amount or 599.0)
+        return 599.0
 
     def get_total_amount(self, obj):
         base = self.get_base_amount(obj)
