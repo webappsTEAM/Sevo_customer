@@ -8427,13 +8427,24 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
+    if (!user?.phone) {
+      setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
+      return
+    }
     setIsSubmitting(true)
     setErrorMsg("")
     try {
       const deliveryDate = vegTiming.deliveryDateStr
       const payload = {
         customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
-        phone: user?.phone || "9876543210",
+        phone: user.phone,
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
         description: `Quick Commerce Vegetable Order
