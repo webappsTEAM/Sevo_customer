@@ -127,31 +127,32 @@ export function RecipeDetails({
 
   return (
     <div className="space-y-6 pb-6">
-      {/* ── Top Split: Cooking Steps & Details (Left) + Compact Recipe Image (Right) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Recipe Info & Step-by-Step Cooking Instructions */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Header Title & Badges */}
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-wrap items-center gap-2 mb-2.5">
-              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black px-3 py-1 rounded-lg flex items-center gap-1.5">
-                <ChefHat className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{recipe.package_name || "Farm Produce Recipe"}</span>
-              </span>
-              <span className="text-xs font-semibold text-slate-400">
-                • Homestyle Dish
-              </span>
+      {/* ── Top Split: Recipe Info & Metadata (Left) + Compact Recipe Image (Right) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Header Title & Badges & Quick Metadata Strip */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black px-3 py-1 rounded-lg flex items-center gap-1.5">
+                  <ChefHat className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{recipe.package_name || "Farm Produce Recipe"}</span>
+                </span>
+                <span className="text-xs font-semibold text-slate-400">
+                  • Homestyle Dish
+                </span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                {recipe.name}
+              </h2>
+
+              {recipe.short_description && (
+                <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed font-medium">
+                  {recipe.short_description}
+                </p>
+              )}
             </div>
-
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
-              {recipe.name}
-            </h2>
-
-            {recipe.short_description && (
-              <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed font-medium">
-                {recipe.short_description}
-              </p>
-            )}
 
             {/* Quick Metadata Strip */}
             <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
@@ -176,33 +177,11 @@ export function RecipeDetails({
               </div>
             </div>
           </div>
-
-          {/* Cooking Instructions on Left */}
-          {recipe.instructions && recipe.instructions.length > 0 && (
-            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">
-              <h4 className="text-sm sm:text-base font-black text-slate-900 mb-4 flex items-center gap-2">
-                <ChefHat className="w-4 h-4 text-emerald-600" />
-                <span>Step-by-Step Cooking Instructions</span>
-              </h4>
-              <div className="space-y-3.5">
-                {recipe.instructions.map((step, idx) => (
-                  <div key={idx} className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                      {idx + 1}
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
-                      {typeof step === "string" ? step.replace(/^\d+\.\s*/, "") : step}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right Column: Compact Recipe Image Showcase */}
-        <div className="lg:col-span-5 flex flex-col items-center">
-          <div className="w-full aspect-[4/3] rounded-3xl overflow-hidden bg-slate-900 border border-slate-200/80 shadow-md relative group">
+        <div className="lg:col-span-5 flex flex-col justify-center">
+          <div className="w-full h-full min-h-[200px] aspect-[4/3] rounded-3xl overflow-hidden bg-slate-900 border border-slate-200/80 shadow-md relative group">
             <img
               src={recipe.image || fallbackPhoto}
               alt={recipe.name}
@@ -221,6 +200,28 @@ export function RecipeDetails({
           </div>
         </div>
       </div>
+
+      {/* ── Step-by-Step Cooking Instructions (Full Width) ── */}
+      {recipe.instructions && recipe.instructions.length > 0 && (
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">
+          <h4 className="text-sm sm:text-base font-black text-slate-900 mb-4 flex items-center gap-2">
+            <ChefHat className="w-4 h-4 text-emerald-600" />
+            <span>Step-by-Step Cooking Instructions</span>
+          </h4>
+          <div className="space-y-3.5">
+            {recipe.instructions.map((step, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                  {idx + 1}
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                  {typeof step === "string" ? step.replace(/^\d+\.\s*/, "") : step}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Nutritional Value (Per Serving) ── */}
       <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">

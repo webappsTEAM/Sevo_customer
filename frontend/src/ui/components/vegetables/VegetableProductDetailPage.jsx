@@ -91,6 +91,9 @@ export function VegetableProductDetailPage({
     setActiveRecipe(recipe)
     setDetailLoading(true)
     try {
+      window.scrollTo({ top: 0, behavior: "instant" })
+    } catch (_) {}
+    try {
       const res = await apiRequest(`/catalog/vegetables/recipes/${recipe.id || recipe.slug}/`)
       if (res.success && res.data) {
         setActiveRecipeDetail(res.data)
@@ -102,6 +105,9 @@ export function VegetableProductDetailPage({
       setActiveRecipeDetail(recipe)
     } finally {
       setDetailLoading(false)
+      try {
+        window.scrollTo({ top: 0, behavior: "instant" })
+      } catch (_) {}
     }
   }
 

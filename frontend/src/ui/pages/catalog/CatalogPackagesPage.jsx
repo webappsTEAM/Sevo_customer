@@ -6564,8 +6564,8 @@ export function CatalogPackagesPage() {
                   />
                 </div>
 
-                {/* 2. Quick Metadata Strip (Prep, Cook, Servings, Energy/Calories) */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* 2. Quick Metadata Strip (Prep, Cook, Servings) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Input
                     label="Prep Time (mins)"
                     type="number"
@@ -6583,12 +6583,6 @@ export function CatalogPackagesPage() {
                     type="number"
                     value={editingRecipe.servings || 2}
                     onChange={(e) => setEditingRecipe({ ...editingRecipe, servings: parseInt(e.target.value) || 0 })}
-                  />
-                  <Input
-                    label="Energy / Calories (kcal)"
-                    type="number"
-                    value={editingRecipe.calories || 110}
-                    onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: parseInt(e.target.value) || 0 })}
                   />
                 </div>
 
@@ -6708,7 +6702,14 @@ export function CatalogPackagesPage() {
                     </span>
                     <span className="text-[11px] text-amber-700">Displayed in Recipe Detail Popup</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <Input
+                      label="Calories (kcal)"
+                      type="number"
+                      placeholder="e.g. 95"
+                      value={editingRecipe.calories || 110}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: parseInt(e.target.value) || 0 })}
+                    />
                     <Input
                       label="Protein"
                       placeholder="e.g. 3g"
