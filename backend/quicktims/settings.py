@@ -22,7 +22,16 @@ SECRET_KEY = _SECRET_KEY
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = ["*"]
+# Fixed: this used to hardcode ALLOWED_HOSTS = ["*"] unconditionally,
+# ignoring the DJANGO_ALLOWED_HOSTS env var that's already set correctly in
+# every .env file this app ships with -- host-header validation was fully
+# disabled in the app actually running. Mirrors the pattern already used
+# correctly on the Vendor app's settings.py.
+_allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
