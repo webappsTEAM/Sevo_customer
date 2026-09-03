@@ -173,6 +173,48 @@ class WorkforceIntegrationService:
         return {"success": True, "fallback": True}
 
     @classmethod
+    def clawback_workforce_job(cls, service_request, reason: str = "") -> dict:
+        """
+        Notifies the external workforce system that a refund completed, so
+        it can claw back the technician's earnings for that job.
+
+        Bug found (gap): admin_complete_refund() used to run the payment
+        gateway refund and flip RefundRequest.status to COMPLETED without
+        telling the Vendor app anything -- the technician's earnings for
+        that job (a JOB_CREDIT wallet ledger entry, held or already
+        released) were left untouched, so a fully refunded customer could
+        still leave a paid-out technician for the same job with no
+        reconciling entry anywhere. Calls the dedicated internal endpoint
+        built for this (WorkforceJobClawbackSyncView), authenticated with
+        the shared webhook secret via _internal_headers(), mirroring
+        cancel_workforce_job() just above.
+        """
+        sr = cls._resolve_sr(service_request)
+        if not sr or not sr.workforce_job_id:
+            return {"success": True, "message": "No external workforce job attached"}
+
+        payload = {
+            "workforce_job_id": sr.workforce_job_id,
+            "booking_id": sr.request_id,
+            "reason": reason or "Customer refund completed.",
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/clawback-sync/"
+            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
+            if response.status_code in [200, 204]:
+                return {"success": True}
+            logger.warning(
+                f"Workforce clawback sync rejected by vendor app "
+                f"(status {response.status_code}): {response.text[:500]} -- "
+                f"vendor side was NOT told to claw back this job's earnings."
+            )
+        except Exception as e:
+            logger.warning(f"Workforce clawback notification failed -- vendor side was NOT told to claw back this job's earnings: {e}")
+
+        return {"success": True, "fallback": True}
+
+    @classmethod
     def reschedule_workforce_job(cls, service_request, new_date, new_time, reason="") -> dict:
         """Updates the external workforce system schedule for an existing job."""
         sr = cls._resolve_sr(service_request)

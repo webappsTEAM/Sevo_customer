@@ -603,12 +603,27 @@ def admin_complete_refund(admin_user, refund_id):
     rr.gateway_reference = gateway_refund_id
     rr.save(update_fields=["gateway_reference"])
 
-    return apply_refund_transition(
+    result = apply_refund_transition(
         refund_request=rr,
         new_status=RefundStatus.COMPLETED,
         actor=admin_user,
         note=f"Refund transaction completed via gateway (ref: {gateway_refund_id})."
     )
+
+    # Bug found (gap): a completed refund never told the Vendor app
+    # anything -- the technician's earnings for this job (a wallet ledger
+    # credit, held or already released) were left untouched, so a fully
+    # refunded customer could still leave a paid-out technician for the
+    # same job with no reconciling entry anywhere. Best-effort like the
+    # cancel/reschedule sync calls elsewhere in this module: never block
+    # or roll back a refund that already succeeded at the gateway just
+    # because this notification failed.
+    if rr.booking_id:
+        WorkforceIntegrationService.clawback_workforce_job(
+            rr.booking, reason=f"Refund #{rr.refund_id or rr.id} completed (gateway ref: {gateway_refund_id})."
+        )
+
+    return result
 
 
 def list_refund_requests(actor, persona, filters=None):
