@@ -225,15 +225,24 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
 
         # Extract token from query string
         import urllib.parse
+        from service_requests.views import _tracking_token_is_expired
         params = urllib.parse.parse_qs(self.query_string)
         provided_token = (params.get("token") or [None])[0]
 
-        # 1. Authorized via valid tracking_token query parameter
-        if provided_token and self.sr.tracking_token and str(self.sr.tracking_token).lower() == str(provided_token).strip().lower():
+        # 1. Authorized via valid, non-expired tracking_token query parameter
+        if (
+            provided_token
+            and self.sr.tracking_token
+            and str(self.sr.tracking_token).lower() == str(provided_token).strip().lower()
+            and not _tracking_token_is_expired(self.sr)  # Fixes EC-08 parity with the REST endpoint below
+        ):
             return True
 
         # 2. Authorized via tracking_token UUID as path identifier
-        if str(self.identifier).lower() == str(self.sr.tracking_token).lower():
+        if (
+            str(self.identifier).lower() == str(self.sr.tracking_token).lower()
+            and not _tracking_token_is_expired(self.sr)
+        ):
             return True
 
         # 3. Authorized via authenticated customer ownership, assigned technician, or staff RBAC
@@ -247,10 +256,18 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             if getattr(self.sr, "assigned_employee", None) and getattr(self.sr.assigned_employee, "user_id", None) == user.id:
                 return True
 
-        # 4. Public customer live tracking: if client knows the specific booking ID / request_id, grant live tracking read stream
-        if self.sr:
-            return True
-
+        # Bug found (BLOCKER): this used to have a 4th branch here --
+        # "if self.sr: return True" -- which granted full read access to
+        # ANY booking's live GPS position, technician name/photo, ETA, and
+        # customer address to anyone who could resolve a request_id or PK,
+        # no authentication or tracking token required at all. That
+        # directly contradicted the properly-secured REST sibling serving
+        # the same data (CustomerBookingLiveLocationView), which requires a
+        # matching non-expired tracking token, or an authenticated
+        # owner/admin/assigned-technician. Removed -- this consumer now
+        # uses exactly that same model (also added the matching non-expired
+        # token check to branches 1 and 2 above, which this REST sibling
+        # already enforces but this consumer previously didn't).
         return False
 
     @sync_to_async
