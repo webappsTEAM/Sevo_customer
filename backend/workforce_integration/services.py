@@ -136,7 +136,7 @@ class WorkforceIntegrationService:
         return {"success": True, "fallback": True}
 
     @classmethod
-    def reschedule_workforce_job(cls, service_request, new_date, new_time) -> dict:
+    def reschedule_workforce_job(cls, service_request, new_date, new_time, reason="") -> dict:
         """Updates the external workforce system schedule for an existing job."""
         sr = cls._resolve_sr(service_request)
         if not sr or not sr.workforce_job_id:
@@ -145,12 +145,33 @@ class WorkforceIntegrationService:
         payload = {
             "workforce_job_id": sr.workforce_job_id,
             "booking_id": sr.request_id,
-            "new_date": str(new_date),
+            "rescheduled_date": str(new_date),
             "new_time": str(new_time),
+            "reason": reason or "Customer requested a new date/time.",
         }
 
         try:
-            url = f"{WORKFORCE_API_BASE_URL}/jobs/reschedule/"
+            # Bug found: this used to POST to "{base}/jobs/reschedule/" -- a
+            # URL that doesn't match any route on the vendor side at all
+            # (the real route takes the job's pk in the path, same as
+            # cancel_workforce_job()'s URL just below). That guaranteed a 404
+            # on every call. Fixed to include the pk.
+            #
+            # Known remaining gap (tracked separately, not fixed here): even
+            # with a matching URL, the vendor endpoint at this path
+            # (WorkforceJobRescheduleView) only accepts requests from an
+            # authenticated vendor-side session/JWT -- it does not recognize
+            # this service's static Bearer API key, so this call is still
+            # expected to fail auth and fall through to the safe fallback
+            # below today. It's also a different feature on the vendor side
+            # (technician/ops-initiated delay tracking) rather than "sync
+            # this job to the customer's new date", so wiring it up for real
+            # needs a small dedicated vendor-side endpoint, not just an auth
+            # fix. This call is safe to leave best-effort in the meantime --
+            # the shared database means the vendor app already sees the new
+            # preferred_date/preferred_time directly once apply_reschedule_
+            # transition() saves the booking, which happens before this call.
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/reschedule/"
             response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
             if response.status_code in [200, 204]:
                 return {"success": True}

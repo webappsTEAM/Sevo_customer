@@ -149,10 +149,14 @@ def auto_reassign_technician(reschedule_request):
     Notifies external workforce management system of reschedule request.
     """
     booking = reschedule_request.booking
+    # Bug found: this used to call reschedule_workforce_job(booking_id=...,
+    # new_time_slot=...), but that method's real signature is
+    # (service_request, new_date, new_time) -- the keyword-name mismatch
+    # raised an uncaught TypeError on every call. Fixed to match.
     return WorkforceIntegrationService.reschedule_workforce_job(
-        booking_id=booking.id,
+        booking,
         new_date=reschedule_request.new_date,
-        new_time_slot=reschedule_request.new_time_slot,
+        new_time=reschedule_request.new_time_slot,
     )
 
 
@@ -337,11 +341,19 @@ def apply_reschedule_transition(reschedule_request, new_status, actor, note=""):
             booking.status = "rescheduled"
             booking.save(update_fields=["preferred_date", "preferred_time", "status", "updated_at"])
 
-            # Notify workforce
+            # Notify workforce.
+            # Bug found: this call used to pass booking_id=/new_time_slot=,
+            # but reschedule_workforce_job()'s real signature is
+            # (service_request, new_date, new_time) -- the mismatch raised an
+            # uncaught TypeError here on every single reschedule, which
+            # rolled back this entire transaction.atomic() block (including
+            # the RescheduleRequest status update and history record above),
+            # so a reschedule could never actually complete or even be
+            # recorded as approved. Fixed to match the real signature.
             WorkforceIntegrationService.reschedule_workforce_job(
-                booking_id=booking.id,
+                booking,
                 new_date=reschedule_request.new_date,
-                new_time_slot=reschedule_request.new_time_slot,
+                new_time=reschedule_request.new_time_slot,
             )
 
     return reschedule_request
