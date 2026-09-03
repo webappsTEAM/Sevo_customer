@@ -840,6 +840,16 @@ class CustomerBookingCancelView(APIView):
                 except Exception as refund_err:
                     logger.warning(f"Could not auto-create refund request for cancelled+paid booking {sr.id}: {refund_err}")
 
+        # Fixes gap: unlike assignment/reschedule/refund/complaints, no
+        # notification existed for cancellation at all -- add it here,
+        # outside the atomic block so a notification failure can never
+        # roll back a cancellation that already succeeded.
+        try:
+            from .notifications import notify_customer_cancelled
+            notify_customer_cancelled(sr, reason=reason)
+        except Exception as notify_err:
+            logger.warning(f"Could not send cancellation notification for booking {sr.id}: {notify_err}")
+
         return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
 
 

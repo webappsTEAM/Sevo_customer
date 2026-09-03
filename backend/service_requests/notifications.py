@@ -852,6 +852,61 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Slice 2b — Cancellation Notifications
+# ─────────────────────────────────────────────────────────────────────────────
+
+def notify_customer_cancelled(service_request, reason="") -> None:
+    """
+    Notify the customer that their booking has been cancelled.
+
+    Bug found (gap): unlike assignment, reschedule, refund, and complaint
+    events, booking cancellation had no customer-facing notification at
+    all -- CustomerBookingCancelView updated the booking's status and
+    optionally auto-created a refund request, but never told the customer
+    anything happened, even when an admin or the system (not the customer
+    themselves) initiated the cancellation.
+
+    Gated on booking_confirmations rather than a new preference field --
+    this app's CustomerNotificationPreference groups booking_confirmations,
+    reschedule_updates, technician_updates, and completion_feedback under
+    one "Booking lifecycle" section, and a cancellation is a booking
+    lifecycle event in that same sense. Adding a dedicated field would
+    require a new migration, which this fix deliberately avoids (see the
+    file-upload-validation fix in workforce_api/views.py for the same
+    reasoning).
+    """
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info("[Cancellation] Customer opted out of booking_confirmations -- skipping cancellation notification for booking %s.", service_request.request_id)
+        return
+
+    subject = f"[CalTrack] Booking Cancelled — {service_request.request_id}"
+    body = _render_html_template(
+        title="Booking Cancelled",
+        greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
+        intro_text="Your booking has been cancelled as requested.",
+        details_dict={
+            "Booking ID": service_request.request_id,
+            "Service": service_request.issue_title,
+            "Reason": reason or "Not specified",
+        },
+        footer_note="If a payment was made for this booking, any applicable refund will be processed separately and you will be notified of its status.",
+    )
+    try:
+        _sent = send_mail(subject, f"Your booking {service_request.request_id} has been cancelled.",
+                  settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
+        if _sent:
+            logger.info("[Cancellation] Customer cancellation notification sent to %s", customer_email)
+        else:
+            logger.error("[Cancellation] send_mail reported 0 messages delivered to %s for booking %s", customer_email, service_request.request_id)
+    except Exception as exc:
+        logger.error("[Cancellation] Failed to send cancellation notification: %s", exc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Slice 3 — Refund Notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
