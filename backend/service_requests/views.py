@@ -2137,6 +2137,26 @@ class CustomerRefundRequestCreateView(APIView):
         if not booking:
             return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
 
+        # Fixes: no duplicate-request guard existed at all -- a customer
+        # could submit any number of refund requests for the same booking
+        # while an earlier one was still active, each independently working
+        # its way through admin approval -> finance -> gateway completion.
+        active_statuses = [
+            RefundStatus.PENDING, RefundStatus.INFO_REQUESTED,
+            RefundStatus.APPROVED_FULL, RefundStatus.APPROVED_PARTIAL,
+            RefundStatus.SENT_TO_FINANCE,
+        ]
+        existing_active = RefundRequest.objects.filter(booking=booking, status__in=active_statuses).first()
+        if existing_active:
+            return _standard_response(
+                success=False,
+                error={
+                    "code": "REFUND_ALREADY_ACTIVE",
+                    "message": f"A refund request for this booking is already in progress (status: {existing_active.status}).",
+                },
+                status_code=409,
+            )
+
         amount = Decimal(str(requested_amount)) if requested_amount else booking.total_amount
 
         rr = sr_services.create_refund_request(

@@ -522,6 +522,23 @@ def _execute_gateway_refund(rr):
                       "instead of completing it here."
         })
 
+    # Fixes: no check existed for whether this exact payment was already
+    # refunded by a DIFFERENT, earlier-completed RefundRequest for the same
+    # booking -- admin_complete_refund()'s own status gate only prevents
+    # re-running this on the SAME request twice, not two separate requests
+    # both reaching SENT_TO_FINANCE and each independently calling
+    # Razorpay's refund API against the same underlying payment.
+    already_completed = RefundRequest.objects.filter(
+        booking=rr.booking,
+        status=RefundStatus.COMPLETED,
+    ).exclude(pk=rr.pk).exclude(gateway_reference="").exclude(gateway_reference__isnull=True).first()
+    if already_completed:
+        raise ValidationError({
+            "detail": f"This booking's payment was already refunded by a separate completed "
+                      f"refund request (ref: {already_completed.gateway_reference}). Refusing "
+                      f"to issue a second gateway refund against the same payment."
+        })
+
     refund_amount = rr.approved_amount if rr.approved_amount else rr.requested_amount
     if not refund_amount or refund_amount <= 0:
         raise ValidationError({"detail": "Refund amount must be greater than zero."})
