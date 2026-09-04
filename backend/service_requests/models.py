@@ -245,6 +245,19 @@ class ServiceRequest(models.Model):
     # own rule warns against. Revisit if Packers & Movers ever needs
     # multi-stop routing.
     drop_address     = models.TextField(blank=True, default="")
+    # GT-B-XX (drop-point coordinates): drop_address above is free text
+    # only -- there was no drop-side coordinate anywhere on this model,
+    # so GT-D-02's leg-aware tracking fix could only target the drop
+    # point for bookings that also have TripStop rows (the multi-stop
+    # case). The common single-pickup/single-drop logistics booking had
+    # no drop coordinate to target at all. Also blocks any real
+    # distance-based fare calculation (GT-B-01) -- distance needs two
+    # real coordinates, not one real + one guessed. Additive, nullable
+    # fields, same pattern as latitude/longitude above; never required
+    # at the serializer level so existing bookings/clients keep working
+    # unchanged if a drop coordinate genuinely couldn't be resolved.
+    drop_latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     # Fixes GT-D-03: nothing captured who's actually receiving the goods at
     # the drop address, so they could never be notified. See
     # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md for the full write-up; this is

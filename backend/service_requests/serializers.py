@@ -165,7 +165,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "address", "latitude", "longitude",
             "preferred_date", "preferred_time", "photo",
             "payment_method", "total_amount", "cart_data",
-            "drop_address", "logistics_tier", "logistics_lane",
+            "drop_address", "drop_latitude", "drop_longitude", "logistics_tier", "logistics_lane",
             # Fixes GT-D-03: accept the recipient's contact info if the
             # frontend sends it. Deliberately NOT required yet -- the
             # booking wizard doesn't collect these fields today, so
@@ -192,6 +192,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "preferred_time":      {"required": False, "allow_blank": True, "allow_null": True},
             "cart_data":           {"required": False},
             "drop_address":        {"required": False, "allow_blank": True},
+            "drop_latitude":       {"required": False, "allow_null": True},
+            "drop_longitude":      {"required": False, "allow_null": True},
             "logistics_tier":      {"required": False, "allow_null": True},
             "logistics_lane":      {"required": False, "allow_null": True},
             "drop_contact_name":   {"required": False, "allow_blank": True},
