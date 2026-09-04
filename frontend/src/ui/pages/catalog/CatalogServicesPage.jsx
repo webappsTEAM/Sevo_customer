@@ -27,6 +27,7 @@ const SERVICE_SUBTABS = {
     { id: "sofa", label: "Sofa Cleaning" },
     { id: "mattress", label: "Mattress Cleaning" },
     { id: "carpet", label: "Carpet Cleaning" },
+    { id: "addons", label: "Quick Extra Services" },
   ],
   "full-house-cleaning": [
     { id: "full_apartment", label: "Occupied Apartment" },

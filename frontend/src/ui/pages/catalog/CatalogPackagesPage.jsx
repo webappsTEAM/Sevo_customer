@@ -3805,6 +3805,7 @@ export function CatalogPackagesPage() {
                         { id: "sofa", label: "Sofa Cleaning" },
                         { id: "mattress", label: "Mattress Cleaning" },
                         { id: "carpet", label: "Carpet Cleaning" },
+                        { id: "addons", label: "Quick Extra Services" },
                       ]) || (serviceCustomizing.slug === "cleaning" && [
                         { id: "full_apartment", label: "Occupied Apartment" },
                         { id: "unoccupied_apartment", label: "Unoccupied Apartment" },

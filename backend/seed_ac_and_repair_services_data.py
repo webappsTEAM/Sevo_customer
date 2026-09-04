@@ -4,9 +4,44 @@
 AC_APPLIANCE_DATA = {
     "ac-service-cleaning": {
         "name": "AC Service & Cleaning",
-        "desc": "High-pressure jet cleaning, foam wash, and comprehensive indoor/outdoor coil maintenance.",
+        "desc": "High-pressure power jet cleaning, deep foam wash, and basic filter maintenance for split and window ACs.",
         "order": 1,
         "packages": [
+            {
+                "slug": "general-ac-service",
+                "name": "General AC Service",
+                "price": 349,
+                "duration": "30 mins",
+                "tag": "Quick Clean",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Quick maintenance service for routine AC cleaning and basic performance checking.",
+                "includes": [
+                    "Air filter cleaning",
+                    "Indoor unit surface cleaning",
+                    "Cooling fin dust removal",
+                    "Basic drain line check",
+                    "Basic cooling and airflow check"
+                ],
+                "tools": [
+                    "Soft fin cleaning brush",
+                    "Air blower & vacuum",
+                    "Digital laser thermometer"
+                ],
+                "ready": [
+                    "AC remote control available"
+                ],
+                "reviews": [
+                    {"name": "Karthik R.", "rating": "4.8", "text": "Quick standard maintenance, great for routine seasonal prep."}
+                ],
+                "faqs": [
+                    {"q": "How often should general AC service be done?", "a": "Every 2-3 months during heavy summer usage to maintain clean airflow."}
+                ],
+                "addons": [
+                    {"name": "Power Jet Cleaning Upgrade", "price": 250, "description": "Deep foam & power-jet cleaning", "sort_order": 1},
+                    {"name": "Drain Pipe Deep Cleaning", "price": 149, "description": "For enhanced drainage cleaning", "sort_order": 2}
+                ]
+            },
             {
                 "slug": "foam-power-jet-split",
                 "name": "Foam & Power Jet AC Service — Split",
@@ -15,309 +50,800 @@ AC_APPLIANCE_DATA = {
                 "tag": "Best Seller",
                 "popular": True,
                 "image": "/mockups/appliance_cleaning_hero.png",
-                "description": "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.",
+                "description": "Deep foam and power-jet cleaning of the indoor cooling coil and outdoor unit to improve cooling performance.",
                 "includes": [
-                    "2x cooling foam wash",
-                    "Indoor & outdoor jet spray wash",
-                    "Gas & cooling delta check",
-                    "Drain tray & pipe flushing",
-                    "30-day post-service warranty"
+                    "Cooling coil foam cleaning",
+                    "Indoor & outdoor power-jet cleaning",
+                    "Air filter cleaning",
+                    "Drain tray/basic drain cleaning",
+                    "Basic cooling performance check"
                 ],
                 "tools": [
                     "High-pressure specialized jet pump",
-                    "Eco-friendly coil cleaner foam",
-                    "Antimicrobial wash spray",
-                    "Digital anemometer & airflow meter",
-                    "Leakage capture jacket bag"
+                    "Anti-bacterial coil foaming agent",
+                    "Waterproof service catch jacket",
+                    "Digital anemometer & airflow gauge"
                 ],
                 "ready": [
-                    "Continuous water and power supply available near the AC unit",
-                    "Keep the area under the indoor unit clear of delicate furniture/electronics",
-                    "Ensure safe accessibility to the outdoor compressor unit"
+                    "Ensure continuous water and electricity near the AC unit",
+                    "Keep area underneath the indoor unit clear of delicate items"
                 ],
                 "reviews": [
-                    {"name": "Siddharth K.", "rating": "5.0", "text": "The power jet wash brought back freezing cold air! Cleaned out years of hidden dust without a single drop on the walls."},
-                    {"name": "Revathi N.", "rating": "4.9", "text": "Extremely punctual and professional tech. Showed before and after coil conditions."}
+                    {"name": "Siddharth K.", "rating": "5.0", "text": "The power jet wash brought back freezing cold air! Flushed out heavy dust without spilling a single drop."},
+                    {"name": "Revathi N.", "rating": "4.9", "text": "Punctual technician. Showed before and after airflow readings."}
                 ],
                 "faqs": [
-                    {"q": "Will the water spray ruin my painted walls?", "a": "No, our technician installs a 100% waterproof AC service jacket with drain hose that channels all wash water into a bucket."},
-                    {"q": "Is outdoor unit cleaning included in this package?", "a": "Yes! Both indoor deep foam wash and outdoor condenser power jet cleaning are included."}
-                ]
-            },
-            {
-                "slug": "foam-power-jet-window",
-                "name": "Foam & Power Jet AC Service — Window",
-                "price": 499,
-                "duration": "45 mins",
-                "tag": "Window Care",
-                "popular": False,
-                "image": "/mockups/appliance_cleaning_thumb.png",
-                "description": "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.",
-                "includes": [
-                    "Foam jet coil wash",
-                    "Front grill sanitization",
-                    "Drain tray clearout",
-                    "Blower wheel detailing"
+                    {"q": "Will water splash on my wall during jet service?", "a": "No, our technician mounts a 100% waterproof AC service jacket with an outlet hose draining directly into a bucket."},
+                    {"q": "Is outdoor condenser cleaning included?", "a": "Yes! Both indoor cooling coil power jet wash and outdoor unit condenser flush are included."}
                 ],
-                "tools": [
-                    "Pressure wash spray gun",
-                    "Heavy-duty coil foaming agent",
-                    "Fin straightener tool",
-                    "Dry microfiber wiping towels"
-                ],
-                "ready": [
-                    "Safe access to the window frame",
-                    "Power supply and bucket of water"
-                ],
-                "reviews": [
-                    {"name": "Karthik R.", "rating": "4.8", "text": "Quick and thorough service. Removed strong musty odor completely."}
-                ],
-                "faqs": [
-                    {"q": "Do you need to unmount the window AC?", "a": "In most cases cleaning is performed on-site without unmounting unless deep rear coil blockage requires bench service."}
+                "addons": [
+                    {"name": "Deep Cleaning Upgrade", "price": 199, "description": "Intensive 2x foam soak & deep antimicrobial sanitization", "sort_order": 1},
+                    {"name": "Drain Pipe Deep Cleaning", "price": 149, "description": "High-pressure chemical drain line de-clog & flush", "sort_order": 2},
+                    {"name": "Anti-Rust Protection", "price": 199, "description": "Protective anti-corrosion spray coat on condenser U-bends", "sort_order": 3}
                 ]
             },
             {
                 "slug": "anti-rust-deep-clean-ac",
                 "name": "Anti-Rust Deep Clean AC Service",
-                "price": 849,
-                "duration": "1 hr",
-                "tag": "Max Protection",
-                "popular": False,
+                "price": 799,
+                "duration": "60 mins",
+                "tag": "Ultimate Care",
+                "popular": True,
                 "image": "/mockups/appliance_cleaning_hero.png",
-                "description": "Premium deep jet cleaning with protective anti-rust coating for high-humidity coastal and urban areas.",
+                "description": "Deep power-jet cleaning with protective anti-rust treatment for selected outdoor-unit components and suitable metal areas. (*Anti-rust treatment is applied only to suitable and accessible metal components. It is not a guarantee against all future corrosion).",
                 "includes": [
-                    "Double foam jet spray wash",
-                    "Outdoor unit protective anti-rust coating",
-                    "Compressor vibration pad inspection",
-                    "Thermostat & electrical safety test",
-                    "60-day extended cooling warranty"
+                    "Complete deep foam & power-jet cleaning",
+                    "Enhanced outdoor unit cleaning",
+                    "Anti-rust protective treatment*",
+                    "Basic cooling performance check",
+                    "30-day service warranty"
                 ],
                 "tools": [
-                    "Anti-corrosive protective coil coating spray",
-                    "High-pressure jet pump",
-                    "Electronic gas leak detector",
-                    "Digital temperature probe"
+                    "Anti-corrosion protective coil coating spray",
+                    "High-pressure jet machine",
+                    "Dual-action enzymatic foam cleaner",
+                    "Fin straightener comb tool",
+                    "Electronic leak sniffer"
                 ],
                 "ready": [
-                    "Ensure indoor and outdoor AC areas are easily accessible",
-                    "Provide uninterrupted water and electricity"
+                    "Safe accessibility to outdoor and indoor units",
+                    "Water tap and electrical supply"
                 ],
                 "reviews": [
-                    {"name": "Vikram M.", "rating": "5.0", "text": "Great protection against rust especially living close to water bodies. Noticeably quieter compressor operation."}
+                    {"name": "Vikram M.", "rating": "5.0", "text": "Super deep cleaning and anti-rust protection. Noticeably quieter compressor operation."}
                 ],
                 "faqs": [
-                    {"q": "What is the anti-rust coating?", "a": "It is a specialized polymer sealant sprayed on the outdoor condenser coils that shields against moisture, acid rain, and oxidation."}
+                    {"q": "What is the anti-rust treatment?", "a": "Anti-rust treatment is applied only to suitable and accessible metal components to shield against moisture and oxidation. It is not a guarantee against all future corrosion."}
+                ],
+                "addons": [
+                    {"name": "Drain Pipe Deep Cleaning", "price": 149, "description": "Deep cleaning for improved water flow", "sort_order": 1},
+                    {"name": "Extended Anti-Rust Protection", "price": 249, "description": "Additional protective treatment for suitable accessible outdoor metal areas", "sort_order": 2},
+                    {"name": "Drain Pipe Replacement", "price": 199, "description": "Replacement of damaged or leaking drain pipe with high-grade flexible pipe", "sort_order": 3}
                 ]
             }
         ]
     },
     "ac-repair": {
         "name": "AC Repair & Diagnostics",
-        "desc": "Troubleshooting not cooling, abnormal noise, water leakage, and compressor tripping.",
+        "desc": "Expert diagnostics and repairs for not cooling, water leakage, strange noises, and power faults.",
         "order": 2,
         "packages": [
             {
-                "slug": "ac-less-no-cooling-check",
-                "name": "AC Less / No Cooling Diagnostics",
-                "price": 299,
+                "slug": "ac-repair-diagnosis",
+                "name": "AC Repair & Diagnosis",
+                "price": 399,
                 "duration": "45 mins",
-                "tag": "Most Booked",
+                "tag": "Diagnostic",
                 "popular": True,
                 "image": "/mockups/appliance_cleaning_hero.png",
-                "description": "Comprehensive fault diagnosis for inadequate cooling, compressor tripping or airflow bottlenecks.",
+                "description": "Comprehensive 21-point AC inspection, electrical voltage check, compressor health scan, and root cause diagnosis.",
                 "includes": [
-                    "Compressor & capacitor health check",
-                    "Refrigerant pressure measurement",
-                    "PCB & sensor diagnostic",
-                    "Clear cost estimate before any repair"
+                    "Full 21-point system diagnostic",
+                    "Electrical & refrigerant check",
+                    "Compressor load & capacitor test",
+                    "Detailed transparent estimate before repair"
                 ],
                 "tools": [
-                    "HVAC digital manifold gauge",
+                    "HVAC manifold pressure gauge",
                     "Digital clamp multimeter",
                     "Infrared laser thermometer",
                     "Capacitor tester"
                 ],
                 "ready": [
-                    "Keep AC remote control available",
-                    "Point out how long the cooling issue has persisted"
+                    "Keep AC remote control handy",
+                    "Describe observed fault symptoms to technician"
                 ],
                 "reviews": [
-                    {"name": "Ananya P.", "rating": "4.9", "text": "Diagnosed a faulty run capacitor in 10 minutes. Replaced it on the spot and AC started blowing chilled air immediately!"}
+                    {"name": "Ananya P.", "rating": "5.0", "text": "Accurately diagnosed a faulty capacitor in 10 minutes. Transparent pricing and immediate fix!"}
                 ],
                 "faqs": [
-                    {"q": "Is repair cost included in this diagnostic fee?", "a": "The diagnosis fee covers inspection and testing. Any replacement spare parts or gas top-up costs are quoted transparently for your approval before proceeding."}
+                    {"q": "Is the inspection fee adjusted in repair costs?", "a": "Yes, if you approve major repairs during the same visit, diagnostic inspection fee is factored into your quote."}
                 ]
             },
             {
-                "slug": "ac-water-leakage-repair",
-                "name": "AC Water Leakage & Drain Repair",
-                "price": 399,
+                "slug": "ac-not-cooling",
+                "name": "AC Not Cooling",
+                "price": 499,
                 "duration": "45 mins",
-                "tag": "Fix Leakage",
+                "tag": "Cooling Restore",
                 "popular": False,
                 "image": "/mockups/appliance_cleaning_thumb.png",
-                "description": "Resolve water dripping from indoor unit, clogged drain trays, and sloping misalignments.",
+                "description": "Specialized diagnostic for AC blowing warm air or low cooling. Compressor relay, sensor, and refrigerant level check.",
                 "includes": [
-                    "Drain line high-pressure backflush",
-                    "Condensate tray cleaning & leveling",
-                    "Insulation leak repair",
-                    "30-day no-drip warranty"
+                    "Cooling delta temp scan",
+                    "Compressor relay & capacitor audit",
+                    "Refrigerant pressure test",
+                    "Thermostat sensor calibration"
                 ],
                 "tools": [
-                    "Drain snake & pressure bulb",
-                    "Antibacterial drain cleaner",
-                    "Spirit level meter",
-                    "Waterproof insulation tape"
+                    "Differential thermometer",
+                    "Electronic refrigerant sniffer",
+                    "Multimeter"
                 ],
                 "ready": [
-                    "Keep towels/bucket ready under dripping indoor unit"
+                    "Keep AC running for 10 mins before tech arrival if possible"
                 ],
                 "reviews": [
-                    {"name": "Deepak G.", "rating": "5.0", "text": "Completely solved our indoor dripping problem that two other local technicians couldn't fix."}
+                    {"name": "Deepak G.", "rating": "4.9", "text": "Fixed the low cooling issue immediately. Room is chilled again."}
                 ],
                 "faqs": [
-                    {"q": "Why does my AC leak water indoors?", "a": "Most indoor leaks happen due to algae sludge clogging the drain line or improper drain pipe slope."}
+                    {"q": "Why is my AC running but not cooling?", "a": "Common reasons include low refrigerant gas, a weak compressor start capacitor, or clogged cooling coils."}
+                ]
+            },
+            {
+                "slug": "ac-water-leakage",
+                "name": "AC Water Leakage",
+                "price": 399,
+                "duration": "45 mins",
+                "tag": "Leak Fix",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Fix indoor unit water dripping, drain pipe unclogging, water tray leveling, and anti-clog jet flush.",
+                "includes": [
+                    "High-pressure drain clearout",
+                    "Water tray re-leveling & flush",
+                    "Drain line slope alignment",
+                    "Insulation leak check & 30-day no-drip warranty"
+                ],
+                "tools": [
+                    "Drain vacuum bulb & snake",
+                    "High-pressure flush gun",
+                    "Spirit level meter"
+                ],
+                "ready": [
+                    "Keep towels or bucket under indoor unit if dripping"
+                ],
+                "reviews": [
+                    {"name": "Pooja V.", "rating": "5.0", "text": "Completely resolved dripping water that other technicians could not solve."}
+                ],
+                "faqs": [
+                    {"q": "Why does indoor unit leak water inside room?", "a": "Usually due to dust sludge blocking the condensate drain pipe or an unlevel indoor unit bracket."}
+                ]
+            },
+            {
+                "slug": "ac-noise-issue",
+                "name": "AC Noise Issue",
+                "price": 399,
+                "duration": "45 mins",
+                "tag": "Acoustic Fix",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Diagnosis & resolution of grinding fan sound, indoor blower squeak, or outdoor compressor vibration noise.",
+                "includes": [
+                    "Blower wheel balancing",
+                    "Motor bearing lubrication",
+                    "Vibration dampener adjustment",
+                    "Loose bracket tightening"
+                ],
+                "tools": [
+                    "Acoustic vibration tester",
+                    "Bearing lubricant spray",
+                    "Torque wrench"
+                ],
+                "ready": [
+                    "Identify whether noise comes from indoor or outdoor unit"
+                ],
+                "reviews": [
+                    {"name": "Arun K.", "rating": "4.8", "text": "Realigned the blower wheel and vibration noise vanished completely."}
+                ],
+                "faqs": [
+                    {"q": "What causes abnormal rattling sound in AC?", "a": "Misaligned blower fan blades, worn motor bearings, or loose outdoor bracket mountings."}
+                ]
+            },
+            {
+                "slug": "ac-power-issue",
+                "name": "AC Power Issue",
+                "price": 449,
+                "duration": "45 mins",
+                "tag": "Power Fix",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Fix AC not turning on, MCB tripping repeatedly, display panel dead, or remote receiver sensor failure.",
+                "includes": [
+                    "Mains supply continuity test",
+                    "Display board & fuse check",
+                    "Power relay inspection",
+                    "Earthing and short circuit safety scan"
+                ],
+                "tools": [
+                    "Digital electrical multimeter",
+                    "Continuity tester",
+                    "Insulation tester"
+                ],
+                "ready": [
+                    "Ensure main breaker / MCB is accessible"
+                ],
+                "reviews": [
+                    {"name": "Gokul K.", "rating": "4.9", "text": "Identified a blown surge fuse and replaced it right away. AC turned back on instantly."}
+                ],
+                "faqs": [
+                    {"q": "Why does my AC keep tripping the MCB breaker?", "a": "A tripping MCB usually indicates compressor short circuit, faulty start capacitor, or electrical overload."}
                 ]
             }
         ]
     },
     "ac-gas-refill": {
         "name": "AC Gas & Refrigerant",
-        "desc": "Leak detection, vacuuming, and complete gas charging (R32, R410A, R22).",
+        "desc": "Nitrogen leak testing, copper pipe brazing, deep vacuuming, and 100% genuine refrigerant gas refill.",
         "order": 3,
         "packages": [
             {
-                "slug": "ac-complete-gas-refill",
-                "name": "Complete AC Gas Charging (R32 / R410A)",
-                "price": 2299,
-                "duration": "1-1.5 hrs",
-                "tag": "Full Charge",
+                "slug": "ac-gas-refill",
+                "name": "AC Gas Refill",
+                "price": 1499,
+                "duration": "1.5 hrs",
+                "tag": "100% Gas Fill",
                 "popular": True,
                 "image": "/mockups/appliance_cleaning_hero.png",
-                "description": "Full refrigerant charging with nitrogen pressure testing, leak sealing, and deep vacuuming.",
+                "description": "Complete vacuum evacuation, moisture removal, and 100% certified eco-friendly refrigerant gas refill (R32 / R410A / R22).",
                 "includes": [
-                    "Nitrogen pressure leak detection",
-                    "Brazing / flare nut leak rectification",
-                    "Two-stage rotary vacuum pump evacuation",
-                    "100% pure virgin refrigerant charging by weight",
+                    "Deep two-stage vacuum evacuation",
+                    "Precise weight-based gas charging",
+                    "Operating delta cooling test",
                     "60-day gas warranty"
                 ],
                 "tools": [
-                    "Refrigerant digital charging scale",
-                    "High-vacuum two-stage pump",
-                    "Dual-manifold HVAC gauge set",
-                    "Nitrogen cylinder & regulator",
-                    "Oxygen-acetylene brazing kit"
+                    "Digital refrigerant charging scale",
+                    "Two-stage rotary vacuum pump",
+                    "Dual-manifold HVAC gauge set"
                 ],
                 "ready": [
                     "Clear access to outdoor unit location",
-                    "Stable electrical power supply for vacuum pump"
+                    "Power supply available for vacuum pump"
                 ],
                 "reviews": [
-                    {"name": "Naveen S.", "rating": "5.0", "text": "They found the micro-leak in the flare nut, fixed it with nitrogen test, and filled genuine R32 gas. Ice cold cooling now."}
+                    {"name": "Naveen S.", "rating": "5.0", "text": "Genuine virgin gas filled by weight. Cooling temperature dropped to 16°C immediately."}
                 ],
                 "faqs": [
-                    {"q": "Why is vacuuming necessary before gas filling?", "a": "Vacuuming removes moisture and air from inside copper pipes, preventing acid formation and ensuring maximum compressor life."}
+                    {"q": "Why is vacuuming necessary before gas filling?", "a": "Vacuuming removes moisture and air from copper pipes, preventing acid formation and prolonging compressor life."}
                 ]
             },
             {
-                "slug": "ac-gas-topup",
-                "name": "AC Gas Top-Up & Pressure Balancing",
-                "price": 1299,
+                "slug": "gas-leak-detection",
+                "name": "Gas Leak Detection",
+                "price": 499,
                 "duration": "45 mins",
-                "tag": "Top Up",
+                "tag": "Nitrogen Test",
                 "popular": False,
                 "image": "/mockups/appliance_cleaning_thumb.png",
-                "description": "Top-up gas charging for minor pressure drop with suction temperature tuning.",
+                "description": "High-pressure nitrogen pressure testing up to 350 PSI and electronic sniffer scan to identify micro pinhole leaks.",
                 "includes": [
-                    "Operating pressure measurement",
-                    "Flare nut tightening & leak bubble test",
-                    "Precision refrigerant top-up",
-                    "Sub-cooling / Superheat thermal check"
+                    "350 PSI nitrogen pressure hold",
+                    "Electronic gas sniffer scan",
+                    "Soap bubble joint testing",
+                    "Detailed leak identification report"
                 ],
                 "tools": [
-                    "Manifold gauge set",
-                    "Electronic leak detector",
-                    "Clamp temperature sensor"
+                    "High-pressure nitrogen cylinder & regulator",
+                    "Electronic halogen/refrigerant sniffer",
+                    "High-pressure manifold set"
                 ],
                 "ready": [
-                    "AC unit running for at least 15 mins prior to tech arrival if possible"
+                    "Accessible indoor and outdoor units"
                 ],
                 "reviews": [
-                    {"name": "Gokul K.", "rating": "4.9", "text": "Quick top up and now the room cools down in under 5 minutes."}
+                    {"name": "Mohan R.", "rating": "4.9", "text": "Found a microscopic pinhole leak in the flare nut that other technicians missed."}
                 ],
                 "faqs": [
-                    {"q": "How do I know if my AC needs gas top-up?", "a": "Symptoms include lukewarm airflow, ice formation on the thin copper pipe, or the compressor running non-stop."}
+                    {"q": "Why use nitrogen for leak testing?", "a": "Nitrogen is dry and inert, allowing high pressure up to 350 PSI without damaging internal compressor components."}
+                ]
+            },
+            {
+                "slug": "refrigerant-leakage-repair",
+                "name": "Refrigerant Leakage Repair",
+                "price": 899,
+                "duration": "1.5 hrs",
+                "tag": "Brazing Fix",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "High-temperature silver braze welding of damaged copper coils, u-bend pinholes, flare nut repair & sealing.",
+                "includes": [
+                    "Silver solder braze welding",
+                    "Flare joint re-flaring & tight seal",
+                    "Post-repair pressure hold test",
+                    "Anti-corrosive coating over repaired joints"
+                ],
+                "tools": [
+                    "Oxygen-acetylene / MAPP gas brazing torch",
+                    "Silver alloy brazing rods & flux",
+                    "Heavy-duty pipe flaring tool"
+                ],
+                "ready": [
+                    "Well-ventilated area near outdoor unit for brazing"
+                ],
+                "reviews": [
+                    {"name": "Revathi S.", "rating": "5.0", "text": "Welded the copper u-bend leak cleanly and pressure held 100%."}
+                ],
+                "faqs": [
+                    {"q": "Is brazing permanent?", "a": "Yes! Silver brazing fuses the copper together creating a permanent hermetic seal that withstands high operating pressures."}
                 ]
             }
         ]
     },
     "ac-installation": {
         "name": "AC Installation & Uninstallation",
-        "desc": "Safe dismounting, precision bracket installation, copper piping & core drilling.",
+        "desc": "Professional wall mounting, bracket setup, zero-gas-loss uninstallation, and complete relocation.",
         "order": 4,
         "packages": [
             {
                 "slug": "split-ac-installation",
-                "name": "Split AC Complete Installation",
+                "name": "Split AC Installation",
                 "price": 1299,
-                "duration": "1.5-2 hrs",
-                "tag": "Professional Fit",
+                "duration": "2 hrs",
+                "tag": "Popular",
                 "popular": True,
                 "image": "/mockups/appliance_cleaning_hero.png",
-                "description": "Standard wall mounting of indoor unit, outdoor bracket installation, pipe connecting & commissioning.",
+                "description": "Professional wall backplate mounting, core hole drilling, outdoor bracket setup, copper pipe flaring & connection.",
                 "includes": [
-                    "Indoor backplate level mounting",
-                    "Standard wall drill for piping",
-                    "Outdoor unit bracket fixing",
-                    "Copper flare connection & electrical wiring",
-                    "Vacuuming and cooling test run"
+                    "Indoor & outdoor unit mounting",
+                    "Wall hole core drilling",
+                    "Copper pipe flaring & electrical wiring",
+                    "Vacuuming & leak testing",
+                    "Cooling temperature demo"
                 ],
                 "tools": [
                     "Heavy-duty rotary hammer drill",
                     "Laser level alignment tool",
-                    "Copper pipe flaring & swaging kit",
-                    "Torque wrench set"
+                    "Flaring & swaging tool kit",
+                    "Torque wrench"
                 ],
                 "ready": [
-                    "AC unit box, copper pipes, and power cable ready",
-                    "Identify desired indoor and outdoor mounting locations"
+                    "AC unit box, copper pipes, and power cables available",
+                    "Identify desired indoor and outdoor unit positions"
                 ],
                 "reviews": [
-                    {"name": "Arun Kumar", "rating": "5.0", "text": "Super clean installation! Used a laser level so the unit is 100% straight and neat wiring."}
+                    {"name": "Arun Kumar", "rating": "5.0", "text": "Super clean installation! Perfectly leveled with laser and neat concealed piping."}
                 ],
                 "faqs": [
-                    {"q": "Are extra copper pipes or outdoor brackets included?", "a": "Standard AC units include default pipes. If extra piping, outdoor wall brackets or core drilling is needed, they are supplied at standard transparent rates."}
+                    {"q": "Are extra copper pipes or outdoor wall stands included?", "a": "Standard boxes include default pipe lengths. Extra copper pipe, outdoor wall stands, or electrical wiring are supplied at standard transparent catalog rates."}
+                ]
+            },
+            {
+                "slug": "window-ac-installation",
+                "name": "Window AC Installation",
+                "price": 799,
+                "duration": "1.5 hrs",
+                "tag": "Window Fit",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Window sill / wooden frame alignment, heavy bracket mounting, rubber vibration pad placement & foam insulation sealing.",
+                "includes": [
+                    "Window frame alignment",
+                    "Bracket mounting & weight support",
+                    "Rubber vibration dampener fit",
+                    "Foam gap sealing & demo"
+                ],
+                "tools": [
+                    "Spirit level",
+                    "Heavy anchor screws & drill",
+                    "Insulation foam strip"
+                ],
+                "ready": [
+                    "Window sill clear of window grills / obstacles"
+                ],
+                "reviews": [
+                    {"name": "Deepak R.", "rating": "4.8", "text": "Fitted the window unit firmly with zero vibration noise."}
+                ],
+                "faqs": [
+                    {"q": "Do you seal gaps around the window AC?", "a": "Yes, heavy-duty insulating foam strips are placed around the chassis to prevent warm air and dust ingress."}
                 ]
             },
             {
                 "slug": "split-ac-uninstallation",
-                "name": "Split AC Safe Uninstallation",
+                "name": "Split AC Uninstallation",
                 "price": 699,
-                "duration": "45 mins",
-                "tag": "Safe Pump Down",
+                "duration": "1 hr",
+                "tag": "Safe Dismount",
                 "popular": False,
                 "image": "/mockups/appliance_cleaning_thumb.png",
-                "description": "Gas pump-down recovery into compressor, safe unmounting of indoor & outdoor units without gas loss.",
+                "description": "Safe refrigerant pump-down into compressor (zero gas loss), dismounting indoor/outdoor units, and copper pipe capping.",
                 "includes": [
-                    "100% gas pump-down into condenser",
-                    "Indoor unit electrical disconnection",
-                    "Outdoor unit dismounting",
-                    "Copper pipe coiling and valve cap sealing"
+                    "Zero gas loss pump-down",
+                    "Indoor & outdoor safe dismount",
+                    "Copper pipe protective taping & brass cap sealing",
+                    "Mounting bracket removal"
                 ],
                 "tools": [
-                    "Allen key valve control set",
-                    "Pressure gauges",
+                    "Allen key service valve key",
+                    "Pressure manifold gauge",
                     "Adjustable spanner set"
                 ],
                 "ready": [
-                    "Power supply must be ON to perform gas pump-down before turning off breaker"
+                    "Power supply must be ON to pump down gas before breaker disconnection"
                 ],
                 "reviews": [
                     {"name": "Pooja V.", "rating": "4.9", "text": "Safely locked all refrigerant gas before unmounting. Saved me a costly gas refill during shifting!"}
                 ],
                 "faqs": [
-                    {"q": "Will my gas be lost during uninstallation?", "a": "No! Our certified tech performs a full 'pump-down' procedure to lock all refrigerant inside the outdoor unit."}
+                    {"q": "Will my gas be lost during uninstallation?", "a": "No! Our certified technician performs a 100% pump-down procedure to lock all refrigerant safely inside the outdoor compressor."}
+                ]
+            },
+            {
+                "slug": "window-ac-uninstallation",
+                "name": "Window AC Uninstallation",
+                "price": 499,
+                "duration": "45 mins",
+                "tag": "Express Removal",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Safe removal of window AC from window frame/grill, bracket dismounting, and frame gap sealing.",
+                "includes": [
+                    "Safe unit removal",
+                    "Bracket dismounting",
+                    "Power cord safety pack"
+                ],
+                "tools": [
+                    "Screwdriver set",
+                    "Bracket spanner"
+                ],
+                "ready": [
+                    "Clear access to window area"
+                ],
+                "reviews": [
+                    {"name": "Siddharth K.", "rating": "4.8", "text": "Quick and clean removal."}
+                ],
+                "faqs": [
+                    {"q": "Can the technician help pack the AC for transport?", "a": "Yes, the technician will secure the power cord and wrap the front panel safely."}
+                ]
+            },
+            {
+                "slug": "ac-relocation",
+                "name": "AC Relocation",
+                "price": 1799,
+                "duration": "3 hrs",
+                "tag": "Combo Saver",
+                "popular": True,
+                "image": "/mockups/appliance_cleaning_hero.png",
+                "description": "Complete end-to-end relocation: safe gas pump-down, dismounting from old location, and full re-installation at new site.",
+                "includes": [
+                    "Zero gas loss pump-down",
+                    "Safe dismounting & pack",
+                    "New site remounting & copper pipe flaring",
+                    "Deep vacuuming & cooling demo"
+                ],
+                "tools": [
+                    "Complete HVAC tool kit",
+                    "Drill, vacuum pump & manifold set"
+                ],
+                "ready": [
+                    "Both old and new addresses accessible"
+                ],
+                "reviews": [
+                    {"name": "Kiran N.", "rating": "5.0", "text": "Seamless relocation! Dismounted safely and reinstalled at our new house with zero gas loss."}
+                ],
+                "faqs": [
+                    {"q": "Is transit included in relocation?", "a": "Uninstallation at origin and re-installation at destination are included. Customer transports unit or books via our goods transport service."}
+                ]
+            }
+        ]
+    },
+    "ac-pcb-electrical": {
+        "name": "AC PCB & Electrical",
+        "desc": "Inverter/non-inverter motherboard micro-soldering, capacitor swap, contactor and wiring diagnostics.",
+        "order": 5,
+        "packages": [
+            {
+                "slug": "pcb-diagnosis",
+                "name": "PCB Diagnosis",
+                "price": 399,
+                "duration": "45 mins",
+                "tag": "PCB Scan",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_hero.png",
+                "description": "Multi-meter electronic circuit diagnostic, error code scan, IPM inverter module test, and sensor resistance check.",
+                "includes": [
+                    "Inverter / non-inverter PCB audit",
+                    "Error code interpretation",
+                    "IPM module & power IC health test",
+                    "Detailed repair estimate report"
+                ],
+                "tools": [
+                    "Oscilloscope / digital multimeter",
+                    "Logic probe",
+                    "Thermal imaging camera"
+                ],
+                "ready": [
+                    "Keep AC remote control available",
+                    "Note down error code displayed on screen (e.g. E1, E6, F3)"
+                ],
+                "reviews": [
+                    {"name": "Suresh B.", "rating": "5.0", "text": "Decoded the E6 communication error instantly and isolated the outdoor PCB fault."}
+                ],
+                "faqs": [
+                    {"q": "What is an inverter PCB?", "a": "It is the intelligent microcontroller motherboard that regulates compressor DC frequency, fan speeds, and temperature sensors."}
+                ]
+            },
+            {
+                "slug": "pcb-repair",
+                "name": "PCB Repair",
+                "price": 899,
+                "duration": "1.5 hrs",
+                "tag": "Micro Soldering",
+                "popular": True,
+                "image": "/mockups/appliance_cleaning_hero.png",
+                "description": "Component-level micro soldering repair: IPM module, power IC, relays, micro-controller, and circuit trace repair.",
+                "includes": [
+                    "Micro solder component swap",
+                    "Power regulation IC & capacitor replacement",
+                    "Bench testing under simulated load",
+                    "60-day PCB warranty"
+                ],
+                "tools": [
+                    "SMD rework soldering station",
+                    "Conformal coating spray",
+                    "Component desoldering pump"
+                ],
+                "ready": [
+                    "Ensure main power breaker can be switched off safely"
+                ],
+                "reviews": [
+                    {"name": "Venkat R.", "rating": "5.0", "text": "Saved me ₹8,000 compared to buying a whole new motherboard. Works flawlessly."}
+                ],
+                "faqs": [
+                    {"q": "How long does PCB repair take?", "a": "Minor component replacements are done on-site; complex multi-layer board repairs may take 24-48 hours in our lab."}
+                ]
+            },
+            {
+                "slug": "pcb-replacement",
+                "name": "PCB Replacement",
+                "price": 699,
+                "duration": "1 hr",
+                "tag": "New Board Fit",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Installing brand new original indoor or outdoor control circuit board / universal PCB with wiring configuration.",
+                "includes": [
+                    "Old PCB removal",
+                    "New PCB harness connection",
+                    "Display & sensor sync test",
+                    "Operational temperature demo"
+                ],
+                "tools": [
+                    "Precision insulated screwdrivers",
+                    "Wiring crimper set"
+                ],
+                "ready": [
+                    "Brand new PCB board / universal kit ready or provided by tech"
+                ],
+                "reviews": [
+                    {"name": "Raghav M.", "rating": "4.9", "text": "Replaced the outdoor PCB swiftly. Display and remote sync working 100%."}
+                ],
+                "faqs": [
+                    {"q": "Are universal PCBs compatible with all AC brands?", "a": "Universal PCBs work with standard non-inverter ACs, while inverter models require brand-matched original boards."}
+                ]
+            },
+            {
+                "slug": "capacitor-replacement",
+                "name": "Capacitor Replacement",
+                "price": 299,
+                "duration": "30 mins",
+                "tag": "Quick Swap",
+                "popular": True,
+                "image": "/mockups/appliance_cleaning_hero.png",
+                "description": "Replacing weak dual-run compressor / blower fan start capacitor with heavy-duty metalized capacitor.",
+                "includes": [
+                    "Microfarad (uF) capacitance test",
+                    "Heavy-duty capacitor installation",
+                    "Compressor startup load test",
+                    "Terminal crimp insulation"
+                ],
+                "tools": [
+                    "Digital capacitance meter",
+                    "Heavy-duty terminal crimping tool"
+                ],
+                "ready": [
+                    "Access to outdoor unit"
+                ],
+                "reviews": [
+                    {"name": "Dinesh P.", "rating": "5.0", "text": "Swapped the dead 45uF capacitor in 15 minutes. Compressor started humming immediately!"}
+                ],
+                "faqs": [
+                    {"q": "What does a capacitor do in an AC?", "a": "It provides the high electrical torque boost needed to start the compressor motor and fan motor smoothly."}
+                ]
+            },
+            {
+                "slug": "wiring-repair",
+                "name": "Wiring Repair",
+                "price": 349,
+                "duration": "30 mins",
+                "tag": "Electrical Care",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Repairing burnt terminal wires, loose copper thimbles, indoor-outdoor interconnecting cable, and earthing fix.",
+                "includes": [
+                    "Burnt wire trimming & re-crimping",
+                    "High-temp insulated thimble fit",
+                    "Interconnecting cable safety test",
+                    "Earth voltage safety test"
+                ],
+                "tools": [
+                    "Heavy duty wire stripper & ratchet crimper",
+                    "Heat-shrink tubing & heat gun",
+                    "Digital multimeter"
+                ],
+                "ready": [
+                    "Turn off AC power supply switch"
+                ],
+                "reviews": [
+                    {"name": "Anil S.", "rating": "4.8", "text": "Repaired loose burnt terminal thimbles. Completely safe now."}
+                ],
+                "faqs": [
+                    {"q": "Why do AC terminal wires burn?", "a": "High running amperage through loose connector thimbles causes resistive heat that melts insulation."}
+                ]
+            }
+        ]
+    },
+    "ac-parts-accessories": {
+        "name": "AC Parts & Accessories",
+        "desc": "Heavy-duty outdoor stands, voltage stabilizer installation, drain pipes, copper lines, and replacement remotes.",
+        "order": 6,
+        "packages": [
+            {
+                "slug": "outdoor-unit-stand",
+                "name": "Outdoor Unit Stand",
+                "price": 499,
+                "duration": "45 mins",
+                "tag": "Heavy Duty",
+                "popular": True,
+                "image": "/mockups/appliance_cleaning_hero.png",
+                "description": "Heavy-duty powder-coated outdoor unit wall bracket or floor stand installation with anchor bolts & vibration pads.",
+                "includes": [
+                    "Heavy gauge metal bracket fit",
+                    "Wall anchor bolt hammer drill",
+                    "Anti-vibration rubber dampening pads",
+                    "Spirit level alignment"
+                ],
+                "tools": [
+                    "Rotary hammer drill with masonry bits",
+                    "Spirit level",
+                    "High-torque socket wrench"
+                ],
+                "ready": [
+                    "Identify wall or balcony position for outdoor unit stand"
+                ],
+                "reviews": [
+                    {"name": "Ramesh V.", "rating": "5.0", "text": "Solid powder coated stand. Withstands heavy compressor weight without any rattling."}
+                ],
+                "faqs": [
+                    {"q": "Is the stand rust-proof?", "a": "Yes, made of heavy-gauge galvanised iron with anti-rust epoxy powder coating."}
+                ]
+            },
+            {
+                "slug": "stabilizer-installation",
+                "name": "Stabilizer Installation",
+                "price": 249,
+                "duration": "30 mins",
+                "tag": "Voltage Guard",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Wall mounting AC voltage stabilizer, connection to power socket, input/output voltage calibration & load test.",
+                "includes": [
+                    "Stabilizer wall mounting",
+                    "Power cord crimping & wiring",
+                    "High/low voltage cutoff calibration test",
+                    "Time-delay restart test"
+                ],
+                "tools": [
+                    "Drill with rawl plugs",
+                    "Multimeter",
+                    "Insulated wire strippers"
+                ],
+                "ready": [
+                    "Keep voltage stabilizer unit and power plug ready"
+                ],
+                "reviews": [
+                    {"name": "Gita M.", "rating": "4.9", "text": "Mounted neatly on the wall next to the AC. Tested cutoff voltages."}
+                ],
+                "faqs": [
+                    {"q": "Do inverter ACs need stabilizers?", "a": "In areas with frequent voltage fluctuations (>270V or <160V), an external stabilizer protects sensitive inverter PCBs."}
+                ]
+            },
+            {
+                "slug": "drain-pipe-replacement",
+                "name": "Drain Pipe Replacement",
+                "price": 199,
+                "duration": "20 mins",
+                "tag": "Drainage",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Replacing cracked, leaking, or blocked AC drain hose with heavy-duty UV-resistant corrugated drain pipe.",
+                "includes": [
+                    "Old drain hose removal",
+                    "UV-resistant corrugated pipe fit",
+                    "Water flow gradient alignment",
+                    "Wall clip clamping"
+                ],
+                "tools": [
+                    "Pipe cutter",
+                    "Insulation waterproof tape",
+                    "Wall clamps"
+                ],
+                "ready": [
+                    "Clear path along drain pipe route"
+                ],
+                "reviews": [
+                    {"name": "Prakash S.", "rating": "4.8", "text": "Replaced cracked sun-damaged pipe. No more balcony dripping."}
+                ],
+                "faqs": [
+                    {"q": "What drain pipe material is used?", "a": "High-density UV-stabilized corrugated polymer that does not crack under direct sunlight."}
+                ]
+            },
+            {
+                "slug": "copper-pipe-work",
+                "name": "Copper Pipe Work",
+                "price": 349,
+                "duration": "30 mins",
+                "tag": "Per Meter",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Insulated pure copper refrigeration pipe laying, nitrile rubber insulation sleeve wrapping, and flaring joint.",
+                "includes": [
+                    "100% pure copper tube flaring",
+                    "Closed-cell nitrile rubber insulation sleeve",
+                    "Vibration clip wall clamping",
+                    "Pressure hold test"
+                ],
+                "tools": [
+                    "Eccentric flaring cone kit",
+                    "Tube bender",
+                    "Pipe cutter"
+                ],
+                "ready": [
+                    "Determine piping route length between indoor and outdoor units"
+                ],
+                "reviews": [
+                    {"name": "Ajay K.", "rating": "5.0", "text": "Expert copper tube bending with zero kinks and neat black nitrile insulation."}
+                ],
+                "faqs": [
+                    {"q": "Why is pure copper better than aluminium piping?", "a": "Copper offers superior thermal conductivity, higher tensile strength, and zero corrosion pinhole risks compared to aluminium."}
+                ]
+            },
+            {
+                "slug": "remote-replacement",
+                "name": "Remote Replacement",
+                "price": 399,
+                "duration": "15 mins",
+                "tag": "Universal Sync",
+                "popular": False,
+                "image": "/mockups/appliance_cleaning_thumb.png",
+                "description": "Brand-specific or universal AC remote supply, frequency pairing, mode configuration & test.",
+                "includes": [
+                    "Compatible remote programming",
+                    "Mode, swing, fan speed & timer sync test",
+                    "Fresh battery pair included"
+                ],
+                "tools": [
+                    "IR signal tester",
+                    "Frequency programming guide"
+                ],
+                "ready": [
+                    "Have AC brand & model name handy"
+                ],
+                "reviews": [
+                    {"name": "Meera T.", "rating": "4.9", "text": "Synced the new remote in 2 minutes. All swing and turbo modes working!"}
+                ],
+                "faqs": [
+                    {"q": "Does this work with inverter AC models?", "a": "Yes! Our remotes support full temperature, swing, turbo, eco and sleep modes across all major AC brands."}
                 ]
             }
         ]

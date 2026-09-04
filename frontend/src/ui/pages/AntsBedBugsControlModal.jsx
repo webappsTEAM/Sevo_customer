@@ -8,8 +8,8 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const ANTS_BUGS_SUB_TABS = [
-  { id: "bedbugs", name: "Bedbugs Control", image: "/mockups/bedbugs_control.jpg" },
-  { id: "ants", name: "Ants Control", image: "/mockups/ants_control.jpg" }
+  { id: "bedbugs", name: "Bedbugs Control", image: "/mockups/icons/pest_bedbugs_control.png" },
+  { id: "ants", name: "Ants Control", image: "/mockups/icons/pest_ants_control.png" }
 ];
 
 const PEST_SERVICES = {

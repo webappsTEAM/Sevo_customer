@@ -5,6 +5,10 @@ import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 import { SOFA_DETAIL_DATA } from "./catalog/sofaDetailData.js";
+import sofaCleaningImg from "../../assets/cleaning/sofa_cleaning.png";
+import mattressCleaningImg from "../../assets/cleaning/mattress_cleaning.png";
+import carpetCleaningImg from "../../assets/cleaning/carpet_cleaning.png";
+import quickExtraServicesImg from "../../assets/cleaning/quick_extra_services.png";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -12,22 +16,22 @@ const SOFA_SUB_TABS = [
   {
     id: "sofa",
     name: "Sofa Cleaning",
-    image: "/mockups/sofa_header_new.png",
+    image: sofaCleaningImg,
   },
   {
     id: "mattress",
     name: "Mattress Cleaning",
-    image: "/mockups/mattress_header_new.png",
+    image: mattressCleaningImg,
   },
   {
     id: "carpet",
     name: "Carpet Cleaning",
-    image: "/mockups/carpet_header_new.png",
+    image: carpetCleaningImg,
   },
   {
     id: "addons",
     name: "Quick Extra Services",
-    image: "/mockups/quick_extra_services_hero.png",
+    image: quickExtraServicesImg,
   }
 ];
 
@@ -395,27 +399,40 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             <h2 className="text-xl font-black text-[var(--sevo-text-primary)]">Sofa Cleaning</h2>
           </div>
         </div>
-        <div className="flex gap-5 pb-3 pt-2 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto">
+        <div className="flex gap-4 pb-2 pt-1 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto scrollbar-none">
           {SOFA_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group outline-none"
               >
-                <img
-                  src={tab.image}
-                  alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
-                  }`}
-                />
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = sofaCleaningImg;
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${
+                      isSelected
+                        ? "scale-110 drop-shadow-md"
+                        : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    }`}
+                  />
+                </div>
                 <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
+                  isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                 }`}>
                   {tab.name}
                 </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
               </button>
             );
           })}
@@ -444,16 +461,20 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 shadow-xs hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-4 border border-[var(--sevo-border)]">
+                    <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-4 border border-[var(--sevo-border)] flex items-center justify-center p-4 bg-white">
                       <img
                         src={resolveImageUrl((() => {
                           const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
-                          if (activeTab === "sofa") return customB.sofa || "/mockups/sofa_top_new.png";
-                          if (activeTab === "mattress") return customB.mattress || "/mockups/mattress_header_new.png";
-                          return customB.carpet || "/mockups/carpet_top_new.png";
-                        })())}
+                          if (activeTab === "sofa") return customB.sofa || sofaCleaningImg;
+                          if (activeTab === "mattress") return customB.mattress || mattressCleaningImg;
+                          return customB.carpet || carpetCleaningImg;
+                        })(), sofaCleaningImg)}
                         alt={service.name}
-                        className="w-full h-full object-cover object-top"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = sofaCleaningImg;
+                        }}
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   )}

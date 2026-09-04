@@ -16,6 +16,7 @@ import { HeroServiceVisualization } from "../components/HeroServiceVisualization
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
@@ -1237,95 +1238,117 @@ function LocationDropdown({ className = "", activeCity, onCityChange }) {
 const ALL_SEARCHABLE_SERVICES = [
   // ── AC & Cooling Services ──
   {
-    id: "hvac-fj-split",
-    title: "Foam & Power Jet AC Service — Split",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹599",
-    badge: "Best Seller",
-    tags: ["foam", "power jet", "jet service", "ac service", "split ac", "cooling", "air conditioner", "hvac", "ac jet wash"]
-  },
-  {
-    id: "hvac-fj-win",
-    title: "Foam & Power Jet AC Service — Window",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹499",
-    badge: "Window Care",
-    tags: ["foam", "power jet", "window ac", "ac service", "jet cleaning", "cooling", "air conditioner"]
-  },
-  {
-    id: "hvac-pj-split",
-    title: "Power Jet AC Service — Split",
+    id: "hvac-pj-service",
+    title: "Power Jet AC Service",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Service & Cleaning",
     price: "₹499",
     badge: "High Pressure",
-    tags: ["power jet", "split ac", "ac cleaning", "jet wash", "air conditioner"]
+    tags: ["power jet", "jet service", "ac service", "split ac", "window ac", "cooling", "air conditioner", "hvac", "ac jet wash"]
   },
   {
-    id: "hvac-pj-win",
-    title: "Power Jet AC Service — Window",
+    id: "hvac-deep-clean",
+    title: "Deep Clean AC Service",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Service & Cleaning",
+    price: "₹699",
+    badge: "Best Seller",
+    tags: ["deep clean", "foam wash", "anti-bacterial", "ac service", "cooling", "air conditioner"]
+  },
+  {
+    id: "general-ac-service",
+    title: "General AC Service",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹349",
+    badge: "Quick Clean",
+    tags: ["general ac service", "basic ac service", "filter cleaning", "quick ac clean", "ac maintenance"]
+  },
+  {
+    id: "hvac-repair-diagnosis",
+    title: "AC Repair & Diagnosis",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
     price: "₹399",
-    tags: ["power jet", "window ac", "ac cleaning", "jet spray"]
+    badge: "Diagnostic",
+    tags: ["ac repair", "ac diagnosis", "ac inspection", "air conditioner repair"]
   },
   {
-    id: "hvac-ar-3",
-    title: "Anti-Rust Deep Clean AC Service",
+    id: "hvac-not-cooling",
+    title: "AC Not Cooling",
     category: "AC & Appliances",
     categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹799",
-    badge: "Ultimate Care",
-    tags: ["anti-rust", "rust protection", "ac deep clean", "coil coating"]
-  },
-  {
-    id: "hvac-rep-1",
-    title: "AC Repair — Split/Window",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Repair",
-    price: "₹599",
-    badge: "Expert Fix",
-    tags: ["ac repair", "ac servicing", "cooling breakdown", "split ac repair", "window ac repair"]
-  },
-  {
-    id: "hvac-rep-2",
-    title: "Less / No Cooling AC Diagnostic",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Repair",
+    subTab: "AC Repair & Diagnostics",
     price: "₹499",
     badge: "Cooling Restore",
-    tags: ["no cooling", "less cooling", "ac not cooling", "hot air", "compressor check"]
+    tags: ["not cooling", "no cooling", "less cooling", "ac blowing warm air", "compressor check"]
   },
   {
-    id: "hvac-rep-4",
-    title: "AC Water Leakage Repair",
+    id: "hvac-water-leakage",
+    title: "AC Water Leakage",
     category: "AC & Appliances",
     categoryId: "hvac",
-    subTab: "AC Repair",
+    subTab: "AC Repair & Diagnostics",
     price: "₹399",
+    badge: "Leak Fix",
     tags: ["water dripping", "water leakage", "drain pipe", "ac water leak"]
   },
   {
-    id: "hvac-gas-1",
-    title: "AC Gas Leak Fix & Refill",
+    id: "hvac-noise-issue",
+    title: "AC Noise Issue",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
+    price: "₹399",
+    badge: "Acoustic Fix",
+    tags: ["ac noise", "vibration", "fan squeak", "rattling sound"]
+  },
+  {
+    id: "hvac-power-issue",
+    title: "AC Power Issue",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
+    price: "₹449",
+    badge: "Power Fix",
+    tags: ["power issue", "ac not turning on", "mcb trip", "dead display", "power problem"]
+  },
+  {
+    id: "hvac-gas-refill",
+    title: "AC Gas Refill",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Gas & Refrigerant",
-    price: "₹1,799",
-    badge: "Full Gas Fill",
-    tags: ["gas refill", "gas charging", "gas leak", "freon", "r32", "r410a", "ac gas"]
+    price: "₹1,499",
+    badge: "100% Gas Fill",
+    tags: ["gas refill", "gas charging", "freon", "r32", "r410a", "r22", "ac gas"]
   },
   {
-    id: "hvac-inst-split",
+    id: "hvac-gas-leak-detect",
+    title: "Gas Leak Detection",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Gas & Refrigerant",
+    price: "₹499",
+    badge: "Nitrogen Test",
+    tags: ["gas leak", "nitrogen test", "micro leak", "leak detection"]
+  },
+  {
+    id: "hvac-refrigerant-leak-repair",
+    title: "Refrigerant Leakage Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Gas & Refrigerant",
+    price: "₹899",
+    badge: "Brazing Fix",
+    tags: ["copper brazing", "refrigerant leak repair", "coil welding", "leak repair"]
+  },
+  {
+    id: "hvac-split-install",
     title: "Split AC Installation",
     category: "AC & Appliances",
     categoryId: "hvac",
@@ -1335,13 +1358,144 @@ const ALL_SEARCHABLE_SERVICES = [
     tags: ["split ac installation", "ac fitting", "ac mounting", "core drilling"]
   },
   {
-    id: "hvac-uninst-1",
-    title: "AC Uninstallation",
+    id: "hvac-window-install",
+    title: "Window AC Installation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹799",
+    badge: "Window Fit",
+    tags: ["window ac installation", "window fitting", "ac bracket"]
+  },
+  {
+    id: "hvac-split-uninstall",
+    title: "Split AC Uninstallation",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Installation & Uninstallation",
     price: "₹699",
-    tags: ["ac uninstallation", "dismount", "ac removal", "gas pump down"]
+    badge: "Safe Dismount",
+    tags: ["split ac uninstallation", "dismount", "ac removal", "gas pump down"]
+  },
+  {
+    id: "hvac-window-uninstall",
+    title: "Window AC Uninstallation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹499",
+    badge: "Express Removal",
+    tags: ["window ac uninstallation", "window removal"]
+  },
+  {
+    id: "hvac-relocation",
+    title: "AC Relocation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹1,799",
+    badge: "Combo Saver",
+    tags: ["ac relocation", "shifting", "dismount and install", "reinstallation"]
+  },
+  {
+    id: "hvac-pcb-diag",
+    title: "PCB Diagnosis",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹399",
+    badge: "PCB Scan",
+    tags: ["pcb diagnosis", "error code", "inverter pcb", "circuit check"]
+  },
+  {
+    id: "hvac-pcb-repair",
+    title: "PCB Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹899",
+    badge: "Micro Soldering",
+    tags: ["pcb repair", "circuit repair", "motherboard soldering", "inverter board"]
+  },
+  {
+    id: "hvac-pcb-replace",
+    title: "PCB Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹699",
+    badge: "New Board Fit",
+    tags: ["pcb replacement", "new circuit board", "universal pcb"]
+  },
+  {
+    id: "hvac-capacitor-replace",
+    title: "Capacitor Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹299",
+    badge: "Quick Swap",
+    tags: ["capacitor replacement", "start capacitor", "run capacitor", "compressor capacitor"]
+  },
+  {
+    id: "hvac-wiring-repair",
+    title: "Wiring Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹349",
+    badge: "Electrical Care",
+    tags: ["wiring repair", "burnt wire", "copper thimble", "earthing"]
+  },
+  {
+    id: "hvac-outdoor-stand",
+    title: "Outdoor Unit Stand",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹499",
+    badge: "Heavy Duty",
+    tags: ["outdoor stand", "wall bracket", "heavy duty stand", "ac stand"]
+  },
+  {
+    id: "hvac-stabilizer-install",
+    title: "Stabilizer Installation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹249",
+    badge: "Voltage Guard",
+    tags: ["stabilizer installation", "voltage stabilizer", "power guard"]
+  },
+  {
+    id: "hvac-drain-pipe-replace",
+    title: "Drain Pipe Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹199",
+    badge: "Drainage",
+    tags: ["drain pipe", "drain hose", "corrugated pipe", "leak pipe"]
+  },
+  {
+    id: "hvac-copper-pipe-work",
+    title: "Copper Pipe Work",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹349",
+    badge: "Per Meter",
+    tags: ["copper pipe", "copper tubing", "insulation sleeve", "flaring"]
+  },
+  {
+    id: "hvac-remote-replace",
+    title: "Remote Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹399",
+    badge: "Universal Sync",
+    tags: ["remote replacement", "ac remote", "universal remote", "control remote"]
   },
 
   // ── Electrical & Fan Services ──
@@ -2944,6 +3098,20 @@ export function LandingPage() {
                 </AnimatePresence>
               </div>
 
+              {/* My Bookings Button */}
+              <button
+                type="button"
+                id="category-my-bookings-btn"
+                onClick={() => {
+                  setActiveAccountTab("My Bookings");
+                  setShowAccountPortal(true);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-emerald-600 bg-white text-slate-700 hover:text-emerald-700 font-bold text-xs shadow-2xs transition-all cursor-pointer shrink-0"
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-emerald-600" />
+                <span>My Bookings</span>
+              </button>
+
             </div>
           </header>
 
@@ -3081,6 +3249,16 @@ export function LandingPage() {
             }}
           />
         )}
+
+        <AnimatePresence>
+          {showAccountPortal && (
+            <CustomerAccountModal
+              activeTab={activeAccountTab}
+              onChangeTab={setActiveAccountTab}
+              onClose={() => setShowAccountPortal(false)}
+            />
+          )}
+        </AnimatePresence>
       </>
     );
   }
@@ -3202,13 +3380,10 @@ export function LandingPage() {
               {/* User Profile Avatar with Name */}
               <button
                 type="button"
+                id="landing-user-profile-btn"
                 onClick={() => {
-                  if (user) {
-                    setActiveAccountTab("My Profile")
-                    setShowAccountPortal(true)
-                  } else {
-                    goToLogin()
-                  }
+                  setActiveAccountTab(estimationRepository.hasActiveEstimationSync() ? "My Bookings" : "My Profile")
+                  setShowAccountPortal(true)
                 }}
                 className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl border border-transparent hover:border-[var(--sevo-border)] hover:bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] transition-colors cursor-pointer group"
               >
@@ -3475,7 +3650,7 @@ export function LandingPage() {
             <button
               type="button"
               onClick={() => {
-                if (user) {
+                if (user || estimationRepository.hasActiveEstimationSync()) {
                   setActiveAccountTab("My Bookings")
                   setShowAccountPortal(true)
                 } else {
@@ -7444,7 +7619,21 @@ export function LandingPage() {
             onCheckout={(customCart) => {
               const finalCart = resolveCartArg(customCart);
               setModalCart(cleanConsultationItems(finalCart));
-              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+              const isEst = finalCart && finalCart.some(c => c.jobType === "ESTIMATION" || c.id === "ac-inspection");
+              const curAddr = user?.id ? getCustomerSelectedAddress(user.id) : null;
+              navigate(routes.booking_checkout, {
+                state: {
+                  category: activeCategory,
+                  cart: finalCart,
+                  jobType: isEst ? "ESTIMATION" : undefined,
+                  address: curAddr?.formatted_address || curAddr?.address || undefined,
+                  latitude: curAddr?.latitude || undefined,
+                  longitude: curAddr?.longitude || undefined,
+                  flat_house_no: curAddr?.flat_house_no || undefined,
+                  landmark: curAddr?.landmark || undefined,
+                  address_type: curAddr?.address_type || undefined
+                }
+              });
             }}
           />
         )

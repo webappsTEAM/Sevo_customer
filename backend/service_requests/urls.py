@@ -113,6 +113,14 @@ from .payment_views import (
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
+from .views_estimation import (
+    CustomerBookingDetailView,
+    CustomerEstimationDetailView,
+    CustomerInspectionDetailView,
+    CustomerQuotationDetailView,
+    CustomerQuotationApproveView,
+    CustomerQuotationRejectView,
+)
 from .technician_views import (
     TechnicianAvailableBookingsView,
     TechnicianAcceptBookingView,
@@ -147,6 +155,21 @@ urlpatterns = [
     path("booking/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(),       name="sr-booking-cancel-identifier"),
     path("customer/bookings/<int:pk>/cancel/", CustomerBookingCancelView.as_view(),     name="customer-booking-cancel"),
     path("customer/bookings/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(), name="customer-booking-cancel-identifier"),
+
+    # ── AC Inspection & Estimation (Phase 2) ──────────────────────────────────
+    path("booking/<int:pk>/estimation/",      CustomerEstimationDetailView.as_view(),    name="sr-booking-estimation-pk"),
+    path("booking/<str:identifier>/estimation/", CustomerEstimationDetailView.as_view(), name="sr-booking-estimation-identifier"),
+    path("booking/<int:pk>/inspection/",      CustomerInspectionDetailView.as_view(),    name="sr-booking-inspection-pk"),
+    path("booking/<str:identifier>/inspection/", CustomerInspectionDetailView.as_view(), name="sr-booking-inspection-identifier"),
+    path("booking/<int:pk>/quotation/",       CustomerQuotationDetailView.as_view(),     name="sr-booking-quotation-pk"),
+    path("booking/<str:identifier>/quotation/", CustomerQuotationDetailView.as_view(),   name="sr-booking-quotation-identifier"),
+    path("booking/<int:pk>/quotation/approve/", CustomerQuotationApproveView.as_view(),  name="sr-booking-quotation-approve-pk"),
+    path("booking/<str:identifier>/quotation/approve/", CustomerQuotationApproveView.as_view(), name="sr-booking-quotation-approve-identifier"),
+    path("booking/<int:pk>/quotation/reject/", CustomerQuotationRejectView.as_view(),    name="sr-booking-quotation-reject-pk"),
+    path("booking/<str:identifier>/quotation/reject/", CustomerQuotationRejectView.as_view(), name="sr-booking-quotation-reject-identifier"),
+    path("booking/<int:pk>/",                 CustomerBookingDetailView.as_view(),       name="sr-booking-detail-pk"),
+    path("booking/<str:identifier>/",         CustomerBookingDetailView.as_view(),       name="sr-booking-detail-identifier"),
+
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
 

@@ -4,13 +4,16 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react"
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import bathroomFullCleanImg from "../../assets/cleaning/bathroom_full_clean.png";
+import bathroomWeeklySubscriptionImg from "../../assets/cleaning/bathroom_weekly_subscription.png";
+import bathroomQuickExtraImg from "../../assets/cleaning/bathroom_quick_extra.png";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
-  { id: "packages", name: "Full Clean", image: "/mockups/bathroom_cleaning.png" },
-  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "/mockups/bathroom_cleaning.png" },
-  { id: "minis", name: "Quick Extra Services", image: "/mockups/exhaust_fan.png" }
+  { id: "packages", name: "Full Clean", image: bathroomFullCleanImg },
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: bathroomWeeklySubscriptionImg },
+  { id: "minis", name: "Quick Extra Services", image: bathroomQuickExtraImg }
 ];
 
 const BATHROOM_SERVICES = {
@@ -545,7 +548,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.ready = dbMatch.ready;
             if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             item.faqs = dbMatch.faqs;
-            item.image = dbMatch.image || item.image;
+            if (dbMatch.image && !dbMatch.image.includes("supabase.co")) {
+              item.image = resolveImageUrl(dbMatch.image, item.image);
+            }
             item.badge = dbMatch.tag || item.badge;
           } else {
             item.gst_rate = item.gst_rate || 18;
@@ -655,27 +660,41 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
         </div>
 
         {/* Sub-tabs */}
-        <div className="flex gap-5 pb-3 pt-4 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto">
+        {/* Sub-tabs */}
+        <div className="flex gap-4 pb-2 pt-1 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto scrollbar-none">
           {BATHROOM_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group outline-none"
               >
-                <img
-                  src={tab.image}
-                  alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
-                  }`}
-                />
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = bathroomFullCleanImg;
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${
+                      isSelected
+                        ? "scale-110 drop-shadow-md"
+                        : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    }`}
+                  />
+                </div>
                 <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
+                  isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                 }`}>
                   {tab.name}
                 </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
               </button>
             );
           })}
@@ -698,9 +717,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           {(() => {
             const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              packages: customB.packages || "/mockups/bathroom_cleaning.png",
-              minis: customB.minis || "/mockups/exhaust_fan.png",
-              subscription: customB.subscription || "/mockups/bathroom_cleaning.png"
+              packages: customB.packages || bathroomFullCleanImg,
+              minis: customB.minis || bathroomQuickExtraImg,
+              subscription: customB.subscription || bathroomWeeklySubscriptionImg
             };
             const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;

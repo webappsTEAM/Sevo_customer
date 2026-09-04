@@ -226,6 +226,55 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     async def employee_rejected(self, event):
         await self.technician_status_updated(event)
 
+    # ── Estimation & Quotation Lifecycle Handlers ─────────────────────────────
+    async def estimation_updated(self, event):
+        """Triggered on estimation lifecycle changes."""
+        await self.send_json({
+            "event": "estimation_updated",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_sent(self, event):
+        """Triggered when vendor or technician issues a formal quotation."""
+        await self.send_json({
+            "event": "quotation_sent",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_approved(self, event):
+        """Triggered when customer approves quotation and converts to service."""
+        await self.send_json({
+            "event": "quotation_approved",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_rejected(self, event):
+        """Triggered when customer rejects quotation."""
+        await self.send_json({
+            "event": "quotation_rejected",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def inspection_started(self, event):
+        """Triggered when technician begins physical inspection."""
+        await self.send_json({
+            "event": "inspection_started",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def inspection_completed(self, event):
+        """Triggered when technician finishes physical inspection report."""
+        await self.send_json({
+            "event": "inspection_completed",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
     # ── Helper Methods ────────────────────────────────────────────────────────
 
     @sync_to_async

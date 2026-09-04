@@ -34,7 +34,10 @@ export function resolveImageUrl(path, fallback = "") {
     trimmed.startsWith("data:") ||
     trimmed.startsWith("blob:")
   ) {
-    return trimmed
+    if (trimmed.includes("zqghatybqkztzgjmmlpl.supabase.co")) {
+      return fallback || "";
+    }
+    return trimmed;
   }
 
   // 2. Vite dev server / bundled assets / mockups / media

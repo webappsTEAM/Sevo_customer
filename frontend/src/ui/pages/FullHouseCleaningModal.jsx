@@ -4,15 +4,20 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react"
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import fullHouseOccupiedAptImg from "../../assets/cleaning/fullhouse_occupied_apt.png";
+import fullHouseUnoccupiedAptImg from "../../assets/cleaning/fullhouse_unoccupied_apt.png";
+import fullHouseOccupiedBungalowImg from "../../assets/cleaning/fullhouse_occupied_bungalow.png";
+import fullHouseUnoccupiedBungalowImg from "../../assets/cleaning/fullhouse_unoccupied_bungalow.png";
+import fullHouseQuickExtraImg from "../../assets/cleaning/fullhouse_quick_extra.png";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const FULL_HOUSE_SUB_TABS = [
-  { id: "full_apartment", name: "Occupied Apartment", image: "/mockups/occupied_apartment_diamond.png" },
-  { id: "unoccupied_apartment", name: "Unoccupied Apartment", image: "/mockups/unoccupied_apartment_cleaning.png" },
-  { id: "full_bungalow", name: "Occupied Bungalow/duplex", image: "/mockups/sub_furnished_villa.png" },
-  { id: "unoccupied_bungalow", name: "Unoccupied Bungalow/duplex", image: "/mockups/sub_unfurnished_villa.png" },
-  { id: "partial_home", name: "quick extra service", image: "/mockups/quick_extra_services_hero.png" }
+  { id: "full_apartment", name: "Occupied Apartment", image: fullHouseOccupiedAptImg },
+  { id: "unoccupied_apartment", name: "Unoccupied Apartment", image: fullHouseUnoccupiedAptImg },
+  { id: "full_bungalow", name: "Occupied Bungalow/duplex", image: fullHouseOccupiedBungalowImg },
+  { id: "unoccupied_bungalow", name: "Unoccupied Bungalow/duplex", image: fullHouseUnoccupiedBungalowImg },
+  { id: "partial_home", name: "Quick Extra Service", image: fullHouseQuickExtraImg }
 ];
 
 const FULL_HOUSE_SERVICES = {
@@ -1049,26 +1054,41 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
         </div>
 
-        {/* Sub-tabs exactly styled like Sofa/Kitchen/Bathroom Cleaning */}
-        <div className="flex gap-5 pb-3 pt-4 px-6 border-b border-[#E8E3DB] justify-start bg-[#FEFCF8] overflow-x-auto scrollbar-none">
+        {/* Sub-tabs exactly styled like AC Services / Sofa / Bathroom Cleaning */}
+        <div className="flex gap-4 pb-2 pt-1 px-4 sm:px-6 border-b border-[#E8E3DB] justify-start bg-[#FEFCF8] overflow-x-auto scrollbar-none">
           {FULL_HOUSE_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[110px] shrink-0 border-none"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[95px] sm:w-[110px] shrink-0 group outline-none border-none"
               >
-                <img
-                  src={tab.image}
-                  alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md border-2 border-white" : "opacity-80 hover:opacity-100"
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = fullHouseOccupiedAptImg;
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${
+                      isSelected
+                        ? "scale-110 drop-shadow-md"
+                        : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
                     }`}
-                />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                  }`}>
+                  />
+                </div>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
+                }`}>
                   {tab.name}
                 </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
               </button>
             );
           })}
@@ -1090,11 +1110,11 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
           {(() => {
             const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              full_apartment: customB.full_apartment || "/mockups/occupied_apartment_diamond.png",
-              unoccupied_apartment: customB.unoccupied_apartment || "/mockups/unoccupied_apartment_cleaning.png",
-              full_bungalow: customB.full_bungalow || "/mockups/sub_furnished_villa.png",
-              unoccupied_bungalow: customB.unoccupied_bungalow || "/mockups/sub_unfurnished_villa.png",
-              partial_home: customB.partial_home || "/mockups/quick_extra_services_hero.png"
+              full_apartment: customB.full_apartment || fullHouseOccupiedAptImg,
+              unoccupied_apartment: customB.unoccupied_apartment || fullHouseUnoccupiedAptImg,
+              full_bungalow: customB.full_bungalow || fullHouseOccupiedBungalowImg,
+              unoccupied_bungalow: customB.unoccupied_bungalow || fullHouseUnoccupiedBungalowImg,
+              partial_home: customB.partial_home || fullHouseQuickExtraImg
             };
             const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;
@@ -1152,7 +1172,15 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
                     <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                       <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        <img
+                          src={resolveImageUrl(service.image, "/mockups/icons/fullhouse_occupied_apt.png")}
+                          alt={service.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/mockups/icons/fullhouse_occupied_apt.png";
+                          }}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="w-24 z-10">
                         {count > 0 ? (

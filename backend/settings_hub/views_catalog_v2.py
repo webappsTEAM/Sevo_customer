@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from accounts.permissions import IsAdminRole
 from service_requests.models import (
     CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
-    VegetableRecipe, RecipeIngredient, VegetableRecommendation
+    VegetableRecipe, RecipeIngredient, VegetableRecommendation, PackageStatus
 )
 from service_requests.serializers import (
     CatalogCategorySerializer, ServiceSerializer, PackageSerializer,
@@ -79,7 +79,7 @@ class PublicPackageListView(APIView):
     authentication_classes = []  # bypass auth middleware entirely for speed
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").all()
+        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").exclude(status__in=[PackageStatus.INACTIVE, PackageStatus.ARCHIVED])
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)

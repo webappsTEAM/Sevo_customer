@@ -718,6 +718,76 @@ class BookingCreateView(APIView):
             zone_name_snapshot = ""
         # ── END ZONE GATE ─────────────────────────────────────────────────────
 
+        job_type = str(serializer.validated_data.get("job_type") or request.data.get("job_type") or "SERVICE").upper()
+        if job_type == "ESTIMATION":
+            from service_requests.services.estimation_service import EstimationService
+            idempotency_key = (
+                request.headers.get("Idempotency-Key")
+                or serializer.validated_data.get("idempotency_key")
+                or request.data.get("idempotency_key")
+            )
+            ac_details = {
+                "ac_type": serializer.validated_data.get("ac_type") or request.data.get("ac_type") or request.data.get("type"),
+                "ac_brand": serializer.validated_data.get("ac_brand") or request.data.get("ac_brand") or request.data.get("brand") or "Other",
+                "ac_capacity": serializer.validated_data.get("ac_capacity") or request.data.get("ac_capacity") or request.data.get("capacity"),
+                "ac_quantity": serializer.validated_data.get("ac_quantity") or request.data.get("ac_quantity") or request.data.get("quantity") or 1,
+                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or serializer.validated_data.get("description"),
+                "customer_notes": serializer.validated_data.get("customer_notes") or request.data.get("customer_notes") or request.data.get("notes") or "",
+            }
+            booking_data = {
+                "customer_name": serializer.validated_data.get("customer_name") or (customer_user.get_full_name() if customer_user else ""),
+                "phone": serializer.validated_data.get("phone") or (getattr(customer_user, "phone", "") if customer_user else ""),
+                "email": serializer.validated_data.get("email") or (getattr(customer_user, "email", "") if customer_user else ""),
+                "address": final_address,
+                "latitude": final_lat,
+                "longitude": final_lng,
+                "saved_address_id": saved_address_id,
+                "service_location_snapshot": location_snapshot,
+                "preferred_date": serializer.validated_data.get("preferred_date"),
+                "preferred_time": serializer.validated_data.get("preferred_time", ""),
+                "payment_method": request.data.get("payment_method", "COD"),
+            }
+            try:
+                sr, created = EstimationService.create_estimation_booking(
+                    customer=customer_user,
+                    ac_details=ac_details,
+                    booking_data=booking_data,
+                    idempotency_key=idempotency_key,
+                    company=company,
+                )
+            except Exception as e:
+                if hasattr(e, "detail"):
+                    return Response({"success": False, "errors": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+                raise e
+
+            return _success(
+                data={
+                    "request_id": sr.request_id,
+                    "id": sr.id,
+                    "customer_id": sr.customer.customer_id if (sr.customer and hasattr(sr.customer, "customer_id")) else None,
+                    "job_type": sr.job_type,
+                    "payment_method": sr.payment_method,
+                    "payment_status": sr.payment_status,
+                    "booking_status": sr.status,
+                    "total_amount": float(sr.total_amount),
+                    "start_otp": sr.start_otp,
+                    "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
+                    "estimation": {
+                        "id": sr.estimation.id,
+                        "ac_type": sr.estimation.ac_type,
+                        "ac_brand": sr.estimation.ac_brand,
+                        "ac_capacity": sr.estimation.ac_capacity,
+                        "ac_quantity": sr.estimation.ac_quantity,
+                        "customer_symptom": sr.estimation.customer_symptom,
+                        "status": sr.estimation.status,
+                        "fee_amount": float(sr.estimation.fee.amount),
+                        "fee_status": sr.estimation.fee.status,
+                    } if hasattr(sr, "estimation") else None,
+                },
+                message="Your AC estimation request has been submitted successfully.",
+                status_code=201 if created else 200,
+            )
+
         corrected_fare = resolve_logistics_fare(
             service_category=serializer.validated_data.get("service_category", ""),
             logistics_tier=serializer.validated_data.get("logistics_tier"),
@@ -904,7 +974,9 @@ class CustomerMyBookingsView(APIView):
 
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
+        qs = ServiceRequest.objects.filter(query).select_related(
+            "customer", "feedback", "estimation", "estimation__fee"
+        ).prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -1005,6 +1077,20 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
+            if hasattr(sr, "estimation"):
+                from service_requests.models import Estimation
+                est = sr.estimation
+                est.status = Estimation.Status.CANCELLED
+                est.save(update_fields=["status", "updated_at"])
+                from service_requests.services.outbox_service import OutboxService
+                OutboxService.record_event(
+                    aggregate_type="ServiceRequest",
+                    aggregate_id=sr.request_id,
+                    event_type="estimation.cancelled",
+                    payload={"request_id": sr.request_id, "status": sr.status, "reason": reason},
+                    version=2,
+                )
+
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
@@ -3614,6 +3700,14 @@ class CustomerQuotePDFView(APIView):
             p.drawString(100, y, f"Payment Split: 50% Advance (Rs. {quote.advance_amount}) + 50% Balance (Rs. {quote.balance_amount})")
 
         p.showPage()
+        p.save()
+
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="Quote-{quote.quote_number}.pdf"'
+        return response
+
+
         p.save()
 
         buffer.seek(0)
