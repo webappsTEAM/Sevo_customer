@@ -16,6 +16,7 @@ from .models import (
     Coupon, CouponUsage,
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
+    DeliveryProof,
     BookingSeries,
     BookingMessage,
     _generate_secure_start_otp,
@@ -1159,8 +1160,34 @@ class TripStopSerializer(serializers.ModelSerializer):
         fields = (
             "id", "sequence", "stop_type", "address", "contact_name",
             "contact_phone", "latitude", "longitude", "notes", "created_at",
+            # GT-D-01: per-stop progress. Read-only -- these are advanced by
+            # the vendor app via the workforce webhook, never by a customer.
+            "arrived_at", "completed_at",
         )
-        read_only_fields = ("id", "sequence", "created_at")
+        read_only_fields = ("id", "sequence", "created_at", "arrived_at", "completed_at")
+
+
+class DeliveryProofSerializer(serializers.ModelSerializer):
+    """
+    GT-D-01: customer-facing read shape for one proof-of-delivery artefact.
+
+    Read-only by design: proofs are written by the vendor app through the
+    authenticated workforce webhook, never submitted by a customer. The
+    recipient's phone is deliberately NOT exposed here -- the customer
+    already knows who they sent goods to, and echoing a third party's
+    number back out of the API widens its exposure for no benefit (same
+    reasoning as the technician phone masking in X-09).
+    """
+    proof_type_display = serializers.CharField(source="get_proof_type_display", read_only=True)
+
+    class Meta:
+        model = DeliveryProof
+        fields = (
+            "id", "stop", "proof_type", "proof_type_display", "image",
+            "recipient_name", "notes", "captured_by_name",
+            "latitude", "longitude", "captured_at",
+        )
+        read_only_fields = fields
 
 
 class BookingSeriesSerializer(serializers.ModelSerializer):

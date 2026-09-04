@@ -479,7 +479,41 @@ class WorkforceWebhookView(APIView):
                         sr.description = f"{sr.description}\n[Completion Remarks]: {notes}".strip()
                         sr.save(update_fields=["description", "updated_at"])
 
+                    # GT-D-01: record an actual proof-of-delivery artefact,
+                    # not just free text appended to the description. See
+                    # DeliveryProof's docstring for why this is a row per
+                    # proof rather than columns on the booking.
+                    self._record_delivery_proof(sr, payload)
+
                     transaction.on_commit(lambda: self._broadcast_event(sr, "completion_proof_submitted"))
+
+                # ── 12b. LOGISTICS LEG ADVANCED (GT-B-03) ───────────────────────────
+                # The leg fields shipped with GT-B-03 but nothing ever wrote
+                # them, so logistics_leg was permanently "" and everything
+                # reading it (leg-aware tracking destination, trip timeline)
+                # was inert. This is the write path.
+                elif event_type in ["logistics.leg_changed", "job.leg_changed", "trip.leg_changed"]:
+                    leg = str(payload.get("leg") or payload.get("logistics_leg") or "").strip().upper()
+                    if sr.service_category not in LOGISTICS_CATEGORIES:
+                        logger.warning(
+                            "Ignoring leg_changed for non-logistics booking %s (category=%s)",
+                            sr.id, sr.service_category,
+                        )
+                    else:
+                        try:
+                            sr.set_logistics_leg(leg)
+                        except ValueError:
+                            # A bad leg value is a vendor-side bug, not a
+                            # reason to 500 the webhook. Log it and move on
+                            # rather than writing garbage into a field the
+                            # customer-facing tracking UI reads.
+                            logger.warning("Rejected invalid logistics leg %r for booking %s", leg, sr.id)
+                        else:
+                            transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
+
+                # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
+                elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:
+                    self._record_stop_progress(sr, event_type, payload)
 
                 # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
                 elif event_type in ["job.rescheduled", "appointment.rescheduled"]:
@@ -524,6 +558,136 @@ class WorkforceWebhookView(APIView):
             webhook_event.error_message = str(err)
             webhook_event.save()
             return Response({"error": f"Failed to process webhook: {err}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @staticmethod
+    def _resolve_stop(sr, payload):
+        """
+        Find the TripStop a webhook payload refers to, by explicit id or by
+        1-based sequence. Returns None when the booking has no stops (the
+        ordinary single-drop case) or the reference doesn't match -- callers
+        treat that as "applies to the booking as a whole", never as an error.
+        """
+        from service_requests.models import TripStop
+
+        stop_id = payload.get("stop_id") or payload.get("trip_stop_id")
+        if stop_id is not None:
+            return TripStop.objects.filter(booking=sr, id=stop_id).first()
+        sequence = payload.get("stop_sequence") or payload.get("sequence")
+        if sequence is not None:
+            return TripStop.objects.filter(booking=sr, sequence=sequence).first()
+        return None
+
+    @classmethod
+    def _record_stop_progress(cls, sr, event_type, payload):
+        """
+        GT-D-01: advance per-stop progress (arrived_at / completed_at).
+
+        Idempotent -- the vendor webhook may retry, and a stop that is
+        already marked arrived must not have its timestamp rewritten to a
+        later time, or the trip timeline would drift every retry.
+        """
+        stop = cls._resolve_stop(sr, payload)
+        if stop is None:
+            logger.warning(
+                "Stop progress event %s for booking %s did not resolve to a TripStop (payload keys: %s)",
+                event_type, sr.id, sorted(payload.keys()),
+            )
+            return
+
+        completed = event_type == "trip.stop_completed" or bool(payload.get("completed"))
+        fields = []
+        now = timezone.now()
+        if stop.arrived_at is None:
+            stop.arrived_at = now
+            fields.append("arrived_at")
+        if completed and stop.completed_at is None:
+            stop.completed_at = now
+            fields.append("completed_at")
+        if fields:
+            # `transaction` is imported inside post() in this module, not at
+            # module level, so import it locally here too.
+            from django.db import transaction
+
+            stop.save(update_fields=fields)
+            transaction.on_commit(lambda: cls._broadcast_event(sr, "trip_stop_progress"))
+
+    @classmethod
+    def _record_delivery_proof(cls, sr, payload):
+        """
+        GT-D-01: persist a proof-of-delivery artefact.
+
+        Accepts whichever evidence the driver app actually captured -- any
+        of a photo URL, a signature image, a recipient name/phone, an OTP
+        confirmation, or a note -- and writes one DeliveryProof row per
+        distinct kind. Never raises into the webhook: a proof that fails to
+        record must not roll back the completion event it accompanied.
+        """
+        from service_requests.models import DeliveryProof
+
+        try:
+            stop = cls._resolve_stop(sr, payload)
+            loc = payload.get("location") or {}
+            common = dict(
+                booking=sr,
+                stop=stop,
+                recipient_name=str(payload.get("recipient_name") or "")[:200],
+                recipient_phone=str(payload.get("recipient_phone") or "")[:30],
+                captured_by_name=str(payload.get("technician_name") or sr.technician_name or "")[:200],
+                captured_by_workforce_id=str(payload.get("workforce_employee_id") or "")[:64],
+                latitude=loc.get("latitude"),
+                longitude=loc.get("longitude"),
+            )
+
+            created = 0
+            notes = str(payload.get("notes") or payload.get("remarks") or "")
+
+            # A photo/signature arrives as a URL from the vendor app's own
+            # storage. ImageField holds the path; we store the reference we
+            # were given rather than re-downloading someone else's file into
+            # this backend's media root from inside a webhook.
+            photo_ref = payload.get("photo_url") or payload.get("proof_image") or payload.get("image_url")
+            if photo_ref:
+                DeliveryProof.objects.create(
+                    proof_type=DeliveryProof.ProofType.PHOTO,
+                    image=str(photo_ref), notes=notes, **common
+                )
+                created += 1
+
+            signature_ref = payload.get("signature_url") or payload.get("signature_image")
+            if signature_ref:
+                DeliveryProof.objects.create(
+                    proof_type=DeliveryProof.ProofType.SIGNATURE,
+                    image=str(signature_ref), **common
+                )
+                created += 1
+
+            if common["recipient_name"]:
+                DeliveryProof.objects.create(
+                    proof_type=DeliveryProof.ProofType.RECIPIENT_NAME, **common
+                )
+                created += 1
+
+            if payload.get("otp_verified"):
+                DeliveryProof.objects.create(
+                    proof_type=DeliveryProof.ProofType.OTP, **common
+                )
+                created += 1
+
+            # Only fall back to a bare note if nothing stronger was supplied,
+            # so a note doesn't duplicate the photo row's own notes field.
+            if created == 0 and notes:
+                DeliveryProof.objects.create(
+                    proof_type=DeliveryProof.ProofType.NOTE, notes=notes, **common
+                )
+                created += 1
+
+            if created == 0:
+                logger.warning(
+                    "completion_proof event for booking %s carried no usable evidence (payload keys: %s)",
+                    sr.id, sorted(payload.keys()),
+                )
+        except Exception as exc:
+            logger.warning("Failed to record delivery proof for booking %s: %s", sr.id, exc)
 
     @classmethod
     def _broadcast_event(cls, sr, event_type):

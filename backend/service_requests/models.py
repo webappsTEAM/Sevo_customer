@@ -317,6 +317,53 @@ class ServiceRequest(models.Model):
     logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
     logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
     logistics_leg_history = models.JSONField(default=list, blank=True)
+    # GT-B-03 (completing it): the three fields above shipped, but nothing
+    # in either backend ever wrote them -- the model comment referred to a
+    # set_logistics_leg() that did not exist, so logistics_leg was
+    # permanently "" in production and every consumer of it (the
+    # leg-aware tracking destination, the customer trip timeline) was
+    # dead code. This is that method.
+    def set_logistics_leg(self, leg, actor=None, save=True):
+        """
+        Advance this booking's logistics leg, appending to the audit trail.
+
+        Append-only history, one entry per call:
+            {"leg": <value>, "at": <iso8601>, "by": <user id or None>}
+
+        Returns True if the leg changed, False if it was already there --
+        idempotent, because the vendor app's webhook can legitimately
+        retry the same event (see the replay-signature guard in
+        workforce_integration/views.py).
+
+        Raises ValueError for a value that isn't a LogisticsLeg, so a typo
+        in a webhook payload fails loudly instead of silently writing
+        garbage into a field the tracking UI reads.
+        """
+        valid = {choice.value for choice in self.LogisticsLeg}
+        if leg not in valid:
+            raise ValueError(
+                f"{leg!r} is not a valid logistics leg. Expected one of: {sorted(valid)}"
+            )
+        if self.logistics_leg == leg:
+            return False
+
+        now = timezone.now()
+        history = list(self.logistics_leg_history or [])
+        history.append({
+            "leg": leg,
+            "at": now.isoformat(),
+            "by": getattr(actor, "id", None),
+        })
+        self.logistics_leg = leg
+        self.logistics_leg_updated_at = now
+        self.logistics_leg_history = history
+        if save:
+            self.save(update_fields=[
+                "logistics_leg", "logistics_leg_updated_at",
+                "logistics_leg_history", "updated_at",
+            ])
+        return True
+
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
@@ -1918,6 +1965,12 @@ class TripStop(models.Model):
     longitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     notes         = models.CharField(max_length=500, blank=True, default="")
     created_at    = models.DateTimeField(auto_now_add=True)
+    # GT-D-01: per-stop progress. Until these existed there was no concept
+    # of "which stop is the driver at" anywhere in the platform -- a stop
+    # was a static address row, never advanced by anything. Both nullable:
+    # a stop that hasn't been reached yet simply has neither set.
+    arrived_at    = models.DateTimeField(null=True, blank=True)
+    completed_at  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "service_requests_trip_stop"
@@ -1926,6 +1979,72 @@ class TripStop(models.Model):
 
     def __str__(self):
         return f"Stop {self.sequence} ({self.stop_type}) for booking #{self.booking_id}"
+
+
+class DeliveryProof(models.Model):
+    """
+    GT-D-01: proof of delivery.
+
+    Before this there was no proof record of any kind. The vendor app
+    could POST a `job.completion_proof_submitted` webhook, and all the
+    handler did was append the free-text remarks onto
+    ServiceRequest.description -- no photo, no signature, no recipient
+    identity, no link to which stop it belonged to. For a goods-transport
+    platform that is the single most load-bearing missing artefact: it is
+    what settles "it was never delivered" disputes and what an insurance
+    claim (GT-C-03) is assessed against.
+
+    Deliberately one row PER PROOF rather than a set of columns on
+    ServiceRequest: a multi-stop trip needs proof at each drop, and a
+    single delivery routinely needs more than one kind of evidence (a
+    photo of the goods AND a signature AND the recipient's name). Both
+    are naturally many-per-booking.
+
+    `stop` is nullable so the common single-drop booking -- which has no
+    TripStop rows at all -- can still record proof against the booking
+    itself. Captured-by is stored as a name/id snapshot rather than an FK
+    for the same reason the technician fields on ServiceRequest are (see
+    HS-E-01): the technician identity lives in the vendor app's own
+    database, and this backend deliberately holds no FK into it.
+    """
+    class ProofType(models.TextChoices):
+        PHOTO          = "PHOTO",          "Photo of delivered goods"
+        SIGNATURE      = "SIGNATURE",      "Recipient signature"
+        RECIPIENT_NAME = "RECIPIENT_NAME", "Recipient name captured"
+        OTP            = "OTP",            "Delivery OTP verified"
+        NOTE           = "NOTE",           "Driver note"
+
+    booking     = models.ForeignKey(
+        ServiceRequest, on_delete=models.CASCADE, related_name="delivery_proofs",
+    )
+    stop        = models.ForeignKey(
+        TripStop, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="delivery_proofs",
+        help_text="Which stop this proves. Null for a single-drop booking with no TripStop rows.",
+    )
+    proof_type  = models.CharField(max_length=20, choices=ProofType.choices)
+    image       = models.ImageField(upload_to="delivery_proofs/", null=True, blank=True)
+    recipient_name  = models.CharField(max_length=200, blank=True, default="")
+    recipient_phone = models.CharField(max_length=30, blank=True, default="")
+    notes       = models.TextField(blank=True, default="")
+    # Snapshot of who captured it, mirroring the technician_* snapshot
+    # pattern already used on ServiceRequest -- no FK into the vendor DB.
+    captured_by_name = models.CharField(max_length=200, blank=True, default="")
+    captured_by_workforce_id = models.CharField(max_length=64, blank=True, default="")
+    latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    captured_at = models.DateTimeField(default=timezone.now)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_delivery_proof"
+        ordering = ["booking", "captured_at", "id"]
+        indexes = [
+            models.Index(fields=["booking", "proof_type"], name="sr_delivery_proof_bk_ty_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_proof_type_display()} for booking #{self.booking_id}"
 
 
 class BookingSeries(models.Model):

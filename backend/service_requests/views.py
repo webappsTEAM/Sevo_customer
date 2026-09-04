@@ -871,6 +871,64 @@ class CustomerBookingCancelView(APIView):
 
 import math
 
+def _build_logistics_progress(sr):
+    """
+    GT-B-03 / GT-D-01: the logistics-specific slice of the tracking
+    payload -- current leg, its history, per-stop progress, and any
+    proof-of-delivery captured so far.
+
+    Returns the same empty shape for a non-logistics booking rather than
+    None or a missing key, so clients can read it unconditionally.
+    """
+    empty = {"leg": "", "leg_updated_at": None, "leg_history": [], "stops": [], "proofs": []}
+    if sr.service_category not in LOGISTICS_CATEGORIES:
+        return empty
+
+    try:
+        stops = [
+            {
+                "id": s.id,
+                "sequence": s.sequence,
+                "stop_type": s.stop_type,
+                "address": s.address,
+                "latitude": float(s.latitude) if s.latitude is not None else None,
+                "longitude": float(s.longitude) if s.longitude is not None else None,
+                "arrived_at": s.arrived_at.isoformat() if s.arrived_at else None,
+                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            }
+            for s in sr.trip_stops.all().order_by("sequence")
+        ]
+    except Exception:
+        stops = []
+
+    try:
+        proofs = [
+            {
+                "id": p.id,
+                "stop": p.stop_id,
+                "proof_type": p.proof_type,
+                "image": p.image.name if p.image else None,
+                "recipient_name": p.recipient_name,
+                # recipient_phone is deliberately omitted -- see
+                # DeliveryProofSerializer for the reasoning.
+                "notes": p.notes,
+                "captured_by_name": p.captured_by_name,
+                "captured_at": p.captured_at.isoformat() if p.captured_at else None,
+            }
+            for p in sr.delivery_proofs.all().order_by("captured_at", "id")
+        ]
+    except Exception:
+        proofs = []
+
+    return {
+        "leg": sr.logistics_leg or "",
+        "leg_updated_at": sr.logistics_leg_updated_at.isoformat() if sr.logistics_leg_updated_at else None,
+        "leg_history": list(sr.logistics_leg_history or []),
+        "stops": stops,
+        "proofs": proofs,
+    }
+
+
 def _jsonable_fare_breakdown(breakdown):
     """
     GT-B-01: JSONField can't store Decimal. Convert the fare breakdown's
@@ -1205,6 +1263,11 @@ def _build_tracking_payload(sr, has_full_access):
         "payment_status": sr.payment_status or "pending",
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
+        # GT-B-03 / GT-D-01: the logistics trip's own progress, separate
+        # from `status` (which is shared by every service category). Only
+        # populated for logistics bookings; every other booking gets the
+        # empty defaults, so no existing consumer changes shape.
+        "logistics": _build_logistics_progress(sr),
         "service_location": {
             "address": dest_address,
             "latitude": dest_lat,
