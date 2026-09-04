@@ -896,7 +896,12 @@ def _build_tracking_payload(sr, has_full_access):
     tracking = None
     active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
     if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
-        tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
+        # Must be the numeric pk: the vendor's tracking routes are <int:pk>, so
+        # passing request_id (an alphanumeric like "HM0001") never matched any
+        # route. Every call fell through all three candidate URLs and returned
+        # None, burning three cross-service round trips per cache miss while
+        # silently disabling the ETA enrichment it exists to provide.
+        tracking = WorkforceIntegrationService.get_technician_tracking(sr.id)
 
     # Authoritative acceptance check:
     # ASSIGNED != ACCEPTED.

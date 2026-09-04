@@ -313,10 +313,13 @@ class WorkforceIntegrationService:
             if cached is not None:
                 return cached
 
+            # Both of these resolve to WorkforceJobLiveTrackingView on the
+            # vendor side. A third candidate ("/tracking/<id>/") used to be tried
+            # here and matches no route at all, so it only ever added a wasted
+            # round trip to every cache miss.
             candidate_urls = [
                 f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/live-tracking/",
                 f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/tracking/",
-                f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/",
             ]
             for url in candidate_urls:
                 try:
