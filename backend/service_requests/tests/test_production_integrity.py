@@ -16,6 +16,13 @@ from service_requests.models import ServiceRequest, BookingAssignment, Workforce
 from service_requests.views import _build_tracking_payload
 from workforce_integration.services import WorkforceIntegrationService
 
+# The literal "wf_webhook_secret_default" used to be accepted by the
+# receiver as a universal skeleton key regardless of the configured
+# secret. That bypass was deliberately closed (see the comment in
+# workforce_integration/views._verify_webhook_signature), so these
+# tests now authenticate with the real configured secret.
+from workforce_integration.views import WORKFORCE_WEBHOOK_SECRET
+
 
 class ProductionWorkflowIntegrityTests(APITestCase):
 
@@ -108,7 +115,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "company_id": self.company.id,
             "reason": "Out of service zone",
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -142,7 +149,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
                 "photo": "http://example.com/tech.jpg"
             }
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -170,7 +177,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
                 "longitude": 77.830000
             }
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -192,7 +199,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "event_id": f"evt_test_arrived_{uuid.uuid4().hex}",
             "booking_id": self.booking.request_id,
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -224,7 +231,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "event_id": f"evt_test_completed_{uuid.uuid4().hex}",
             "booking_id": self.booking.request_id,
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -240,10 +247,10 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "technician": {"name": "Unique Tech"}
         }
 
-        resp1 = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        resp1 = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(resp1.status_code, status.HTTP_200_OK)
 
-        resp2 = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        resp2 = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(resp2.status_code, status.HTTP_200_OK)
         self.assertTrue(resp2.data.get("duplicate"))
 
@@ -257,7 +264,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "event_id": f"evt_stale_{uuid.uuid4().hex}",
             "booking_id": self.booking.request_id,
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.booking.refresh_from_db()
@@ -271,7 +278,7 @@ class ProductionWorkflowIntegrityTests(APITestCase):
             "booking_id": self.booking.request_id,
             "company_id": self.other_company.id,
         }
-        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET="wf_webhook_secret_default")
+        response = self.client.post("/api/workforce-integration/webhook/", webhook_data, format="json", HTTP_X_WORKFORCE_SECRET=WORKFORCE_WEBHOOK_SECRET)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     # ── Test 14: Unauthenticated WebSocket authorization check ────────────────

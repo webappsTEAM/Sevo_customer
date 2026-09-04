@@ -571,24 +571,78 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
 
-    def get_payment_confirmation_otp(self, obj):
-        if obj.payment_status in ["cash_pending", "pending", "collected"]:
+    _OTP_STATUSES = ("cash_pending", "pending", "collected")
+
+    def _payment_otp_map(self):
+        """
+        Payment-confirmation OTPs for every booking on this page, in ONE
+        query.
+
+        This used to run a raw per-object SELECT against the vendor app's
+        workforce_notification table inside get_payment_confirmation_otp,
+        which made every customer list endpoint scale linearly with the
+        number of bookings returned -- one extra query per row, exactly
+        the N+1 the query-regression tests exist to catch.
+
+        Built once per serializer instance and cached. Falls back to an
+        empty map on any error, which simply yields no OTP -- the same
+        outcome the previous per-row try/except produced.
+        """
+        cached = getattr(self, "_otp_map_cache", None)
+        if cached is not None:
+            return cached
+
+        # With many=True this child serializer hangs off a ListSerializer
+        # that holds the full queryset; alone, it holds its own instance.
+        holder = self.parent if isinstance(self.parent, serializers.ListSerializer) else self
+        source = getattr(holder, "instance", None)
+        if source is None:
+            items = []
+        elif isinstance(source, (list, tuple)):
+            items = list(source)
+        elif hasattr(source, "__iter__"):
+            items = list(source)
+        else:
+            items = [source]
+
+        ids = [
+            str(o.id) for o in items
+            if getattr(o, "id", None) is not None
+            and getattr(o, "payment_status", None) in self._OTP_STATUSES
+        ]
+
+        otp_map = {}
+        if ids:
             try:
                 import re
                 from django.db import connection
+                placeholders = ",".join(["%s"] * len(ids))
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "SELECT message FROM workforce_notification WHERE related_object_id = %s AND notification_type = 'PAYMENT_CONFIRMATION_OTP' ORDER BY created_at DESC LIMIT 1;",
-                        [str(obj.id)]
+                        "SELECT related_object_id, message FROM workforce_notification "
+                        "WHERE related_object_id IN (%s) "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at ASC;" % placeholders,
+                        ids,
                     )
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    for related_id, message in cursor.fetchall():
+                        if not message:
+                            continue
+                        m = re.search(r'OTP\s+([0-9]{6})', message)
                         if m:
-                            return m.group(1)
+                            # Ascending order means the last row for an id
+                            # wins, matching the previous "most recent" query.
+                            otp_map[str(related_id)] = m.group(1)
             except Exception:
-                pass
-        return None
+                otp_map = {}
+
+        self._otp_map_cache = otp_map
+        return otp_map
+
+    def get_payment_confirmation_otp(self, obj):
+        if obj.payment_status not in self._OTP_STATUSES:
+            return None
+        return self._payment_otp_map().get(str(obj.id))
 
     def get_extension_amount(self, obj):
         try:

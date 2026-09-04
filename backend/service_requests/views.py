@@ -871,6 +871,50 @@ class CustomerBookingCancelView(APIView):
 
 import math
 
+def _notify_quote_sent(quote):
+    """
+    Fixes a live 500: both quotation endpoints called
+    `send_quote_notification(quote)`, which was never defined anywhere --
+    so submitting a quotation raised NameError AFTER the quote had already
+    been saved. Routed to the real notification (added in
+    notifications.py) and made non-fatal, matching how every other
+    notification is called in this codebase: a mail failure must never
+    fail the request that triggered it.
+    """
+    try:
+        from .notifications import notify_painting_quote_sent
+        notify_painting_quote_sent(quote)
+    except Exception as exc:
+        logger.warning("Could not send quote notification: %s", exc)
+
+
+GENERIC_TECHNICIAN_LABEL = "Assigned Service Professional"
+
+
+def _humanised_technician_name(name, service_category):
+    """
+    Return `name` unless it is obviously not a person's name.
+
+    Technician identity is snapshotted at acceptance from
+    `user.get_full_name() or user.username`, and some accounts have
+    slug-style usernames that match the service category ("pest_control",
+    "ac_repair"). Those leaked into the customer's tracking view as the
+    technician's name. A slug is recognisable: it has no spaces and uses
+    underscores/hyphens as separators, or it simply equals the booking's
+    own service category.
+    """
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return cleaned
+    category = (service_category or "").strip().lower()
+    normalised = cleaned.lower()
+    if category and normalised == category:
+        return GENERIC_TECHNICIAN_LABEL
+    if " " not in cleaned and ("_" in cleaned or "-" in cleaned):
+        return GENERIC_TECHNICIAN_LABEL
+    return cleaned
+
+
 def _build_logistics_progress(sr):
     """
     GT-B-03 / GT-D-01: the logistics-specific slice of the tracking
@@ -1177,6 +1221,13 @@ def _build_tracking_payload(sr, has_full_access):
             eta_minutes = tracking.get("eta_minutes")
         if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
             distance_km = tracking.get("distance_km")
+
+        # Never present a service slug as a person's name. Technician names
+        # are snapshotted from whatever the accepting system had -- which
+        # falls back to a username, and usernames here are sometimes service
+        # slugs like "pest_control". Showing that to a customer as "your
+        # technician" is worse than showing nothing specific.
+        tech_name = _humanised_technician_name(tech_name, sr.service_category)
 
         technician_data = {
             "id": tech_job_id,
@@ -3800,7 +3851,7 @@ class AdminQuoteCreateView(APIView):
                 )
 
         if quote.status == PaintingQuote.Status.SENT_TO_CUSTOMER:
-            send_quote_notification(quote)
+            _notify_quote_sent(quote)
 
         return _success(
             data=PaintingQuoteSerializer(quote).data,
@@ -3825,7 +3876,7 @@ class AdminQuoteActionView(APIView):
         if action == "APPROVE_AND_SEND":
             quote.status = PaintingQuote.Status.SENT_TO_CUSTOMER
             quote.save(update_fields=["status"])
-            send_quote_notification(quote)
+            _notify_quote_sent(quote)
             return _success(message="Quotation approved and sent to customer.")
         elif action == "REJECT":
             quote.status = PaintingQuote.Status.DECLINED

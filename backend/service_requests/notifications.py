@@ -855,6 +855,55 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
 # Slice 2b — Cancellation Notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
+def notify_painting_quote_sent(quote) -> None:
+    """
+    Tell the customer their painting/masonry quotation is ready to view.
+
+    Bug found: two endpoints in views.py called `send_quote_notification(quote)`
+    the moment a quote reached SENT_TO_CUSTOMER, but no such function existed
+    anywhere in the codebase -- so submitting a quotation raised
+    NameError and returned a 500, after the quote had already been saved.
+    The customer was never told, and the vendor saw a server error on a
+    request that had actually succeeded.
+
+    Implemented here rather than by deleting the call, because the intent
+    is unambiguous and every other customer-facing lifecycle event in this
+    module is notified the same way. Gated on booking_confirmations for
+    the same reason notify_customer_cancelled is: this app groups booking
+    lifecycle events under that one preference, and adding a dedicated
+    field would require a migration this fix does not need.
+    """
+    service_request = getattr(quote, "service_request", None)
+    if service_request is None:
+        return
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info(
+            "[Quote] Customer opted out of booking_confirmations -- skipping "
+            "quote notification for %s.", getattr(quote, "quote_number", "?"),
+        )
+        return
+
+    subject = f"Your quotation {getattr(quote, 'quote_number', '')} is ready"
+    message = (
+        f"Hello {service_request.customer_name or 'there'},\n\n"
+        f"Your quotation for \"{service_request.issue_title}\" is ready to review.\n"
+        f"Quotation: {getattr(quote, 'quote_number', '')}\n"
+        f"Total: Rs. {getattr(quote, 'grand_total', '')}\n\n"
+        f"You can review and accept it from your bookings page.\n"
+    )
+    try:
+        send_mail(subject, message, None, [customer_email])
+    except Exception as exc:
+        logger.warning(
+            "[Quote] Could not send quote notification for %s: %s",
+            getattr(quote, "quote_number", "?"), exc,
+        )
+
+
 def notify_customer_cancelled(service_request, reason="") -> None:
     """
     Notify the customer that their booking has been cancelled.
