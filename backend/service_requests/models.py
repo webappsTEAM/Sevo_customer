@@ -323,6 +323,12 @@ class ServiceRequest(models.Model):
     # permanently "" in production and every consumer of it (the
     # leg-aware tracking destination, the customer trip timeline) was
     # dead code. This is that method.
+    # Forward-only ordering for a trip. Mirrors LEG_SEQUENCE in the vendor
+    # app's workforce_api/services/logistics_events.py -- the two must agree.
+    LEG_SEQUENCE = [
+        "EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED",
+    ]
+
     def set_logistics_leg(self, leg, actor=None, save=True):
         """
         Advance this booking's logistics leg, appending to the audit trail.
@@ -330,14 +336,21 @@ class ServiceRequest(models.Model):
         Append-only history, one entry per call:
             {"leg": <value>, "at": <iso8601>, "by": <user id or None>}
 
-        Returns True if the leg changed, False if it was already there --
-        idempotent, because the vendor app's webhook can legitimately
-        retry the same event (see the replay-signature guard in
-        workforce_integration/views.py).
+        Returns True if the leg changed, False if it did not. False covers
+        two distinct non-error cases, both of which a webhook receiver must
+        tolerate:
 
-        Raises ValueError for a value that isn't a LogisticsLeg, so a typo
-        in a webhook payload fails loudly instead of silently writing
-        garbage into a field the tracking UI reads.
+          - a REPEAT of the leg already set (the vendor app retries; see the
+            replay-signature guard in workforce_integration/views.py);
+          - a STALE, out-of-order event naming an EARLIER leg. Webhook
+            delivery is not ordered, so an EN_ROUTE_PICKUP event can
+            genuinely arrive after UNLOADING. Applying it would drag the
+            customer's tracking view backwards and corrupt the audit trail,
+            so it is ignored rather than applied or treated as an error.
+
+        Raises ValueError only for a value that is not a LogisticsLeg at
+        all, so a typo in a webhook payload fails loudly instead of
+        silently writing garbage into a field the tracking UI reads.
         """
         valid = {choice.value for choice in self.LogisticsLeg}
         if leg not in valid:
@@ -346,6 +359,14 @@ class ServiceRequest(models.Model):
             )
         if self.logistics_leg == leg:
             return False
+        if self.logistics_leg:
+            try:
+                if self.LEG_SEQUENCE.index(leg) < self.LEG_SEQUENCE.index(self.logistics_leg):
+                    return False
+            except ValueError:
+                # A leg outside the ordered sequence: fall through and apply
+                # it rather than silently dropping a legitimate value.
+                pass
 
         now = timezone.now()
         history = list(self.logistics_leg_history or [])
