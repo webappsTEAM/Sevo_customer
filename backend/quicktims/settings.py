@@ -182,6 +182,14 @@ TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Kolkata")
 USE_I18N = True
 USE_TZ = True
 
+# ── Booking window ──────────────────────────────────────────────────────────
+# Same-day bookings close at this local hour; afterwards customers are offered
+# the next day's slots. Enforced server-side in
+# service_requests/booking_window.py, which the booking serializer calls -- the
+# frontend filter is a convenience, not the control. Tunable per environment.
+BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
+
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

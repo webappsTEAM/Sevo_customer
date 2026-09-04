@@ -361,15 +361,48 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
+// Booking rules are evaluated in the business timezone, never the browser's.
+// The old cut-off logic read the device clock, so a customer whose machine was
+// set to another timezone (or simply wrong) got a different answer than the
+// server would -- and since there was no server-side time check at all, that
+// answer was final. The server now enforces the same window in
+// service_requests/booking_window.py; everything here is the matching
+// convenience filter, and the two deliberately use the same numbers.
+const BOOKING_TIMEZONE = 'Asia/Kolkata'
+const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
+const SAME_DAY_MIN_LEAD_MINUTES = 60
+
+function businessNowParts() {
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: BOOKING_TIMEZONE,
+        hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      }).formatToParts(new Date()).map(part => [part.type, part.value])
+    )
+    return {
+      dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+      hour: Number(parts.hour) % 24,
+      minute: Number(parts.minute),
+    }
+  } catch (_) {
+    // Intl unavailable: fall back to device time rather than blocking booking.
+    const d = new Date()
+    return {
+      dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+    }
+  }
+}
+
 function isSlotInPast(dateStr, slotStr) {
   if (!dateStr || !slotStr) return false
-  const now = new Date()
 
-  // Format today's date in local YYYY-MM-DD
-  const todayYear = now.getFullYear()
-  const todayMonth = String(now.getMonth() + 1).padStart(2, '0')
-  const todayDay = String(now.getDate()).padStart(2, '0')
-  const todayStr = `${todayYear}-${todayMonth}-${todayDay}`
+  const business = businessNowParts()
+  const todayStr = business.dateStr
 
   // Normalize dateStr
   const cleanDateStr = String(dateStr).split('T')[0].trim()
@@ -378,6 +411,10 @@ function isSlotInPast(dateStr, slotStr) {
   if (cleanDateStr < todayStr) return true
   // If date is strictly in the future, slot is available
   if (cleanDateStr > todayStr) return false
+
+  // Same-day bookings close at the daily cut-off: past it, every remaining
+  // slot today is unbookable and the customer is moved on to the next day.
+  if (business.hour >= SAME_DAY_CUTOFF_HOUR) return true
 
   // If date is today, parse the slot time
   let hours = 0
@@ -399,8 +436,11 @@ function isSlotInPast(dateStr, slotStr) {
     minutes = parseInt(parts[1], 10) || 0
   }
 
-  const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0)
-  return slotDate <= now
+  // Compare in business-timezone minutes, and keep the same minimum lead time
+  // the server applies, so a slot starting in a few minutes is not offered.
+  const slotMinutes = hours * 60 + minutes
+  const nowMinutes = business.hour * 60 + business.minute
+  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -3218,7 +3258,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <Clock size={14} color={canCancel ? '#d97706' : '#94a3b8'} />
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: canCancel ? '#92400e' : '#64748b' }}>
                 {canCancel
-                  ? `Free cancellation available: ${formatGraceTime(graceSecs)}`
+                  ? `Cancellation available: ${formatGraceTime(graceSecs)}`
                   : '5-minute free cancellation window expired'}
               </span>
             </div>

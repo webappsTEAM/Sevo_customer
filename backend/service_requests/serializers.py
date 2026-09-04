@@ -266,6 +266,20 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # Booking window: same-day requests are refused after the configured
+        # cut-off, and a slot that has already passed today is refused too.
+        # This lived only in the frontend before, evaluated against the
+        # browser's clock, so it was both bypassable and wrong for any device
+        # not set to IST. See service_requests/booking_window.py.
+        from .booking_window import validate_booking_slot
+
+        slot_error = validate_booking_slot(
+            attrs.get("preferred_date"),
+            attrs.get("preferred_time"),
+        )
+        if slot_error:
+            raise serializers.ValidationError({"preferred_date": slot_error})
+
         # Fixes GT-B-04: nothing captured what's actually being moved for a
         # Goods & Transport booking -- `description` already exists as a
         # generic free-text field on ServiceRequest and was optional for

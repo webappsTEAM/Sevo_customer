@@ -906,6 +906,93 @@ def notify_customer_cancelled(service_request, reason="") -> None:
         logger.error("[Cancellation] Failed to send cancellation notification: %s", exc)
 
 
+def notify_customer_technician_delayed(service_request, reason="", delay_count=1, new_date=None) -> None:
+    """
+    Tell the customer their technician has reported a delay.
+
+    Bug found (gap): the vendor app already let a technician report a delay
+    (WorkforceJobRescheduleView) and stamped the resulting row
+    customer_notified=True, but the only thing it actually created was a
+    WorkforceNotification -- a row in the *vendor* app's own table. Nothing
+    ever reached the customer app, so "customer notified" was recorded for a
+    customer who was never told anything.
+
+    Deliberately says only what the system actually knows: the technician
+    reported a delay, and the reason they gave. It never attributes the delay
+    to weather or traffic on its own, because there is no weather or traffic
+    feed in this codebase to justify such a claim -- the reason shown is
+    whatever the technician selected or typed.
+
+    Gated on technician_updates, the existing preference covering
+    technician-progress messages. Deduplicated against NotificationOutbox so a
+    replayed or retried webhook cannot mail the customer about the same delay
+    report twice; each distinct report carries an incrementing delay_count.
+    """
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "technician_updates"):
+        logger.info(
+            "[Delay] Customer opted out of technician_updates -- skipping delay notification for booking %s.",
+            service_request.request_id,
+        )
+        return
+
+    subject = f"[CalTrack] Service Delay Update — {service_request.request_id} (#{delay_count})"
+
+    # Persistent dedup: NotificationOutbox already records every send, so it
+    # doubles as the "have we told them about this delay yet?" ledger without
+    # needing a new field and migration.
+    try:
+        from .models import NotificationOutbox
+        if NotificationOutbox.objects.filter(recipient=customer_email, subject=subject).exists():
+            logger.info(
+                "[Delay] Delay #%s for booking %s already notified -- not sending again.",
+                delay_count, service_request.request_id,
+            )
+            return
+    except Exception as exc:
+        logger.warning("[Delay] Could not check notification history (sending anyway): %s", exc)
+
+    details = {
+        "Booking ID": service_request.request_id,
+        "Service": service_request.issue_title,
+        "Reason given": reason or "Not specified",
+    }
+    if new_date:
+        details["Revised date"] = str(new_date)
+
+    body = _render_html_template(
+        title="Your technician is running late",
+        greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
+        intro_text=(
+            "Your technician has reported a delay and may reach you later than "
+            "originally scheduled. We are sorry for the inconvenience."
+        ),
+        details_dict=details,
+        footer_note="You can follow their live progress on your booking tracking page.",
+    )
+    try:
+        _sent = send_mail(
+            subject,
+            f"Your technician for booking {service_request.request_id} has reported a delay. Reason: {reason or 'Not specified'}.",
+            settings.DEFAULT_FROM_EMAIL,
+            [customer_email],
+            html_message=body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[Delay] Technician delay notification sent to %s", customer_email)
+        else:
+            logger.error(
+                "[Delay] send_mail reported 0 messages delivered to %s for booking %s",
+                customer_email, service_request.request_id,
+            )
+    except Exception as exc:
+        logger.error("[Delay] Failed to send technician delay notification: %s", exc)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Slice 3 — Refund Notifications
 # ─────────────────────────────────────────────────────────────────────────────

@@ -329,6 +329,26 @@ class WorkforceWebhookView(APIView):
                     failed_cycles = payload.get("failed_offer_cycles")
                     transaction.on_commit(lambda: self._broadcast_delay_event(sr, delay_message, failed_cycles))
 
+                # ── 3b. ASSIGNED TECHNICIAN IS RUNNING LATE ─────────────────────────
+                # Distinct from dispatch_delayed above, which means "still looking
+                # for a technician". This one means a technician is already
+                # assigned and has reported that they will be late.
+                elif event_type in ["technician.delayed", "job.technician_delayed"]:
+                    delay_reason = str(payload.get("reason") or "").strip()
+                    delay_count = payload.get("delay_count") or 1
+                    revised_date = payload.get("rescheduled_date")
+                    delay_message = str(
+                        payload.get("message")
+                        or "Your technician has reported a delay and may arrive later than scheduled."
+                    )
+                    # Live tracking page updates immediately; the email is sent
+                    # once per distinct delay report (deduplicated in
+                    # notify_customer_technician_delayed).
+                    transaction.on_commit(lambda: self._broadcast_delay_event(sr, delay_message))
+                    transaction.on_commit(
+                        lambda: self._safe_notify_delay(sr, delay_reason, delay_count, revised_date)
+                    )
+
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
                 elif event_type in ["employee_on_the_way", "job.on_the_way"]:
                     loc_dict = payload.get("location") or {}
@@ -518,6 +538,22 @@ class WorkforceWebhookView(APIView):
             broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
+
+    @classmethod
+    def _safe_notify_delay(cls, sr, reason, delay_count, revised_date):
+        # Same fire-and-forget-but-logged shape as the broadcasts: a mail
+        # failure must never turn the webhook itself into an error response,
+        # because the vendor app does not retry.
+        try:
+            from service_requests.notifications import notify_customer_technician_delayed
+            notify_customer_technician_delayed(
+                sr, reason=reason, delay_count=delay_count, new_date=revised_date,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not send technician-delay notification for %s: %s",
+                getattr(sr, "request_id", sr.pk), exc,
+            )
 
     @classmethod
     def _broadcast_delay_event(cls, sr, message, failed_cycles=None):
