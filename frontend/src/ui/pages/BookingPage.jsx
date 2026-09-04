@@ -9312,7 +9312,7 @@ function StepWorkflowCheckout({
           <button
             type="button"
             onClick={() => {
-              if (category?.isQuickCommerce || incomingCategory?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
+              if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
                 } catch {}
@@ -9325,8 +9325,11 @@ function StepWorkflowCheckout({
                     foodCart: {},
                   }
                 })
-              } else {
+              } else if (onBack && typeof onBack === "function") {
                 onBack()
+              } else {
+                const catId = category?.id || category?.slug || "cleaning";
+                navigate(`/home?category=${encodeURIComponent(catId)}`);
               }
             }}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 border-none"
@@ -11221,13 +11224,9 @@ export function BookingPage() {
                 loading={loading}
                 error={error}
                 onBack={() => {
-                  if (window.history.length > 1) {
-                    navigate(-1);
-                  } else {
-                    let activeCat = resolveCategoryFromCart(category, cart);
-                    const catId = activeCat?.id || activeCat?.slug || "cleaning";
-                    navigate(`/?category=${encodeURIComponent(catId)}`);
-                  }
+                  let activeCat = resolveCategoryFromCart(category, cart);
+                  const catId = activeCat?.id || activeCat?.slug || category?.id || category?.slug || "cleaning";
+                  navigate(`/home?category=${encodeURIComponent(catId)}`);
                 }}
                 setFormData={setFormData}
                 setLocation={setLocation}
