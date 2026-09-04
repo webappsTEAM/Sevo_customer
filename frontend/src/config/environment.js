@@ -6,14 +6,14 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.PROD
-    ? `${window.location.origin}/Caltrack/api`
+    ? `${window.location.origin}/api`
     : `/api`);
 
 export const WS_BASE_URL =
   import.meta.env.VITE_WS_BASE_URL ??
   (import.meta.env.PROD
-    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/Caltrack`
-    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8001`);
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
 export const GOOGLE_MAPS_API_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ??

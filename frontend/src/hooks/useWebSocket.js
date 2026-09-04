@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 const WS_BASE =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_WS_BASE_URL) ||
   (import.meta.env.PROD
-    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/Caltrack`
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
     : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`)
 
 

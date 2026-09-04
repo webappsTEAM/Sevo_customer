@@ -10,7 +10,7 @@ import { haversineDistance, calculateBearing } from "./trackingUtils.js"
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
-  (import.meta.env.PROD ? `${window.location.origin}/Caltrack/api` : `/api`)
+  (import.meta.env.PROD ? `${window.location.origin}/api` : `/api`)
 
 const TERMINAL_STATUSES = new Set([
   "completed",
