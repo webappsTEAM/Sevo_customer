@@ -394,6 +394,14 @@ RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
 # local development.
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
 
+# — Google Maps (X-10: server-side routing/ETA) ————————————————————————
+# Backend-only key -- never send this to the frontend. The Vite
+# VITE_GOOGLE_MAPS_KEY/VITE_GOOGLE_MAPS_API_KEY vars are a separate,
+# browser-restricted key for the Maps JS SDK; this one is used server-side
+# by service_requests/services/routing.py for the Distance Matrix API, so
+# distance/ETA are computed server-side rather than trusting the client.
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0")

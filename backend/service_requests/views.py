@@ -56,6 +56,7 @@ from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
 from .services.logistics_pricing import resolve_logistics_fare, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
+from .services.routing import get_route_eta
 from .services.address_service import AddressService
 
 
@@ -1060,13 +1061,18 @@ def _build_tracking_payload(sr, has_full_access):
             eta_seconds = 0
             eta_minutes = 0
         elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
-            raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
-            if raw_meters is not None:
-                distance_m = int(round(raw_meters))
-                distance_km = round(distance_m / 1000.0, 1)
-                eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
-                eta_minutes = eta_mins
-                eta_seconds = eta_mins * 60
+            # X-10: server-side routing/ETA. Prefers a real Google Maps
+            # Distance Matrix road-network result; falls back to the
+            # straight-line haversine + assumed-speed estimate used here
+            # previously on ANY Maps failure (no key, network error,
+            # timeout, bad API status) -- never silently pretending to be
+            # more precise than the data actually is.
+            route = get_route_eta(tech_lat, tech_lng, dest_lat, dest_lng)
+            if route is not None:
+                distance_km = route["distance_km"]
+                distance_m = int(round(distance_km * 1000.0))
+                eta_seconds = route["duration_seconds"]
+                eta_minutes = max(1, int(round(route["duration_seconds"] / 60.0)))
         else:
             distance_m = None
             distance_km = None
