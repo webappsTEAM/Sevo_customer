@@ -22,6 +22,7 @@ import {
   searchHosurPlacesOnline,
   formatExactLocation,
   isHosurRouteServed,
+  resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
@@ -1235,6 +1236,17 @@ export function PackersMoversBookingHosurPage() {
       const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
       const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
+      // No hardcoded fallback coordinate. A relocation whose pickup we
+      // could not pin is refused rather than booked at a made-up point --
+      // the crew and vehicle are allocated from that location.
+      if (!pickupPoint) {
+        setBookingSubmitting(false)
+        setBookingError(
+          "We couldn't pin your pickup location. Please pick it from the suggestions so we can plan your move."
+        )
+        return
+      }
+
       const payload = {
         customer_name: name || "Thejaa T",
         phone: phone || "6379222691",
@@ -1244,12 +1256,9 @@ export function PackersMoversBookingHosurPage() {
         description: `Type: ${userType} | Relocation: ${relocationType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
-        // Real resolved coordinates when we have them for exactly this
-        // address; otherwise the previous Hosur-centre default, so a
-        // booking whose location never resolved still passes the server's
-        // zone gate instead of failing outright.
-        latitude: pickupPoint ? pickupPoint.lat : 12.7409,
-        longitude: pickupPoint ? pickupPoint.lng : 77.8253,
+        // Only ever the REAL resolved pickup point -- see the guard above.
+        latitude: pickupPoint.lat,
+        longitude: pickupPoint.lng,
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
@@ -1534,11 +1543,14 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setPickup(loc.name)
-                                          setPickupCoords(
-                                            loc.lat != null && loc.lng != null
-                                              ? { lat: loc.lat, lng: loc.lng, forAddress: loc.name }
-                                              : null
-                                          )
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
                                           setShowPickupSuggestions(false)
                                         }}
                                         className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
@@ -1573,11 +1585,14 @@ export function PackersMoversBookingHosurPage() {
                                             e.preventDefault()
                                             const exact = formatExactLocation(loc)
                                             setDrop(exact)
-                                            setDropCoords(
-                                              loc.lat != null && loc.lng != null
-                                                ? { lat: loc.lat, lng: loc.lng, forAddress: exact }
-                                                : null
-                                            )
+                                            if (loc.lat != null && loc.lng != null) {
+                                              setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
+                                            } else {
+                                              setDropCoords(null)
+                                              resolveLocationCoords(loc).then((c) => {
+                                                if (c) setDropCoords({ ...c, forAddress: exact })
+                                              })
+                                            }
                                             setShowDropSuggestions(false)
                                           }}
                                           className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
@@ -1623,11 +1638,14 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setPickup(loc.name)
-                                          setPickupCoords(
-                                            loc.lat != null && loc.lng != null
-                                              ? { lat: loc.lat, lng: loc.lng, forAddress: loc.name }
-                                              : null
-                                          )
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
                                           if (relocationType === "Between Cities" && drop && drop.trim().toLowerCase() === loc.name.toLowerCase()) {
                                             setDrop("")
                                           }

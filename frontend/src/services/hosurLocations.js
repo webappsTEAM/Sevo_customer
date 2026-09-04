@@ -688,6 +688,65 @@ export async function searchHosurPlacesOnline(query) {
   return syntheticCandidate
 }
 
+const coordCache = new Map()
+
+/**
+ * Resolve real coordinates for a location the customer selected.
+ *
+ * Why this exists: only 9 of the ~71 entries in HOSUR_LOCATIONS_DATABASE
+ * carry hand-authored lat/lng. Picking any of the other 62 -- or typing a
+ * free-text address -- produced a booking with NO coordinate, which is
+ * what the hardcoded Hosur town-centre fallback in the booking pages was
+ * papering over. That fake point then drove the server-side zone gate,
+ * distance-based dispatch, the route measurement and therefore the fare.
+ *
+ * The fix is deliberately NOT a hand-typed coordinate table for the
+ * remaining 62 entries. Coordinates invented from memory would look
+ * authoritative while being wrong, and wrong coordinates are worse than
+ * none here precisely because so much depends on them. Instead this
+ * resolves them for real, from the same geocoding providers the online
+ * search already uses (Google Geocoding, then Photon, then Nominatim),
+ * and caches the answer for the session.
+ *
+ * Returns { lat, lng } or null. Callers must treat null as "we do not
+ * know where this is" and refuse to guess.
+ */
+export async function resolveLocationCoords(locOrText) {
+  if (!locOrText) return null
+
+  // Already carries real coordinates (an online suggestion, or one of the
+  // authored entries) -- nothing to resolve.
+  if (typeof locOrText === "object" && locOrText.lat != null && locOrText.lng != null) {
+    return { lat: Number(locOrText.lat), lng: Number(locOrText.lng) }
+  }
+
+  const address = typeof locOrText === "object"
+    ? (locOrText.fullAddress || locOrText.name || "")
+    : String(locOrText)
+  if (!address.trim()) return null
+
+  const key = address.trim().toLowerCase()
+  if (coordCache.has(key)) return coordCache.get(key)
+
+  // The online place search already returns lat/lng from whichever
+  // provider answers, so reuse it rather than adding a fourth code path.
+  try {
+    const results = await searchHosurPlacesOnline(address)
+    const hit = (results || []).find((r) => r.lat != null && r.lng != null)
+    if (hit) {
+      const coords = { lat: Number(hit.lat), lng: Number(hit.lng) }
+      coordCache.set(key, coords)
+      return coords
+    }
+  } catch (err) {
+    console.debug("[HosurLocations] coordinate resolution failed:", err)
+  }
+
+  coordCache.set(key, null)
+  return null
+}
+
+
 /**
  * Format exact location text when user selects or enters a destination
  */

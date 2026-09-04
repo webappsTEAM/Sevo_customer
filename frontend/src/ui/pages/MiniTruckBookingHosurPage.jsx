@@ -22,6 +22,7 @@ import {
   searchHosurPlacesOnline,
   formatExactLocation,
   isHosurRouteServed,
+  resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
@@ -1198,6 +1199,20 @@ export function MiniTruckBookingHosurPage() {
       // quote effect, so the fare the customer was shown and the booking
       // submitted here are derived from exactly the same inputs.
 
+      // No hardcoded fallback coordinate any more. If we could not resolve
+      // where the pickup actually is, refuse rather than book the customer
+      // at a made-up point -- the backend rejects a coordinate-less booking
+      // for exactly this reason (see the HS-B-04 comment in
+      // BookingCreateView), and a wrong coordinate is worse than none
+      // because dispatch, routing and the fare all trust it.
+      if (!pickupPoint) {
+        setBookingSubmitting(false)
+        setBookingError(
+          "We couldn't pin your pickup location. Please pick it from the suggestions so we can find a driver near you."
+        )
+        return
+      }
+
       const payload = {
         customer_name: name || "Thejaa T",
         phone: phone || "6379222691",
@@ -1207,12 +1222,16 @@ export function MiniTruckBookingHosurPage() {
         description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
-        // Real resolved coordinates when we have them for exactly this
-        // address; otherwise the previous Hosur-centre default, so a
-        // booking whose location never resolved still passes the server's
-        // zone gate instead of failing outright.
-        latitude: pickupPoint ? pickupPoint.lat : 12.7409,
-        longitude: pickupPoint ? pickupPoint.lng : 77.8253,
+        // Only ever the REAL resolved pickup point. There is deliberately
+        // no fallback here any more: this used to send a fixed Hosur
+        // town-centre coordinate whenever nothing resolved, and that fake
+        // point drove the server's zone gate, distance-based dispatch,
+        // the route measurement and therefore the fare. A booking with an
+        // unknown pickup location is now refused above, before we get
+        // here, rather than being silently placed somewhere the customer
+        // never chose.
+        latitude: pickupPoint.lat,
+        longitude: pickupPoint.lng,
         preferred_date: dateString,
         preferred_time: selectedSlot || "Immediate / Next Available",
         total_amount: fare,
@@ -1531,11 +1550,18 @@ export function MiniTruckBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setPickup(exact)
-                            setPickupCoords(
-                              loc.lat != null && loc.lng != null
-                                ? { lat: loc.lat, lng: loc.lng, forAddress: exact }
-                                : null
-                            )
+                            // Most local database entries carry no lat/lng.
+                            // Resolve them for real rather than falling back
+                            // to a fixed town-centre point -- see
+                            // resolveLocationCoords() for why that matters.
+                            if (loc.lat != null && loc.lng != null) {
+                              setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
+                            } else {
+                              setPickupCoords(null)
+                              resolveLocationCoords(loc).then((c) => {
+                                if (c) setPickupCoords({ ...c, forAddress: exact })
+                              })
+                            }
                             setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
@@ -1568,6 +1594,10 @@ export function MiniTruckBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(pickup)
                             setPickup(exact)
+                            setPickupCoords(null)
+                            resolveLocationCoords(exact).then((c) => {
+                              if (c) setPickupCoords({ ...c, forAddress: exact })
+                            })
                             setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
@@ -1642,11 +1672,14 @@ export function MiniTruckBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setDrop(exact)
-                            setDropCoords(
-                              loc.lat != null && loc.lng != null
-                                ? { lat: loc.lat, lng: loc.lng, forAddress: exact }
-                                : null
-                            )
+                            if (loc.lat != null && loc.lng != null) {
+                              setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
+                            } else {
+                              setDropCoords(null)
+                              resolveLocationCoords(loc).then((c) => {
+                                if (c) setDropCoords({ ...c, forAddress: exact })
+                              })
+                            }
                             setDestinationError("")
                             setNoServiceRoute(false)
                             setShowDropSuggestions(false)
@@ -1680,6 +1713,10 @@ export function MiniTruckBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(drop)
                             setDrop(exact)
+                            setDropCoords(null)
+                            resolveLocationCoords(exact).then((c) => {
+                              if (c) setDropCoords({ ...c, forAddress: exact })
+                            })
                             setDestinationError("")
                             setNoServiceRoute(false)
                             setShowDropSuggestions(false)
