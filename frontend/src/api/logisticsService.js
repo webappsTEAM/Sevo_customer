@@ -32,3 +32,60 @@ export async function fetchServiceAreas(city) {
   const res = await apiRequest(`/logistics/areas/${qs ? `?${qs}` : ""}`)
   return unwrapResults(res)
 }
+
+/**
+ * GT-B-01: ask the SERVER what this trip costs.
+ *
+ * The booking pages used to compute a display fare in the browser while
+ * the backend computed the real one at booking time; any disagreement
+ * showed up to the customer as a price that changed after they pressed
+ * book. This is the authoritative quote -- the same computation, from the
+ * same rates and the same server-measured distance, that the booking will
+ * record.
+ *
+ * The caller must NOT send or derive a price. It renders what comes back.
+ *
+ * Resolves to { total, currency, pricing_mode, breakdown, tier_id } on
+ * success, or { error, errorCode, message } when the server declines to
+ * quote (missing coordinates, unknown tier, or a category that is not
+ * distance-priced). Callers fall back to the tier's own starting price
+ * for display only, and never treat that as an authoritative fare.
+ */
+export async function fetchLogisticsQuote({
+  serviceCategory, tierId, pickup, drop, stopCount,
+}) {
+  if (!serviceCategory || !tierId || !pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
+    return { error: true, errorCode: "COORDINATES_REQUIRED" }
+  }
+  try {
+    const res = await apiRequest("/logistics/quote/", {
+      method: "POST",
+      body: {
+        service_category: serviceCategory,
+        tier_id: tierId,
+        pickup_latitude: pickup.lat,
+        pickup_longitude: pickup.lng,
+        drop_latitude: drop.lat,
+        drop_longitude: drop.lng,
+        ...(stopCount ? { stop_count: stopCount } : {}),
+      },
+    })
+    const data = res?.data || res
+    if (!data || data.total == null) {
+      return { error: true, errorCode: "NO_QUOTE" }
+    }
+    return {
+      total: data.total,
+      currency: data.currency || "INR",
+      pricingMode: data.pricing_mode,
+      breakdown: data.breakdown || null,
+      tierId: data.tier_id,
+    }
+  } catch (err) {
+    return {
+      error: true,
+      errorCode: err?.data?.error_code || "QUOTE_FAILED",
+      message: err?.data?.message || "",
+    }
+  }
+}

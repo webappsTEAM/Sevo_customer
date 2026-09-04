@@ -276,6 +276,13 @@ REST_FRAMEWORK = {
         "feedback": os.getenv("THROTTLE_FEEDBACK", "10/hour"),
         "coupon_validate": os.getenv("THROTTLE_COUPON", "20/minute"),
         "invoice_download": os.getenv("THROTTLE_INVOICE", "20/hour"),
+        # GT-B-01: the logistics quote endpoint is public (the booking
+        # pages are pre-login) and every cache miss costs a real, billed
+        # Google Distance Matrix call, so it needs a tighter limit than
+        # the blanket anon rate. Generous enough for a customer adjusting
+        # pickup/drop a few times, tight enough that it is not a free
+        # metered-API proxy.
+        "logistics_quote": os.getenv("THROTTLE_LOGISTICS_QUOTE", "30/minute"),
     },
 }
 

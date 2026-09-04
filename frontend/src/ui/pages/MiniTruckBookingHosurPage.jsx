@@ -7,7 +7,7 @@ import {
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -529,6 +529,17 @@ export function MiniTruckBookingHosurPage() {
   // to an address the customer has since changed.
   const [pickupCoords, setPickupCoords] = useState(null) // { lat, lng, forAddress }
   const [dropCoords, setDropCoords] = useState(null)     // { lat, lng, forAddress }
+
+  // GT-B-01: the authoritative fare comes from the SERVER, never from this
+  // component. The page previously derived a display price from the tier's
+  // starting price while the backend computed the real fare at booking
+  // time, so a customer could be shown one number and charged another.
+  // serverQuote is what /logistics/quote/ returned for exactly the pickup,
+  // drop and vehicle currently selected; it is null until all three are
+  // known, and is cleared the moment any of them changes.
+  const [serverQuote, setServerQuote] = useState(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [quoteError, setQuoteError] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("House Shifting & Personal Items")
@@ -865,6 +876,60 @@ export function MiniTruckBookingHosurPage() {
     ),
   ]
 
+  // Only use a stored coordinate if it was resolved for the address being
+  // used right now -- see the pickupCoords/dropCoords declaration above.
+  const usableCoords = (coords, address) =>
+    coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+      ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+      : null
+
+  const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
+  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")
+  const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
+  const dropPoint = usableCoords(dropCoords, dropAddressValue)
+
+  // GT-B-01: pickup -> drop -> vehicle -> server distance -> server fare.
+  // Debounced so dragging through suggestions doesn't spend a metered
+  // Distance Matrix call per keystroke, and guarded against out-of-order
+  // responses so a slower earlier request can't overwrite a newer quote.
+  useEffect(() => {
+    const tierId = selectedVehicle?._tierId
+    if (!pickupPoint || !dropPoint || !tierId) {
+      setServerQuote(null)
+      setQuoteError("")
+      return
+    }
+    let cancelled = false
+    setQuoteLoading(true)
+    const timer = setTimeout(async () => {
+      const res = await fetchLogisticsQuote({
+        serviceCategory: "goods_transport_truck",
+        tierId,
+        pickup: pickupPoint,
+        drop: dropPoint,
+      })
+      if (cancelled) return
+      setQuoteLoading(false)
+      if (res?.error) {
+        setServerQuote(null)
+        setQuoteError(res.message || "")
+      } else {
+        setServerQuote(res)
+        setQuoteError("")
+      }
+    }, 350)
+    return () => { cancelled = true; clearTimeout(timer) }
+    // Depends on the primitive lat/lng values, deliberately NOT on the
+    // pickupPoint/dropPoint objects react-hooks wants here: those are
+    // rebuilt on every render, so listing them would re-run this effect
+    // (and spend a metered Distance Matrix call) on every keystroke
+    // anywhere on the page. The primitives are the actual inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
+    selectedVehicle?._tierId,
+  ])
+
   // Live location fetch handler (can be fetched live or entered manually)
   const handleFetchLiveLocation = (e) => {
     if (e) {
@@ -1109,7 +1174,16 @@ export function MiniTruckBookingHosurPage() {
     try {
       const vehicle = selectedVehicle || LIGHT_VEHICLES[0]
       const currentGoodsType = goodsTypeOverride || selectedGoodsType || "General Goods"
-      const fare = Number(String(vehicle?.price || "160").replace(/[^0-9.]/g, "")) || 160
+      // GT-B-01: submit the server's own quote when we have one. The
+      // backend re-derives and validates the fare regardless (a
+      // client-supplied total is never trusted for a logistics booking),
+      // so this is about the customer being charged the number they were
+      // actually shown -- not about the client deciding the price. The
+      // tier-derived value remains only as a last-resort display default
+      // for a trip we could not get a server quote for.
+      const fare = serverQuote?.total != null
+        ? Number(serverQuote.total)
+        : (Number(String(vehicle?.price || "160").replace(/[^0-9.]/g, "")) || 160)
       
       let dateString = todayDateString()
       if (selectedDate && selectedDate.fullDate) {
@@ -1119,17 +1193,10 @@ export function MiniTruckBookingHosurPage() {
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
 
-      const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-      const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")
-      // Only use a stored coordinate if it was resolved for the address
-      // being submitted right now -- see the pickupCoords/dropCoords
-      // declaration above for why.
-      const usableCoords = (coords, address) =>
-        coords && coords.forAddress === address && coords.lat != null && coords.lng != null
-          ? { lat: Number(coords.lat), lng: Number(coords.lng) }
-          : null
-      const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
-      const dropPoint = usableCoords(dropCoords, dropAddressValue)
+      // pickupAddressValue / dropAddressValue / pickupPoint / dropPoint are
+      // computed once in the component body above and shared with the
+      // quote effect, so the fare the customer was shown and the booking
+      // submitted here are derived from exactly the same inputs.
 
       const payload = {
         customer_name: name || "Thejaa T",
@@ -2609,6 +2676,48 @@ export function MiniTruckBookingHosurPage() {
                   <Calendar className="w-3.5 h-3.5 text-slate-600" />
                   <span>Schedule your booking</span>
                 </button>
+
+                {/* GT-B-01: the authoritative, server-computed fare. This is
+                    the number the booking will actually record -- the page
+                    renders it, it does not calculate it. The per-vehicle
+                    prices in the selector are indicative starting prices;
+                    this is the quote for the trip actually entered. */}
+                {(quoteLoading || serverQuote || quoteError) && (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+                    {quoteLoading && (
+                      <p className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Calculating your fare…
+                      </p>
+                    )}
+                    {!quoteLoading && serverQuote && (
+                      <>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                            Your fare
+                          </span>
+                          <span className="text-base font-extrabold text-emerald-900">
+                            ₹ {Number(serverQuote.total).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                        {serverQuote.breakdown && (
+                          <p className="text-[10px] text-emerald-700 mt-0.5">
+                            {serverQuote.breakdown.distance_km} km
+                            {serverQuote.breakdown.distance_source === "straight_line_estimate"
+                              ? " (estimated route)"
+                              : ""}
+                            {" · "}base ₹{serverQuote.breakdown.base_fare}
+                            {Number(serverQuote.breakdown.distance_charge) > 0
+                              ? ` · distance ₹${serverQuote.breakdown.distance_charge}`
+                              : ""}
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {!quoteLoading && !serverQuote && quoteError && (
+                      <p className="text-[11px] font-semibold text-slate-600">{quoteError}</p>
+                    )}
+                  </div>
+                )}
               </div>
               {isSignedIn && bookingError && (
                 <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
