@@ -281,6 +281,23 @@ export function TwoWheelerBookingHosurPage() {
   // Form State
   const [pickup, setPickup] = useState("")
   const [drop, setDrop] = useState("")
+
+  // Real geocoded coordinates for the pickup / drop the customer actually
+  // picked. searchHosurPlacesOnline() already returns lat/lng on every
+  // online suggestion (Google Geocoding, Photon and Nominatim all supply
+  // it) and the live-GPS button already has exact device coordinates --
+  // both were being thrown away, and every booking was submitted with the
+  // same hardcoded Hosur town-centre point regardless of where the
+  // customer said they were. That fake coordinate then drove the
+  // server-side zone gate, technician dispatch and the live-tracking ETA.
+  //
+  // Each entry remembers the exact address string it was resolved FOR, so
+  // any later change to that field (typing, picking a popular route, an
+  // autofilled default) automatically invalidates it -- better to send no
+  // coordinate and let the backend fall back than to attach a stale point
+  // to an address the customer has since changed.
+  const [pickupCoords, setPickupCoords] = useState(null) // { lat, lng, forAddress }
+  const [dropCoords, setDropCoords] = useState(null)     // { lat, lng, forAddress }
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("Personal Parcels & Documents")
@@ -631,12 +648,18 @@ export function TwoWheelerBookingHosurPage() {
         const { latitude, longitude } = position.coords
         try {
           const formatted = await getAddress(latitude, longitude)
-          setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          const resolved = formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(resolved)
+          // Exact device GPS -- the most accurate pickup point we can get.
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
           console.warn("Reverse geocoding error:", err)
-          setPickup(`Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          const resolved = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(resolved)
+          // Reverse geocoding failed, but the GPS fix itself is still valid.
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } finally {
@@ -811,6 +834,19 @@ export function TwoWheelerBookingHosurPage() {
       }
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
+
+      const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
+      const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")
+      // Only use a stored coordinate if it was resolved for the address
+      // being submitted right now -- see the pickupCoords/dropCoords
+      // declaration above for why.
+      const usableCoords = (coords, address) =>
+        coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+          ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+          : null
+      const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
+      const dropPoint = usableCoords(dropCoords, dropAddressValue)
+
       const payload = {
         customer_name: name || "Thejaa T",
         phone: phone || "6379222691",
@@ -818,10 +854,14 @@ export function TwoWheelerBookingHosurPage() {
         service_category: "goods_transport_two_wheeler",
         issue_title: `Two-wheeler delivery — ${vehicle.name} (${currentGoodsType})`,
         description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
-        address: pickup || "Hosur, Tamil Nadu",
-        drop_address: drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India"),
-        latitude: 12.7409,
-        longitude: 77.8253,
+        address: pickupAddressValue,
+        drop_address: dropAddressValue,
+        // Real resolved coordinates when we have them for exactly this
+        // address; otherwise the previous Hosur-centre default, so a
+        // booking whose location never resolved still passes the server's
+        // zone gate instead of failing outright.
+        latitude: pickupPoint ? pickupPoint.lat : 12.7409,
+        longitude: pickupPoint ? pickupPoint.lng : 77.8253,
         preferred_date: dateString,
         preferred_time: selectedSlot || "Immediate / Next Available",
         total_amount: fare,
@@ -830,6 +870,11 @@ export function TwoWheelerBookingHosurPage() {
       }
       if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+      // Backend accepts these as optional; only send a real resolved point.
+      if (dropPoint) {
+        payload.drop_latitude = dropPoint.lat
+        payload.drop_longitude = dropPoint.lng
+      }
 
       const res = await createBooking(payload)
       const bookingId = res?.data?.request_id || res?.request_id || ("CRN" + Math.floor(100000000000 + Math.random() * 900000000000))
@@ -1187,6 +1232,11 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setPickup(exact)
+                            setPickupCoords(
+                              loc.lat != null && loc.lng != null
+                                ? { lat: loc.lat, lng: loc.lng, forAddress: exact }
+                                : null
+                            )
                             setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
@@ -1293,6 +1343,11 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setDrop(exact)
+                            setDropCoords(
+                              loc.lat != null && loc.lng != null
+                                ? { lat: loc.lat, lng: loc.lng, forAddress: exact }
+                                : null
+                            )
                             setDestinationError("")
                             setNoServiceRoute(false)
                             setShowDropSuggestions(false)
