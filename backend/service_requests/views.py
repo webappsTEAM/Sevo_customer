@@ -34,6 +34,7 @@ from .models import (
     Coupon, CouponUsage,
     BookingSeries,
     BookingMessage,
+    TripStop,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -876,6 +877,42 @@ def _build_tracking_payload(sr, has_full_access):
     """
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
+    dest_address = sr.address or ""
+
+    # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
+    # field comment above sr.address) -- there is no separate drop-point
+    # coordinate pair on ServiceRequest itself, so a Goods & Transport
+    # booking still showed the pickup address/ETA even after pickup was
+    # complete and the technician was en route to the drop. Bookings
+    # that used TripStop (multi-stop routes, GT-B-05) already have real
+    # per-stop coordinates recorded; use them to target whichever leg
+    # logistics_leg says is current. Bookings with no TripStop rows (the
+    # common single-pickup/single-drop case) still fall back to the
+    # pickup point below -- there is no drop coordinate captured for
+    # them yet, so this only fixes the multi-stop case; it does not
+    # regress the simple case, which behaves exactly as it did before.
+    if sr.service_category in LOGISTICS_CATEGORIES:
+        try:
+            stops = list(sr.trip_stops.all().order_by("sequence"))
+        except Exception:
+            stops = []
+        if stops:
+            post_pickup_legs = {
+                ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
+                ServiceRequest.LogisticsLeg.UNLOADING,
+                ServiceRequest.LogisticsLeg.DELIVERED,
+            }
+            target_stop = None
+            if sr.logistics_leg in post_pickup_legs:
+                drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
+                target_stop = drop_stops[-1] if drop_stops else stops[-1]
+            else:
+                pickup_stops = [s for s in stops if s.stop_type == TripStop.StopType.PICKUP]
+                target_stop = pickup_stops[0] if pickup_stops else stops[0]
+            if target_stop is not None and target_stop.latitude is not None and target_stop.longitude is not None:
+                dest_lat = float(target_stop.latitude)
+                dest_lng = float(target_stop.longitude)
+                dest_address = target_stop.address or dest_address
 
     # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
     db_heading = 0.0
@@ -1127,12 +1164,12 @@ def _build_tracking_payload(sr, has_full_access):
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
         "service_location": {
-            "address": sr.address or "",
+            "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
         "destination": {
-            "address": sr.address or "",
+            "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
