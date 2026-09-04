@@ -23,7 +23,6 @@ def find_veg(query):
     if "cucumber" in q: return vegs.get("green cucumber (vellarikai)")
     if "lady finger" in q or "vendakkai" in q: return vegs.get("lady finger (vendaikkai)")
     if "vari" in q: return vegs.get("brinjal (vari kathirikkai)")
-    if "bharta" in q: return vegs.get("brinjal - bharta")
     if "brinjal" in q: return vegs.get("brinjal (vari kathirikkai)")
     if "cabbage" in q: return vegs.get("cabbage (muttaikose)")
     if "cauliflower" in q: return vegs.get("cauliflower (pookosu)")
@@ -157,12 +156,6 @@ USER_RECIPES_DATA = [
         ("Brinjal Poriyal", ["Brinjal", "Onion"], 10, 15, 105, "2g", "12g", "4g", "6g"),
         ("Brinjal Sambar", ["Brinjal", "Tomato", "Drumstick"], 15, 25, 150, "7g", "22g", "6g", "4g"),
         ("Brinjal Kara Kuzhambu", ["Brinjal", "Small Onion", "Tomato"], 15, 25, 145, "4g", "19g", "5g", "6g"),
-    ]),
-    # 12. Brinjal – Bharta
-    ("Brinjal - Bharta", [
-        ("Brinjal Bharta", ["Brinjal", "Onion", "Tomato", "Green Chilli"], 15, 25, 135, "3g", "16g", "6g", "6g"),
-        ("Brinjal Masala", ["Brinjal", "Onion", "Tomato"], 10, 20, 145, "3g", "16g", "5g", "8g"),
-        ("Brinjal Kootu", ["Brinjal", "Carrot", "Green Peas"], 15, 25, 155, "7g", "20g", "6g", "5g"),
     ]),
     # 13. Cabbage
     ("Cabbage", [
