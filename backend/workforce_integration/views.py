@@ -395,6 +395,15 @@ class WorkforceWebhookView(APIView):
                         safe_apply_transition(sr, "completed")
                     sr.save()
 
+                    # GT-C-01: reconcile the fare quoted at booking against
+                    # what the trip actually was, from server-side facts
+                    # only (measured distance if the vendor reported one,
+                    # recorded stop progress, customer-approved extra work).
+                    # Runs inside the same transaction as the completion so
+                    # a booking can never be marked complete with an
+                    # unreconciled fare.
+                    self._reconcile_fare(sr, payload)
+
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_completed"))
                     # HS-A-06: reward a pending referral once the referee's
                     # first booking actually completes. Fire-and-forget, same
@@ -558,6 +567,32 @@ class WorkforceWebhookView(APIView):
             webhook_event.error_message = str(err)
             webhook_event.save()
             return Response({"error": f"Failed to process webhook: {err}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @staticmethod
+    def _reconcile_fare(sr, payload):
+        """
+        GT-C-01: build the estimated-vs-final fare record at completion.
+
+        `actual_distance_km` is the one number taken from the completion
+        payload, and it is a FACT ABOUT THE TRIP, not a price -- it is
+        re-priced here using the rates already locked into the stored
+        quote. A payload can never supply an amount.
+
+        Never raises into the webhook: a reconciliation failure must not
+        prevent a job from being marked complete. It leaves the booking
+        with its quoted fare, which is the safe direction to fail.
+        """
+        from service_requests.services.fare_reconciliation import reconcile_booking_fare
+
+        try:
+            actual_km = (
+                payload.get("actual_distance_km")
+                or payload.get("distance_km")
+                or payload.get("trip_distance_km")
+            )
+            reconcile_booking_fare(sr, actual_distance_km=actual_km)
+        except Exception as exc:
+            logger.warning("Fare reconciliation failed for booking %s: %s", sr.id, exc)
 
     @staticmethod
     def _resolve_stop(sr, payload):

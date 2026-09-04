@@ -2047,6 +2047,55 @@ class DeliveryProof(models.Model):
         return f"{self.get_proof_type_display()} for booking #{self.booking_id}"
 
 
+class FareReconciliation(models.Model):
+    """
+    GT-C-01: the estimated-vs-final fare record.
+
+    A Porter-style booking quotes a fare upfront and locks it, then the
+    real trip deviates -- the route was longer than quoted, the customer
+    added a stop, extra work was approved mid-job. Before this there was
+    no record connecting the two: ServiceRequest.total_amount was simply
+    whatever it had most recently been set to, with no statement of what
+    was originally quoted, what changed, or why. A customer disputing a
+    final charge, or anyone auditing revenue, had nothing to read.
+
+    One row per booking (OneToOne). It is written at completion, from the
+    server's own numbers -- never from a client-supplied total. Each
+    adjustment is itemised in `adjustments` so the delta is explainable
+    line by line rather than being a single unexplained difference.
+
+    Deliberately additive and non-authoritative for charging: this
+    records and explains the reconciliation, it does not silently move
+    money. ServiceRequest.total_amount remains the field the rest of the
+    system charges against, and is updated in the same transaction only
+    when the reconciliation actually resolves to a different number.
+    """
+    booking = models.OneToOneField(
+        ServiceRequest, on_delete=models.CASCADE, related_name="fare_reconciliation",
+    )
+    estimated_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    final_amount     = models.DecimalField(max_digits=10, decimal_places=2)
+    # Signed: positive means the customer owes more than quoted.
+    delta            = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Snapshots, so the record stays readable even after tier rates change.
+    estimated_breakdown = models.JSONField(default=dict, blank=True)
+    final_breakdown     = models.JSONField(default=dict, blank=True)
+    # [{"code": ..., "label": ..., "amount": "123.00", "source": ...}, ...]
+    adjustments         = models.JSONField(default=list, blank=True)
+
+    notes      = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_fare_reconciliation"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Fare reconciliation for booking #{self.booking_id} (delta {self.delta})"
+
+
 class BookingSeries(models.Model):
     """
     HS-B-07: "no support for recurring bookings / AMC subscriptions" --
