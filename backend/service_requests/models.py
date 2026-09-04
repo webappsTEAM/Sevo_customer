@@ -258,6 +258,23 @@ class ServiceRequest(models.Model):
     # unchanged if a drop coordinate genuinely couldn't be resolved.
     drop_latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     drop_longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    # GT-B-01: the itemised fare the server actually computed at booking
+    # time (base, chargeable km, per-km charge, loading, stop charges,
+    # surge, whether the minimum applied, and crucially whether the
+    # distance came from the Google Maps road network or a straight-line
+    # estimate -- see services/logistics_pricing.quote_logistics_fare).
+    #
+    # Stored rather than recomputed because it is the *quote the customer
+    # was given*, locked at booking per CALTRACK_PHASE_14 H.1. Rates can
+    # change afterwards, so recomputing later would silently produce a
+    # different number and there would be no record of what was actually
+    # agreed. This is also the "estimated" half that final-fare
+    # reconciliation (GT-C-01) needs to compare an actual against.
+    #
+    # Empty dict for every booking priced by the flat lane/tier lookup and
+    # for every non-logistics booking -- absence means "not distance-priced",
+    # not "missing data".
+    fare_breakdown   = models.JSONField(default=dict, blank=True)
     # Fixes GT-D-03: nothing captured who's actually receiving the goods at
     # the drop address, so they could never be notified. See
     # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md for the full write-up; this is

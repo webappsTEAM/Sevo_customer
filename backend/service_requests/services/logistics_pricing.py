@@ -14,11 +14,38 @@ Business logic on purpose lives here, not in BookingCreateView — CLAUDE.md:
 "Business logic: NEVER in views — always in a service function."
 """
 
+from decimal import Decimal, ROUND_HALF_UP
+
 LOGISTICS_CATEGORIES = {
     "goods_transport_truck",
     "goods_transport_two_wheeler",
     "packers_movers",
 }
+
+# GT-B-01: which categories get real distance-based pricing.
+#
+# Packers & Movers is deliberately excluded. CALTRACK_PHASE_14 PART H
+# splits pricing in two: H.1 "Goods Transport - deterministic" is the
+# distance formula implemented below, while H.2 "Relocation -
+# survey-driven" is volume/inventory/crew-based and starts with a
+# physical survey booking. Pricing a relocation by road distance would
+# be wrong, not merely incomplete, so packers_movers stays on the
+# existing flat tier price until H.2 is actually built.
+DISTANCE_PRICED_CATEGORIES = {
+    "goods_transport_truck",
+    "goods_transport_two_wheeler",
+}
+
+# Standard trip shape the additional-stop charge is measured against:
+# one pickup + one drop. H.1: "additional_stop_charge x (stops - 2)".
+STANDARD_STOP_COUNT = 2
+
+_PAISE = Decimal("0.01")
+
+
+def _money(value):
+    """Quantise to 2dp with half-up rounding -- money, never float."""
+    return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
 
 
 class UnresolvedLogisticsFareError(Exception):
@@ -62,3 +89,195 @@ def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, 
     raise UnresolvedLogisticsFareError(
         f"Cannot verify a fare for '{service_category}' without a resolvable logistics tier or lane."
     )
+
+
+class LogisticsFareBreakdown(dict):
+    """
+    The itemised result of quote_logistics_fare().
+
+    A plain dict subclass so it serialises straight to JSON for the quote
+    endpoint and can be snapshotted onto the booking, but named so its
+    role is obvious at call sites. Keys:
+
+        total               Decimal -- the fare to charge
+        base_fare           Decimal
+        distance_km         Decimal -- what was actually charged for
+        chargeable_km       Decimal -- distance_km minus free_km, floored at 0
+        distance_charge     Decimal
+        loading_unloading   Decimal
+        additional_stops    int
+        additional_stop_charge  Decimal
+        subtotal            Decimal -- before surge
+        surge_multiplier    Decimal
+        minimum_fare_applied  bool
+        distance_source     str -- "google_maps" | "straight_line_estimate"
+        currency            str
+    """
+
+
+def quote_logistics_fare(
+    *,
+    tier,
+    pickup_lat,
+    pickup_lng,
+    drop_lat,
+    drop_lng,
+    stop_count=STANDARD_STOP_COUNT,
+):
+    """
+    Compute a real, itemised, distance-based fare for one goods-transport
+    booking, per CALTRACK_PHASE_14 H.1.
+
+    Returns a LogisticsFareBreakdown, or None when this tier isn't
+    configured for distance pricing (no per_km_rate) or the coordinates
+    needed to measure a distance aren't available. Returning None is the
+    signal to fall back to the existing flat lookup -- it is never a
+    reason to trust a client-supplied amount.
+
+    Distance comes from services/routing.get_route_eta(), which uses the
+    Google Maps Distance Matrix road network when it can and a
+    straight-line estimate when it can't. Which one was used is reported
+    in `distance_source` and stored on the booking, so a fare computed
+    from an estimate is auditable as such rather than silently
+    indistinguishable from a real road distance.
+    """
+    if tier is None:
+        return None
+    per_km_rate = getattr(tier, "per_km_rate", None)
+    if per_km_rate is None:
+        return None
+    if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
+        return None
+
+    # Imported here rather than at module import time: this module is
+    # imported by views.py at startup, and routing.py pulls in `requests`
+    # plus the cache framework, which the flat-pricing path never needs.
+    from .routing import get_route_eta
+
+    route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
+    if route is None:
+        return None
+
+    distance_km = _money(str(route["distance_km"]))
+    free_km = _money(getattr(tier, "free_km", 0) or 0)
+    chargeable_km = distance_km - free_km
+    if chargeable_km < 0:
+        chargeable_km = Decimal("0.00")
+
+    base_fare = getattr(tier, "base_fare", None)
+    if base_fare is None:
+        # Documented fallback: a tier that has a per-km rate but no explicit
+        # base keeps using its existing starting_price as the fixed
+        # component, so switching a tier to distance pricing is a one-field
+        # change rather than a required re-entry of every price.
+        base_fare = tier.starting_price
+    base_fare = _money(base_fare)
+
+    distance_charge = _money(chargeable_km * _money(per_km_rate))
+    loading = _money(getattr(tier, "loading_unloading_charge", 0) or 0)
+
+    try:
+        stops = int(stop_count)
+    except (TypeError, ValueError):
+        stops = STANDARD_STOP_COUNT
+    additional_stops = max(0, stops - STANDARD_STOP_COUNT)
+    per_stop = _money(getattr(tier, "additional_stop_charge", 0) or 0)
+    stop_charge = _money(per_stop * additional_stops)
+
+    subtotal = _money(base_fare + distance_charge + loading + stop_charge)
+
+    surge = getattr(tier, "surge_multiplier", None)
+    surge = _money(surge) if surge is not None else Decimal("1.00")
+    if surge <= 0:
+        # A zero/negative multiplier would zero out or invert the fare;
+        # treat a misconfigured value as "no surge" rather than charging
+        # nothing.
+        surge = Decimal("1.00")
+    total = _money(subtotal * surge)
+
+    minimum_fare = getattr(tier, "minimum_fare", None)
+    minimum_applied = False
+    if minimum_fare is not None:
+        minimum_fare = _money(minimum_fare)
+        if total < minimum_fare:
+            total = minimum_fare
+            minimum_applied = True
+
+    return LogisticsFareBreakdown(
+        total=total,
+        base_fare=base_fare,
+        distance_km=distance_km,
+        chargeable_km=chargeable_km,
+        distance_charge=distance_charge,
+        loading_unloading=loading,
+        additional_stops=additional_stops,
+        additional_stop_charge=stop_charge,
+        subtotal=subtotal,
+        surge_multiplier=surge,
+        minimum_fare_applied=minimum_applied,
+        distance_source=route.get("source"),
+        currency=getattr(tier, "currency", "INR") or "INR",
+    )
+
+
+def resolve_logistics_fare_v2(
+    *,
+    service_category,
+    logistics_tier,
+    logistics_lane,
+    submitted_amount,
+    pickup_lat=None,
+    pickup_lng=None,
+    drop_lat=None,
+    drop_lng=None,
+    stop_count=STANDARD_STOP_COUNT,
+):
+    """
+    GT-B-01. Returns (fare, breakdown_or_None).
+
+    Resolution order, most specific first:
+      1. A distance-based quote, when the category is distance-priced,
+         the selected tier has a per_km_rate, and we have real pickup and
+         drop coordinates. This is the Porter-style path.
+      2. A selected Lane's fixed fare (a pre-agreed point-to-point route
+         price -- deliberately still wins over a tier's flat starting
+         price, unchanged from before).
+      3. The tier's flat starting_price.
+      4. Nothing resolvable -> UnresolvedLogisticsFareError.
+
+    Note (2) sits *below* (1): a lane fare is a flat pre-agreed number,
+    so where a tier is genuinely configured for distance pricing and we
+    can measure the trip, the measured fare is the more accurate one.
+    Where distance pricing isn't configured, behaviour is byte-identical
+    to the previous resolve_logistics_fare().
+
+    submitted_amount is still never trusted for a logistics category --
+    it is only ever passed through for non-logistics bookings, exactly as
+    before.
+    """
+    if service_category not in LOGISTICS_CATEGORIES:
+        return submitted_amount, None
+
+    if service_category in DISTANCE_PRICED_CATEGORIES:
+        breakdown = quote_logistics_fare(
+            tier=logistics_tier,
+            pickup_lat=pickup_lat,
+            pickup_lng=pickup_lng,
+            drop_lat=drop_lat,
+            drop_lng=drop_lng,
+            stop_count=stop_count,
+        )
+        if breakdown is not None:
+            return breakdown["total"], breakdown
+
+    # Fall through to the original flat resolver rather than duplicating
+    # its lane-beats-tier ordering and its
+    # "raise rather than trust the client" guarantee in two places. That
+    # function stays the single definition of flat logistics pricing and
+    # keeps its own test coverage.
+    return resolve_logistics_fare(
+        service_category=service_category,
+        logistics_tier=logistics_tier,
+        logistics_lane=logistics_lane,
+        submitted_amount=submitted_amount,
+    ), None

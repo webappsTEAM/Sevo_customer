@@ -55,7 +55,7 @@ from .serializers import (
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
-from .services.logistics_pricing import resolve_logistics_fare, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
+from .services.logistics_pricing import resolve_logistics_fare_v2, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
 from .services.routing import get_route_eta
 from .services.address_service import AddressService
 
@@ -362,11 +362,22 @@ class BookingCreateView(APIView):
         # ── END ZONE GATE ─────────────────────────────────────────────────────
 
         try:
-            corrected_fare = resolve_logistics_fare(
+            # GT-B-01: server-side fare resolution. For a distance-priced
+            # category whose tier is configured with a per-km rate and
+            # which has real pickup + drop coordinates, this measures the
+            # trip (services/routing.py) and computes the H.1 formula;
+            # otherwise it falls back to the previous flat lane/tier
+            # lookup. The client-submitted total_amount is still never
+            # trusted for any logistics category.
+            corrected_fare, fare_breakdown = resolve_logistics_fare_v2(
                 service_category=serializer.validated_data.get("service_category", ""),
                 logistics_tier=serializer.validated_data.get("logistics_tier"),
                 logistics_lane=serializer.validated_data.get("logistics_lane"),
                 submitted_amount=serializer.validated_data.get("total_amount", 0),
+                pickup_lat=serializer.validated_data.get("latitude"),
+                pickup_lng=serializer.validated_data.get("longitude"),
+                drop_lat=serializer.validated_data.get("drop_latitude"),
+                drop_lng=serializer.validated_data.get("drop_longitude"),
             )
         except UnresolvedLogisticsFareError:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -521,6 +532,9 @@ class BookingCreateView(APIView):
             payment_method=payment_method,
             payment_status=initial_payment_status,
             total_amount=corrected_fare,
+            # GT-B-01: the itemised quote behind total_amount, when the
+            # fare was distance-computed. Empty for flat-priced bookings.
+            fare_breakdown=_jsonable_fare_breakdown(fare_breakdown),
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
             service_zone_id_snapshot=zone_result.zone_id,
@@ -856,6 +870,21 @@ class CustomerBookingCancelView(APIView):
 
 
 import math
+
+def _jsonable_fare_breakdown(breakdown):
+    """
+    GT-B-01: JSONField can't store Decimal. Convert the fare breakdown's
+    Decimals to strings (not floats -- money must not go through binary
+    floating point, even one-way) so the stored quote is exact and
+    round-trips for reconciliation later. None/empty -> {}.
+    """
+    if not breakdown:
+        return {}
+    out = {}
+    for key, value in breakdown.items():
+        out[key] = str(value) if isinstance(value, Decimal) else value
+    return out
+
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
     try:

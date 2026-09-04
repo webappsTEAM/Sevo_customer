@@ -83,6 +83,59 @@ class ServiceTier(models.Model):
     starting_price = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default="INR")
 
+    # GT-B-01: real distance-based pricing, per CALTRACK_PHASE_14
+    # PART H.1 ("Goods Transport - deterministic"):
+    #   fare = base_fare + distance_km x per_km_rate
+    #        + loading_unloading + additional_stop_charge x (stops - 2)
+    #        (x surge), floored at minimum_fare
+    # These live on ServiceTier because H.1 scopes base_fare and
+    # per_km_rate to the *vehicle class*, and ServiceTier already IS the
+    # vehicle class (scoped by category + city). This is the
+    # "swapping in real distance-based pricing later is a service-layer
+    # change, not a schema change" note on Lane below, made concrete --
+    # additive fields, nothing replaced.
+    #
+    # Every field is optional/zero-default so existing rows keep behaving
+    # exactly as before: with per_km_rate unset, resolve_logistics_fare()
+    # falls back to the old flat starting_price/Lane.fare lookup. Set
+    # per_km_rate on a tier to switch that tier to distance pricing.
+    #
+    # Waiting charges are deliberately NOT here: H.1 says the quote is
+    # "locked at booking" and deviations (extra waiting, extra stops
+    # beyond what was booked) go through the existing WorkExtension
+    # approval flow, which already exists. Toll/parking are likewise
+    # evidenced pass-throughs, not part of the upfront quote.
+    base_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Fixed component of the fare. Falls back to starting_price when unset.",
+    )
+    per_km_rate = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Per-km charge beyond free_km. Leave unset to keep this tier on flat pricing.",
+    )
+    free_km = models.DecimalField(
+        max_digits=6, decimal_places=2, default=0,
+        help_text="Distance included in base_fare before per_km_rate starts applying.",
+    )
+    loading_unloading_charge = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+    )
+    additional_stop_charge = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Charged per stop beyond the standard two (one pickup, one drop).",
+    )
+    surge_multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default=1,
+        help_text=(
+            "Applied to the whole computed fare. A configurable per-tier value, "
+            "not a live demand engine -- time-band/demand surge is its own system."
+        ),
+    )
+    minimum_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Floor applied after everything else. Unset means no floor.",
+    )
+
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
     icon = models.CharField(max_length=100, blank=True, default="")  # lucide-react icon name used by frontend
     duration = models.CharField(max_length=50, blank=True, default="")
