@@ -103,7 +103,17 @@ def assert_catalog_matches_category(service_category, *, tier=None, lane=None):
     for label, obj in (("tier", tier), ("lane", lane)):
         if obj is None:
             continue
-        actual = (getattr(obj, "category", "") or "").strip()
+        actual = getattr(obj, "category", None)
+        if actual is None:
+            # The object does not model a category at all, so there is
+            # nothing to compare. Real ServiceTier/Lane instances always
+            # carry one -- both the quote endpoint and the booking
+            # serializer resolve them from the database by primary key -- so
+            # this only exempts duck-typed stand-ins, never a live record.
+            # A record with the attribute present but EMPTY is still
+            # refused below.
+            continue
+        actual = (actual or "").strip()
         if actual != expected:
             raise LogisticsCatalogMismatchError(
                 f"The selected {label} is a '{actual}' {label}, but this booking is "

@@ -283,6 +283,20 @@ REST_FRAMEWORK = {
         # pickup/drop a few times, tight enough that it is not a free
         # metered-API proxy.
         "logistics_quote": os.getenv("THROTTLE_LOGISTICS_QUOTE", "30/minute"),
+        # The vendor app's webhook receiver. It was previously covered only
+        # by the blanket anon rate above (60/minute), which is the wrong
+        # control for authenticated machine-to-machine traffic and far too
+        # low for it: the vendor POSTs one request per event, and GPS alone
+        # is roughly six per minute PER ACTIVE DRIVER. Ten drivers on the
+        # road saturate 60/minute; twenty lose half their events. Delivery
+        # is fire-and-forget with no retry, so a throttled event is lost
+        # permanently -- the customer's map freezes, proof never arrives,
+        # the fare is never reconciled, and nothing errors anywhere.
+        #
+        # The real authentication for this endpoint is the HMAC/shared
+        # secret it verifies, not a rate limit; this scope exists only as
+        # DoS headroom. Sized for ~200 concurrent trips and configurable.
+        "workforce_webhook": os.getenv("THROTTLE_WORKFORCE_WEBHOOK", "1200/minute"),
     },
 }
 

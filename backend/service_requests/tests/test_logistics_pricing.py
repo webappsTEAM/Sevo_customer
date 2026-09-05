@@ -31,7 +31,7 @@ class ResolveLogisticsFareTests(unittest.TestCase):
         self.assertEqual(fare, Decimal("999.00"))
 
     def test_logistics_category_with_lane_uses_lane_fare_not_client_amount(self):
-        lane = SimpleNamespace(fare=Decimal("900.00"))
+        lane = SimpleNamespace(fare=Decimal("900.00"), category="truck", is_active=True)
         fare = resolve_logistics_fare(
             service_category="goods_transport_truck",
             logistics_tier=None,
@@ -41,7 +41,7 @@ class ResolveLogisticsFareTests(unittest.TestCase):
         self.assertEqual(fare, Decimal("900.00"))
 
     def test_logistics_category_with_tier_only_uses_tier_starting_price(self):
-        tier = SimpleNamespace(starting_price=Decimal("205.00"))
+        tier = SimpleNamespace(starting_price=Decimal("205.00"), category="truck", is_active=True)
         fare = resolve_logistics_fare(
             service_category="goods_transport_truck",
             logistics_tier=tier,
@@ -51,8 +51,8 @@ class ResolveLogisticsFareTests(unittest.TestCase):
         self.assertEqual(fare, Decimal("205.00"))
 
     def test_lane_takes_priority_over_tier_when_both_present(self):
-        tier = SimpleNamespace(starting_price=Decimal("205.00"))
-        lane = SimpleNamespace(fare=Decimal("900.00"))
+        tier = SimpleNamespace(starting_price=Decimal("205.00"), category="truck", is_active=True)
+        lane = SimpleNamespace(fare=Decimal("900.00"), category="truck", is_active=True)
         fare = resolve_logistics_fare(
             service_category="goods_transport_truck",
             logistics_tier=tier,

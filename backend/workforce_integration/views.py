@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 
 from .services import WorkforceIntegrationService
 
@@ -121,8 +122,19 @@ class WorkforceWebhookView(APIView):
     Ingests asynchronous events from the separate Workforce system.
     Enforces webhook idempotency, transaction safety, state-machine validation,
     and strict ASSIGNED != ACCEPTED privacy rules.
+
+    AllowAny is correct here -- the vendor app has no user session to send,
+    and trust comes from _verify_webhook_signature (shared secret or an
+    HMAC-SHA256 over the raw body), not from Django auth. But AllowAny also
+    meant this endpoint inherited the blanket anonymous 60/minute rate,
+    which is far too low for what it receives: one request per event, with
+    GPS alone running at roughly six per minute per active driver. Ten
+    drivers saturate it. Because delivery is fire-and-forget with no retry,
+    every throttled event is lost for good, silently.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "workforce_webhook"
 
     def post(self, request):
         from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way, notify_delivery_recipient
@@ -725,18 +737,39 @@ class WorkforceWebhookView(APIView):
         Turn the booking's estimate into the final fare once the trip is
         delivered.
 
-        reconcile_booking_fare() has existed, fully implemented and tested,
-        since the fare work -- and was called by nothing. The "final fare"
-        step of the journey simply did not happen: a trip that ran 40 km on
-        a 20 km quote was charged the 20 km price, extra stops the driver
-        actually completed were charged for at all, and approved extra work
-        never reached the amount collected. This is the call site it was
-        written for.
+        There is already a call site for this: _reconcile_fare(), wired to
+        the `service_completed` event. The problem is that the vendor app
+        never emits `service_completed`. Its complete emission set is
+        technician.assigned, booking.dispatch_delayed, technician.delayed,
+        technician.location_updated, payment.collected, logistics.leg_changed,
+        trip.stop_arrived / trip.stop_completed and
+        job.completion_proof_submitted -- confirmed by enumerating every
+        notify_customer_app() call in that codebase. `service_completed`
+        appears there only in a docstring listing valid event names and in a
+        status filter, never as an emission.
+
+        So the "final fare" step never actually ran: a trip that went 40 km
+        on a 20 km quote was charged the 20 km price, extra stops the driver
+        completed were charged for at all, and approved extra work never
+        reached the amount collected. This hook attaches the same
+        reconciliation to DELIVERED, which the vendor DOES emit (via
+        set_logistics_leg on the proof endpoint), so it runs for Goods &
+        Transport.
+
+        Both call sites are safe together: reconcile_booking_fare is
+        idempotent (update_or_create keyed on the booking), so if
+        `service_completed` is ever wired up it simply refreshes the row --
+        with the distance, which this event does not carry.
 
         `actual_distance_km` is used only when the vendor app reports a
-        measured trip distance. Absent it, distance variance is skipped and
-        stops/extra-work/minimum-fare still reconcile -- the function is
-        built to return a partial reconciliation rather than nothing.
+        measured trip distance. The DELIVERED event does not currently carry
+        one (emit_leg_changed sends only the leg), so in practice this
+        reconciles stops, approved extra work and the minimum fare -- all of
+        which are exact recorded facts -- and leaves distance variance
+        unapplied. Charging distance variance needs the vendor to include a
+        measured trip distance on this event; deriving one from the GPS
+        trail here was considered and rejected, because a haversine sum over
+        jittery fixes overstates distance and would quietly overcharge.
 
         Fire-and-forget, and idempotent on the receiving side
         (update_or_create keyed on the booking), so a retried DELIVERED
