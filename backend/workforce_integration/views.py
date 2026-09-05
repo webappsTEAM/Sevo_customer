@@ -13,6 +13,7 @@ import hmac
 import hashlib
 import logging
 import os
+from datetime import timezone as dt_timezone
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -53,6 +54,31 @@ if not _raw_webhook_secret:
         )
 else:
     WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret
+
+
+def parse_datetime_safe(value):
+    """
+    Parse a timestamp out of a webhook payload, or return None.
+
+    Returns None rather than raising or defaulting to "now": a fix with an
+    unreadable capture time must not be treated as the freshest thing we
+    have, because that is exactly how a stale packet would win.
+    """
+    if not value:
+        return None
+    from django.utils.dateparse import parse_datetime
+
+    try:
+        parsed = parse_datetime(str(value))
+    except (TypeError, ValueError):
+        return None
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        # datetime.timezone.utc, not django.utils.timezone.utc -- the latter
+        # was removed in Django 5.
+        parsed = timezone.make_aware(parsed, dt_timezone.utc)
+    return parsed
 
 
 def _verify_webhook_signature(request) -> bool:
@@ -413,12 +439,53 @@ class WorkforceWebhookView(APIView):
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
+                    # Was: write latitude/longitude straight onto the booking
+                    # and broadcast. Two things were wrong with that.
+                    #
+                    # (1) No ordering check. Mobile networks retry and
+                    # reorder, so a fix captured at 17:15 routinely arrives
+                    # after one captured at 17:20 -- and the later-arriving,
+                    # older packet won, moving the customer's map pin
+                    # backwards. Because the stale value was persisted it
+                    # survived a page reload; the frontend's own out-of-order
+                    # guard only protects a live socket session.
+                    #
+                    # (2) heading, speed and accuracy sent by the vendor were
+                    # thrown away, and no TechnicianLocation row was written,
+                    # even though that table is the authoritative per-fix
+                    # record every reader now uses.
+                    #
+                    # Both are handled by the same service the technician
+                    # app's own ingestion path uses, so the two transports
+                    # cannot drift apart again.
+                    from service_requests.services.technician_tracking import record_technician_fix
+
                     loc_dict = payload.get("location") or payload
                     if isinstance(loc_dict, dict) and loc_dict.get("latitude") and loc_dict.get("longitude"):
-                        sr.technician_latitude = loc_dict.get("latitude")
-                        sr.technician_longitude = loc_dict.get("longitude")
-                        sr.save(update_fields=["technician_latitude", "technician_longitude", "updated_at"])
-                        transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
+                        captured_at = parse_datetime_safe(
+                            loc_dict.get("updated_at")
+                            or loc_dict.get("captured_at")
+                            or loc_dict.get("timestamp")
+                            or payload.get("captured_at")
+                        )
+                        outcome, _fix = record_technician_fix(
+                            sr,
+                            latitude=loc_dict.get("latitude"),
+                            longitude=loc_dict.get("longitude"),
+                            accuracy=loc_dict.get("accuracy"),
+                            heading=loc_dict.get("heading"),
+                            speed=loc_dict.get("speed"),
+                            captured_at=captured_at,
+                            location_name=loc_dict.get("location_name"),
+                        )
+                        # Only broadcast a position the server actually
+                        # accepted. Broadcasting a rejected stale fix would
+                        # push the old coordinates to every watching client
+                        # and undo the guard on the client side.
+                        if outcome == "applied":
+                            transaction.on_commit(
+                                lambda: self._broadcast_event(sr, "technician_location_updated")
+                            )
 
                 # ── 9. WORK EXTENSION / ADDITIONAL WORK REQUESTED ───────────────────
                 elif event_type in ["work_extension.created", "additional_work.requested", "job.extension_requested"]:

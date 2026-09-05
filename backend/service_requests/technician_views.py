@@ -386,6 +386,12 @@ class TechnicianUpdateLocationView(APIView):
         ])
 
         # Log telemetry history -- the authoritative per-fix record.
+        # captured_at is stamped even though this transport has no device
+        # timestamp of its own: `now` is the closest thing to a capture time
+        # for a fix posted directly by the device, and stamping it keeps this
+        # path and the vendor webhook comparable on one ordering key. Leaving
+        # it null would make every fix written here look older than any
+        # webhook fix that carries a real capture time.
         TechnicianLocation.objects.create(
             booking=sr,
             technician=user,
@@ -394,6 +400,7 @@ class TechnicianUpdateLocationView(APIView):
             accuracy=float(accuracy) if accuracy is not None else None,
             heading=heading,
             speed=speed,
+            captured_at=now,
         )
 
         logger.info(f"[TRACKING] Location saved: booking_id={sr.id}, lat={lat}, lng={lng}")

@@ -1211,8 +1211,19 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     for this service request.
     """
     try:
-        import sys
-        if "test" in sys.argv:
+        # Was: `if "test" in sys.argv: return` -- a hard no-op whenever the
+        # word "test" appeared anywhere in the process arguments. That made
+        # every WebSocket broadcast unreachable under `manage.py test`, which
+        # is why the two tests covering the live-tracking bridge could only
+        # ever time out: the code they exercise was switched off by the fact
+        # that they were running. It is also a production branch keyed on
+        # argv, so any process launched with "test" in its arguments would
+        # silently lose live tracking with no error anywhere.
+        #
+        # Replaced with an explicit setting so the behaviour is chosen
+        # deliberately rather than inferred from a command line. Defaults to
+        # broadcasting, i.e. the same behaviour as production today.
+        if not getattr(settings, "TRACKING_BROADCAST_ENABLED", True):
             return
 
         from channels.layers import get_channel_layer

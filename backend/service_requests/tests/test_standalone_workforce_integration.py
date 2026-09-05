@@ -225,14 +225,21 @@ class StandaloneWorkforceIntegrationTests(TestCase):
         self.booking.refresh_from_db()
         self.assertAlmostEqual(float(self.booking.technician_latitude), 12.7420, places=4)
         self.assertAlmostEqual(float(self.booking.technician_longitude), 77.8260, places=4)
-        self.assertEqual(self.booking.technician_heading, 85.0)
-        self.assertEqual(self.booking.technician_speed, 22.5)
-        self.assertEqual(self.booking.technician_accuracy, 6.0)
-
-        # Verify TechnicianLocation log was created
+        # heading/speed/accuracy are no longer denormalised onto the booking
+        # (those columns were dropped); TechnicianLocation is the
+        # authoritative per-fix record, so the same telemetry is asserted
+        # where it now actually lives. The webhook previously discarded all
+        # three -- it wrote latitude/longitude only.
         loc_log = TechnicianLocation.objects.filter(booking=self.booking).latest("id")
         self.assertAlmostEqual(float(loc_log.latitude), 12.7420, places=4)
+        self.assertAlmostEqual(float(loc_log.longitude), 77.8260, places=4)
         self.assertEqual(loc_log.heading, 85.0)
+        self.assertEqual(loc_log.speed, 22.5)
+        self.assertEqual(loc_log.accuracy, 6.0)
+        # The DEVICE's capture time must survive, not be replaced by the
+        # server's receive time -- it is the only thing that makes
+        # out-of-order detection possible (see test_06).
+        self.assertEqual(loc_log.captured_at.isoformat(), "2026-09-01T17:15:00+00:00")
 
         # 3. Technician Status -> on_the_way
         on_way_payload = {
@@ -279,12 +286,22 @@ class StandaloneWorkforceIntegrationTests(TestCase):
     def test_06_stale_location_protection(self):
         """Test Step 6: Out-of-order stale GPS packets do not overwrite newer coordinates."""
         import datetime
-        # 1. Store a newer GPS update at 17:20:00
+        from service_requests.services.technician_tracking import record_technician_fix
+
+        # 1. Store a newer GPS update captured at 17:20:00. This goes through
+        # the real ingestion service because that is where the freshness
+        # comparison reads from -- the booking no longer carries a
+        # technician_location_updated_at column to compare against, which is
+        # precisely how this protection got lost.
         new_time = datetime.datetime(2026, 9, 1, 17, 20, 0, tzinfo=datetime.timezone.utc)
-        self.booking.technician_latitude = Decimal("12.744000")
-        self.booking.technician_longitude = Decimal("77.828000")
-        self.booking.technician_location_updated_at = new_time
-        self.booking.save()
+        outcome, _ = record_technician_fix(
+            self.booking,
+            latitude="12.744000",
+            longitude="77.828000",
+            captured_at=new_time,
+        )
+        self.assertEqual(outcome, "applied")
+        self.booking.refresh_from_db()
 
         # 2. Receive an older/out-of-order GPS update with timestamp 17:15:00
         stale_payload = {
@@ -314,7 +331,13 @@ class StandaloneWorkforceIntegrationTests(TestCase):
         self.booking.refresh_from_db()
         self.assertAlmostEqual(float(self.booking.technician_latitude), 12.7440, places=4)
         self.assertAlmostEqual(float(self.booking.technician_longitude), 77.8280, places=4)
-        self.assertEqual(self.booking.technician_location_updated_at, new_time)
+
+        # ...and the stale packet left no trace in the telemetry log either,
+        # so a later reader cannot pick it up as the newest fix.
+        from service_requests.services.technician_tracking import latest_fix
+        newest = latest_fix(self.booking)
+        self.assertEqual(newest.captured_at, new_time)
+        self.assertAlmostEqual(float(newest.latitude), 12.7440, places=4)
 
     def test_07_unauthorized_cross_customer_rejection(self):
         """Test Step 7: Cross-customer access to live tracking without valid token is rejected."""
@@ -336,15 +359,25 @@ class StandaloneWorkforceIntegrationTests(TestCase):
         self.assertEqual(data.get("booking_id"), self.booking.id)
 
     def _update_booking_gps(self):
+        # Records the fix through the same service both real ingestion paths
+        # use, rather than assigning columns that no longer exist. That also
+        # means this helper exercises the storage the tracking payload
+        # actually reads from, instead of a shape only the test knew about.
+        from service_requests.services.technician_tracking import record_technician_fix
+
         self.booking.refresh_from_db()
         self.booking.status = ServiceRequest.Status.ON_THE_WAY
-        self.booking.technician_latitude = Decimal("12.743500")
-        self.booking.technician_longitude = Decimal("77.827500")
-        self.booking.technician_heading = 92.0
-        self.booking.technician_speed = 28.0
-        self.booking.technician_accuracy = 5.0
-        self.booking.technician_location_updated_at = timezone.now()
-        self.booking.save()
+        self.booking.save(update_fields=["status", "updated_at"])
+        record_technician_fix(
+            self.booking,
+            latitude="12.743500",
+            longitude="77.827500",
+            heading=92.0,
+            speed=28.0,
+            accuracy=5.0,
+            captured_at=timezone.now(),
+        )
+        self.booking.refresh_from_db()
 
         from service_requests.notifications import broadcast_tracking_event
         broadcast_tracking_event(self.booking, "technician_location_updated")

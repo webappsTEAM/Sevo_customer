@@ -1054,9 +1054,28 @@ def _build_tracking_payload(sr, has_full_access):
             dest_address = sr.drop_address or dest_address
 
     # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
+    #
+    # These three used to be denormalised columns on ServiceRequest. When
+    # those columns were dropped, the writer moved to TechnicianLocation but
+    # this reader was left initialising them to 0/0/None and never assigning
+    # them again -- so every tracking payload reported heading 0, speed 0 and
+    # accuracy null regardless of what the technician's device actually sent.
+    # TechnicianLocation is the authoritative per-fix record, so read the
+    # latest fix from there.
     db_heading = 0.0
     db_speed = 0.0
     db_accuracy = None
+    try:
+        from service_requests.services.technician_tracking import latest_fix
+
+        _fix = latest_fix(sr)
+        if _fix is not None:
+            db_heading = float(_fix.heading or 0.0)
+            db_speed = float(_fix.speed or 0.0)
+            db_accuracy = _fix.accuracy
+    except Exception as _fix_err:  # never let telemetry break the tracking page
+        logger.warning("Could not read latest technician fix for %s: %s",
+                       getattr(sr, "request_id", sr.pk), _fix_err)
 
     assigned_emp = getattr(sr, "assigned_employee", None)
     if assigned_emp:

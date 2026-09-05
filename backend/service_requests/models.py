@@ -2494,6 +2494,13 @@ class TechnicianLocation(models.Model):
     heading = models.FloatField(default=0.0, blank=True)
     speed = models.FloatField(default=0.0, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # When the DEVICE recorded the fix, as opposed to when this server
+    # received it. The two diverge whenever a packet is retried, queued
+    # behind a tunnel, or reordered by the mobile network -- and without a
+    # capture time there is no way to tell a fresh fix from an old one that
+    # simply arrived late. Nullable because rows written before this field
+    # existed have no capture time; readers fall back to created_at.
+    captured_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
