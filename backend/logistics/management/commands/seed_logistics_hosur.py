@@ -9,6 +9,8 @@ lanes were illegible in the design PDF export but are readable here).
 Idempotent — safe to re-run. Run with:
     python manage.py seed_logistics_hosur
 """
+from decimal import Decimal
+
 from django.core.management.base import BaseCommand
 
 from logistics.models import Lane, LogisticsCategory, ServiceArea, ServiceTier
@@ -21,6 +23,55 @@ SERVICE_AREAS = [
     "Thally Road", "Alasanatham", "Railway Station Area", "Dinnur", "Kelamangalam Road",
     "Kamaraj Nagar",
 ]
+
+# ── SEVO Goods & Transport launch rate card ──────────────────────────────────
+# Supplied by the business as SEVO's own proposed rates. Not derived from,
+# benchmarked against, or copied from any competitor's pricing.
+#
+# Applied by slug, and ONLY to a tier that has never been priced (per_km_rate
+# is NULL). A tier whose rates someone has since tuned in the admin is left
+# alone, because this command is re-run on deploys and silently reverting
+# live pricing would be the worst possible thing for it to do. Use
+# --force-pricing to deliberately reset every tier back to this card.
+#
+# Packers & Movers is deliberately absent: it stays survey/quotation priced
+# (CALTRACK_PHASE_14 H.2), and DISTANCE_PRICED_CATEGORIES excludes it, so a
+# per-km rate there would be data the fare engine never reads.
+#
+# surge_multiplier is not in the card and is left at its default of 1.00 --
+# no surge value was supplied, and inventing one would change every fare.
+LAUNCH_PRICING = {
+    "3-wheeler": dict(
+        base_fare="150.00", per_km_rate="18.00", free_km="2.00",
+        minimum_fare="150.00", loading_unloading_charge="40.00",
+        additional_stop_charge="30.00",
+    ),
+    "tata-ace": dict(
+        base_fare="220.00", per_km_rate="22.00", free_km="3.00",
+        minimum_fare="220.00", loading_unloading_charge="60.00",
+        additional_stop_charge="40.00",
+    ),
+    "pickup-8ft": dict(
+        base_fare="300.00", per_km_rate="28.00", free_km="3.00",
+        minimum_fare="300.00", loading_unloading_charge="80.00",
+        additional_stop_charge="50.00",
+    ),
+    "1-7-ton": dict(
+        base_fare="450.00", per_km_rate="40.00", free_km="5.00",
+        minimum_fare="450.00", loading_unloading_charge="120.00",
+        additional_stop_charge="75.00",
+    ),
+    "2-wheeler": dict(
+        base_fare="50.00", per_km_rate="10.00", free_km="1.00",
+        minimum_fare="50.00", loading_unloading_charge="10.00",
+        additional_stop_charge="15.00",
+    ),
+    "2-wheeler-electric-express": dict(
+        base_fare="60.00", per_km_rate="11.00", free_km="1.00",
+        minimum_fare="60.00", loading_unloading_charge="10.00",
+        additional_stop_charge="15.00",
+    ),
+}
 
 TRUCK_TIERS = [
     dict(slug="3-wheeler", name="3 Wheeler", weight_class="light", capacity_label="500kg",
@@ -92,7 +143,24 @@ PACKERS_MOVERS_LANES = [
 class Command(BaseCommand):
     help = "Seed logistics catalog (ServiceTier, Lane, ServiceArea) with Hosur data from the design PDFs."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force-pricing",
+            action="store_true",
+            help=(
+                "Reset every tier's distance-pricing fields back to the launch "
+                "rate card, overwriting rates changed since. Without this, a "
+                "tier that already has a per_km_rate is left untouched so a "
+                "routine re-seed on deploy cannot revert live pricing."
+            ),
+        )
+
     def handle(self, *args, **options):
+        self.force_pricing = options.get("force_pricing", False)
+        if self.force_pricing:
+            self.stdout.write(self.style.WARNING(
+                "--force-pricing: resetting all tier pricing to the launch rate card."
+            ))
         area_count = self._seed_areas()
         truck_tier_count = self._seed_tiers(LogisticsCategory.TRUCK, TRUCK_TIERS)
         truck_lane_count = self._seed_lanes(LogisticsCategory.TRUCK, TRUCK_LANES)
@@ -119,14 +187,58 @@ class Command(BaseCommand):
         return count
 
     def _seed_tiers(self, category, tiers):
+        """
+        Identity and display fields are upserted every run, as before.
+        Pricing is handled separately by _apply_launch_pricing so that a
+        re-seed cannot revert rates that were tuned after launch.
+        """
         count = 0
         for tier in tiers:
-            ServiceTier.objects.update_or_create(
+            obj, _created = ServiceTier.objects.update_or_create(
                 category=category, city=CITY, slug=tier["slug"],
                 defaults={**tier, "is_active": True},
             )
+            self._apply_launch_pricing(obj)
             count += 1
         return count
+
+    def _apply_launch_pricing(self, tier):
+        """
+        Write the launch rate card onto a tier that has never been priced.
+
+        `per_km_rate is None` is the test for "never priced": it is the field
+        that switches a tier from flat starting_price to the distance
+        formula, and nothing else sets it. A tier that already has one is
+        skipped unless --force-pricing was passed.
+
+        Returns "applied", "forced", "skipped" or "not-in-card".
+        """
+        card = LAUNCH_PRICING.get(tier.slug)
+        if card is None:
+            # Packers & Movers, and anything added later that is not
+            # distance-priced.
+            return "not-in-card"
+
+        already_priced = tier.per_km_rate is not None
+        if already_priced and not self.force_pricing:
+            self.stdout.write(
+                "  = %-30s already priced (per_km_rate=%s) -- left alone"
+                % (tier.slug, tier.per_km_rate)
+            )
+            return "skipped"
+
+        for field, value in card.items():
+            setattr(tier, field, Decimal(value))
+        tier.save(update_fields=list(card.keys()) + ["updated_at"])
+        verb = "forced" if already_priced else "applied"
+        self.stdout.write(
+            "  %s %-30s base=%s per_km=%s free_km=%s min=%s load=%s stop=%s"
+            % ("~" if already_priced else "+", tier.slug,
+               card["base_fare"], card["per_km_rate"], card["free_km"],
+               card["minimum_fare"], card["loading_unloading_charge"],
+               card["additional_stop_charge"])
+        )
+        return verb
 
     def _seed_lanes(self, category, lanes):
         count = 0

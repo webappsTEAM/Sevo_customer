@@ -261,42 +261,38 @@ class SeedDataMatchesTheCategoryGateTests(APITestCase):
             self.assertIsNotNone(tier.starting_price, tier.slug)
             self.assertGreater(tier.starting_price, Decimal("0.00"), tier.slug)
 
-    def test_seeded_tiers_are_on_flat_pricing_until_per_km_rates_are_supplied(self):
+    def test_re_running_the_seed_does_not_revert_rates_tuned_after_launch(self):
         """
-        Documents the actual state of the catalogue rather than asserting a
-        wish. The seed sets no per_km_rate, so distance pricing is inert and
-        every quote returns the flat starting_price. This is correct
-        behaviour -- no rate was invented -- but it means Porter-style
-        distance pricing is NOT live until real rates are entered.
-
-        When rates are supplied this test should be updated to assert they
-        exist; it failing is the signal that the catalogue changed.
+        The seed runs on deploys. A tier whose rates someone has since tuned
+        in the admin must survive that -- silently reverting live pricing on
+        a routine redeploy would be the worst thing this command could do.
         """
-        priced = ServiceTier.objects.exclude(per_km_rate=None).count()
-        total = ServiceTier.objects.count()
-        self.assertEqual(
-            priced, 0,
-            f"{priced}/{total} tiers now carry a per_km_rate -- distance pricing is "
-            f"live, so update this test to assert the rates are present and correct",
-        )
-
-    def test_re_running_the_seed_does_not_wipe_manually_entered_rates(self):
-        # update_or_create's defaults come from the seed dicts, which carry
-        # no pricing-formula keys -- so rates an admin enters survive a
-        # re-seed. Worth pinning: the opposite would silently revert
-        # production pricing on any redeploy that re-runs the seed.
         from django.core.management import call_command
 
-        tier = ServiceTier.objects.filter(category="truck").first()
-        tier.per_km_rate = Decimal("18.00")
-        tier.base_fare = Decimal("250.00")
+        tier = ServiceTier.objects.get(slug="tata-ace")
+        tier.per_km_rate = Decimal("26.50")      # a deliberate post-launch change
+        tier.base_fare = Decimal("240.00")
         tier.save(update_fields=["per_km_rate", "base_fare"])
 
         call_command("seed_logistics_hosur", verbosity=0)
 
         tier.refresh_from_db()
-        self.assertEqual(tier.per_km_rate, Decimal("18.00"))
-        self.assertEqual(tier.base_fare, Decimal("250.00"))
+        self.assertEqual(tier.per_km_rate, Decimal("26.50"))
+        self.assertEqual(tier.base_fare, Decimal("240.00"))
+
+    def test_force_pricing_resets_a_tuned_tier_back_to_the_card(self):
+        # The deliberate escape hatch, so "we cannot revert" is a choice and
+        # not a limitation.
+        from django.core.management import call_command
+
+        tier = ServiceTier.objects.get(slug="tata-ace")
+        tier.per_km_rate = Decimal("26.50")
+        tier.save(update_fields=["per_km_rate"])
+
+        call_command("seed_logistics_hosur", "--force-pricing", verbosity=0)
+
+        tier.refresh_from_db()
+        self.assertEqual(tier.per_km_rate, Decimal("22.00"))
 
 
 class CategoryVocabularyTests(APITestCase):
@@ -363,3 +359,142 @@ class CategoryVocabularyTests(APITestCase):
                 logistics_tier=None, logistics_lane=None,
                 submitted_amount=Decimal("1.00"),
             )
+
+
+class LaunchRateCardTests(APITestCase):
+    """
+    The SEVO Goods & Transport launch rate card, asserted value by value.
+
+    These are SEVO's own proposed rates, supplied by the business. Every
+    number below is pinned so a later edit to the seed -- or to the fare
+    formula -- cannot move a published price without a test saying so.
+    """
+
+    # slug -> (base_fare, per_km_rate, free_km, minimum_fare,
+    #          loading_unloading_charge, additional_stop_charge)
+    CARD = {
+        "3-wheeler":                  ("150.00", "18.00", "2.00", "150.00", "40.00", "30.00"),
+        "tata-ace":                   ("220.00", "22.00", "3.00", "220.00", "60.00", "40.00"),
+        "pickup-8ft":                 ("300.00", "28.00", "3.00", "300.00", "80.00", "50.00"),
+        "1-7-ton":                    ("450.00", "40.00", "5.00", "450.00", "120.00", "75.00"),
+        "2-wheeler":                  ("50.00",  "10.00", "1.00", "50.00",  "10.00", "15.00"),
+        "2-wheeler-electric-express": ("60.00",  "11.00", "1.00", "60.00",  "10.00", "15.00"),
+    }
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.management import call_command
+        call_command("seed_logistics_hosur", verbosity=0)
+
+    def test_every_tier_carries_its_exact_card_values(self):
+        for slug, (base, per_km, free, minimum, load, stop) in self.CARD.items():
+            with self.subTest(slug=slug):
+                t = ServiceTier.objects.get(slug=slug)
+                self.assertEqual(t.base_fare, Decimal(base))
+                self.assertEqual(t.per_km_rate, Decimal(per_km))
+                self.assertEqual(t.free_km, Decimal(free))
+                self.assertEqual(t.minimum_fare, Decimal(minimum))
+                self.assertEqual(t.loading_unloading_charge, Decimal(load))
+                self.assertEqual(t.additional_stop_charge, Decimal(stop))
+
+    def test_surge_is_left_at_one_because_no_surge_value_was_supplied(self):
+        for slug in self.CARD:
+            self.assertEqual(
+                ServiceTier.objects.get(slug=slug).surge_multiplier, Decimal("1.00"),
+                f"{slug}: a surge value was invented",
+            )
+
+    def test_packers_movers_stays_survey_priced(self):
+        # H.2: relocation is volume/inventory/crew based and starts with a
+        # physical survey. A per-km rate here would be data the fare engine
+        # never reads, and it would make the tier look distance-priced.
+        for tier in ServiceTier.objects.filter(category="packers_movers"):
+            with self.subTest(slug=tier.slug):
+                self.assertIsNone(tier.per_km_rate, tier.slug)
+                self.assertIsNone(tier.base_fare, tier.slug)
+                self.assertGreater(tier.starting_price, Decimal("0.00"))
+
+    def test_packers_movers_is_not_distance_priced_in_the_engine_either(self):
+        from service_requests.services.logistics_pricing import DISTANCE_PRICED_CATEGORIES
+        self.assertNotIn("packers_movers", DISTANCE_PRICED_CATEGORIES)
+
+
+class LaunchFareExamplesTests(APITestCase):
+    """
+    Worked fares at 2, 5, 10 and 20 km, computed by the real engine with the
+    distance stubbed at the boundary (this environment cannot reach Google,
+    and the point here is the arithmetic, not the road network).
+
+    fare = base_fare + max(0, km - free_km) x per_km_rate
+           + loading_unloading_charge, x surge, floored at minimum_fare
+    """
+
+    EXPECTED = {
+        # slug: {km: fare}
+        "3-wheeler":                  {2: "190.00", 5: "244.00", 10: "334.00", 20: "514.00"},
+        "tata-ace":                   {2: "280.00", 5: "324.00", 10: "434.00", 20: "654.00"},
+        "pickup-8ft":                 {2: "380.00", 5: "436.00", 10: "576.00", 20: "856.00"},
+        "1-7-ton":                    {2: "570.00", 5: "570.00", 10: "770.00", 20: "1170.00"},
+        "2-wheeler":                  {2: "70.00",  5: "100.00", 10: "150.00", 20: "250.00"},
+        "2-wheeler-electric-express": {2: "81.00",  5: "114.00", 10: "169.00", 20: "279.00"},
+    }
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.management import call_command
+        call_command("seed_logistics_hosur", verbosity=0)
+
+    def _fare(self, slug, km, stop_count=2):
+        from unittest.mock import patch
+        from service_requests.services.logistics_pricing import quote_logistics_fare
+
+        tier = ServiceTier.objects.get(slug=slug)
+        route = {"distance_km": float(km), "duration_seconds": 600, "source": "google_maps"}
+        with patch("service_requests.services.routing.get_route_eta", return_value=route):
+            return quote_logistics_fare(
+                tier=tier,
+                pickup_lat=PICKUP["lat"], pickup_lng=PICKUP["lng"],
+                drop_lat=DROP["lat"], drop_lng=DROP["lng"],
+                stop_count=stop_count,
+            )
+
+    def test_worked_fares_at_2_5_10_and_20_km(self):
+        for slug, by_km in self.EXPECTED.items():
+            for km, expected in by_km.items():
+                with self.subTest(slug=slug, km=km):
+                    self.assertEqual(self._fare(slug, km)["total"], Decimal(expected))
+
+    def test_free_km_is_actually_free(self):
+        # 1.7 ton includes 5 km, so 2 km and 5 km cost the same.
+        self.assertEqual(self._fare("1-7-ton", 2)["total"],
+                         self._fare("1-7-ton", 5)["total"])
+
+    def test_the_minimum_fare_never_binds_on_this_card(self):
+        # Worth stating: on every tier base_fare + loading already exceeds
+        # minimum_fare, so the floor is inert. If a future card lowers a base
+        # below its minimum this test fails and someone looks at it.
+        for slug in self.EXPECTED:
+            bd = self._fare(slug, 0)
+            self.assertFalse(bd["minimum_fare_applied"], slug)
+
+    def test_an_extra_stop_adds_exactly_the_cards_stop_charge(self):
+        two = self._fare("tata-ace", 10, stop_count=2)["total"]
+        three = self._fare("tata-ace", 10, stop_count=3)["total"]
+        self.assertEqual(three - two, Decimal("40.00"))
+
+    def test_a_client_supplied_total_cannot_override_the_card(self):
+        from unittest.mock import patch
+        from service_requests.services.logistics_pricing import resolve_logistics_fare_v2
+
+        tier = ServiceTier.objects.get(slug="tata-ace")
+        route = {"distance_km": 10.0, "duration_seconds": 600, "source": "google_maps"}
+        with patch("service_requests.services.routing.get_route_eta", return_value=route):
+            fare, breakdown = resolve_logistics_fare_v2(
+                service_category="goods_transport_truck",
+                logistics_tier=tier, logistics_lane=None,
+                submitted_amount=Decimal("1.00"),     # tampered
+                pickup_lat=PICKUP["lat"], pickup_lng=PICKUP["lng"],
+                drop_lat=DROP["lat"], drop_lng=DROP["lng"],
+            )
+        self.assertEqual(fare, Decimal("434.00"))
+        self.assertEqual(breakdown["base_fare"], Decimal("220.00"))
