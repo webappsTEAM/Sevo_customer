@@ -585,6 +585,12 @@ class WorkforceWebhookView(APIView):
                             # customer-facing tracking UI reads.
                             logger.warning("Rejected invalid logistics leg %r for booking %s", leg, sr.id)
                         else:
+                            # DELIVERED is the moment every input to the final
+                            # fare exists: stops completed, extra work
+                            # approved, distance travelled. This is where the
+                            # estimate becomes the amount actually charged.
+                            if leg == "DELIVERED":
+                                self._reconcile_final_fare(sr, payload)
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
 
                 # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
@@ -712,6 +718,50 @@ class WorkforceWebhookView(APIView):
 
             stop.save(update_fields=fields)
             transaction.on_commit(lambda: cls._broadcast_event(sr, "trip_stop_progress"))
+
+    @classmethod
+    def _reconcile_final_fare(cls, sr, payload):
+        """
+        Turn the booking's estimate into the final fare once the trip is
+        delivered.
+
+        reconcile_booking_fare() has existed, fully implemented and tested,
+        since the fare work -- and was called by nothing. The "final fare"
+        step of the journey simply did not happen: a trip that ran 40 km on
+        a 20 km quote was charged the 20 km price, extra stops the driver
+        actually completed were charged for at all, and approved extra work
+        never reached the amount collected. This is the call site it was
+        written for.
+
+        `actual_distance_km` is used only when the vendor app reports a
+        measured trip distance. Absent it, distance variance is skipped and
+        stops/extra-work/minimum-fare still reconcile -- the function is
+        built to return a partial reconciliation rather than nothing.
+
+        Fire-and-forget, and idempotent on the receiving side
+        (update_or_create keyed on the booking), so a retried DELIVERED
+        event cannot double-adjust a fare and a reconciliation failure can
+        never undo the delivery it accompanied.
+        """
+        from service_requests.services.fare_reconciliation import reconcile_booking_fare
+
+        try:
+            measured = (
+                payload.get("actual_distance_km")
+                or payload.get("distance_km")
+                or payload.get("trip_distance_km")
+            )
+            recon = reconcile_booking_fare(sr, actual_distance_km=measured)
+            if recon is not None and recon.delta:
+                logger.info(
+                    "Fare reconciled for booking %s: estimate %s -> final %s (delta %s)",
+                    sr.request_id, recon.estimated_amount, recon.final_amount, recon.delta,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Could not reconcile the final fare for booking %s: %s",
+                getattr(sr, "request_id", sr.pk), exc,
+            )
 
     @classmethod
     def _record_delivery_proof(cls, sr, payload):

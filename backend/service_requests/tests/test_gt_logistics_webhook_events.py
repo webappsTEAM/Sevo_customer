@@ -366,3 +366,106 @@ class LogisticsWebhookEventTests(TestCase):
             HTTP_X_WORKFORCE_WEBHOOK_SECRET=SECRET,
         )
         self.assertIn(resp.status_code, (400, 404), resp.content)
+
+
+class FinalFareReconciliationTests(TestCase):
+    """
+    The final-fare step of the journey.
+
+    reconcile_booking_fare() existed, fully implemented and tested, and was
+    called by nothing: the estimate a customer booked at was the amount they
+    were charged no matter what the trip actually did. These tests pin it to
+    the DELIVERED event that now drives it.
+    """
+    def setUp(self):
+        secret_patch = patch(
+            "workforce_integration.views.WORKFORCE_WEBHOOK_SECRET", SECRET
+        )
+        secret_patch.start()
+        self.addCleanup(secret_patch.stop)
+        self.sr = _booking(
+            total_amount=Decimal("908.94"),
+            fare_breakdown={
+                "total": "908.94", "base_fare": "250.00",
+                "distance_km": "35.83", "chargeable_km": "33.83",
+                "distance_charge": "608.94", "loading_unloading": "50.00",
+                "additional_stops": 0, "additional_stop_charge": "0.00",
+                "subtotal": "908.94", "surge_multiplier": "1.00",
+                "minimum_fare_applied": False,
+                "distance_source": "straight_line_estimate", "currency": "INR",
+            },
+        )
+
+    def _send(self, event, payload=None, event_id=None):
+        body = {
+            "event": event,
+            "event_id": event_id or f"evt_{uuid.uuid4().hex}",
+            "sequence": 1,
+            "payload": {"booking_id": self.sr.request_id, **(payload or {})},
+        }
+        return self.client.post(
+            WEBHOOK_URL, data=json.dumps(body), content_type="application/json",
+            HTTP_X_WORKFORCE_WEBHOOK_SECRET=SECRET,
+        )
+
+    def test_delivered_produces_a_reconciliation_row(self):
+        from service_requests.models import FareReconciliation
+
+        res = self._send("logistics.leg_changed", {"leg": "DELIVERED"})
+        self.assertEqual(res.status_code, 200)
+        recon = FareReconciliation.objects.filter(booking=self.sr).first()
+        self.assertIsNotNone(recon, "DELIVERED must produce a final fare")
+        self.assertEqual(recon.estimated_amount, Decimal("908.94"))
+
+    def test_a_longer_trip_is_repriced_at_the_rate_that_was_quoted(self):
+        # 35.83 km quoted, 45.83 actual -> 10 extra km at the effective rate
+        # recovered from the stored quote (608.94 / 33.83 = 18.00).
+        self._send("logistics.leg_changed", {"leg": "DELIVERED", "actual_distance_km": "45.83"})
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.total_amount, Decimal("1088.94"))
+
+    def test_reconciliation_is_idempotent_across_a_retried_delivered_event(self):
+        from service_requests.models import FareReconciliation
+
+        payload = {"leg": "DELIVERED", "actual_distance_km": "45.83"}
+        self._send("logistics.leg_changed", payload)
+        self.sr.refresh_from_db()
+        once = self.sr.total_amount
+        # Same event, new id -- a retry after a lost response.
+        self._send("logistics.leg_changed", payload, event_id=f"evt_{uuid.uuid4().hex}")
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.total_amount, once, "a retry must not double-adjust the fare")
+        self.assertEqual(FareReconciliation.objects.filter(booking=self.sr).count(), 1)
+
+    def test_an_earlier_leg_does_not_reconcile(self):
+        from service_requests.models import FareReconciliation
+
+        self._send("logistics.leg_changed", {"leg": "LOADING"})
+        self.assertFalse(FareReconciliation.objects.filter(booking=self.sr).exists())
+
+    def test_a_flat_priced_booking_is_left_alone(self):
+        from service_requests.models import FareReconciliation
+
+        flat = _booking(total_amount=Decimal("400.00"), fare_breakdown={})
+        body = {
+            "event": "logistics.leg_changed",
+            "event_id": f"evt_{uuid.uuid4().hex}",
+            "payload": {"booking_id": flat.request_id, "leg": "DELIVERED"},
+        }
+        res = self.client.post(WEBHOOK_URL, data=json.dumps(body),
+                               content_type="application/json",
+                               HTTP_X_WORKFORCE_WEBHOOK_SECRET=SECRET)
+        self.assertEqual(res.status_code, 200)
+        flat.refresh_from_db()
+        self.assertEqual(flat.total_amount, Decimal("400.00"))
+        self.assertFalse(FareReconciliation.objects.filter(booking=flat).exists())
+
+    def test_a_reconciliation_failure_never_breaks_the_webhook(self):
+        with patch(
+            "service_requests.services.fare_reconciliation.reconcile_booking_fare",
+            side_effect=RuntimeError("pricing service down"),
+        ):
+            res = self._send("logistics.leg_changed", {"leg": "DELIVERED"})
+        self.assertEqual(res.status_code, 200)
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.logistics_leg, "DELIVERED")

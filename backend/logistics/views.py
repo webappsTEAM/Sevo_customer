@@ -11,6 +11,7 @@ logic never lives in views) — there isn't any yet because this is pure
 catalog lookup. Fare computation for an actual booking (once the frontend
 submits one) belongs in service_requests/services/, not here.
 """
+import logging
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import permissions, status
@@ -22,6 +23,8 @@ from utils.responses import success_response
 
 from .models import Lane, ServiceArea, ServiceTier
 from .serializers import LaneSerializer, ServiceAreaSerializer, ServiceTierSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceTierListView(APIView):
@@ -122,7 +125,8 @@ class LogisticsQuoteView(APIView):
 
     def post(self, request):
         from service_requests.services.logistics_pricing import (
-            DISTANCE_PRICED_CATEGORIES, quote_logistics_fare,
+            DISTANCE_PRICED_CATEGORIES, LogisticsCatalogMismatchError,
+            assert_catalog_matches_category, quote_logistics_fare,
         )
 
         data = request.data if isinstance(request.data, dict) else {}
@@ -165,6 +169,28 @@ class LogisticsQuoteView(APIView):
                     "success": False,
                     "error_code": "TIER_NOT_FOUND",
                     "message": "Select a vehicle type to get a fare.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # The tier id is just a number in the request body. Without this
+        # check a caller could quote a `goods_transport_truck` trip against
+        # a two_wheeler tier and be given the scooter fare -- and then book
+        # at it, because the booking path resolved the same unchecked tier.
+        # Same rule, same service function, so quote and booking cannot
+        # disagree about which catalogue records a category may price from.
+        try:
+            assert_catalog_matches_category(category, tier=tier)
+        except LogisticsCatalogMismatchError as exc:
+            logger.warning(
+                "Rejected logistics quote: %s (category=%r tier=%s)",
+                exc, category, tier.id,
+            )
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "TIER_CATEGORY_MISMATCH",
+                    "message": "That vehicle type isn't available for this service. Pick one from the list.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )

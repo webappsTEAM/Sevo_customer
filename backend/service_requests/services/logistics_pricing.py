@@ -40,12 +40,18 @@ DISTANCE_PRICED_CATEGORIES = {
 # one pickup + one drop. H.1: "additional_stop_charge x (stops - 2)".
 STANDARD_STOP_COUNT = 2
 
-_PAISE = Decimal("0.01")
-
-
-def _money(value):
-    """Quantise to 2dp with half-up rounding -- money, never float."""
-    return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
+# The booking's service_category and the catalogue's LogisticsCategory are
+# two different vocabularies for the same thing, and nothing was checking
+# they agreed. A tier id is just a number in the request body, so a caller
+# could ask for a `goods_transport_truck` booking while naming a
+# two_wheeler tier and be charged the scooter fare for a truck -- the
+# customer picks the price by picking the tier, and the price was never
+# checked against what was actually being booked.
+SERVICE_CATEGORY_TO_TIER_CATEGORY = {
+    "goods_transport_truck": "truck",
+    "goods_transport_two_wheeler": "two_wheeler",
+    "packers_movers": "packers_movers",
+}
 
 
 class UnresolvedLogisticsFareError(Exception):
@@ -57,6 +63,63 @@ class UnresolvedLogisticsFareError(Exception):
     an unverified, client-supplied price.
     """
     pass
+
+
+class LogisticsCatalogMismatchError(UnresolvedLogisticsFareError):
+    """
+    The tier or lane named does not belong to the category being booked, or
+    is no longer active.
+
+    Subclasses UnresolvedLogisticsFareError deliberately: every caller
+    already handles that by refusing the booking with "pick a valid
+    route/tier", which is exactly the right outcome here too. Callers that
+    want to say something more specific can catch this first.
+    """
+    pass
+
+
+def expected_tier_category(service_category):
+    """The catalogue category a booking of `service_category` must use."""
+    return SERVICE_CATEGORY_TO_TIER_CATEGORY.get((service_category or "").strip())
+
+
+def assert_catalog_matches_category(service_category, *, tier=None, lane=None):
+    """
+    Raise unless every catalogue record supplied belongs to this booking's
+    category and is still active.
+
+    Checked for tiers AND lanes: a lane carries a flat fare and the same
+    category column, so the same substitution works there.
+
+    Silent on a category this mapping doesn't know: non-logistics bookings
+    never reach the fare resolver's logistics branch, and a new logistics
+    category should fail by being added here, not by being rejected in
+    production before anyone notices.
+    """
+    expected = expected_tier_category(service_category)
+    if expected is None:
+        return
+
+    for label, obj in (("tier", tier), ("lane", lane)):
+        if obj is None:
+            continue
+        actual = (getattr(obj, "category", "") or "").strip()
+        if actual != expected:
+            raise LogisticsCatalogMismatchError(
+                f"The selected {label} is a '{actual}' {label}, but this booking is "
+                f"'{service_category}' (expects '{expected}')."
+            )
+        if not getattr(obj, "is_active", True):
+            raise LogisticsCatalogMismatchError(
+                f"The selected {label} is no longer available."
+            )
+
+_PAISE = Decimal("0.01")
+
+
+def _money(value):
+    """Quantise to 2dp with half-up rounding -- money, never float."""
+    return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
 
 
 def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, submitted_amount):
@@ -81,6 +144,14 @@ def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, 
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount
+
+    # Before reading a price off either record, confirm it is a record this
+    # booking is entitled to price from. Without this, the tier/lane id in
+    # the request body chooses the fare with nothing checking it belongs to
+    # the category being booked.
+    assert_catalog_matches_category(
+        service_category, tier=logistics_tier, lane=logistics_lane
+    )
 
     if logistics_lane is not None:
         return logistics_lane.fare
@@ -257,6 +328,14 @@ def resolve_logistics_fare_v2(
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount, None
+
+    # Same gate as the flat resolver, applied before the distance formula
+    # too -- otherwise a mismatched tier would be caught only on the flat
+    # fall-through path and would sail through distance pricing, which is
+    # the path that actually computes most goods-transport fares.
+    assert_catalog_matches_category(
+        service_category, tier=logistics_tier, lane=logistics_lane
+    )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
         breakdown = quote_logistics_fare(
