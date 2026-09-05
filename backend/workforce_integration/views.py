@@ -723,8 +723,38 @@ class WorkforceWebhookView(APIView):
         confirmation, or a note -- and writes one DeliveryProof row per
         distinct kind. Never raises into the webhook: a proof that fails to
         record must not roll back the completion event it accompanied.
+
+        Idempotent per (booking, stop, kind, value). The event-id replay
+        guard alone is not enough here: a driver who loses the network
+        mid-upload retries, the vendor's proof endpoint accepts the
+        re-submission (it upserts a single PostServiceProof and explicitly
+        allows a repeat while the job is in proof_submitted), and it emits a
+        FRESH event with a new id. Same delivery, same photo, different
+        event -- so without this the customer would see the same signature
+        and recipient listed twice on their tracking screen.
         """
         from service_requests.models import DeliveryProof
+
+        def _record(proof_type, **extra):
+            """Create this proof unless an identical one is already stored."""
+            lookup = dict(
+                booking=common["booking"], stop=common["stop"],
+                proof_type=proof_type,
+            )
+            # The value that identifies this evidence: the image reference
+            # for a photo/signature, the recipient for a name, the note for
+            # a note. OTP has no value of its own -- one confirmed OTP per
+            # stop is one fact, not several.
+            if "image" in extra:
+                lookup["image"] = extra["image"]
+            elif proof_type == DeliveryProof.ProofType.RECIPIENT_NAME:
+                lookup["recipient_name"] = common["recipient_name"]
+            elif proof_type == DeliveryProof.ProofType.NOTE:
+                lookup["notes"] = extra.get("notes", "")
+            _obj, was_created = DeliveryProof.objects.get_or_create(
+                defaults={**common, **extra}, **lookup
+            )
+            return 1 if was_created else 0
 
         try:
             stop = cls._resolve_stop(sr, payload)
@@ -740,7 +770,8 @@ class WorkforceWebhookView(APIView):
                 longitude=loc.get("longitude"),
             )
 
-            created = 0
+            created = 0   # rows actually written by this event
+            supplied = 0  # kinds of evidence the payload carried at all
             notes = str(payload.get("notes") or payload.get("remarks") or "")
 
             # A photo/signature arrives as a URL from the vendor app's own
@@ -749,44 +780,45 @@ class WorkforceWebhookView(APIView):
             # this backend's media root from inside a webhook.
             photo_ref = payload.get("photo_url") or payload.get("proof_image") or payload.get("image_url")
             if photo_ref:
-                DeliveryProof.objects.create(
-                    proof_type=DeliveryProof.ProofType.PHOTO,
-                    image=str(photo_ref), notes=notes, **common
+                supplied += 1
+                created += _record(
+                    DeliveryProof.ProofType.PHOTO,
+                    image=str(photo_ref), notes=notes,
                 )
-                created += 1
 
             signature_ref = payload.get("signature_url") or payload.get("signature_image")
             if signature_ref:
-                DeliveryProof.objects.create(
-                    proof_type=DeliveryProof.ProofType.SIGNATURE,
-                    image=str(signature_ref), **common
+                supplied += 1
+                created += _record(
+                    DeliveryProof.ProofType.SIGNATURE, image=str(signature_ref),
                 )
-                created += 1
 
             if common["recipient_name"]:
-                DeliveryProof.objects.create(
-                    proof_type=DeliveryProof.ProofType.RECIPIENT_NAME, **common
-                )
-                created += 1
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.RECIPIENT_NAME)
 
             if payload.get("otp_verified"):
-                DeliveryProof.objects.create(
-                    proof_type=DeliveryProof.ProofType.OTP, **common
-                )
-                created += 1
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.OTP)
 
             # Only fall back to a bare note if nothing stronger was supplied,
             # so a note doesn't duplicate the photo row's own notes field.
-            if created == 0 and notes:
-                DeliveryProof.objects.create(
-                    proof_type=DeliveryProof.ProofType.NOTE, notes=notes, **common
-                )
-                created += 1
+            # Keyed on `supplied`, not `created`: on a retry every kind is
+            # already stored, and treating that as "nothing was supplied"
+            # would invent a bare note the first delivery never had.
+            if supplied == 0 and notes:
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.NOTE, notes=notes)
 
-            if created == 0:
+            if supplied == 0:
                 logger.warning(
                     "completion_proof event for booking %s carried no usable evidence (payload keys: %s)",
                     sr.id, sorted(payload.keys()),
+                )
+            elif created == 0:
+                logger.info(
+                    "completion_proof event for booking %s was a repeat -- every artefact it "
+                    "carried is already recorded; nothing duplicated.", sr.id,
                 )
         except Exception as exc:
             logger.warning("Failed to record delivery proof for booking %s: %s", sr.id, exc)

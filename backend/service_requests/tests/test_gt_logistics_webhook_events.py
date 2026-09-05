@@ -270,6 +270,85 @@ class LogisticsWebhookEventTests(TestCase):
         foreign.refresh_from_db()
         self.assertIsNone(foreign.arrived_at)
 
+    def test_retried_proof_with_a_new_event_id_does_not_duplicate_evidence(self):
+        """
+        The event-id replay guard is not enough on its own.
+
+        A driver who loses the network mid-upload retries; the vendor's proof
+        endpoint accepts the re-submission (it upserts a single
+        PostServiceProof and explicitly allows a repeat while the job is in
+        proof_submitted) and emits a FRESH event with a new id. Same
+        delivery, same photo, different event. Without per-artefact
+        idempotency the customer sees the same signature and recipient listed
+        twice on their tracking screen.
+        """
+        payload = {
+            "photo_url": "https://vendor.example/media/proof/ab12.jpg",
+            "signature_url": "https://vendor.example/media/sig/ab12.png",
+            "recipient_name": "Anitha R",
+            "recipient_phone": "9876500011",
+            "otp_verified": True,
+            "stop_id": self.drop.id,
+            "notes": "Left with the neighbour on the ground floor.",
+        }
+        first = self._send("job.completion_proof_submitted", payload)
+        self.assertEqual(first.status_code, 200)
+        after_first = DeliveryProof.objects.filter(booking=self.sr).count()
+        self.assertEqual(after_first, 4)  # photo, signature, recipient, otp
+
+        # Same evidence, brand new event id -- exactly what a retry looks
+        # like from the receiver's side.
+        second = self._send("job.completion_proof_submitted", payload,
+                            event_id=f"evt_{uuid.uuid4().hex}")
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(DeliveryProof.objects.filter(booking=self.sr).count(), after_first)
+
+    def test_a_retry_does_not_invent_a_note_proof(self):
+        """
+        Guards the specific way per-artefact idempotency can go wrong: on a
+        retry every artefact already exists, so a naive "nothing was created,
+        fall back to a bare note" would add a NOTE row the original delivery
+        never had.
+        """
+        payload = {
+            "photo_url": "https://vendor.example/media/proof/cd34.jpg",
+            "notes": "Handed over at the gate.",
+        }
+        self._send("job.completion_proof_submitted", payload)
+        self._send("job.completion_proof_submitted", payload,
+                   event_id=f"evt_{uuid.uuid4().hex}")
+        self.assertEqual(
+            DeliveryProof.objects.filter(
+                booking=self.sr, proof_type=DeliveryProof.ProofType.NOTE
+            ).count(),
+            0,
+        )
+        self.assertEqual(DeliveryProof.objects.filter(booking=self.sr).count(), 1)
+
+    def test_genuinely_new_evidence_after_a_retry_is_still_recorded(self):
+        """
+        Idempotency must not become deafness: a second drop on a multi-stop
+        trip, or a signature captured after the photo, is new evidence and
+        has to land.
+        """
+        self._send("job.completion_proof_submitted", {
+            "photo_url": "https://vendor.example/media/proof/ef56.jpg",
+            "stop_id": self.drop.id,
+        })
+        self._send("job.completion_proof_submitted", {
+            "photo_url": "https://vendor.example/media/proof/ef56.jpg",
+            "signature_url": "https://vendor.example/media/sig/ef56.png",
+            "stop_id": self.drop.id,
+        })
+        types = set(
+            DeliveryProof.objects.filter(booking=self.sr).values_list("proof_type", flat=True)
+        )
+        self.assertEqual(
+            types,
+            {DeliveryProof.ProofType.PHOTO, DeliveryProof.ProofType.SIGNATURE},
+        )
+        self.assertEqual(DeliveryProof.objects.filter(booking=self.sr).count(), 2)
+
     def test_proof_event_with_no_evidence_records_nothing_but_succeeds(self):
         resp = self._send("job.completion_proof_submitted", {})
         self.assertEqual(resp.status_code, 200, resp.content)

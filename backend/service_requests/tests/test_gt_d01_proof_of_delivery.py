@@ -233,8 +233,11 @@ class DeliveryProofTests(TestCase):
         from unittest.mock import patch
 
         sr = _booking()
+        # get_or_create, not create: proof recording became idempotent per
+        # (booking, stop, kind, value) so a driver's retry cannot duplicate
+        # the evidence, and that is the call that now touches storage.
         with patch(
-            "service_requests.models.DeliveryProof.objects.create",
+            "service_requests.models.DeliveryProof.objects.get_or_create",
             side_effect=RuntimeError("storage unavailable"),
         ):
             WorkforceWebhookView._record_delivery_proof(
