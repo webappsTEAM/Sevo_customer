@@ -53,9 +53,19 @@ def _verify_booking_ownership(request, sr):
         or request.query_params.get("token")
         or request.data.get("tracking_token")
     )
+    # The expiry rule has to apply here too. EC-08 gave tracking tokens a
+    # 180-day life because a link that has been forwarded, screenshotted or
+    # left in an old SMS should stop being a bearer credential -- but that
+    # check lived only on the tracking endpoints. This one accepts the same
+    # token to authorise a PAYMENT, so without it an expired link was still
+    # good enough to start and confirm an order on someone's booking: a
+    # weaker rule guarding the more sensitive action.
+    from .views import _tracking_token_is_expired
+
     token_matches = bool(
         provided_token and sr.tracking_token and
-        str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+        str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+        not _tracking_token_is_expired(sr)
     )
     if request.user and request.user.is_authenticated:
         is_owner = bool(
