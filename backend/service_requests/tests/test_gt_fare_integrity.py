@@ -297,3 +297,69 @@ class SeedDataMatchesTheCategoryGateTests(APITestCase):
         tier.refresh_from_db()
         self.assertEqual(tier.per_km_rate, Decimal("18.00"))
         self.assertEqual(tier.base_fare, Decimal("250.00"))
+
+
+class CategoryVocabularyTests(APITestCase):
+    """
+    The four logistics category sets across the two apps must agree.
+
+    They drifted once already, and in the worst possible direction: the bare
+    `goods_transport` slug was present in the vendor's dispatch set, in this
+    app's multi-stop trip-editor gate and in vendor_views' copy, but missing
+    from LOGISTICS_CATEGORIES -- the one set that decides whether a
+    client-supplied total is trusted. So the vendor treated those bookings as
+    logistics for dispatch, legs and stops, while this app priced them at
+    whatever the client sent.
+    """
+
+    CANONICAL = {
+        "goods_transport",
+        "goods_transport_truck",
+        "goods_transport_two_wheeler",
+        "packers_movers",
+    }
+
+    def test_the_pricing_gate_covers_every_logistics_slug(self):
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+        self.assertEqual(set(LOGISTICS_CATEGORIES), self.CANONICAL)
+
+    def test_the_trip_stop_gate_agrees(self):
+        from service_requests.services import LOGISTICS_STOP_CATEGORIES
+        self.assertEqual(set(LOGISTICS_STOP_CATEGORIES), self.CANONICAL)
+
+    def test_every_slug_with_a_gt_request_prefix_is_priced_as_logistics(self):
+        """
+        The request-id prefix map is the closest thing to a registry of live
+        category slugs. Anything it labels GT or PM is a goods-transport
+        booking and must not be priced from a client-supplied amount.
+        """
+        from service_requests.models import CATEGORY_PREFIX_MAP
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+
+        gt_slugs = {
+            slug for slug, prefix in CATEGORY_PREFIX_MAP.items()
+            if prefix in ("GT", "PM")
+        }
+        unpriced = gt_slugs - set(LOGISTICS_CATEGORIES)
+        self.assertEqual(
+            unpriced, {"truck"},
+            "a goods-transport slug is not covered by the pricing gate, so its "
+            f"bookings would be priced from the client's amount: {sorted(unpriced)}",
+        )
+
+    def test_the_bare_slug_is_not_distance_priced(self):
+        # It does not say truck or two-wheeler, so there is no tier category
+        # to validate a distance quote against.
+        from service_requests.services.logistics_pricing import DISTANCE_PRICED_CATEGORIES
+        self.assertNotIn("goods_transport", DISTANCE_PRICED_CATEGORIES)
+
+    def test_a_bare_slug_booking_refuses_rather_than_trusting_the_client(self):
+        from service_requests.services.logistics_pricing import (
+            UnresolvedLogisticsFareError, resolve_logistics_fare_v2,
+        )
+        with self.assertRaises(UnresolvedLogisticsFareError):
+            resolve_logistics_fare_v2(
+                service_category="goods_transport",
+                logistics_tier=None, logistics_lane=None,
+                submitted_amount=Decimal("1.00"),
+            )

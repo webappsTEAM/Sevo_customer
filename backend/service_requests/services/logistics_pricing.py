@@ -20,6 +20,27 @@ LOGISTICS_CATEGORIES = {
     "goods_transport_truck",
     "goods_transport_two_wheeler",
     "packers_movers",
+    # The bare slug was missing here and present in all three of the other
+    # logistics category sets -- the vendor's LOGISTICS_SERVICE_CATEGORIES,
+    # this app's LOGISTICS_STOP_CATEGORIES (the multi-stop trip editor's
+    # gate) and vendor_views' copy. It is a live value, not a legacy one:
+    # it has its own "GT" request-id prefix in models.py and the generic
+    # booking page emits it as a category slug.
+    #
+    # Being absent HERE specifically meant resolve_logistics_fare returned
+    # the submitted amount unchanged for those bookings -- so a
+    # goods_transport booking was priced by whatever the client sent, while
+    # the vendor side treated the same booking as logistics for dispatch,
+    # legs and stops. This set is the one that decides whether a client
+    # total is trusted, which made it the worst of the four to be missing
+    # from.
+    #
+    # Deliberately NOT added to DISTANCE_PRICED_CATEGORIES below: the bare
+    # slug does not say whether the trip is a truck or a two-wheeler, so
+    # there is no tier category to validate it against. It resolves through
+    # the flat lane/tier lookup, or raises UnresolvedLogisticsFareError and
+    # gets a clean 400 -- never a trusted client amount.
+    "goods_transport",
 }
 
 # GT-B-01: which categories get real distance-based pricing.
