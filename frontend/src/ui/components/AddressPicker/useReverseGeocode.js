@@ -59,10 +59,15 @@ export function useReverseGeocode(coords) {
     try {
       let resolvedData = null
 
+      // SECURITY: a real Google Maps API key was hardcoded here as a
+      // fallback -- committed to git and shipped in every bundle. It now
+      // comes only from the environment; with none set this falls through
+      // to the keyless reverse-geocoding path below. The leaked key still
+      // needs rotating in the Google Cloud console.
       const googleApiKey =
         import.meta.env.VITE_GOOGLE_MAPS_KEY ||
         import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-        "AIzaSyC-7JjgSXDrqNF1BMMnlvKtgRPS6_98uP8"
+        ""
 
       // 1. Direct Google Maps Geocoding API (highest accuracy when API key is provided)
       if (googleApiKey && !signal.aborted) {

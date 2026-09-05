@@ -534,10 +534,24 @@ export function filterLocationSuggestions(searchText) {
   return result
 }
 
+// SECURITY: a real Google Maps API key used to be hardcoded here as a
+// fallback. A key committed to source ships in every built bundle AND sits
+// in git history, and because it was a *fallback* it kept working even
+// where the deployment intended a different key -- so a misconfigured
+// environment silently billed the wrong project instead of failing
+// visibly. The key now comes only from the environment
+// (VITE_GOOGLE_MAPS_KEY / VITE_GOOGLE_MAPS_API_KEY, see
+// frontend/.env.example). With none set, place search degrades to the
+// Photon and Nominatim tiers below, which need no key.
+//
+// Removing it here does NOT un-leak it: the value is still in git history
+// and in any bundle already shipped. It must be rotated in the Google
+// Cloud console, and the replacement restricted by HTTP referrer and by
+// API (Geocoding + Distance Matrix only).
 const GOOGLE_API_KEY =
   (typeof import.meta !== "undefined" && import.meta.env
     ? import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-    : "") || "AIzaSyC-7JjgSXDrqNF1BMMnlvKtgRPS6_98uP8"
+    : "") || ""
 
 function toTitleCase(str) {
   return (str || "")
