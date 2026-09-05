@@ -40,7 +40,19 @@ def detect_customer_location(latitude: float, longitude: float, accuracy: float 
         except (ValueError, TypeError):
             pass
 
-    google_api_key = os.environ.get("VITE_GOOGLE_MAPS_KEY") or os.environ.get("GOOGLE_MAPS_API_KEY") or os.environ.get("VITE_GOOGLE_MAPS_API_KEY")
+    # Server-side calls must prefer the SERVER key. The browser key
+    # (VITE_*) is meant to be restricted by HTTP referrer, and a request
+    # from this process sends no referrer -- so a correctly-restricted
+    # browser key is REJECTED here, and the only way to make this path work
+    # with it is to leave the browser key unrestricted, which is exactly
+    # what must not happen. Reading GOOGLE_MAPS_API_KEY first means the
+    # server uses its own IP-restricted key; the VITE names stay as a
+    # last-resort fallback so deployments that only set those keep working.
+    google_api_key = (
+        os.environ.get("GOOGLE_MAPS_API_KEY")
+        or os.environ.get("VITE_GOOGLE_MAPS_KEY")
+        or os.environ.get("VITE_GOOGLE_MAPS_API_KEY")
+    )
     if google_api_key:
         try:
             g_url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={google_api_key}"

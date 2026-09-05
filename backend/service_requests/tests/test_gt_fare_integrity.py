@@ -24,6 +24,7 @@ from companies.models import Company
 from logistics.models import ServiceTier
 from service_requests.models import ServiceRequest
 from service_requests.services.logistics_pricing import (
+    SERVICE_CATEGORY_TO_TIER_CATEGORY,
     LogisticsCatalogMismatchError,
     UnresolvedLogisticsFareError,
     assert_catalog_matches_category,
@@ -214,3 +215,85 @@ class BookingFareAuthorityTests(APITestCase):
         body.pop("logistics_tier")
         res = self.client.post(reverse("sr-booking"), body, format="json")
         self.assertEqual(res.status_code, 400)
+
+
+class SeedDataMatchesTheCategoryGateTests(APITestCase):
+    """
+    The production seed command and the category gate have to agree.
+
+    They use two different vocabularies for the same idea -- the seed writes
+    LogisticsCategory values ("truck"), bookings carry service_category
+    values ("goods_transport_truck") -- so a divergence here would refuse
+    every real booking in production while every unit test still passed.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.management import call_command
+        call_command("seed_logistics_hosur", verbosity=0)
+
+    def test_the_seed_produces_tiers_for_every_bookable_category(self):
+        for service_category in ("goods_transport_truck",
+                                 "goods_transport_two_wheeler",
+                                 "packers_movers"):
+            expected = SERVICE_CATEGORY_TO_TIER_CATEGORY[service_category]
+            self.assertTrue(
+                ServiceTier.objects.filter(category=expected, is_active=True).exists(),
+                f"no seeded tier can serve a {service_category} booking",
+            )
+
+    def test_every_seeded_tier_passes_the_gate_for_its_own_category(self):
+        reverse_map = {v: k for k, v in SERVICE_CATEGORY_TO_TIER_CATEGORY.items()}
+        for tier in ServiceTier.objects.all():
+            service_category = reverse_map.get(tier.category)
+            self.assertIsNotNone(
+                service_category,
+                f"seeded tier {tier.slug!r} has category {tier.category!r}, which no "
+                f"bookable service_category maps to",
+            )
+            assert_catalog_matches_category(service_category, tier=tier)
+
+    def test_every_seeded_tier_has_a_price_the_server_can_charge(self):
+        # starting_price is the floor of the whole fare chain: it is what a
+        # tier falls back to when distance pricing is not configured, so a
+        # tier without one has no server-verifiable fare at all.
+        for tier in ServiceTier.objects.all():
+            self.assertIsNotNone(tier.starting_price, tier.slug)
+            self.assertGreater(tier.starting_price, Decimal("0.00"), tier.slug)
+
+    def test_seeded_tiers_are_on_flat_pricing_until_per_km_rates_are_supplied(self):
+        """
+        Documents the actual state of the catalogue rather than asserting a
+        wish. The seed sets no per_km_rate, so distance pricing is inert and
+        every quote returns the flat starting_price. This is correct
+        behaviour -- no rate was invented -- but it means Porter-style
+        distance pricing is NOT live until real rates are entered.
+
+        When rates are supplied this test should be updated to assert they
+        exist; it failing is the signal that the catalogue changed.
+        """
+        priced = ServiceTier.objects.exclude(per_km_rate=None).count()
+        total = ServiceTier.objects.count()
+        self.assertEqual(
+            priced, 0,
+            f"{priced}/{total} tiers now carry a per_km_rate -- distance pricing is "
+            f"live, so update this test to assert the rates are present and correct",
+        )
+
+    def test_re_running_the_seed_does_not_wipe_manually_entered_rates(self):
+        # update_or_create's defaults come from the seed dicts, which carry
+        # no pricing-formula keys -- so rates an admin enters survive a
+        # re-seed. Worth pinning: the opposite would silently revert
+        # production pricing on any redeploy that re-runs the seed.
+        from django.core.management import call_command
+
+        tier = ServiceTier.objects.filter(category="truck").first()
+        tier.per_km_rate = Decimal("18.00")
+        tier.base_fare = Decimal("250.00")
+        tier.save(update_fields=["per_km_rate", "base_fare"])
+
+        call_command("seed_logistics_hosur", verbosity=0)
+
+        tier.refresh_from_db()
+        self.assertEqual(tier.per_km_rate, Decimal("18.00"))
+        self.assertEqual(tier.base_fare, Decimal("250.00"))
