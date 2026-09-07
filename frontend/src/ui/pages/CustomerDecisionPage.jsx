@@ -21,29 +21,22 @@ export function CustomerDecisionPage() {
       setLoading(true)
       const res = await fetch(`/api/customer/work-extensions/${token}/`)
       const data = await res.json()
+      // Bug found: on any failure (bad/expired token, server error) this
+      // used to silently substitute a completely fabricated work-extension
+      // record -- a fake customer name ("Sathish"), fake request id, fake
+      // technician notes, and a fake ₹2200 approved amount -- and render it
+      // as if it were a real billing decision the visitor was being asked
+      // to approve. There's already a proper "Link Expired or Invalid"
+      // error screen further down (gated on `error && !extension`); it was
+      // just never reachable because extension was always being set to
+      // this mock data instead of staying null. Use the real error path.
       if (data.success && data.data) {
         setExtension(data.data)
       } else {
-        setExtension({
-          request_id: "SR-0002",
-          customer_name: "Sathish",
-          issue_title: "Standard Package — AC & Heating",
-          original_estimate: 599,
-          approved_amount: 2200,
-          technician_notes: "Run capacitor replacement & refrigerant check required to restore full cooling.",
-          status: "admin_approved"
-        })
+        setError(data.error || "This link is invalid or has expired.")
       }
     } catch (err) {
-      setExtension({
-        request_id: "SR-0002",
-        customer_name: "Sathish",
-        issue_title: "Standard Package — AC & Heating",
-        original_estimate: 599,
-        approved_amount: 2200,
-        technician_notes: "Run capacitor replacement & refrigerant check required to restore full cooling.",
-        status: "admin_approved"
-      })
+      setError("Could not load this decision -- please check your connection and try again.")
     } finally {
       setLoading(false)
     }
@@ -195,21 +188,29 @@ export function CustomerDecisionPage() {
                 </tr>
               </thead>
               <tbody>
+                {/* Bug found: when extension.items was empty this used to
+                    render a fully fabricated line item ("Run Capacitor 45uF
+                    & AC Compressor Service", ₹2200.00) as if it were the
+                    real proposed work -- on a screen whose entire purpose is
+                    a real customer billing decision. A valid extension with
+                    just a single approved amount and no itemized breakdown
+                    is a legitimate case; show that honestly instead of
+                    inventing items. Per-item billed_to_customer also no
+                    longer fakes a ₹2200 fallback if it's ever missing. */}
                 {(extension?.items && extension.items.length > 0) ? (
                   extension.items.map((item) => (
                     <tr key={item.id} className="border-b border-[var(--sevo-border)]/50 last:border-0">
                       <td className="p-3 sm:p-3.5 font-bold text-[var(--sevo-text-primary)]">{item.item_name}</td>
                       <td className="p-3 sm:p-3.5 text-center text-[var(--sevo-text-secondary)]">{item.quantity}</td>
                       <td className="p-3 sm:p-3.5 text-xs text-[var(--sevo-text-muted)]">Company Fulfilled</td>
-                      <td className="p-3 sm:p-3.5 text-right font-black text-[var(--sevo-text-primary)]">₹{Number(item.billed_to_customer || 2200).toFixed(2)}</td>
+                      <td className="p-3 sm:p-3.5 text-right font-black text-[var(--sevo-text-primary)]">₹{Number(item.billed_to_customer || 0).toFixed(2)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr className="border-b border-[var(--sevo-border)]/50 last:border-0">
-                    <td className="p-3 sm:p-3.5 font-bold text-[var(--sevo-text-primary)]">Run Capacitor 45uF &amp; AC Compressor Service</td>
-                    <td className="p-3 sm:p-3.5 text-center text-[var(--sevo-text-secondary)]">1</td>
-                    <td className="p-3 sm:p-3.5 text-xs text-[var(--sevo-text-muted)]">Company Supplied</td>
-                    <td className="p-3 sm:p-3.5 text-right font-black text-[var(--sevo-text-primary)]">₹2200.00</td>
+                    <td className="p-3 sm:p-3.5 text-[var(--sevo-text-muted)] italic" colSpan={4}>
+                      No itemized breakdown provided -- see Additional Approved Amount below.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -220,11 +221,11 @@ export function CustomerDecisionPage() {
           <div className="bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded-2xl p-4 sm:p-5 mb-6">
             <div className="flex justify-between text-xs sm:text-sm text-[var(--sevo-text-secondary)] mb-2">
               <span>Additional Approved Amount</span>
-              <span className="font-bold text-[var(--sevo-text-primary)]">₹{Number(extension?.admin_approved_amount || extension?.approved_amount || 2200).toFixed(2)}</span>
+              <span className="font-bold text-[var(--sevo-text-primary)]">₹{Number(extension?.admin_approved_amount || extension?.approved_amount || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-base sm:text-lg font-black text-[var(--sevo-text-primary)] pt-2.5 border-t border-[var(--sevo-border)]">
               <span>Total Supplemental Balance</span>
-              <span className="text-[var(--sevo-primary)]">₹{Number(extension?.admin_approved_amount || extension?.approved_amount || 2200).toFixed(2)}</span>
+              <span className="text-[var(--sevo-primary)]">₹{Number(extension?.admin_approved_amount || extension?.approved_amount || 0).toFixed(2)}</span>
             </div>
           </div>
 

@@ -136,7 +136,11 @@ export function createTrackingWebSocket(identifier, token, onEvent, onConnection
   let reconnectTimeout = null
   let pingInterval = null
   let retryCount = 0
-  const maxRetries = 6
+  // Reconnect for as long as the tracking page is open. Giving up after six
+  // tries (~31s) silently downgraded the customer to slow REST polling for the
+  // rest of the session, with no way back other than reloading the page.
+  // retryDelays already caps the backoff, so this stays gentle on the server.
+  const maxRetries = Infinity
   const retryDelays = [1000, 2000, 3000, 5000, 8000, 12000]
 
   function notifyState(state) {
@@ -174,7 +178,7 @@ export function createTrackingWebSocket(identifier, token, onEvent, onConnection
       // Safe structured logs without exposing raw tokens
       console.log(`[TRACKING] booking: ${cleanId}`)
       console.log(`[TRACKING] connecting to backend: ${baseUrl}/tracking/${encodeURIComponent(cleanId)}/`)
-      console.log(`[TRACKING] WebSocket connecting (attempt ${retryCount + 1}/${maxRetries})`)
+      console.log(`[TRACKING] WebSocket connecting (attempt ${retryCount + 1})`)
 
       notifyState(retryCount > 0 ? "reconnecting" : "connecting")
 
@@ -228,7 +232,7 @@ export function createTrackingWebSocket(identifier, token, onEvent, onConnection
 
         if (retryCount < maxRetries) {
           const delay = retryDelays[Math.min(retryCount, retryDelays.length - 1)]
-          console.log(`[TRACKING] reconnect attempt: ${retryCount + 1}/${maxRetries} in ${delay}ms...`)
+          console.log(`[TRACKING] reconnect attempt: ${retryCount + 1} in ${delay}ms...`)
           notifyState("reconnecting")
           retryCount++
           if (reconnectTimeout) clearTimeout(reconnectTimeout)

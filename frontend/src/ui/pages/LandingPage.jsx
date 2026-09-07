@@ -1049,6 +1049,8 @@ const VEGETABLE_ITEMS = [
   { name: "Pumpkin Yellow (Cut)", unit: "200 g", price: 42, mrp: 50, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Disco Pumpkin", unit: "500 g", price: 48, mrp: 58, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Brinjal - Bharta", unit: "500 g", price: 26, mrp: 31, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Assorted Capsicum (R/Y/G)", unit: "3 pcs", price: 59, mrp: 70, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
 ]
 
 const GROCERY_ITEMS = [
@@ -2656,6 +2658,14 @@ export function LandingPage() {
       navigate(".", { replace: true, state: {} })
     } else if (location.state?.openGoodsModal) {
       setIsGoodsModalOpen(true)
+      navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openAccountTab) {
+      // HS-A-03: deep-linkable customer account area. Routes like /account/bookings
+      // redirect here with state={{ openAccountTab: "My Bookings" }} so a customer
+      // can be sent a real, bookmarkable/shareable URL that lands them on a specific
+      // account tab instead of only being reachable via the header account button.
+      setActiveAccountTab(location.state.openAccountTab)
+      setShowAccountPortal(true)
       navigate(".", { replace: true, state: {} })
     }
   }, [location.state, navigate])

@@ -12,7 +12,8 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench,
+  Gift, Repeat, PauseCircle, PlayCircle, XCircle
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, extractAuthError,
@@ -360,15 +361,48 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
+// Booking rules are evaluated in the business timezone, never the browser's.
+// The old cut-off logic read the device clock, so a customer whose machine was
+// set to another timezone (or simply wrong) got a different answer than the
+// server would -- and since there was no server-side time check at all, that
+// answer was final. The server now enforces the same window in
+// service_requests/booking_window.py; everything here is the matching
+// convenience filter, and the two deliberately use the same numbers.
+const BOOKING_TIMEZONE = 'Asia/Kolkata'
+const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
+const SAME_DAY_MIN_LEAD_MINUTES = 60
+
+function businessNowParts() {
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: BOOKING_TIMEZONE,
+        hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      }).formatToParts(new Date()).map(part => [part.type, part.value])
+    )
+    return {
+      dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+      hour: Number(parts.hour) % 24,
+      minute: Number(parts.minute),
+    }
+  } catch (_) {
+    // Intl unavailable: fall back to device time rather than blocking booking.
+    const d = new Date()
+    return {
+      dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+    }
+  }
+}
+
 function isSlotInPast(dateStr, slotStr) {
   if (!dateStr || !slotStr) return false
-  const now = new Date()
 
-  // Format today's date in local YYYY-MM-DD
-  const todayYear = now.getFullYear()
-  const todayMonth = String(now.getMonth() + 1).padStart(2, '0')
-  const todayDay = String(now.getDate()).padStart(2, '0')
-  const todayStr = `${todayYear}-${todayMonth}-${todayDay}`
+  const business = businessNowParts()
+  const todayStr = business.dateStr
 
   // Normalize dateStr
   const cleanDateStr = String(dateStr).split('T')[0].trim()
@@ -377,6 +411,10 @@ function isSlotInPast(dateStr, slotStr) {
   if (cleanDateStr < todayStr) return true
   // If date is strictly in the future, slot is available
   if (cleanDateStr > todayStr) return false
+
+  // Same-day bookings close at the daily cut-off: past it, every remaining
+  // slot today is unbookable and the customer is moved on to the next day.
+  if (business.hour >= SAME_DAY_CUTOFF_HOUR) return true
 
   // If date is today, parse the slot time
   let hours = 0
@@ -398,8 +436,11 @@ function isSlotInPast(dateStr, slotStr) {
     minutes = parseInt(parts[1], 10) || 0
   }
 
-  const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0)
-  return slotDate <= now
+  // Compare in business-timezone minutes, and keep the same minimum lead time
+  // the server applies, so a slot starting in a few minutes is not offered.
+  const slotMinutes = hours * 60 + minutes
+  const nowMinutes = business.hour * 60 + business.minute
+  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -3217,7 +3258,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <Clock size={14} color={canCancel ? '#d97706' : '#94a3b8'} />
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: canCancel ? '#92400e' : '#64748b' }}>
                 {canCancel
-                  ? `Free cancellation available: ${formatGraceTime(graceSecs)}`
+                  ? `Cancellation available: ${formatGraceTime(graceSecs)}`
                   : '5-minute free cancellation window expired'}
               </span>
             </div>
@@ -4402,6 +4443,38 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
+  // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
+  // each fetches only when its tab is activated, matching the existing
+  // My Bookings fetch-on-activate pattern immediately above.
+  const [walletData, setWalletData] = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [referralData, setReferralData] = useState(null)
+  const [referralLoading, setReferralLoading] = useState(false)
+  const [amcSeries, setAmcSeries] = useState([])
+  const [amcLoading, setAmcLoading] = useState(false)
+  const [amcActionError, setAmcActionError] = useState("")
+  // GT-C-03: Insurance Claims tab.
+  const [insuranceClaims, setInsuranceClaims] = useState([])
+  const [claimsLoading, setClaimsLoading] = useState(false)
+  const [claimBookingId, setClaimBookingId] = useState("")
+  const [claimDescription, setClaimDescription] = useState("")
+  const [claimAmount, setClaimAmount] = useState("")
+  const [claimSubmitting, setClaimSubmitting] = useState(false)
+  const [claimError, setClaimError] = useState("")
+  // GT-D-02: per-booking multi-stop trip editor, inline in the My
+  // Bookings card rather than a separate tab -- a stop list only makes
+  // sense in the context of one specific booking.
+  const LOGISTICS_STOP_CATEGORIES = ['goods_transport_truck', 'goods_transport_two_wheeler', 'goods_transport', 'packers_movers']
+  const [stopsEditorBookingId, setStopsEditorBookingId] = useState(null)
+  const [stopsDraft, setStopsDraft] = useState([])
+  const [stopsLoading, setStopsLoading] = useState(false)
+  const [stopsSaving, setStopsSaving] = useState(false)
+  const [stopsError, setStopsError] = useState('')
+  const [stopsSavedMsg, setStopsSavedMsg] = useState('')
+  // HS-D-05: Notification Preferences tab.
+  const [notifPrefs, setNotifPrefs] = useState(null)
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifSaving, setNotifSaving] = useState(false)
 
   const [profileName, setProfileName] = useState('')
   const [initialProfileName, setInitialProfileName] = useState('')
@@ -4571,6 +4644,172 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         .finally(() => setBookingsLoading(false))
     }
   }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Wallet" && user) {
+      setWalletLoading(true)
+      apiRequest("/wallet/", { method: "GET" })
+        .then(res => { if (res?.data) setWalletData(res.data) })
+        .catch(console.error)
+        .finally(() => setWalletLoading(false))
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Referral Code" && user) {
+      setReferralLoading(true)
+      apiRequest("/referral-code/", { method: "GET" })
+        .then(res => { if (res?.data) setReferralData(res.data) })
+        .catch(console.error)
+        .finally(() => setReferralLoading(false))
+    }
+  }, [activeTab, user])
+
+  const loadAmcSeries = () => {
+    setAmcLoading(true)
+    apiRequest("/booking-series/", { method: "GET" })
+      .then(res => { if (res?.data) setAmcSeries(res.data) })
+      .catch(console.error)
+      .finally(() => setAmcLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "AMC Bookings" && user) {
+      loadAmcSeries()
+    }
+  }, [activeTab, user])
+
+  const handleAmcStatusChange = (seriesId, newStatus) => {
+    setAmcActionError("")
+    apiRequest(`/booking-series/${seriesId}/status/`, { method: "PATCH", json: { status: newStatus } })
+      .then(res => {
+        if (res?.success === false) {
+          setAmcActionError(res?.error?.message || "Could not update this AMC series.")
+          return
+        }
+        loadAmcSeries()
+      })
+      .catch(() => setAmcActionError("Could not update this AMC series."))
+  }
+
+  const loadInsuranceClaims = () => {
+    setClaimsLoading(true)
+    apiRequest("/insurance-claims/", { method: "GET" })
+      .then(res => { if (res?.data) setInsuranceClaims(res.data) })
+      .catch(console.error)
+      .finally(() => setClaimsLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "Insurance Claims" && user) {
+      loadInsuranceClaims()
+    }
+  }, [activeTab, user])
+
+  const eligibleInsuranceBookings = (realBookings || []).filter(b => b.insurance_opted_in && b.status === "completed")
+
+  const handleFileInsuranceClaim = async (e) => {
+    e.preventDefault()
+    setClaimError("")
+    if (!claimBookingId || !claimDescription.trim() || !claimAmount) {
+      setClaimError("Please choose a booking, describe the damage, and enter a claimed amount.")
+      return
+    }
+    setClaimSubmitting(true)
+    try {
+      const form = new FormData()
+      form.append("booking_id", claimBookingId)
+      form.append("description", claimDescription)
+      form.append("claimed_amount", claimAmount)
+      const res = await apiRequest("/insurance-claims/", { method: "POST", body: form })
+      if (res?.success === false) {
+        setClaimError(res?.error?.message || "Could not file this claim.")
+        return
+      }
+      setClaimBookingId(""); setClaimDescription(""); setClaimAmount("")
+      loadInsuranceClaims()
+    } catch (err) {
+      setClaimError(err?.body?.error?.message || "Could not file this claim.")
+    } finally {
+      setClaimSubmitting(false)
+    }
+  }
+
+  const toggleStopsEditor = (b) => {
+    setStopsError(''); setStopsSavedMsg('')
+    if (stopsEditorBookingId === b.id) {
+      setStopsEditorBookingId(null)
+      return
+    }
+    setStopsEditorBookingId(b.id)
+    setStopsLoading(true)
+    apiRequest(`/booking/${b.id}/stops/`, { method: 'GET' })
+      .then(res => {
+        const stops = (res?.data || []).map(s => ({
+          stop_type: s.stop_type || 'WAYPOINT',
+          address: s.address || '',
+          contact_name: s.contact_name || '',
+          contact_phone: s.contact_phone || '',
+          notes: s.notes || '',
+        }))
+        setStopsDraft(stops)
+      })
+      .catch(() => setStopsError('Could not load existing stops.'))
+      .finally(() => setStopsLoading(false))
+  }
+
+  const addStopRow = () => {
+    setStopsDraft(prev => [...prev, { stop_type: 'WAYPOINT', address: '', contact_name: '', contact_phone: '', notes: '' }])
+  }
+
+  const removeStopRow = (idx) => {
+    setStopsDraft(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const updateStopRow = (idx, field, value) => {
+    setStopsDraft(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  }
+
+  const saveStops = async (bookingId) => {
+    setStopsError(''); setStopsSavedMsg('')
+    if (stopsDraft.some(s => !s.address.trim())) {
+      setStopsError('Every stop needs an address.')
+      return
+    }
+    setStopsSaving(true)
+    try {
+      const res = await apiRequest(`/booking/${bookingId}/stops/`, { method: 'PUT', json: { stops: stopsDraft } })
+      if (res?.success === false) {
+        setStopsError(res?.error?.message || 'Could not save stops.')
+        return
+      }
+      setStopsSavedMsg('Stops saved.')
+    } catch (err) {
+      setStopsError(err?.body?.error?.message || 'Could not save stops.')
+    } finally {
+      setStopsSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "Notification Settings" && user) {
+      setNotifLoading(true)
+      apiRequest("/notification-preferences/", { method: "GET" })
+        .then(res => { if (res?.data) setNotifPrefs(res.data) })
+        .catch(console.error)
+        .finally(() => setNotifLoading(false))
+    }
+  }, [activeTab, user])
+
+  const toggleNotifPref = (field) => {
+    if (!notifPrefs) return
+    const next = { ...notifPrefs, [field]: !notifPrefs[field] }
+    setNotifPrefs(next)
+    setNotifSaving(true)
+    apiRequest("/notification-preferences/", { method: "PATCH", json: { [field]: next[field] } })
+      .catch(console.error)
+      .finally(() => setNotifSaving(false))
+  }
 
   // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
   // ── Reschedule State ────────────────────────────────────────────────────────
@@ -5143,6 +5382,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "My Profile", icon: User },
     { id: "Saved Addresses", icon: MapPin },
     { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
+    { id: "Wallet", icon: Wallet },
+    { id: "Referral Code", icon: Gift },
+    { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
+    { id: "Insurance Claims", icon: ShieldCheck },
+    { id: "Notification Settings", icon: Settings },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -5467,12 +5711,65 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                            </button>
-                          </div>
+                          </button>
                         </div>
-                      </div>
 
-                      {b.child_requests && b.child_requests.length > 0 && (
+                        {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
+                        {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
+                          <div style={{ marginTop: 8 }}>
+                            <button
+                              onClick={() => toggleStopsEditor(b)}
+                              style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                              <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
+                            </button>
+                            {stopsEditorBookingId === b.id && (
+                              <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                {stopsError && (
+                                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
+                                )}
+                                {stopsSavedMsg && (
+                                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
+                                )}
+                                {stopsLoading ? (
+                                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
+                                ) : (
+                                  <>
+                                    {stopsDraft.length === 0 && (
+                                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
+                                    )}
+                                    {stopsDraft.map((s, idx) => (
+                                      <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                                        <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                                          <option value="PICKUP">Pickup</option>
+                                          <option value="WAYPOINT">Stop</option>
+                                          <option value="DROP">Drop</option>
+                                        </select>
+                                        <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                        <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                        <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                      <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                                        + Add Stop
+                                      </button>
+                                      <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
+                                        {stopsSaving ? 'Saving...' : 'Save Stops'}
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -5508,8 +5805,65 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
+                        {/* Cash Collection Confirmation OTP Box */}
+                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+                            border: '1.5px solid #10b981',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            marginBottom: 16,
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.12)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                                <KeyRound size={22} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  💰 Cash Payment Confirmation OTP
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#065f46', marginTop: 2, fontWeight: 500 }}>
+                                  Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job.
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{
+                              fontFamily: 'monospace',
+                              fontSize: '1.5rem',
+                              fontWeight: 900,
+                              color: '#047857',
+                              letterSpacing: 4,
+                              background: 'white',
+                              padding: '8px 18px',
+                              borderRadius: 10,
+                              border: '1.5px solid #a7f3d0',
+                              boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {/* Bug found: this used to fall back to a hardcoded
+                                  '405863' whenever the real OTP wasn't resolved yet
+                                  (this box can render on payment_status === 'cash_pending'
+                                  alone, before payment_confirmation_otp exists) --
+                                  showing a fixed, meaningless code the customer could
+                                  hand to a technician as if it were real, breaking the
+                                  cash-confirmation flow. Show an honest pending state
+                                  instead of fabricating a code. */}
+                              {b.payment_confirmation_otp || (
+                                <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
+                                  Generating OTP...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) && (
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -5603,7 +5957,18 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 const tipAmount = Number(b.tip_amount || 0);
                                 const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                                 const rawStored = Number(b.total_amount || 0);
-                                const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                                // Bug found: this heuristic used to override a correctly-
+                                // discounted rawStored (b.total_amount) with a higher,
+                                // discount-blind computedGrand estimate whenever
+                                // rawStored < computedGrand -- which is exactly what
+                                // happens on every coupon booking, since computedGrand
+                                // never subtracted a discount (discount was always 0
+                                // before b.discount_amount existed in the API). Now that
+                                // the backend total_amount is authoritative end-to-end
+                                // (coupon-persistence + serializer fixes), trust it
+                                // directly; only fall back to the local estimate when
+                                // the API sent no usable total at all.
+                                const finalTot = rawStored > 0 ? rawStored : computedGrand;
                                 return Number(finalTot).toLocaleString('en-IN');
                               })()}
                             </div>
@@ -5648,7 +6013,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             const tipAmount = Number(b.tip_amount || 0);
                             const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                             const rawStored = Number(b.total_amount || 0);
-                            const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                            // See the matching comment in the list-total block above --
+                            // trust the now-authoritative rawStored (b.total_amount)
+                            // directly instead of this discount-blind override heuristic.
+                            const finalTot = rawStored > 0 ? rawStored : computedGrand;
 
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
@@ -5881,6 +6249,326 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 </div>
               </div>
             </div>
+          </motion.div>
+        )
+      case "Wallet":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {walletLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading wallet...</div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Wallet Balance</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: 6 }}>
+                    {BOOKING_CURRENCY_SYMBOL}{Number(walletData?.balance || 0).toFixed(2)}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Transaction History</div>
+                {!walletData?.transactions || walletData.transactions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                    <Wallet size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                    <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No wallet transactions yet.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {walletData.transactions.map((tx) => (
+                      <div key={tx.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{tx.reason}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>{tx.note || ''}</div>
+                        </div>
+                        <div style={{ fontWeight: 800, color: tx.tx_type === 'CREDIT' ? '#16a34a' : '#dc2626', fontSize: '0.95rem' }}>
+                          {tx.tx_type === 'CREDIT' ? '+' : '-'}{BOOKING_CURRENCY_SYMBOL}{Number(tx.amount).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
+        )
+      case "Referral Code":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {referralLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading referral code...</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', textAlign: 'center' }}>
+                <Gift size={32} style={{ color: '#5d5fef', marginBottom: 10 }} />
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Share your code, earn rewards</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.1em', margin: '10px 0' }}>
+                  {referralData?.code || '—'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+                  {referralData?.total_referrals ?? referralData?.referral_count ?? 0} friend(s) referred so far
+                </div>
+                <button
+                  onClick={() => { if (referralData?.code) navigator.clipboard?.writeText(referralData.code) }}
+                  style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Copy size={16} /> Copy Code
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      case "AMC Bookings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {amcActionError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                {amcActionError}
+              </div>
+            )}
+            {amcLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading recurring bookings...</div>
+            ) : !amcSeries || amcSeries.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <Repeat size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No recurring (AMC) bookings set up yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {amcSeries.map((s) => (
+                  <div key={s.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{s.issue_title}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 4 }}>{s.address}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          {s.frequency} · Next: {s.next_run_date} · {s.occurrences_generated} generated
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: s.status === 'ACTIVE' ? '#dcfce7' : s.status === 'PAUSED' ? '#fef9c3' : '#fee2e2',
+                        color: s.status === 'ACTIVE' ? '#16a34a' : s.status === 'PAUSED' ? '#a16207' : '#dc2626',
+                      }}>
+                        {s.status}
+                      </span>
+                    </div>
+                    {s.status !== 'CANCELLED' && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        {s.status === 'ACTIVE' ? (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'PAUSED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PauseCircle size={14} /> Pause
+                          </button>
+                        ) : (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'ACTIVE')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PlayCircle size={14} /> Resume
+                          </button>
+                        )}
+                        <button onClick={() => handleAmcStatusChange(s.id, 'CANCELLED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>
+                          <XCircle size={14} /> Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Insurance Claims":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>File a New Claim</div>
+              {eligibleInsuranceBookings.length === 0 ? (
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                  No completed, insurance-opted-in bookings are eligible for a claim right now.
+                </div>
+              ) : (
+                <form onSubmit={handleFileInsuranceClaim}>
+                  {claimError && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                      {claimError}
+                    </div>
+                  )}
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Booking</label>
+                  <select value={claimBookingId} onChange={e => setClaimBookingId(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }}>
+                    <option value="">Select a booking...</option>
+                    {eligibleInsuranceBookings.map(b => (
+                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}</option>
+                    ))}
+                  </select>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>What happened?</label>
+                  <textarea value={claimDescription} onChange={e => setClaimDescription(e.target.value)} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="Describe the damage or loss..." />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Claimed Amount ({BOOKING_CURRENCY_SYMBOL})</label>
+                  <input type="number" min="0" step="0.01" value={claimAmount} onChange={e => setClaimAmount(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="0.00" />
+                  <button type="submit" disabled={claimSubmitting} style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: claimSubmitting ? 'not-allowed' : 'pointer', opacity: claimSubmitting ? 0.6 : 1 }}>
+                    {claimSubmitting ? 'Submitting...' : 'File Claim'}
+                  </button>
+                </form>
+              )}
+            </div>
+            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Your Claims</div>
+            {claimsLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading claims...</div>
+            ) : !insuranceClaims || insuranceClaims.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <ShieldCheck size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No claims filed yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {insuranceClaims.map(c => (
+                  <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{c.description}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          Claimed {BOOKING_CURRENCY_SYMBOL}{Number(c.claimed_amount).toFixed(2)}
+                          {c.approved_amount != null ? ` · Approved ${BOOKING_CURRENCY_SYMBOL}${Number(c.approved_amount).toFixed(2)}` : ''}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: c.status === 'PAID' ? '#dcfce7' : c.status === 'REJECTED' ? '#fee2e2' : '#e0e7ff',
+                        color: c.status === 'PAID' ? '#16a34a' : c.status === 'REJECTED' ? '#dc2626' : '#4338ca',
+                      }}>
+                        {c.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Notification Settings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {notifLoading || !notifPrefs ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>{notifLoading ? 'Loading preferences...' : 'No preferences found.'}</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 4 }}>Notification Preferences</div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 12 }}>Choose which updates you want to receive.{notifSaving ? ' Saving...' : ''}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Booking Confirmations</span>
+                  <button
+                    onClick={() => toggleNotifPref("booking_confirmations")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.booking_confirmations ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.booking_confirmations ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Reschedule Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("reschedule_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.reschedule_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.reschedule_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Technician Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("technician_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.technician_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.technician_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Completion & Feedback</span>
+                  <button
+                    onClick={() => toggleNotifPref("completion_feedback")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.completion_feedback ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.completion_feedback ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Payment Receipts</span>
+                  <button
+                    onClick={() => toggleNotifPref("payment_receipts")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.payment_receipts ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.payment_receipts ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Refund Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("refund_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.refund_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.refund_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Complaint Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("complaint_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.complaint_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.complaint_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Promotional Offers</span>
+                  <button
+                    onClick={() => toggleNotifPref("promotional_offers")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.promotional_offers ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.promotional_offers ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )
       case "Help & Support":
@@ -7791,13 +8479,24 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
+    if (!user?.phone) {
+      setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
+      return
+    }
     setIsSubmitting(true)
     setErrorMsg("")
     try {
       const deliveryDate = vegTiming.deliveryDateStr
       const payload = {
         customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
-        phone: user?.phone || "9876543210",
+        phone: user.phone,
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
         description: `Quick Commerce Vegetable Order
@@ -8635,7 +9334,7 @@ function StepWorkflowCheckout({
           <button
             type="button"
             onClick={() => {
-              if (category?.isQuickCommerce || incomingCategory?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
+              if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
                 } catch {}
@@ -8648,8 +9347,11 @@ function StepWorkflowCheckout({
                     foodCart: {},
                   }
                 })
-              } else {
+              } else if (onBack && typeof onBack === "function") {
                 onBack()
+              } else {
+                const catId = category?.id || category?.slug || "cleaning";
+                navigate(`/home?category=${encodeURIComponent(catId)}`);
               }
             }}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 border-none"
@@ -10561,13 +11263,9 @@ export function BookingPage() {
                 loading={loading}
                 error={error}
                 onBack={() => {
-                  if (window.history.length > 1) {
-                    navigate(-1);
-                  } else {
-                    let activeCat = resolveCategoryFromCart(category, cart);
-                    const catId = activeCat?.id || activeCat?.slug || "cleaning";
-                    navigate(`/?category=${encodeURIComponent(catId)}`);
-                  }
+                  let activeCat = resolveCategoryFromCart(category, cart);
+                  const catId = activeCat?.id || activeCat?.slug || category?.id || category?.slug || "cleaning";
+                  navigate(`/home?category=${encodeURIComponent(catId)}`);
                 }}
                 setFormData={setFormData}
                 setLocation={setLocation}
@@ -23872,4 +24570,3 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       onCheckout={onCheckout}
     />
   );
-}

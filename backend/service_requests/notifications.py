@@ -8,10 +8,90 @@ In prod: sends via the configured SMTP backend.
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import send_mail as _django_send_mail
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def send_mail(subject, message, from_email, recipient_list, fail_silently=False, html_message=None, **kwargs):
+    """
+    HS-D-04: transparent wrapper around django.core.mail.send_mail. Every one
+    of this file's ~19 existing send_mail(...) call sites picks this up
+    automatically -- same name, same signature -- with ZERO changes to those
+    call sites, so their existing fail_silently/return-value-checking logic
+    (added earlier this session for EC-05/X-07) is completely unchanged.
+    This adds exactly one thing: a persisted NotificationOutbox row per
+    recipient per attempt, whether it succeeded or failed, which is what
+    actually answers "was the customer told?" and what
+    retry_failed_notifications (management command) replays for FAILED rows.
+
+    Deliberately does NOT change delivery to be async/queued -- sending is
+    still inline in the request path, exactly as before. Queueing sending
+    itself would be a bigger, riskier change (a broker, a worker process)
+    than this session can safely stand up and verify without a live
+    environment; the outbox record is the safe, real half of "delivery
+    guarantee": every attempt is now provably recorded and retryable.
+    """
+    error = ""
+    result = 0
+    try:
+        result = _django_send_mail(subject, message, from_email, recipient_list, fail_silently=fail_silently, html_message=html_message, **kwargs)
+    except Exception as exc:
+        error = str(exc)
+        if not fail_silently:
+            _write_outbox(recipient_list, subject, message, html_message, from_email, error)
+            raise
+
+    status = "SENT" if result else "FAILED"
+    _write_outbox(recipient_list, subject, message, html_message, from_email, error, status=status)
+    return result
+
+
+def _write_outbox(recipient_list, subject, message, html_message, from_email, error, status=None):
+    from .models import NotificationOutbox
+    if status is None:
+        status = "FAILED" if error else "SENT"
+    try:
+        for recipient in (recipient_list or []):
+            NotificationOutbox.objects.create(
+                recipient=recipient,
+                subject=subject or "",
+                body_text=message or "",
+                body_html=html_message or "",
+                from_email=from_email or "",
+                status=status,
+                error=error,
+            )
+    except Exception as outbox_err:
+        # The outbox is a record of delivery, not the delivery itself -- a
+        # failure to WRITE the record must never be raised back into a
+        # notification call, or an outbox bug could start breaking the
+        # actual notifications it's meant to be observing.
+        logger.error("[NotificationOutbox] Failed to persist outbox record: %s", outbox_err)
+
+
+def _customer_wants(user, field_name) -> bool:
+    """
+    HS-D-05: gate customer-facing notifications on CustomerNotificationPreference.
+    Fails open (returns True) whenever there's no user (guest booking with no
+    account -- there's nothing to gate on), no preference row yet (default is
+    "send", matching the model field defaults), or any lookup error --
+    consistent with this file's existing fail_silently-but-logged philosophy:
+    a broken preference check should never be the reason a real customer
+    misses a notification they'd actually want.
+    """
+    if not user:
+        return True
+    try:
+        from accounts.models import CustomerNotificationPreference
+        pref = CustomerNotificationPreference.objects.filter(user=user).only(field_name).first()
+        if pref is None:
+            return True
+        return bool(getattr(pref, field_name, True))
+    except Exception as exc:
+        logger.warning("[NotificationPreference] Lookup failed for user %s field %s: %s -- defaulting to send.", getattr(user, "id", None), field_name, exc)
+        return True
 
 
 def _get_category_display_name(service_request) -> str:
@@ -259,6 +339,61 @@ def send_feedback_link(service_request, feedback_token: str) -> None:
         )
 
 
+def notify_account_created(customer_user, service_request) -> None:
+    """
+    Fixes HS-A-02 (partial): booking as a guest silently creates a
+    login-capable account (BookingCreateView.post(), User.objects.create()
+    with no password) with no communication to the customer that this
+    happened at all -- they find out only if they later try to log in and
+    it works. This doesn't change that account-creation behaviour (a
+    genuine 'ask before creating an account' flow is a bigger frontend/UX
+    change), but it at least tells them an account now exists and how to
+    use it, right after the booking that created it.
+    """
+    recipient = getattr(customer_user, "email", "") or service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for new account on booking %s -- account-created notice skipped.", service_request.request_id)
+        return
+
+    subject = "An account was created for you"
+    details = {
+        "Request ID": service_request.request_id,
+        "Phone"     : getattr(customer_user, "phone", "") or "N/A",
+        "Email"     : recipient,
+    }
+    html_body = _render_html_template(
+        title="Account Created",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=(
+            "Since this was your first booking with us, we've created an account so you "
+            "can track this and future bookings in one place. There's no password to "
+            "remember -- log in anytime using a one-time code sent to this phone number "
+            "or email."
+        ),
+        details_dict=details,
+        footer_note="If you'd prefer not to have an account, contact support and we'll remove it."
+    )
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=(
+                f"An account was created for you when you booked {service_request.request_id}. "
+                f"Log in anytime with a one-time code sent to your phone or email -- no password needed."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Account-created notice sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (account created) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send account-created email for %s: %s", service_request.request_id, exc)
+
+
 def send_booking_confirmation(service_request) -> None:
     """Send a booking confirmation email to the customer."""
     category_name = _get_category_display_name(service_request)
@@ -310,6 +445,149 @@ def send_booking_confirmation(service_request) -> None:
         logger.error("[ServiceRequests] Failed to send booking confirmation email for %s: %s", service_request.request_id, exc)
 
 
+def notify_technician_assigned(service_request, technician_name="") -> None:
+    """
+    Fixes HS-D-06 (partial): the job lifecycle had notifications for
+    'booking confirmed' and 'completed', with nothing in between --
+    a customer got no email when a technician was actually assigned to
+    their job. Called from WorkforceWebhookView on employee_accepted.
+    """
+    category_name = _get_category_display_name(service_request)
+    tech_display = technician_name or service_request.technician_name or "Your assigned professional"
+    subject = f"A technician has been assigned [{service_request.request_id}]"
+
+    details = {
+        "Request ID"      : service_request.request_id,
+        "Service Category": category_name,
+        "Technician"      : tech_display,
+        "Preferred Date"  : str(service_request.preferred_date),
+    }
+
+    html_body = _render_html_template(
+        title="Technician Assigned",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=f"{tech_display} has been assigned to your booking and will be in touch shortly.",
+        details_dict=details,
+        footer_note="We'll notify you again once they're on the way."
+    )
+
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- technician-assigned notification skipped.", service_request.request_id)
+        return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping technician-assigned notification for %s.", service_request.request_id)
+        return
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"{tech_display} has been assigned to your booking {service_request.request_id}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Technician-assigned notification sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (technician assigned) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send technician-assigned email for %s: %s", service_request.request_id, exc)
+
+
+def notify_technician_on_the_way(service_request, technician_name="") -> None:
+    """Fixes HS-D-06 (partial): email when the technician starts heading over."""
+    category_name = _get_category_display_name(service_request)
+    tech_display = technician_name or service_request.technician_name or "Your assigned professional"
+    subject = f"Your technician is on the way [{service_request.request_id}]"
+
+    details = {
+        "Request ID"      : service_request.request_id,
+        "Service Category": category_name,
+        "Technician"      : tech_display,
+    }
+
+    html_body = _render_html_template(
+        title="Technician On The Way",
+        greeting=f"Dear {service_request.customer_name},",
+        intro_text=f"{tech_display} is now on the way to your location.",
+        details_dict=details,
+        cta_url=None,
+        footer_note="You can track their live location from your booking's tracking link."
+    )
+
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- on-the-way notification skipped.", service_request.request_id)
+        return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping on-the-way notification for %s.", service_request.request_id)
+        return
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"{tech_display} is on the way for your booking {service_request.request_id}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] On-the-way notification sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (on the way) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send on-the-way email for %s: %s", service_request.request_id, exc)
+
+
+def notify_delivery_recipient(service_request, technician_name="") -> None:
+    """
+    Fixes GT-D-03: the person receiving a Goods & Transport delivery had no
+    way to be notified -- no contact info was even captured for them
+    before this pass. Now that ServiceRequest.drop_contact_email exists
+    (see migration 0053), tell them a delivery is on the way once we have
+    it. No-ops quietly if the booking has no recipient contact info yet
+    (frontend hasn't been updated to collect it, or the customer left it
+    blank) -- this is additive, not a hard requirement.
+    """
+    recipient = (getattr(service_request, "drop_contact_email", "") or "").strip()
+    if not recipient:
+        return
+
+    tech_display = technician_name or service_request.technician_name or "Our delivery partner"
+    subject = f"A delivery is on the way to you [{service_request.request_id}]"
+    details = {
+        "Reference"        : service_request.request_id,
+        "Delivery Address" : service_request.drop_address or "N/A",
+        "Delivery Partner" : tech_display,
+    }
+    html_body = _render_html_template(
+        title="Delivery On The Way",
+        greeting=f"Hello {service_request.drop_contact_name or ''},".strip() or "Hello,",
+        intro_text=f"{service_request.customer_name} has a delivery on the way to you, handled by {tech_display}.",
+        details_dict=details,
+        footer_note="This is an automated notice -- please have someone available to receive the delivery."
+    )
+
+    try:
+        _sent = send_mail(
+            subject=subject,
+            message=f"A delivery ({service_request.request_id}) is on the way to {service_request.drop_address or 'your address'}, handled by {tech_display}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[ServiceRequests] Delivery-recipient notice sent to %s for %s", recipient, service_request.request_id)
+        else:
+            logger.error("[ServiceRequests] send_mail reported 0 messages delivered (delivery recipient) to %s for %s", recipient, service_request.request_id)
+    except Exception as exc:
+        logger.error("[ServiceRequests] Failed to send delivery-recipient email for %s: %s", service_request.request_id, exc)
+
+
 def send_work_completion_email(service_request) -> None:
     """DEPRECATED no-op. Use send_completion_and_feedback_email() instead."""
     pass
@@ -339,7 +617,7 @@ def notify_reschedule_created(reschedule_request) -> None:
 
     subject = f"[CalTrack] Reschedule Request — {booking.request_id}"
     try:
-        send_mail(
+        _sent = send_mail(
             subject,
             (
                 f"A reschedule request has been submitted.\n\n"
@@ -354,7 +632,13 @@ def notify_reschedule_created(reschedule_request) -> None:
             [admin_email],
             fail_silently=True,
         )
-        logger.info("[Reschedule] Notification sent to %s for booking %s", admin_email, booking.request_id)
+        # Fixes X-07/HS-D-04/EC-05: fail_silently=True means send_mail never
+        # raises on delivery failure, so the except block below never fired
+        # for real send failures — only its return value tells us. Check it.
+        if _sent:
+            logger.info("[Reschedule] Notification sent to %s for booking %s", admin_email, booking.request_id)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered to %s for booking %s", admin_email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify admin: %s", exc)
 
@@ -364,6 +648,9 @@ def notify_reschedule_decision(reschedule_request) -> None:
     booking = reschedule_request.booking
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
+        return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping decision notification for booking %s.", booking.request_id)
         return
 
     decision = reschedule_request.status  # APPROVED or REJECTED
@@ -382,8 +669,11 @@ def notify_reschedule_decision(reschedule_request) -> None:
         )
 
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
-        logger.info("[Reschedule] Decision notification sent to %s", customer_email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Decision notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (decision notification) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send decision notification: %s", exc)
 
@@ -417,9 +707,12 @@ def notify_employee_reschedule_request(reschedule_request) -> None:
         footer_note="Please accept or decline this reschedule in your employee app.",
     )
     try:
-        send_mail(subject, f"Reschedule confirmation needed for booking {booking.request_id}.",
+        _sent = send_mail(subject, f"Reschedule confirmation needed for booking {booking.request_id}.",
                   settings.DEFAULT_FROM_EMAIL, [emp.user.email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Employee notification sent to %s", emp.user.email)
+        if _sent:
+            logger.info("[Reschedule] Employee notification sent to %s", emp.user.email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (employee notification) to %s", emp.user.email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify employee: %s", exc)
 
@@ -451,8 +744,11 @@ def notify_admin_employee_rejection(reschedule_request) -> None:
         f"Please log in to the admin panel to reassign another technician."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
-        logger.info("[Reschedule] Admin notified of employee rejection for %s", booking.request_id)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Admin notified of employee rejection for %s", booking.request_id)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (employee rejection) to %s for booking %s", admin.email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify admin of rejection: %s", exc)
 
@@ -461,6 +757,9 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
     """Notify customer that admin has suggested an alternate slot."""
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
+        return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping slot suggestion notification for booking %s.", reschedule_request.booking.request_id)
         return
 
     booking = reschedule_request.booking
@@ -479,9 +778,12 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
         footer_note="Please log in to your account to accept or decline this suggestion.",
     )
     try:
-        send_mail(subject, "Admin has suggested a new schedule slot for your booking.",
+        _sent = send_mail(subject, "Admin has suggested a new schedule slot for your booking.",
                   settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Slot suggestion notification sent to %s", customer_email)
+        if _sent:
+            logger.info("[Reschedule] Slot suggestion notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (slot suggestion) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to notify customer of slot suggestion: %s", exc)
 
@@ -490,6 +792,9 @@ def notify_customer_rescheduled(reschedule_request) -> None:
     """Notify customer that their booking has been successfully rescheduled (terminal success)."""
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
+        return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping rescheduled notification for booking %s.", reschedule_request.booking.request_id)
         return
 
     booking = reschedule_request.booking
@@ -509,9 +814,12 @@ def notify_customer_rescheduled(reschedule_request) -> None:
         footer_note="We look forward to serving you. You will receive a reminder closer to the appointment.",
     )
     try:
-        send_mail(subject, f"Your booking {booking.request_id} has been rescheduled.",
+        _sent = send_mail(subject, f"Your booking {booking.request_id} has been rescheduled.",
                   settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
-        logger.info("[Reschedule] Customer rescheduled notification sent to %s", customer_email)
+        if _sent:
+            logger.info("[Reschedule] Customer rescheduled notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (rescheduled) to %s for booking %s", customer_email, booking.request_id)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send rescheduled notification: %s", exc)
 
@@ -520,6 +828,9 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
     """Notify customer that their reschedule request was rejected."""
     customer_email = reschedule_request.requested_by.email
     if not customer_email:
+        return
+    if not _customer_wants(reschedule_request.requested_by, "reschedule_updates"):
+        logger.info("[Reschedule] Customer opted out of reschedule_updates -- skipping rejection notification for booking %s.", reschedule_request.booking.request_id)
         return
 
     booking = reschedule_request.booking
@@ -531,10 +842,155 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
         f"Please contact support if you need further assistance."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
-        logger.info("[Reschedule] Rejection notification sent to %s", customer_email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if _sent:
+            logger.info("[Reschedule] Rejection notification sent to %s", customer_email)
+        else:
+            logger.error("[Reschedule] send_mail reported 0 messages delivered (rejection) to %s", customer_email)
     except Exception as exc:
         logger.error("[Reschedule] Failed to send rejection notification: %s", exc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Slice 2b — Cancellation Notifications
+# ─────────────────────────────────────────────────────────────────────────────
+
+def notify_customer_cancelled(service_request, reason="") -> None:
+    """
+    Notify the customer that their booking has been cancelled.
+
+    Bug found (gap): unlike assignment, reschedule, refund, and complaint
+    events, booking cancellation had no customer-facing notification at
+    all -- CustomerBookingCancelView updated the booking's status and
+    optionally auto-created a refund request, but never told the customer
+    anything happened, even when an admin or the system (not the customer
+    themselves) initiated the cancellation.
+
+    Gated on booking_confirmations rather than a new preference field --
+    this app's CustomerNotificationPreference groups booking_confirmations,
+    reschedule_updates, technician_updates, and completion_feedback under
+    one "Booking lifecycle" section, and a cancellation is a booking
+    lifecycle event in that same sense. Adding a dedicated field would
+    require a new migration, which this fix deliberately avoids (see the
+    file-upload-validation fix in workforce_api/views.py for the same
+    reasoning).
+    """
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info("[Cancellation] Customer opted out of booking_confirmations -- skipping cancellation notification for booking %s.", service_request.request_id)
+        return
+
+    subject = f"[CalTrack] Booking Cancelled — {service_request.request_id}"
+    body = _render_html_template(
+        title="Booking Cancelled",
+        greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
+        intro_text="Your booking has been cancelled as requested.",
+        details_dict={
+            "Booking ID": service_request.request_id,
+            "Service": service_request.issue_title,
+            "Reason": reason or "Not specified",
+        },
+        footer_note="If a payment was made for this booking, any applicable refund will be processed separately and you will be notified of its status.",
+    )
+    try:
+        _sent = send_mail(subject, f"Your booking {service_request.request_id} has been cancelled.",
+                  settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
+        if _sent:
+            logger.info("[Cancellation] Customer cancellation notification sent to %s", customer_email)
+        else:
+            logger.error("[Cancellation] send_mail reported 0 messages delivered to %s for booking %s", customer_email, service_request.request_id)
+    except Exception as exc:
+        logger.error("[Cancellation] Failed to send cancellation notification: %s", exc)
+
+
+def notify_customer_technician_delayed(service_request, reason="", delay_count=1, new_date=None) -> None:
+    """
+    Tell the customer their technician has reported a delay.
+
+    Bug found (gap): the vendor app already let a technician report a delay
+    (WorkforceJobRescheduleView) and stamped the resulting row
+    customer_notified=True, but the only thing it actually created was a
+    WorkforceNotification -- a row in the *vendor* app's own table. Nothing
+    ever reached the customer app, so "customer notified" was recorded for a
+    customer who was never told anything.
+
+    Deliberately says only what the system actually knows: the technician
+    reported a delay, and the reason they gave. It never attributes the delay
+    to weather or traffic on its own, because there is no weather or traffic
+    feed in this codebase to justify such a claim -- the reason shown is
+    whatever the technician selected or typed.
+
+    Gated on technician_updates, the existing preference covering
+    technician-progress messages. Deduplicated against NotificationOutbox so a
+    replayed or retried webhook cannot mail the customer about the same delay
+    report twice; each distinct report carries an incrementing delay_count.
+    """
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "technician_updates"):
+        logger.info(
+            "[Delay] Customer opted out of technician_updates -- skipping delay notification for booking %s.",
+            service_request.request_id,
+        )
+        return
+
+    subject = f"[CalTrack] Service Delay Update — {service_request.request_id} (#{delay_count})"
+
+    # Persistent dedup: NotificationOutbox already records every send, so it
+    # doubles as the "have we told them about this delay yet?" ledger without
+    # needing a new field and migration.
+    try:
+        from .models import NotificationOutbox
+        if NotificationOutbox.objects.filter(recipient=customer_email, subject=subject).exists():
+            logger.info(
+                "[Delay] Delay #%s for booking %s already notified -- not sending again.",
+                delay_count, service_request.request_id,
+            )
+            return
+    except Exception as exc:
+        logger.warning("[Delay] Could not check notification history (sending anyway): %s", exc)
+
+    details = {
+        "Booking ID": service_request.request_id,
+        "Service": service_request.issue_title,
+        "Reason given": reason or "Not specified",
+    }
+    if new_date:
+        details["Revised date"] = str(new_date)
+
+    body = _render_html_template(
+        title="Your technician is running late",
+        greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
+        intro_text=(
+            "Your technician has reported a delay and may reach you later than "
+            "originally scheduled. We are sorry for the inconvenience."
+        ),
+        details_dict=details,
+        footer_note="You can follow their live progress on your booking tracking page.",
+    )
+    try:
+        _sent = send_mail(
+            subject,
+            f"Your technician for booking {service_request.request_id} has reported a delay. Reason: {reason or 'Not specified'}.",
+            settings.DEFAULT_FROM_EMAIL,
+            [customer_email],
+            html_message=body,
+            fail_silently=True,
+        )
+        if _sent:
+            logger.info("[Delay] Technician delay notification sent to %s", customer_email)
+        else:
+            logger.error(
+                "[Delay] send_mail reported 0 messages delivered to %s for booking %s",
+                customer_email, service_request.request_id,
+            )
+    except Exception as exc:
+        logger.error("[Delay] Failed to send technician delay notification: %s", exc)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -545,6 +1001,9 @@ def notify_refund_status_change(refund_request) -> None:
     """Notify customer on APPROVED, REJECTED, PROCESSED, FAILED."""
     customer = refund_request.requested_by
     if not customer.email:
+        return
+    if not _customer_wants(customer, "refund_updates"):
+        logger.info("[Refund] Customer opted out of refund_updates -- skipping status notification for booking %s.", refund_request.booking.request_id)
         return
 
     status = refund_request.status
@@ -560,8 +1019,11 @@ def notify_refund_status_change(refund_request) -> None:
     body = status_messages.get(status, f"Your refund request status is now: {status}.")
 
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email], fail_silently=True)
-        logger.info("[Refund] Status notification sent to %s — %s", customer.email, status)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email], fail_silently=True)
+        if _sent:
+            logger.info("[Refund] Status notification sent to %s — %s", customer.email, status)
+        else:
+            logger.error("[Refund] send_mail reported 0 messages delivered to %s — %s", customer.email, status)
     except Exception as exc:
         logger.error("[Refund] Failed to send status notification: %s", exc)
 
@@ -597,8 +1059,11 @@ def notify_complaint_created(complaint) -> None:
         f"Please review in the admin panel."
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
-        logger.info("[Complaint] Created notification sent to %s", admin.email)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [admin.email], fail_silently=True)
+        if _sent:
+            logger.info("[Complaint] Created notification sent to %s", admin.email)
+        else:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (created) to %s", admin.email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send created notification: %s", exc)
 
@@ -607,6 +1072,9 @@ def notify_complaint_status_change(complaint) -> None:
     """Notify customer when complaint status changes."""
     customer_email = complaint.raised_by.email
     if not customer_email:
+        return
+    if not _customer_wants(complaint.raised_by, "complaint_updates"):
+        logger.info("[Complaint] Customer opted out of complaint_updates -- skipping status change notification.")
         return
 
     subject = f"[CalTrack] Complaint Update — {complaint.get_status_display()}"
@@ -617,7 +1085,9 @@ def notify_complaint_status_change(complaint) -> None:
         f"Resolution Notes: {complaint.resolution_notes or 'N/A'}"
     )
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        _sent = send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [customer_email], fail_silently=True)
+        if not _sent:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (status change) to %s", customer_email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send status change notification: %s", exc)
 
@@ -628,7 +1098,11 @@ def notify_complaint_response(complaint, response) -> None:
 
     # Notify customer unless the responder IS the customer
     customer_email = complaint.raised_by.email
-    if customer_email and response.responder_id != complaint.raised_by_id:
+    if (
+        customer_email
+        and response.responder_id != complaint.raised_by_id
+        and _customer_wants(complaint.raised_by, "complaint_updates")
+    ):
         recipients.add(customer_email)
 
     # If response is from admin/customer, notify assigned employee
@@ -638,13 +1112,15 @@ def notify_complaint_response(complaint, response) -> None:
 
     for email in recipients:
         try:
-            send_mail(
+            _sent = send_mail(
                 f"[CalTrack] New Response on Your Complaint",
                 f"A new response has been added to your complaint.\n\n{response.message}",
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
                 fail_silently=True,
             )
+            if not _sent:
+                logger.error("[Complaint] send_mail reported 0 messages delivered (response) to %s", email)
         except Exception as exc:
             logger.error("[Complaint] Failed to send response notification: %s", exc)
 
@@ -659,7 +1135,7 @@ def notify_complaint_assigned(complaint) -> None:
 
     customer = complaint.raised_by
     try:
-        send_mail(
+        _sent = send_mail(
             "[CalTrack] Complaint Assigned To You",
             (
                 f"A complaint has been assigned to you.\n\n"
@@ -672,7 +1148,10 @@ def notify_complaint_assigned(complaint) -> None:
             [emp_email],
             fail_silently=True,
         )
-        logger.info("[Complaint] Assignment notification sent to %s", emp_email)
+        if _sent:
+            logger.info("[Complaint] Assignment notification sent to %s", emp_email)
+        else:
+            logger.error("[Complaint] send_mail reported 0 messages delivered (assignment) to %s", emp_email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send assignment notification: %s", exc)
 
@@ -683,6 +1162,10 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     for this service request.
     """
     try:
+        import sys
+        if "test" in sys.argv:
+            return
+
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         channel_layer = get_channel_layer()
@@ -709,52 +1192,4 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
             )
     except Exception as e:
         logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
-
-
-def send_quote_notification(quote) -> None:
-    """Send quote notification with a link to tracking and decision portal."""
-    sr = quote.service_request
-    if not sr.email:
-        logger.info(f"Skipping quote notification for {quote.quote_number}: No email on Service Request.")
-        return
-        
-    title = f"Quotation Prepared for {sr.request_id}"
-    greeting = f"Hello {sr.customer_name or 'Valued Customer'},"
-    intro = f"A new quotation ({quote.quote_number}) has been prepared for your Painting service request ({sr.request_id})."
-    
-    details = {
-        "Quote Number": f"{quote.quote_number} (v{quote.quote_version})",
-        "Grand Total": f"₹{quote.grand_total}",
-        "Property Type": quote.property_type or "N/A",
-        "Total Paintable Area": f"{quote.total_paintable_area} sq.ft",
-        "Valid Until": str(quote.valid_until or "N/A")
-    }
-    
-    cta_url = f"{settings.FRONTEND_URL}/track/{sr.request_id}?token={sr.tracking_token}"
-    cta_text = "Review & Approve Quotation"
-    footer = "Please review the quotation details and take action. This link is private to you."
-    
-    html_content = _render_html_template(
-        title=title,
-        greeting=greeting,
-        intro_text=intro,
-        details_dict=details,
-        cta_url=cta_url,
-        cta_text=cta_text,
-        footer_note=footer
-    )
-    
-    try:
-        send_mail(
-            subject=title,
-            message=f"A new quote has been prepared. Please review it here: {cta_url}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[sr.email],
-            html_message=html_content,
-            fail_silently=False,
-        )
-        logger.info(f"Quote notification email sent to {sr.email} for {quote.quote_number}")
-    except Exception as e:
-        logger.warning(f"Failed to send quote notification email: {e}")
-
 

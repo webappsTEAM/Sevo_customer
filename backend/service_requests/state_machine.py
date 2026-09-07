@@ -41,6 +41,31 @@ ALLOWED_TRANSITIONS = {
     S.CLOSED:                 set(),
     S.REJECTED:               set(),
     S.CANCELLED:              set(),
+
+    # X-03: "redispatching" is written directly into this shared table by
+    # the vendor app's own, separate state machine (vendor/backend/
+    # service_requests/state_machine.py) whenever a technician cancels or
+    # is reassigned off a job -- it was never a status this app's Status
+    # enum/ALLOWED_TRANSITIONS knew about. Before this entry, apply_transition()
+    # here used ALLOWED_TRANSITIONS.get(current_status, set()) -- an unknown
+    # current_status silently resolved to the empty set, i.e. "no transitions
+    # allowed", so any Customer-app-side action (a customer cancelling their
+    # own booking while it happened to be mid-reassignment, an admin
+    # correcting it, etc.) on a booking currently sitting at "redispatching"
+    # would fail with "Allowed transitions: none (terminal state)" even
+    # though the booking is very much not actually finished.
+    #
+    # Deliberately NOT added to ServiceRequest.Status as a formal enum
+    # member -- only this app's own code ever needs to transition *out of*
+    # "redispatching" (the vendor app is the only thing that ever writes
+    # it), so a plain string key here is enough and keeps this app's own
+    # Status choices, serializers, and admin UI unchanged. "en_route",
+    # "offering", and "dispatching" also exist in the vendor app's status
+    # vocabulary but were confirmed (by search) to never actually be written
+    # to this shared column in production code -- only referenced in that
+    # app's own transition table and read-side filters -- so they are not
+    # added here; if that changes, this comment is the place to revisit it.
+    "redispatching":          {S.UNASSIGNED, S.ASSIGNED, S.ACCEPTED, S.CANCELLED},
 }
 
 """

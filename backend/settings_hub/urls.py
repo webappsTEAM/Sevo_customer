@@ -30,6 +30,7 @@ from .views_service_zones import (
     ServiceZoneListCreateView,
     ServiceZoneDetailView,
     ServiceZoneCheckView,
+    CityListView,
 )
 from .views_legal import PublicLegalConfigAPIView
 from service_requests.payment_views import InvoiceDownloadView
@@ -100,4 +101,7 @@ urlpatterns = [
     path("service-zones/", ServiceZoneListCreateView.as_view(), name="service-zone-list"),
     path("service-zones/check/", ServiceZoneCheckView.as_view(), name="service-zone-check"),
     path("service-zones/<int:pk>/", ServiceZoneDetailView.as_view(), name="service-zone-detail"),
+
+    # GT-B-06: public city registry
+    path("cities/", CityListView.as_view(), name="city-list"),
 ]

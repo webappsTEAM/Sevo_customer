@@ -132,6 +132,9 @@ const TwoWheelerBookingHosurPage = lazy(() =>
 const PackersMoversBookingHosurPage = lazy(() =>
   import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage || m.default }))
 )
+const LogisticsBookingPage = lazy(() =>
+  import("./pages/LogisticsBookingPage.jsx").then(m => ({ default: m.LogisticsBookingPage || m.default }))
+)
 const FeedbackPage = lazy(() =>
   import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage || m.default }))
 )
@@ -321,6 +324,7 @@ export function App() {
           <Route path="/vegetable" element={<VegetableFullScreenPage />} />
           <Route path="/fresh-vegetables" element={<VegetableFullScreenPage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
+          <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
@@ -338,6 +342,21 @@ export function App() {
           <Route path="/transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transports" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          {/* HS-A-03: logged-in customer account area -- real routes, not just a
+              modal reachable from the header. Each redirects into the existing
+              CustomerAccountModal on /home with the matching tab pre-selected via
+              location.state (same pattern as /goods, /transport above), so the tab
+              switch/fetch logic already built for that modal is reused as-is instead
+              of duplicating it as separate full pages. */}
+          <Route path={routes.account} element={<Navigate to="/home" state={{ openAccountTab: "My Profile" }} replace />} />
+          <Route path={routes.account_bookings} element={<Navigate to="/home" state={{ openAccountTab: "My Bookings" }} replace />} />
+          <Route path={routes.account_addresses} element={<Navigate to="/home" state={{ openAccountTab: "Saved Addresses" }} replace />} />
+          <Route path={routes.account_wallet} element={<Navigate to="/home" state={{ openAccountTab: "Wallet" }} replace />} />
+          <Route path={routes.account_referral} element={<Navigate to="/home" state={{ openAccountTab: "Referral Code" }} replace />} />
+          <Route path={routes.account_amc} element={<Navigate to="/home" state={{ openAccountTab: "AMC Bookings" }} replace />} />
+          <Route path={routes.account_insurance} element={<Navigate to="/home" state={{ openAccountTab: "Insurance Claims" }} replace />} />
+          <Route path={routes.account_notifications} element={<Navigate to="/home" state={{ openAccountTab: "Notification Settings" }} replace />} />
+          <Route path={routes.account_help} element={<Navigate to="/home" state={{ openAccountTab: "Help & Support" }} replace />} />
           <Route path="/courier/two-wheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
           <Route path="/courier/twowheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
           <Route path="/courier" element={<Navigate to="/two-wheelers/hosur" replace />} />

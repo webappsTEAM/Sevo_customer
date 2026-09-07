@@ -22,7 +22,16 @@ SECRET_KEY = _SECRET_KEY
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = ["*"]
+# Fixed: this used to hardcode ALLOWED_HOSTS = ["*"] unconditionally,
+# ignoring the DJANGO_ALLOWED_HOSTS env var that's already set correctly in
+# every .env file this app ships with -- host-header validation was fully
+# disabled in the app actually running. Mirrors the pattern already used
+# correctly on the Vendor app's settings.py.
+_allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
@@ -117,10 +126,6 @@ elif USE_POSTGRES:
         except Exception:
             _db_host = "3.111.105.85"
 
-    _db_port = os.getenv("DB_PORT", "")
-    if not _db_port:
-        _db_port = "6543" if "pooler.supabase.com" in _db_host else "5432"
-
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -128,10 +133,10 @@ elif USE_POSTGRES:
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": _db_host,
-            "PORT": _db_port,
+            "PORT": os.getenv("DB_PORT", "5432"),
             "OPTIONS": _db_options,
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
-            "CONN_HEALTH_CHECKS": False if os.getenv("DB_CONN_MAX_AGE", "0") == "0" else True,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 else:
@@ -176,6 +181,14 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Kolkata")
 USE_I18N = True
 USE_TZ = True
+
+# ── Booking window ──────────────────────────────────────────────────────────
+# Same-day bookings close at this local hour; afterwards customers are offered
+# the next day's slots. Enforced server-side in
+# service_requests/booking_window.py, which the booking serializer calls -- the
+# frontend filter is a convenience, not the control. Tunable per environment.
+BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
 
 STATIC_URL = "static/"
 
