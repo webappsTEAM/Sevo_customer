@@ -12039,10 +12039,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const contentRef = useRef(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
-  }, [searchQuery]);
+  }, [searchQuery, activeTab]);
 
   const scrollToCard = (id) => {
     const card = cardRefs.current[id];
@@ -14156,6 +14157,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [expandedFaq, setExpandedFaq] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const MASON_SEARCH_HINTS = ["Brick & Block Work", "Plastering", "Wall Partition", "House Construction", "Demolition"];
   useEffect(() => {
     const t = setInterval(() => setMasonSearchRotateIdx(i => (i + 1) % MASON_SEARCH_HINTS.length), 2800);
@@ -14679,6 +14681,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const contentRef = useRef(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
@@ -24570,3 +24573,4 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       onCheckout={onCheckout}
     />
   );
+}
