@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('inventory', '0007_inventoryitem_default_daily_quantity_grams_and_more'),
-        ('service_requests', '0059_unconstrain_legacy_columns'),
+        ('service_requests', '0063_unconstrain_legacy_columns'),
     ]
 
     operations = [
