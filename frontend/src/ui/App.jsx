@@ -61,6 +61,10 @@ const InventoryPage = lazy(() =>
   import("./pages/InventoryPage.jsx").then(m => ({ default: m.InventoryPage || m.default }))
 )
 
+const VegetableStockAdminPage = lazy(() =>
+  import("./pages/inventory/VegetableStockAdminPage.jsx").then(m => ({ default: m.VegetableStockAdminPage || m.default }))
+)
+
 const CatalogDashboardPage = lazy(() =>
   import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
@@ -432,6 +436,8 @@ export function App() {
               <Route path={routes.marketing_offers} element={<OffersPage />} />
               <Route path={routes.marketing_referrals} element={<ReferralsPage />} />
               <Route path={routes.homepage_customizer} element={<HomePageCustomizerPage />} />
+              <Route path={routes.inventory_vegetables} element={<VegetableStockAdminPage />} />
+              <Route path="/admin/vegetable-stock" element={<VegetableStockAdminPage />} />
               <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
               <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
             </Route>

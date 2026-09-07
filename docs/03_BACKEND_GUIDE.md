@@ -108,3 +108,11 @@ The `service_requests` module is driven by a deterministic finite state machine 
 ### Payments & Invoicing (`/api/service-requests/payments/`)
 - `POST /api/service-requests/payments/create-order/` — Initialize payment gateway intent (Razorpay/Stripe).
 - `POST /api/service-requests/payments/verify/` — Validate payment signature and mark invoice `PAID`.
+
+### Vegetable Stock & Daily Capacity (`/api/inventory/vegetable-stock/`)
+- `GET  /api/inventory/vegetable-stock/` — Admin list of all vegetable items with live stock, default capacity, and status.
+- `POST /api/inventory/vegetable-stock/<id>/restock/` — Additive intra-day restock (`quantity`, `unit`).
+- `POST /api/inventory/vegetable-stock/<id>/adjust/` — Absolute intra-day stock correction (`quantity`, `unit`, `reason`).
+- `POST /api/inventory/vegetable-stock/<id>/set-default/` — Configure daily 4:00 AM reset baseline capacity (`quantity`, `unit`, `apply_now`).
+- `GET  /api/inventory/vegetable-stock/<id>/history/` — Dynamic daily opening/sold/closing history ledger and transaction audit log.
+

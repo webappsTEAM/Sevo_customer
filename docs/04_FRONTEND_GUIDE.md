@@ -80,3 +80,19 @@ The tracking view connects via WebSocket to the Daphne backend:
   ```
 - **Animations**: Subtle page entry transitions and status badge pulse animations for live status indicators.
 - **Accessibility**: Semantic HTML5 elements (`<header>`, `<main>`, `<section>`, `<nav>`) and descriptive form labels.
+
+---
+
+## 5. Vegetable Stock & Capacity Management (`/inventory/vegetables`)
+
+- **State Management**: `inventorySlice` manages `vegetables` catalog items and `historyByProduct` ledgers.
+- **Admin Dashboard (`VegetableStockAdminPage.jsx`)**:
+  - Live stock state indicators (`In Stock`, `Out of Stock`, `Not Tracked`).
+  - **Set Default Modal**: Baseline daily stock with instant application toggle (`apply_now`).
+  - **Restock Modal**: Additive stock increment in `kg` / `g`.
+  - **Adjust Modal**: Absolute stock level correction requiring mandatory reason.
+  - **History Modal**: Custom date range picker with PDF print/download.
+- **Customer Product Pages**:
+  - Uncapped quantity input supporting `kg`/`g` conversion.
+  - Reactive Out-of-Stock badge and disabled purchase flow when capacity reaches zero.
+

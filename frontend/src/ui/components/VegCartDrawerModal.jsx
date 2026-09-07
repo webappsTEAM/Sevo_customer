@@ -26,7 +26,14 @@ export function VegCartDrawerModal({
   const [selectedTip, setSelectedTip] = useState(0)
   const [includeDonation, setIncludeDonation] = useState(false)
   const [copiedShare, setCopiedShare] = useState(false)
+  const [drawerToast, setDrawerToast] = useState("")
   const vegTiming = getVegetableTimingInfo()
+
+  const showDrawerStockToast = (msg = "Limited stock — can't add more right now") => {
+    setDrawerToast(msg)
+    window.clearTimeout(showDrawerStockToast._t)
+    showDrawerStockToast._t = window.setTimeout(() => setDrawerToast(""), 2800)
+  }
 
   if (!isOpen) return null
 
@@ -96,6 +103,8 @@ export function VegCartDrawerModal({
       mrp: effectiveMrp,
       quantity: qty,
       image: image,
+      in_stock: matchedItem?.in_stock !== false,
+      max_quantity: typeof matchedItem?.max_quantity === "number" ? matchedItem.max_quantity : null,
     })
   })
 
@@ -107,6 +116,34 @@ export function VegCartDrawerModal({
   const grandTotal = itemTotal + deliveryCharge + handlingCharge + (selectedTip || 0)
 
   const handleUpdateQty = (key, delta) => {
+    if (delta > 0 && selectedFoodSubModule?.items) {
+      // Find matching item in catalog
+      let matched = null
+      for (const it of selectedFoodSubModule.items) {
+        if (it.name === key || key.startsWith(it.name)) {
+          matched = it
+          break
+        }
+      }
+      if (matched && typeof matched.max_quantity === "number") {
+        let totalUnitsForProduct = 0
+        Object.entries(foodCart || {}).forEach(([k, q]) => {
+          if (k === matched.name) {
+            totalUnitsForProduct += q
+          } else if (k.includes(" (2 x ") && k.startsWith(matched.name)) {
+            totalUnitsForProduct += q * 2
+          } else if (k.startsWith(matched.name)) {
+            totalUnitsForProduct += q
+          }
+        })
+        const multiplier = key.includes(" (2 x ") ? 2 : 1
+        if (totalUnitsForProduct + (delta * multiplier) > matched.max_quantity) {
+          showDrawerStockToast("Limited stock — can't add more right now")
+          return
+        }
+      }
+    }
+
     if (typeof setFoodCart === "function") {
       setFoodCart((prev) => {
         const current = prev[key] || 0
@@ -180,6 +217,14 @@ export function VegCartDrawerModal({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md bg-[#F4F6FB] h-full flex flex-col shadow-2xl overflow-hidden font-sans relative"
       >
+        {/* Toast Warning */}
+        {drawerToast && (
+          <div className="absolute top-14 left-4 right-4 z-50 bg-slate-900/95 backdrop-blur-md text-white px-4 py-2.5 rounded-xl font-bold text-xs text-center shadow-xl border border-slate-700 flex items-center justify-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>{drawerToast}</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="px-4 py-3.5 bg-white border-b border-slate-100 flex items-center justify-between shrink-0 shadow-2xs">
           <div className="flex items-center gap-2">

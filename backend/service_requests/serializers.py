@@ -31,6 +31,8 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     service_sort_order = serializers.IntegerField(source="service.sort_order", read_only=True)
     service_image = serializers.CharField(source="service.image", read_only=True)
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    in_stock = serializers.SerializerMethodField()
+    max_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -40,7 +42,16 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "faqs", "sort_order", "tools", "ready",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
+            "in_stock", "max_quantity",
         ]
+
+    def get_in_stock(self, obj):
+        from inventory.selectors.vegetable_stock_selectors import get_stock_status
+        return get_stock_status(obj).get("in_stock", True)
+
+    def get_max_quantity(self, obj):
+        from inventory.selectors.vegetable_stock_selectors import get_stock_status
+        return get_stock_status(obj).get("max_quantity", None)
 
     def get_category(self, obj):
         if obj.service_id and obj.service:

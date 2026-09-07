@@ -26,6 +26,7 @@ export const routes = {
   settings_invoices: "/settings/invoices",
   reset_password: "/reset-password",
   inventory: "/inventory",
+  inventory_vegetables: "/inventory/vegetables",
   booking: "/booking",
   booking_services: "/booking/services",
   booking_checkout: "/booking/checkout",

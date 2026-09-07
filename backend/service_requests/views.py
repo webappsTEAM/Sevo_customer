@@ -85,6 +85,8 @@ def _get_company(request):
     company = getattr(request, "company", None)
     if company:
         return company
+    if hasattr(request, "user") and request.user and getattr(request.user, "company", None):
+        return request.user.company
     from companies.models import Company
     if Company.objects.count() == 1:
         return Company.objects.first()
@@ -176,11 +178,13 @@ class CatalogServiceListView(APIView):
         from django.core.cache import cache
         from django.conf import settings
 
+        company = _get_company(request)
+        company_id = company.id if company else ''
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
         use_cache = not getattr(settings, 'DEBUG', False)
-        cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
+        cache_key = f"catalog_services_list_{company_id}_{cat_id}_{service_slug}_{status_filter}"
         
         if use_cache:
             cached_res = cache.get(cache_key)
@@ -768,64 +772,33 @@ class BookingCreateView(APIView):
             elif request.user and request.user.is_authenticated and request.user.email:
                 final_email = request.user.email
 
-        sr = serializer.save(
-            company=company,
-            customer=customer_user,
-            email=final_email,
-            address=final_address,
-            latitude=final_lat,
-            longitude=final_lng,
-            saved_address_id=saved_addr.id if saved_addr else None,
-            service_location_snapshot=location_snapshot,
-            status=initial_status,
-            payment_method=payment_method,
-            payment_status=initial_payment_status,
-            total_amount=corrected_fare,
-            # Zone snapshot — captured at creation time so existing bookings
-            # remain valid even if admin later edits or removes the zone.
-            service_zone_id_snapshot=zone_id_snapshot,
-            service_zone_name_snapshot=zone_name_snapshot,
-        )
+        from service_requests.services.booking_service import BookingService
+        from inventory.services.vegetable_stock_service import InsufficientStockError
 
-        coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
-        if coupon_code:
-            cpn = Coupon.objects.filter(code__iexact=coupon_code, status="Active").first()
-            if cpn:
-                subtotal = float(corrected_fare)
-                if cpn.discount_type == "flat":
-                    calc_disc = float(cpn.discount_value)
-                else:
-                    calc_disc = subtotal * (float(cpn.discount_value) / 100.0)
-
-                if cpn.max_discount > 0:
-                    disc = min(calc_disc, float(cpn.max_discount))
-                else:
-                    disc = calc_disc
-
-                disc = min(subtotal, disc)
-                final_tot = max(0.0, subtotal - disc)
-
-                sr.coupon = cpn
-                sr.coupon_code_snapshot = cpn.code
-                sr.subtotal_amount = subtotal
-                sr.discount_amount = disc
-                sr.final_amount = final_tot
-                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount"])
-
-                with transaction.atomic():
-                    cpn.current_usage += 1
-                    cpn.save(update_fields=["current_usage"])
-                    CouponUsage.objects.create(
-                        coupon=cpn,
-                        customer=sr.customer,
-                        booking=sr,
-                        discount_amount=disc,
-                        order_amount=subtotal,
-                        final_amount=final_tot
-                    )
-
-        # Dispatch booking notification to workforce management system
-        WorkforceIntegrationService.dispatch_job(sr.id)
+        try:
+            sr = BookingService.create_service_request_booking(
+                serializer=serializer,
+                request_data=request.data,
+                company=company,
+                customer_user=customer_user,
+                final_email=final_email,
+                final_address=final_address,
+                final_lat=final_lat,
+                final_lng=final_lng,
+                saved_addr=saved_addr,
+                location_snapshot=location_snapshot,
+                initial_status=initial_status,
+                payment_method=payment_method,
+                initial_payment_status=initial_payment_status,
+                corrected_fare=corrected_fare,
+                zone_id_snapshot=zone_id_snapshot,
+                zone_name_snapshot=zone_name_snapshot,
+            )
+        except InsufficientStockError:
+            return Response(
+                {"success": False, "message": "This quantity is no longer available. Please reduce the quantity and try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if is_admin_booking_on_behalf:
             try:

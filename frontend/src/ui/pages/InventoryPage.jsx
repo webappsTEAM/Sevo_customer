@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from "react"
 import { useDispatch, useSelector } from "react-redux"
+import { Link } from "react-router-dom"
+import { routes } from "../routes.js"
 import {
   fetchInventoryItems,
   fetchAlerts,
   clearInventoryState
 } from "../../store/inventorySlice.js"
-import { Package, AlertCircle, CheckCircle, Search, Plus, X, Trash2, Warehouse, ArrowRightLeft } from "lucide-react"
+import { Package, AlertCircle, CheckCircle, Search, Plus, X, Trash2, Warehouse, ArrowRightLeft, Sprout } from "lucide-react"
 import { apiRequest } from "../../api/client.js"
 
 export function InventoryPage() {
@@ -138,6 +140,12 @@ export function InventoryPage() {
         >
           <AlertCircle className="h-4 w-4 text-amber-500" /> Low Stock Alerts ({(alerts || []).length})
         </button>
+        <Link
+          to={routes.inventory_vegetables}
+          className="pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 border-transparent text-emerald-600 dark:text-emerald-400 hover:border-emerald-500 transition-all"
+        >
+          <Sprout className="h-4 w-4" /> Vegetables Stock
+        </Link>
       </div>
 
       {/* Content */}

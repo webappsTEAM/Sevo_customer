@@ -54,18 +54,28 @@ def clear_catalog_cache():
         pass
 
     # Standard loop to be absolutely sure
-    from service_requests.models import CatalogCategory
+    from service_requests.models import CatalogCategory, Service
+    from companies.models import Company
     try:
         cat_ids = [""] + list(CatalogCategory.objects.values_list("id", flat=True))
     except Exception:
         cat_ids = [""]
+
+    try:
+        company_ids = [""] + list(Company.objects.values_list("id", flat=True))
+    except Exception:
+        company_ids = [""]
+
+    try:
+        slugs = ["", "vegetables"] + list(Service.objects.values_list("slug", flat=True))
+    except Exception:
+        slugs = ["", "vegetables"]
         
-    cache.delete("catalog_services_list___")
-    for cid in cat_ids:
-        cache.delete(f"catalog_services_list_{cid}__")
-        for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
-            cache.delete(f"catalog_services_list_{cid}_{status}")
-            cache.delete(f"catalog_services_list_{cid}__{status}")
+    for comp_id in company_ids:
+        for cid in cat_ids:
+            for s_slug in slugs:
+                for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
+                    cache.delete(f"catalog_services_list_{comp_id}_{cid}_{s_slug}_{status}")
 
 
 # ── Public (no-auth) read-only catalog endpoints ─────────────────────────────
