@@ -32,6 +32,11 @@ class InventoryItem(models.Model):
     expected_delivery_date = models.DateField(null=True, blank=True)
     is_returnable = models.BooleanField(default=True)
     requires_photo_on_issue = models.BooleanField(default=False)
+    # Vegetable Stock Additions (integer grams, null=not tracked)
+    unit = models.CharField(max_length=20, blank=True, default="")
+    stock_quantity_grams = models.PositiveIntegerField(null=True, blank=True, default=None)
+    default_daily_quantity_grams = models.PositiveIntegerField(null=True, blank=True, default=None)
+    last_reset_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
@@ -40,6 +45,33 @@ class InventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.sku})"
+
+
+class StockMovement(models.Model):
+    class MovementType(models.TextChoices):
+        RESTOCK = "RESTOCK", "Restock"
+        ADJUSTMENT = "ADJUSTMENT", "Adjustment"
+        DAILY_RESET = "DAILY_RESET", "Daily Reset"
+        SOLD = "SOLD", "Sold"
+        RESTOCKED_ON_CANCELLATION = "RESTOCKED_ON_CANCELLATION", "Restocked on Cancellation"
+
+    objects = CompanyScopedManager(company_field="org")
+
+    org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="stock_movements")
+    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name="stock_movements")
+    movement_type = models.CharField(max_length=30, choices=MovementType.choices)
+    delta_grams = models.IntegerField(help_text="Change in grams (positive for addition, negative for deduction)")
+    balance_after_grams = models.PositiveIntegerField(help_text="Stock quantity in grams immediately after this movement")
+    reason = models.TextField(blank=True, default="")
+    booking_ref = models.CharField(max_length=100, blank=True, default="")
+    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="entered_stock_movements")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.item.name} | {self.movement_type} | {self.delta_grams:+d}g -> {self.balance_after_grams}g"
 
 
 class InventoryAlert(models.Model):
@@ -81,3 +113,4 @@ class InventoryTransfer(models.Model):
 
     def __str__(self):
         return f"Transfer {self.quantity}x {self.item.name} to {self.to_warehouse}"
+

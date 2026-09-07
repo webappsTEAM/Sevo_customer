@@ -65,38 +65,60 @@ export function VegetableFullScreenPage() {
     } catch {}
   }, [foodCart])
 
-  // Fetch active vegetables from database catalog
+  // Fetch active vegetables from database catalog with live real-time sync
   useEffect(() => {
-    setLoading(true)
-    apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
-      .then((res) => {
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const items = res.data.map((pkg) => {
-            const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
-            const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
-            const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
-            return {
-              id: pkg.id,
-              name: pkg.name,
-              unit: pkg.duration || "500 g",
-              price: price,
-              mrp: mrp,
-              discount: discount,
-              delivery: "8 MINS",
-              category: getCategoryFromName(pkg.name),
-              image: getVegetableProducePhoto(pkg.name),
-              description: pkg.description || "",
-            }
-          })
-          setVegetables(items)
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load catalog vegetables:", err)
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+    let isMounted = true
+
+    const fetchVegetables = () => {
+      apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
+        .then((res) => {
+          if (!isMounted) return
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            const items = res.data.map((pkg) => {
+              const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
+              const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
+              const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
+              return {
+                id: pkg.id,
+                name: pkg.name,
+                unit: pkg.duration || "500 g",
+                price: price,
+                mrp: mrp,
+                discount: discount,
+                delivery: "8 MINS",
+                category: getCategoryFromName(pkg.name),
+                image: getVegetableProducePhoto(pkg.name),
+                description: pkg.description || "",
+                in_stock: pkg.in_stock !== false,
+                max_quantity: typeof pkg.max_quantity === "number" ? pkg.max_quantity : null,
+              }
+            })
+            setVegetables(items)
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load catalog vegetables:", err)
+        })
+        .finally(() => {
+          if (isMounted) setLoading(false)
+        })
+    }
+
+    // Initial fetch
+    fetchVegetables()
+
+    // Real-time live polling every 3 seconds for instant stock & availability updates
+    const interval = setInterval(fetchVegetables, 3000)
+
+    // Instant refetch when customer refocuses the browser window/tab
+    const handleFocus = () => fetchVegetables()
+    window.addEventListener("focus", handleFocus)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener("focus", handleFocus)
+    }
   }, [])
 
   // Helper category classification
@@ -128,8 +150,44 @@ export function VegetableFullScreenPage() {
     return "/mockups/vegetables_realistic.png"
   }
 
-  // Cart actions
+  // Toast notice for stock limits
+  const [toastMessage, setToastMessage] = useState("")
+  const showStockToast = (msg = "Limited stock — can't add more right now") => {
+    setToastMessage(msg)
+    window.clearTimeout(showStockToast._t)
+    showStockToast._t = window.setTimeout(() => setToastMessage(""), 2800)
+  }
+
+  // Cart actions with stock limit enforcement
   const handleUpdateQty = (name, delta) => {
+    // Find matching vegetable product to inspect stock
+    const matchedVeg = vegetables.find((v) => v.name === name || name.startsWith(v.name))
+    
+    if (matchedVeg) {
+      if (matchedVeg.in_stock === false || matchedVeg.max_quantity === 0) {
+        showStockToast("This item is currently OUT OF STOCK")
+        return
+      }
+      if (delta > 0 && typeof matchedVeg.max_quantity === "number") {
+        // Calculate units in cart for this vegetable
+        let unitsInCart = 0
+        Object.entries(foodCart).forEach(([k, qty]) => {
+          if (k === matchedVeg.name) {
+            unitsInCart += qty
+          } else if (k.includes(" (2 x ") && k.startsWith(matchedVeg.name)) {
+            unitsInCart += qty * 2
+          } else if (k.startsWith(matchedVeg.name)) {
+            unitsInCart += qty
+          }
+        })
+        const multiplier = name.includes(" (2 x ") ? 2 : 1
+        if (unitsInCart + (delta * multiplier) > matchedVeg.max_quantity) {
+          showStockToast("Limited stock — can't add more right now")
+          return
+        }
+      }
+    }
+
     setFoodCart((prev) => {
       const current = prev[name] || 0
       const next = Math.max(0, current + delta)
@@ -408,6 +466,14 @@ export function VegetableFullScreenPage() {
           items: vegetables,
         }}
       />
+
+      {/* ── Toast Notification Banner ── */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-[10090] bg-slate-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl font-black text-xs sm:text-sm shadow-2xl border border-slate-700 flex items-center gap-2.5 animate-in fade-in slide-in-from-top-3">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Footer */}
       <AppBannerAndFooter />

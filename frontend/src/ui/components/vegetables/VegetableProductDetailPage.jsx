@@ -465,7 +465,11 @@ export function VegetableProductDetailPage({
 
                 {/* Add to Cart Button */}
                 <div>
-                  {activeCartQty > 0 ? (
+                  {vegetable.in_stock === false || vegetable.max_quantity === 0 ? (
+                    <div className="px-6 py-3 rounded-xl bg-slate-200 text-slate-500 font-black text-sm border border-slate-300 select-none uppercase tracking-wider">
+                      OUT OF STOCK
+                    </div>
+                  ) : activeCartQty > 0 ? (
                     <div className="flex items-center bg-emerald-700 text-white rounded-xl px-2 py-1.5 shadow-sm">
                       <button
                         type="button"

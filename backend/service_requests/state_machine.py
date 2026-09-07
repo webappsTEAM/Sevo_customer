@@ -215,6 +215,16 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
     # Store temporary actor for save() transition hook
     service_request._status_actor = actor
 
+    # Release and restore any reserved vegetable stock on CANCELLED or REJECTED
+    if new_status in [S.CANCELLED, S.REJECTED]:
+        try:
+            from inventory.services.vegetable_stock_service import release_stock_for_booking
+            release_stock_for_booking(service_request)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to release vegetable stock on status transition: %s", exc)
+
+
 
 def get_allowed_transitions(service_request) -> list:
     """Return list of allowed next status values for a given ServiceRequest."""

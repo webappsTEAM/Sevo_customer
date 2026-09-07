@@ -8408,6 +8408,18 @@ function QuickCommerceCartCheckout({
   const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
 
   const handleUpdateQty = (id, delta) => {
+    if (delta > 0) {
+      const itemToUpdate = cart.find(it => it.id === id)
+      if (itemToUpdate && typeof itemToUpdate.max_quantity === "number") {
+        if ((itemToUpdate.quantity || 1) + delta > itemToUpdate.max_quantity) {
+          setErrorMsg("Limited stock — can't add more right now")
+          window.clearTimeout(handleUpdateQty._t)
+          handleUpdateQty._t = window.setTimeout(() => setErrorMsg(""), 2800)
+          return
+        }
+      }
+    }
+    setErrorMsg("")
     setCart(prev => {
       const nextCart = prev
         .map(it => {
@@ -8505,26 +8517,36 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         }))
       }
 
-      let res = null
-      try {
-        res = await apiRequest("/booking/", { method: "POST", data: payload })
-      } catch (e) {
-        res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
+      const res = await apiRequest("/booking/", { method: "POST", json: payload })
+      if (res && res.success !== false) {
+        try {
+          localStorage.setItem("calservice_veg_food_cart", "{}")
+        } catch {}
+        if (typeof setCart === "function") {
+          setCart([])
+        }
+        setOrderConfirmedData({
+          requestId: res?.data?.request_id || res?.request_id || `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}`,
+          address: activeAddressObj?.address,
+          total: grandTotal,
+          itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
+          deliveryDayText: vegTiming.deliveryDay,
+          deliverySlot: vegTiming.deliverySlot,
+          deliveryNotice: vegTiming.afterTwelveNotice
+            ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
+            : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
+        })
+      } else {
+        setErrorMsg(res?.message || "This quantity is no longer available. Please reduce the quantity and try again.")
       }
-
-      setOrderConfirmedData({
-        requestId: res?.data?.request_id || res?.request_id || `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}`,
-        address: activeAddressObj?.address,
-        total: grandTotal,
-        itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
-        deliveryDayText: vegTiming.deliveryDay,
-        deliverySlot: vegTiming.deliverySlot,
-        deliveryNotice: vegTiming.afterTwelveNotice
-          ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
-          : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
-      })
     } catch (err) {
-      setErrorMsg(err?.message || "Failed to place order. Please try again.")
+      if (err?.body?.errors) {
+        const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
+        setErrorMsg(msgs || err?.body?.message || "This quantity is no longer available. Please reduce the quantity and try again.")
+      } else {
+        const msg = err?.body?.message || err?.body?.detail || err?.message || "This quantity is no longer available. Please reduce the quantity and try again."
+        setErrorMsg(msg)
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -8598,7 +8620,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={onBack}
+                onClick={() => onBack && onBack()}
                 className="w-9 h-9 rounded-full hover:bg-slate-105 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -10982,8 +11004,10 @@ export function BookingPage() {
           user={user}
           onRequireAuth={() => setShowCustomerEntryModal(true)}
           onBack={(explicitFoodCart) => {
-            const restoredFoodCart = explicitFoodCart !== undefined ? explicitFoodCart : {}
-            if (explicitFoodCart === undefined) {
+            let restoredFoodCart = {}
+            if (explicitFoodCart && typeof explicitFoodCart === "object" && !(explicitFoodCart instanceof Event) && !("nativeEvent" in explicitFoodCart)) {
+              restoredFoodCart = { ...explicitFoodCart }
+            } else {
               cart.forEach(item => {
                 const key = item.displayName || item.name
                 if (key && (item.quantity || 1) > 0) {
@@ -11005,6 +11029,21 @@ export function BookingPage() {
             })
           }}
         />
+
+        <AnimatePresence>
+          {showCustomerEntryModal && (
+            <CustomerEntryFlowModal
+              isOpen={showCustomerEntryModal}
+              onClose={() => {
+                setShowCustomerEntryModal(false)
+              }}
+              onComplete={async () => {
+                setShowCustomerEntryModal(false)
+                await refreshMe?.()
+              }}
+            />
+          )}
+        </AnimatePresence>
       </>
     )
   }
@@ -24531,4 +24570,3 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       onCheckout={onCheckout}
     />
   );
-}

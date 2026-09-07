@@ -123,15 +123,15 @@ USER_RECIPES_DATA = [
     ]),
     # 6. Baby Potato
     ("Baby Potato", [
-        ("Baby Potato Roast", ["Baby Potato", "Curry Leaves"], 10, 20, 185, "4g", "28g", "4g", "7g"),
-        ("Baby Potato Masala", ["Baby Potato", "Onion", "Tomato"], 15, 25, 190, "4g", "27g", "4g", "8g"),
-        ("Baby Potato Kurma", ["Baby Potato", "Carrot", "Green Peas"], 15, 25, 210, "5g", "27g", "5g", "10g"),
+        ("Baby Potato Egg Curry", ["Baby Potato", "Tomato", "Onion"], 15, 15, 275, "11 g", "31 g", "4 g", "12 g"),
+        ("Poori Aloo Koora", ["Baby Potato", "Onion", "Ginger"], 10, 12, 205, "4 g", "31 g", "5 g", "8 g"),
+        ("Baby Potato Aloo Palak", ["Baby Potato", "Spinach", "Tomato"], 15, 15, 225, "7 g", "29 g", "6 g", "9 g"),
     ]),
     # 7. Ooty Potato
     ("Ooty Potato", [
-        ("Ooty Potato Fry", ["Ooty Potato", "Onion"], 10, 20, 185, "4g", "29g", "4g", "7g"),
-        ("Potato Kurma", ["Ooty Potato", "Carrot", "Green Peas"], 15, 25, 200, "5g", "28g", "5g", "8g"),
-        ("Potato Masala", ["Ooty Potato", "Tomato", "Onion", "Green Chilli"], 10, 20, 175, "4g", "28g", "4g", "6g"),
+        ("Potato Palya", ["Ooty Potato", "Onion", "Curry Leaves"], 10, 10, 185, "4 g", "31 g", "5 g", "7 g"),
+        ("Urulai Roast", ["Ooty Potato", "Curry Leaves"], 10, 15, 220, "4 g", "32 g", "5 g", "9 g"),
+        ("Ooty Potato Kurma", ["Ooty Potato", "Coconut", "Tomato"], 15, 18, 235, "5 g", "35 g", "5 g", "9 g"),
     ]),
     # 8. Orange Carrot
     ("Orange Carrot", [
@@ -213,9 +213,9 @@ USER_RECIPES_DATA = [
     ]),
     # 22. Lemon
     ("Lemon", [
-        ("Lemon Rice", ["Lemon", "Green Chilli", "Curry Leaves", "Coriander"], 10, 15, 240, "5g", "42g", "2g", "7g"),
-        ("Lemon Vegetable Salad", ["Lemon", "Cucumber", "Carrot", "Beetroot"], 10, 5, 60, "2g", "12g", "4g", "1g"),
-        ("Lemon Rasam", ["Lemon", "Tomato", "Coriander", "Green Chilli"], 10, 15, 65, "2g", "9g", "2g", "2g"),
+        ("Lemon Bars", ["Lemon", "Flour", "Butter"], 20, 40, 320, "5 g", "44 g", "1 g", "14 g"),
+        ("Avgolemono Soup", ["Lemon", "Chicken", "Rice"], 15, 25, 235, "20 g", "22 g", "1 g", "8 g"),
+        ("Chicken Piccata", ["Lemon", "Chicken", "Capers"], 10, 12, 365, "39 g", "12 g", "1 g", "18 g"),
     ]),
     # 23. Curry Leaves
     ("Curry Leaves", [
@@ -285,15 +285,15 @@ USER_RECIPES_DATA = [
     ]),
     # 34. Green Amaranthus
     ("Green Amaranthus", [
-        ("Green Amaranthus Poriyal", ["Amaranthus", "Onion", "Coconut"], 15, 15, 110, "4g", "12g", "5g", "5g"),
-        ("Amaranthus Dal", ["Amaranthus", "Tomato", "Onion"], 15, 25, 175, "9g", "23g", "7g", "4g"),
-        ("Amaranthus Kootu", ["Amaranthus", "Carrot", "Moong Dal"], 15, 20, 150, "7g", "20g", "7g", "4g"),
+        ("Green Amaranthus Leaves Poriyal", ["Green Amaranthus Leaves", "Onion", "Coconut"], 10, 10, 125, "4 g", "10 g", "4 g", "8 g"),
+        ("Green Amaranthus Leaves Kootu", ["Green Amaranthus Leaves", "Moong Dal", "Coconut"], 10, 15, 175, "8 g", "23 g", "6 g", "6 g"),
+        ("Green Amaranthus Leaves Puli Kuzhambu", ["Green Amaranthus Leaves", "Onion", "Garlic"], 15, 15, 120, "4 g", "15 g", "5 g", "6 g"),
     ]),
     # 35. Red Amaranthus
     ("Red Amaranthus", [
-        ("Red Keerai Poriyal", ["Red Amaranthus", "Onion", "Coconut"], 15, 15, 110, "4g", "12g", "5g", "5g"),
-        ("Red Keerai Dal", ["Red Amaranthus", "Tomato", "Onion"], 15, 25, 175, "9g", "23g", "7g", "4g"),
-        ("Red Keerai Kootu", ["Red Amaranthus", "Carrot", "Moong Dal"], 15, 20, 150, "7g", "20g", "7g", "4g"),
+        ("Red Amaranthus Dal", ["Red Amaranthus Leaves", "Toor Dal", "Tomato"], 10, 15, 175, "9 g", "25 g", "6 g", "5 g"),
+        ("Red Amaranthus Coconut Milk Curry", ["Red Amaranthus Leaves", "Coconut Milk", "Garlic"], 10, 12, 145, "4 g", "14 g", "4 g", "9 g"),
+        ("Red Amaranthus Vadai", ["Red Amaranthus Leaves", "Chana Dal", "Onion"], 70, 15, 265, "9 g", "34 g", "7 g", "10 g"),
     ]),
     # 36. Green Lettuce
     ("Green Lettuce", [
@@ -309,21 +309,21 @@ USER_RECIPES_DATA = [
     ]),
     # 38. Broad Beans
     ("Broad Beans", [
-        ("Avarakkai Poriyal", ["Broad Beans", "Coconut"], 10, 15, 105, "4g", "13g", "5g", "5g"),
-        ("Avarakkai Sambar", ["Broad Beans", "Tomato", "Onion"], 15, 25, 150, "7g", "22g", "6g", "4g"),
-        ("Broad Beans Kootu", ["Broad Beans", "Carrot", "Moong Dal"], 15, 20, 150, "7g", "20g", "7g", "4g"),
+        ("Avarakkai Poriyal", ["Broad Beans", "Coconut"], 8, 12, 150, "5 g", "16 g", "6 g", "8 g"),
+        ("Avarakkai Kootu", ["Broad Beans", "Moong Dal", "Coconut"], 10, 15, 180, "7 g", "22 g", "7 g", "8 g"),
+        ("Avarakkai Masala Curry", ["Broad Beans", "Tomato", "Onion"], 10, 18, 175, "5 g", "21 g", "7 g", "8 g"),
     ]),
     # 39. Cluster Beans
     ("Cluster Beans", [
-        ("Kothavarangai Poriyal", ["Cluster Beans", "Coconut", "Onion"], 10, 15, 110, "4g", "13g", "5g", "5g"),
-        ("Kothavarangai Sambar", ["Cluster Beans", "Tomato", "Onion"], 15, 25, 150, "7g", "22g", "7g", "4g"),
-        ("Cluster Beans Curry", ["Cluster Beans", "Potato", "Tomato"], 15, 25, 165, "4g", "25g", "6g", "6g"),
+        ("Cluster Beans Thogayal", ["Cluster Beans", "Small Onion", "Tomato", "Coconut"], 8, 12, 170, "5 g", "18 g", "7 g", "9 g"),
+        ("Kothavarangai Pulikootu", ["Cluster Beans", "Toor Dal", "Coconut"], 15, 20, 190, "8 g", "27 g", "8 g", "6 g"),
+        ("Kothavarangai Poriyal", ["Cluster Beans", "Coconut"], 8, 12, 155, "5 g", "17 g", "7 g", "8 g"),
     ]),
     # 40. Cowpea Beans
     ("Cowpea Beans", [
-        ("Karamani Poriyal", ["Cowpea Beans", "Onion", "Coconut"], 10, 20, 140, "7g", "19g", "7g", "5g"),
-        ("Karamani Kuzhambu", ["Cowpea Beans", "Tomato", "Small Onion"], 15, 25, 160, "7g", "23g", "7g", "5g"),
-        ("Karamani Vegetable Curry", ["Cowpea Beans", "Potato", "Carrot"], 15, 25, 180, "8g", "28g", "8g", "5g"),
+        ("Cowpea Beans Poriyal", ["Cowpea Beans", "Coconut"], 8, 12, 155, "5 g", "17 g", "6 g", "8 g"),
+        ("Cowpea Beans Coconut Curry", ["Cowpea Beans", "Onion", "Tomato", "Coconut"], 10, 16, 185, "6 g", "21 g", "7 g", "9 g"),
+        ("Cowpea Beans Masala Fry", ["Cowpea Beans", "Garlic", "Onion"], 8, 15, 175, "6 g", "20 g", "7 g", "9 g"),
     ]),
     # 41. Green Peas
     ("Green Peas", [
@@ -363,33 +363,27 @@ USER_RECIPES_DATA = [
     ]),
     # 47. Ash Gourd
     ("Ash Gourd", [
-        ("Ash Gourd Mor Kuzhambu", ["Ash Gourd", "Green Chilli", "Coriander"], 15, 20, 130, "5g", "12g", "3g", "7g"),
-        ("Ash Gourd Kootu", ["Ash Gourd", "Moong Dal", "Coconut"], 15, 20, 145, "7g", "19g", "5g", "5g"),
-        ("Ash Gourd Sambar", ["Ash Gourd", "Tomato", "Onion"], 15, 25, 140, "7g", "21g", "6g", "4g"),
+        ("Poosanikai Kootu", ["Ash Gourd", "Moong Dal", "Coconut"], 10, 18, 180, "7 g", "22 g", "5 g", "8 g"),
+        ("Poosanikai Mor Kuzhambu", ["Ash Gourd", "Sour Curd", "Coconut"], 25, 15, 165, "6 g", "17 g", "3 g", "8 g"),
+        ("Poosanikai Poriyal", ["Ash Gourd", "Coconut", "Coriander"], 8, 12, 135, "3 g", "14 g", "4 g", "8 g"),
     ]),
     # 48. Ivy Gourd
     ("Ivy Gourd", [
-        ("Kovakkai Fry", ["Ivy Gourd", "Onion"], 10, 15, 115, "3g", "13g", "5g", "6g"),
-        ("Kovakkai Poriyal", ["Ivy Gourd", "Coconut", "Green Chilli"], 10, 15, 105, "3g", "13g", "5g", "5g"),
-        ("Kovakkai Masala", ["Ivy Gourd", "Tomato", "Onion"], 10, 20, 130, "3g", "16g", "5g", "6g"),
+        ("Kovakkai Mor Kuzhambu", ["Ivy Gourd", "Sour Curd", "Coconut"], 15, 15, 185, "5 g", "18 g", "4 g", "11 g"),
+        ("Kovakkai Fry", ["Ivy Gourd", "Rice Flour", "Gram Flour"], 10, 10, 285, "6 g", "30 g", "5 g", "16 g"),
+        ("Kovakkai Poriyal", ["Ivy Gourd", "Coconut"], 8, 15, 155, "4 g", "17 g", "5 g", "8 g"),
     ]),
-    # 49. Pointed Gourd
-    ("Pointed Gourd", [
-        ("Parwal Fry", ["Pointed Gourd", "Onion"], 10, 15, 120, "3g", "14g", "4g", "6g"),
-        ("Parwal Masala", ["Pointed Gourd", "Tomato", "Green Chilli"], 10, 20, 135, "3g", "17g", "5g", "7g"),
-        ("Parwal Potato Curry", ["Pointed Gourd", "Potato", "Tomato"], 15, 25, 175, "4g", "28g", "6g", "6g"),
-    ]),
-    # 50. Chow Chow
+    # 49. Chow Chow
     ("Chow Chow", [
-        ("Chow Chow Kootu", ["Chow Chow", "Moong Dal", "Carrot"], 15, 20, 140, "7g", "19g", "5g", "4g"),
-        ("Chow Chow Poriyal", ["Chow Chow", "Coconut", "Onion"], 10, 15, 95, "2g", "12g", "4g", "5g"),
-        ("Chow Chow Sambar", ["Chow Chow", "Tomato", "Onion"], 15, 25, 140, "7g", "21g", "6g", "4g"),
+        ("Chow Chow Kootu", ["Chow Chow", "Moong Dal", "Coconut"], 10, 15, 155, "6 g", "20 g", "5 g", "7 g"),
+        ("Chow Chow Mor Kuzhambu", ["Chow Chow", "Sour Curd", "Coconut"], 15, 15, 145, "5 g", "15 g", "3 g", "8 g"),
+        ("Chow Chow Chana Masala", ["Chow Chow", "Chickpeas", "Tomato", "Onion"], 10, 20, 235, "8 g", "34 g", "9 g", "8 g"),
     ]),
     # 51. Green Pumpkin
     ("Green Pumpkin", [
-        ("Pumpkin Poriyal", ["Green Pumpkin", "Coconut", "Green Chilli"], 10, 15, 100, "2g", "15g", "4g", "4g"),
-        ("Pumpkin Kootu", ["Green Pumpkin", "Moong Dal", "Carrot"], 15, 20, 145, "7g", "21g", "6g", "4g"),
-        ("Pumpkin Sambar", ["Green Pumpkin", "Tomato", "Onion"], 15, 25, 145, "7g", "22g", "6g", "4g"),
+        ("Pumpkin Halwa", ["Green Pumpkin", "Milk", "Ghee"], 10, 25, 230, "4 g", "32 g", "2 g", "10 g"),
+        ("Pumpkin Soup", ["Green Pumpkin", "Garlic", "Onion"], 10, 15, 105, "2 g", "18 g", "3 g", "4 g"),
+        ("Pumpkin Sambar", ["Green Pumpkin", "Toor Dal", "Curry Leaves"], 10, 20, 190, "7 g", "24 g", "5 g", "8 g"),
     ]),
     # 52. Pumpkin Yellow – Cut
     ("Pumpkin Yellow (Cut)", [
@@ -399,45 +393,45 @@ USER_RECIPES_DATA = [
     ]),
     # 53. Disco Pumpkin
     ("Disco Pumpkin", [
-        ("Pumpkin Sambar", ["Disco Pumpkin", "Tomato", "Onion"], 15, 25, 145, "7g", "22g", "6g", "4g"),
-        ("Pumpkin Kootu", ["Disco Pumpkin", "Moong Dal", "Coconut"], 15, 20, 145, "7g", "21g", "6g", "4g"),
-        ("Pumpkin Poriyal", ["Disco Pumpkin", "Green Chilli", "Coconut"], 10, 15, 100, "2g", "15g", "4g", "4g"),
+        ("Pumpkin Erissery", ["Disco Pumpkin", "Coconut", "Curry Leaves"], 10, 15, 155, "3 g", "18 g", "5 g", "9 g"),
+        ("Pumpkin Curry", ["Disco Pumpkin", "Onion", "Tomato"], 10, 15, 145, "3 g", "20 g", "4 g", "7 g"),
+        ("Pumpkin Pie", ["Disco Pumpkin", "Condensed Milk", "Pie Crust"], 20, 40, 310, "6 g", "42 g", "2 g", "13 g"),
     ]),
     # 54. Colocasia
     ("Colocasia", [
-        ("Seppankizhangu Roast", ["Colocasia", "Onion"], 15, 25, 210, "3g", "34g", "5g", "7g"),
-        ("Seppankizhangu Fry", ["Colocasia", "Green Chilli", "Curry Leaves"], 15, 20, 200, "3g", "32g", "5g", "7g"),
-        ("Colocasia Masala", ["Colocasia", "Tomato", "Onion"], 15, 25, 185, "4g", "29g", "5g", "7g"),
+        ("Seppankizhangu Roast", ["Colocasia", "Rice Flour"], 15, 15, 225, "3 g", "35 g", "5 g", "9 g"),
+        ("Seppankizhangu Coconut Poriyal", ["Colocasia", "Coconut", "Onion"], 15, 15, 250, "4 g", "38 g", "6 g", "10 g"),
+        ("Seppankizhangu Tomato Curry", ["Colocasia", "Tomato", "Onion"], 15, 18, 235, "4 g", "36 g", "6 g", "9 g"),
     ]),
     # 55. Knol Khol
     ("Knol Khol", [
-        ("Knol Khol Poriyal", ["Knol Khol", "Coconut", "Onion"], 10, 15, 95, "3g", "13g", "4g", "4g"),
-        ("Knol Khol Kootu", ["Knol Khol", "Moong Dal", "Carrot"], 15, 20, 140, "7g", "20g", "6g", "4g"),
-        ("Knol Khol Sambar", ["Knol Khol", "Tomato", "Onion"], 15, 25, 140, "7g", "21g", "6g", "4g"),
+        ("Knol Khol Kootu", ["Knol Khol", "Moong Dal", "Coconut"], 10, 15, 165, "7 g", "22 g", "5 g", "6 g"),
+        ("Kashmiri Knol Khol Curry", ["Knol Khol", "Curd", "Cumin"], 10, 18, 155, "5 g", "14 g", "4 g", "9 g"),
+        ("Knol Khol Vegetable Soup", ["Knol Khol", "Carrot", "Cabbage"], 8, 15, 95, "3 g", "16 g", "4 g", "3 g"),
     ]),
     # 56. Banana Stem
     ("Banana Stem", [
-        ("Vazhaithandu Poriyal", ["Banana Stem", "Coconut", "Onion"], 20, 15, 90, "2g", "13g", "5g", "4g"),
-        ("Banana Stem Kootu", ["Banana Stem", "Moong Dal", "Carrot"], 20, 20, 135, "7g", "20g", "7g", "4g"),
-        ("Banana Stem Salad", ["Banana Stem", "Cucumber", "Carrot", "Lemon"], 20, 5, 65, "2g", "12g", "5g", "1g"),
+        ("Vazhaithandu Poriyal", ["Banana Stem", "Moong Dal", "Coconut"], 15, 12, 135, "5 g", "17 g", "5 g", "6 g"),
+        ("Vazhaithandu Mor Kootu", ["Banana Stem", "Curd", "Coconut"], 15, 12, 125, "5 g", "13 g", "4 g", "6 g"),
+        ("Vazhaithandu Usli", ["Banana Stem", "Toor Dal", "Chana Dal"], 60, 20, 235, "11 g", "29 g", "7 g", "8 g"),
     ]),
     # 57. Raw Banana
     ("Raw Banana", [
-        ("Raw Banana Fry", ["Raw Banana", "Onion"], 10, 20, 180, "3g", "30g", "5g", "6g"),
-        ("Raw Banana Poriyal", ["Raw Banana", "Coconut", "Green Chilli"], 10, 20, 155, "3g", "27g", "5g", "5g"),
-        ("Raw Banana Masala", ["Raw Banana", "Tomato", "Onion"], 10, 20, 165, "3g", "28g", "5g", "6g"),
+        ("Vazhakkai Poriyal", ["Raw Banana", "Coconut"], 8, 12, 180, "2 g", "30 g", "5 g", "7 g"),
+        ("Vazhakkai Podimas", ["Raw Banana", "Ginger", "Coconut"], 10, 12, 175, "3 g", "29 g", "5 g", "7 g"),
+        ("Aratikaya Fry", ["Raw Banana", "Curry Leaves"], 8, 15, 190, "2 g", "31 g", "4 g", "8 g"),
     ]),
     # 58. Raw Papaya
     ("Raw Papaya", [
-        ("Raw Papaya Poriyal", ["Raw Papaya", "Coconut", "Onion"], 10, 15, 95, "2g", "14g", "4g", "4g"),
-        ("Raw Papaya Kootu", ["Raw Papaya", "Moong Dal", "Carrot"], 15, 20, 140, "7g", "20g", "6g", "4g"),
-        ("Raw Papaya Curry", ["Raw Papaya", "Tomato", "Green Chilli"], 10, 20, 120, "3g", "17g", "5g", "5g"),
+        ("Raw Papaya Sabzi", ["Raw Papaya", "Onion", "Tomato"], 10, 15, 120, "2 g", "18 g", "4 g", "5 g"),
+        ("Raw Papaya Kofta Curry", ["Raw Papaya", "Besan", "Tomato"], 20, 20, 245, "7 g", "29 g", "5 g", "11 g"),
+        ("Raw Papaya Salad", ["Raw Papaya", "Carrot", "Roasted Peanuts"], 15, 0, 105, "3 g", "15 g", "4 g", "4 g"),
     ]),
     # 59. Broccoli
     ("Broccoli", [
-        ("Broccoli Stir Fry", ["Broccoli", "Carrot", "Capsicum"], 10, 15, 110, "5g", "13g", "5g", "5g"),
-        ("Broccoli Soup", ["Broccoli", "Carrot", "Potato"], 10, 20, 100, "5g", "15g", "5g", "3g"),
-        ("Broccoli Vegetable Roast", ["Broccoli", "Mushroom", "Zucchini"], 15, 20, 125, "5g", "15g", "5g", "6g"),
+        ("Broccoli Poriyal", ["Broccoli", "Onion", "Coconut"], 5, 10, 145, "6 g", "14 g", "6 g", "8 g"),
+        ("Broccoli Paruppu Usili", ["Broccoli", "Chana Dal", "Curry Leaves"], 35, 20, 240, "11 g", "30 g", "8 g", "9 g"),
+        ("Broccoli Pepper Fry", ["Broccoli", "Garlic", "Onion"], 5, 15, 135, "6 g", "13 g", "5 g", "8 g"),
     ]),
     # 60. Button Mushroom
     ("Button Mushroom", [
@@ -447,9 +441,9 @@ USER_RECIPES_DATA = [
     ]),
     # 61. Baby Corn
     ("Baby Corn", [
-        ("Baby Corn Manchurian", ["Baby Corn", "Capsicum", "Spring Onion"], 15, 20, 210, "5g", "31g", "4g", "8g"),
-        ("Baby Corn Stir Fry", ["Baby Corn", "Carrot", "Beans", "Capsicum"], 10, 15, 120, "4g", "18g", "5g", "4g"),
-        ("Baby Corn Vegetable Soup", ["Baby Corn", "Carrot", "Mushroom"], 10, 20, 100, "4g", "17g", "4g", "2g"),
+        ("Baby Corn Manchurian", ["Baby Corn", "Capsicum", "Spring Onion"], 15, 15, 285, "5 g", "40 g", "4 g", "12 g"),
+        ("Baby Corn Stir Fry", ["Baby Corn", "Tomato", "Capsicum"], 10, 12, 155, "5 g", "22 g", "5 g", "6 g"),
+        ("Baby Corn Vegetable Soup", ["Baby Corn", "Carrot", "Mushroom"], 10, 15, 105, "4 g", "18 g", "4 g", "3 g"),
     ]),
     # 62. Sweet Corn Cob
     ("Sweet Corn Cob", [
@@ -465,27 +459,21 @@ USER_RECIPES_DATA = [
     ]),
     # 64. Red Bell Pepper
     ("Red Bell Pepper", [
-        ("Red Pepper Stir Fry", ["Red Bell Pepper", "Broccoli", "Carrot"], 10, 15, 110, "4g", "15g", "5g", "4g"),
-        ("Red Pepper Pasta", ["Red Bell Pepper", "Tomato", "Basil"], 10, 20, 290, "9g", "47g", "6g", "8g"),
-        ("Red Pepper Vegetable Soup", ["Red Bell Pepper", "Carrot", "Potato"], 10, 20, 105, "3g", "18g", "5g", "3g"),
+        ("Stuffed Red Bell Pepper", ["Red Bell Pepper", "Potato", "Green Peas"], 15, 25, 250, "8 g", "32 g", "6 g", "11 g"),
+        ("Roasted Red Bell Pepper Soup", ["Red Bell Pepper", "Tomato", "Garlic"], 10, 20, 105, "3 g", "16 g", "4 g", "4 g"),
+        ("Red Bell Pepper Bajji", ["Red Bell Pepper", "Besan", "Rice Flour"], 10, 8, 245, "7 g", "29 g", "5 g", "12 g"),
     ]),
     # 65. Yellow Bell Pepper
     ("Yellow Bell Pepper", [
-        ("Yellow Pepper Stir Fry", ["Yellow Bell Pepper", "Broccoli", "Zucchini"], 10, 15, 110, "4g", "15g", "5g", "4g"),
-        ("Yellow Pepper Rice", ["Yellow Bell Pepper", "Carrot", "Green Peas"], 10, 15, 235, "5g", "41g", "3g", "7g"),
-        ("Yellow Pepper Soup", ["Yellow Bell Pepper", "Carrot", "Potato"], 10, 20, 105, "3g", "18g", "5g", "3g"),
+        ("Yellow Bell Pepper Bajji", ["Yellow Bell Pepper", "Besan"], 10, 8, 250, "7 g", "29 g", "5 g", "12 g"),
+        ("Stuffed Yellow Bell Pepper", ["Yellow Bell Pepper", "Green Peas", "Rice"], 15, 20, 270, "9 g", "36 g", "6 g", "10 g"),
+        ("Yellow Bell Pepper Besan Curry", ["Yellow Bell Pepper", "Besan", "Onion"], 8, 15, 190, "7 g", "23 g", "5 g", "8 g"),
     ]),
-    # 66. Assorted Capsicum
-    ("Assorted Capsicum", [
-        ("Three Pepper Stir Fry", ["Red Bell Pepper", "Yellow Bell Pepper", "Green Capsicum", "Onion"], 10, 15, 110, "4g", "15g", "5g", "4g"),
-        ("Three Pepper Fried Rice", ["Red Bell Pepper", "Yellow Bell Pepper", "Green Capsicum", "Carrot", "Green Peas"], 15, 15, 245, "6g", "42g", "4g", "7g"),
-        ("Capsicum Pasta", ["Red Bell Pepper", "Yellow Bell Pepper", "Green Capsicum", "Tomato", "Italian Basil Leaves"], 10, 20, 290, "9g", "47g", "6g", "8g"),
-    ]),
-    # 67. Green Zucchini
+    # 66. Green Zucchini
     ("Green Zucchini", [
-        ("Zucchini Stir Fry", ["Zucchini", "Capsicum", "Carrot"], 10, 10, 100, "3g", "12g", "3g", "5g"),
-        ("Zucchini Soup", ["Zucchini", "Potato", "Carrot"], 10, 20, 90, "3g", "13g", "3g", "3g"),
-        ("Zucchini Vegetable Roast", ["Zucchini", "Broccoli", "Mushroom"], 10, 20, 115, "4g", "14g", "4g", "5g"),
+        ("Green Zucchini Fritters", ["Green Zucchini", "Besan", "Wheat Flour"], 10, 10, 220, "7 g", "27 g", "5 g", "10 g"),
+        ("Stuffed Green Zucchini", ["Green Zucchini", "Green Peas", "Cheese"], 15, 15, 210, "9 g", "19 g", "5 g", "12 g"),
+        ("Green Zucchini Vegetable Soup", ["Green Zucchini", "Carrot", "Sweet Corn"], 10, 15, 125, "4 g", "20 g", "4 g", "4 g"),
     ]),
     # 68. Green Moong Sprouts
     ("Green Moong Sprouts", [

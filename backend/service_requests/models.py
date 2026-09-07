@@ -830,6 +830,7 @@ class Package(models.Model):
     icon           = models.CharField(max_length=100, blank=True, default="")
     gst_rate       = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST percentage (e.g. 18.00)")
     platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
+    stock_item     = models.OneToOneField("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="vegetable_package")
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
@@ -842,7 +843,7 @@ class Package(models.Model):
 
 class AddOn(models.Model):
     """Optional extra scoped to one specific Package (e.g. 'Gas Top-up' on 'AC General Service')."""
-    package     = models.ForeignKey(Package, on_delete=models.CASCADE, related_name="addons")
+    package     = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True, blank=True, related_name="addons")
     name        = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     price       = models.DecimalField(max_digits=10, decimal_places=2, default=0)

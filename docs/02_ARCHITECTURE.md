@@ -116,3 +116,26 @@ Real-time geolocation tracking is decoupled from heavy database writes:
 2. Models inherit from `CompanyScopedModel` and use `CompanyScopedManager`.
 3. Default querysets automatically enforce `filter(company=request.user.company)`.
 4. Guarantees cross-tenant data isolation at the ORM layer.
+
+---
+
+## 5. Vegetable Stock & Daily Capacity Architecture
+
+The Vegetable Stock sub-domain handles daily perishable inventory where stock represents vendor selling capacity rather than static warehouse physical bins.
+
+```text
+[ Daily 4:00 AM Celery Beat Reset ]  ──>  [ InventoryItem.default_daily_quantity_grams ]
+                                                        │
+                                                        ▼
+[ Customer Cart Checkout ]  ──(Atomic Row Lock)──> [ reserve_stock_for_booking_items() ]
+                                                        │
+                                    ┌───────────────────┴───────────────────┐
+                                    ▼                                       ▼
+                       [ StockMovement (SOLD) ]               [ Invalidate Tenant Cache ]
+```
+
+### Key Architectural Characteristics:
+1. **Integer Gram Standard**: All internal stock mathematical operations, booking reservations, and movements are executed and persisted in integer grams to eliminate floating-point drift.
+2. **Deterministic Locking**: Deadlock-free reservations acquire row locks via `select_for_update()` ordered strictly by ascending `InventoryItem.id`.
+3. **Idempotent Daily Reset**: Automatic daily reset (scheduled at 4:00 AM via Celery) resets available capacity to `default_daily_quantity_grams` and records an audit movement, with self-healing checks on checkout.
+4. **Ledger-Based History**: Daily opening, restocked, sold, and closing history are computed dynamically from `StockMovement` immutable audit rows without dedicated secondary history tables.
