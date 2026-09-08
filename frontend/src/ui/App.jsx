@@ -82,6 +82,9 @@ const CatalogChangeLogPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const GTPricingPage = lazy(() =>
+  import("./pages/catalog/GTPricingPage.jsx").then(m => ({ default: m.GTPricingPage || m.default }))
+)
 const AdminRecipesPage = lazy(() =>
   import("./pages/catalog/AdminRecipesPage.jsx").then(m => ({ default: m.AdminRecipesPage || m.default }))
 )
@@ -485,6 +488,7 @@ export function App() {
               <Route path={routes.catalog_recommendations} element={<RequireModule module="catalog"><AdminRecommendationsPage /></RequireModule>} />
               <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
               <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
+              <Route path={routes.catalog_gt_pricing} element={<RequireModule module="catalog"><GTPricingPage /></RequireModule>} />
               <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />
               <Route path={routes.marketing_offers} element={<RequireModule module="marketing"><OffersPage /></RequireModule>} />
               <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />

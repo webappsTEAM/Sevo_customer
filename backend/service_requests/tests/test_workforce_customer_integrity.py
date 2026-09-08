@@ -30,6 +30,7 @@ import hashlib
 from decimal import Decimal
 from unittest.mock import patch
 from django.test import TestCase, Client
+from rest_framework.test import APIClient
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from service_requests.models import ServiceRequest, BookingAssignment, WorkforceWebhookEvent
@@ -71,6 +72,33 @@ class WorkforceCustomerIntegrityTest(TestCase):
             status=ServiceRequest.Status.CONFIRMED,
             total_amount=Decimal("450.00"),
         )
+
+    def _authenticate_as_admin(self):
+        """
+        BookingVerifyStartOTPView was AllowAny and is now
+        [IsAuthenticated, IsAdminRole] -- an anonymous POST carrying a
+        guessable booking id could previously flip a booking straight to
+        in_progress, bypassing the state machine (fixes EC-02, see that
+        view's docstring). The live technician flow uses the vendor app's
+        own endpoint; this Customer-app copy is for manual support
+        overrides only, so these tests authenticate as staff.
+        """
+        User = get_user_model()
+        admin = User.objects.create_user(
+            username="otp_support_admin",
+            email="support_admin@sevo.in",
+            password="password123",
+            role=getattr(User.Role, "ADMIN", "admin"),
+        )
+        admin.is_staff = True
+        admin.save()
+        # The DRF config for this project deliberately excludes
+        # SessionAuthentication (see REST_FRAMEWORK in settings.py), so
+        # force_login would not authenticate an API call. APIClient's
+        # force_authenticate is what the other suites here use.
+        self.client = APIClient()
+        self.client.force_authenticate(user=admin)
+        return admin
 
     def _generate_webhook_headers(self, payload_dict):
         body_bytes = json.dumps(payload_dict).encode("utf-8")
@@ -220,6 +248,7 @@ class WorkforceCustomerIntegrityTest(TestCase):
 
     # 8. OTP valid -> work starts
     def test_08_otp_valid_transitions_to_in_progress(self):
+        self._authenticate_as_admin()
         self.booking.status = ServiceRequest.Status.ARRIVED
         self.booking.technician_name = "Karthik Raja"
         self.booking.save()
@@ -234,6 +263,7 @@ class WorkforceCustomerIntegrityTest(TestCase):
 
     # 9. OTP invalid -> rejected with attempts decrement
     def test_09_otp_invalid_is_rejected(self):
+        self._authenticate_as_admin()
         self.booking.status = ServiceRequest.Status.ARRIVED
         self.booking.technician_name = "Karthik Raja"
         self.booking.save()
@@ -246,6 +276,7 @@ class WorkforceCustomerIntegrityTest(TestCase):
 
     # 10. OTP expired -> rejected
     def test_10_otp_expired_is_rejected(self):
+        self._authenticate_as_admin()
         self.booking.status = ServiceRequest.Status.ARRIVED
         self.booking.technician_name = "Karthik Raja"
         self.booking.otp_expires_at = timezone.now() - timezone.timedelta(minutes=5)
@@ -258,6 +289,7 @@ class WorkforceCustomerIntegrityTest(TestCase):
 
     # 11. OTP reused -> rejected
     def test_11_otp_reused_is_rejected(self):
+        self._authenticate_as_admin()
         self.booking.status = ServiceRequest.Status.IN_PROGRESS
         self.booking.technician_name = "Karthik Raja"
         self.booking.otp_verified = True

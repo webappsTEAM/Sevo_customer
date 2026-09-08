@@ -42,6 +42,15 @@ def _resolve_sr(pk=None, identifier=None):
     return ServiceRequest.objects.filter(request_id__iexact=clean_id).first()
 
 
+def _technician_ref(user):
+    """
+    The stable string this backend uses to identify a technician on a
+    BookingAssignment. Kept in one place so ownership checks and assignment
+    writes can never drift apart.
+    """
+    return f"TECH-{user.id:04d}"
+
+
 def _get_technician_identity(request):
     """
     Resolves the authenticated technician's real identity from the database.
@@ -59,8 +68,27 @@ def _get_technician_identity(request):
     except Exception:
         photo = None
     rating = getattr(user, "rating", None) or None
-    tech_id = f"TECH-{user.id:04d}"
+    tech_id = _technician_ref(user)
     return user, name, phone, photo, rating, tech_id
+
+
+def _assigned_technician_ref(sr):
+    """
+    The technician reference currently holding this booking, or "".
+
+    ServiceRequest used to carry a `technician` FK. It was removed when
+    technician identity moved to the snapshot/assignment model (the same
+    refactor that left technician_name/phone/photo/rating behind), so
+    ownership is now read from the accepted BookingAssignment -- which is
+    where it was already being written.
+    """
+    assignment = sr.assignments.filter(
+        status__in=[
+            BookingAssignment.Status.ACCEPTED,
+            getattr(BookingAssignment.Status, "COMPLETED", BookingAssignment.Status.ACCEPTED),
+        ]
+    ).order_by("-id").first()
+    return (assignment.technician_id or "") if assignment else ""
 
 
 def _forbidden_if_not_owner(sr, user):
@@ -69,7 +97,8 @@ def _forbidden_if_not_owner(sr, user):
     same authenticated technician may update its status/location/OTP. Prevents
     Technician B's device from ever writing into Technician A's active booking.
     """
-    if sr.technician_id and sr.technician_id != user.id:
+    holder = _assigned_technician_ref(sr)
+    if holder and holder != _technician_ref(user):
         return Response(
             {"success": False, "error": "This booking is assigned to a different technician."},
             status=status.HTTP_403_FORBIDDEN
@@ -98,8 +127,17 @@ class TechnicianAvailableBookingsView(APIView):
 
         available_bookings = base_qs.filter(status__in=available_statuses)[:30]
 
-        # Active bookings: strictly scoped to this authenticated technician
-        active_bookings = base_qs.filter(technician=user, status__in=active_statuses)
+        # Active bookings: strictly scoped to this authenticated technician.
+        # Was `filter(technician=user, ...)`, which raised FieldError on every
+        # request once the `technician` FK was removed from the model -- this
+        # endpoint returned a 500 rather than a booking list. Scoped through
+        # the accepted BookingAssignment instead, which is where the
+        # technician reference actually lives now.
+        active_bookings = base_qs.filter(
+            assignments__technician_id=tech_id,
+            assignments__status=BookingAssignment.Status.ACCEPTED,
+            status__in=active_statuses,
+        ).distinct()
 
         def serialize_item(sr):
             return {
@@ -173,7 +211,8 @@ class TechnicianAcceptBookingView(APIView):
                 )
 
             # If already accepted by someone else
-            if sr.technician_id and sr.technician_id != user.id:
+            _holder = _assigned_technician_ref(sr)
+            if _holder and _holder != tech_id:
                 return Response(
                     {"success": False, "error": "Booking has already been accepted by another technician"},
                     status=status.HTTP_409_CONFLICT
@@ -182,12 +221,13 @@ class TechnicianAcceptBookingView(APIView):
             # Update booking — technician identity comes strictly from the
             # authenticated backend user, never from client-supplied fields.
             sr.status = ServiceRequest.Status.ACCEPTED
-            sr.technician = user
+            # `sr.technician` (FK) and `sr.accepted_at` no longer exist --
+            # identity is the snapshot below plus the BookingAssignment
+            # created at the end of this block, which carries accepted_at.
             sr.technician_name = name or ""
             sr.technician_phone = phone or ""
             sr.technician_photo = photo or ""
             sr.technician_rating = rating
-            sr.accepted_at = timezone.now()
 
             # Record initial GPS if provided in accept request or from user's last known location
             raw_lat = request.data.get("latitude") or request.data.get("lat")
@@ -208,17 +248,18 @@ class TechnicianAcceptBookingView(APIView):
                     if -90.0 <= valid_lat <= 90.0 and -180.0 <= valid_lng <= 180.0 and not (valid_lat == 0 and valid_lng == 0):
                         sr.technician_latitude = valid_lat
                         sr.technician_longitude = valid_lng
-                        sr.technician_heading = float(request.data.get("heading", 0.0) or 0.0)
-                        sr.technician_speed = float(request.data.get("speed", 0.0) or 0.0)
-                        sr.technician_location_updated_at = timezone.now()
-
+                        # heading/speed/accuracy and the update timestamp were
+                        # denormalised columns on ServiceRequest that no longer
+                        # exist. TechnicianLocation is the authoritative record
+                        # for per-fix telemetry and always was -- these lines
+                        # were duplicating it.
                         TechnicianLocation.objects.create(
                             booking=sr,
                             technician=user,
                             latitude=valid_lat,
                             longitude=valid_lng,
-                            heading=sr.technician_heading,
-                            speed=sr.technician_speed,
+                            heading=float(request.data.get("heading", 0.0) or 0.0),
+                            speed=float(request.data.get("speed", 0.0) or 0.0),
                             accuracy=float(request.data.get("accuracy", 10.0) or 10.0),
                         )
                 except Exception as loc_e:
@@ -314,10 +355,15 @@ class TechnicianUpdateLocationView(APIView):
         prev_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else None
         prev_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else None
         will_transition_status = sr.status == "accepted"
-        if prev_lat is not None and prev_lng is not None and sr.technician_location_updated_at and not will_transition_status:
+        # The previous fix's timestamp and heading used to be denormalised
+        # onto ServiceRequest; those columns were removed. TechnicianLocation
+        # is the authoritative per-fix record, so read the last one from
+        # there instead of re-adding duplicate columns.
+        last_fix = TechnicianLocation.objects.filter(booking=sr).order_by("-created_at").first()
+        if prev_lat is not None and prev_lng is not None and last_fix and not will_transition_status:
             distance = _haversine_meters(prev_lat, prev_lng, lat, lng) or 0.0
-            elapsed = (now - sr.technician_location_updated_at).total_seconds()
-            heading_delta = abs(((heading - float(sr.technician_heading or 0.0)) + 180) % 360 - 180)
+            elapsed = (now - last_fix.created_at).total_seconds()
+            heading_delta = abs(((heading - float(last_fix.heading or 0.0)) + 180) % 360 - 180)
             if distance < MIN_MOVE_METERS and elapsed < MIN_UPDATE_INTERVAL_SECONDS and heading_delta < MIN_HEADING_DELTA_DEGREES:
                 payload = _build_tracking_payload(sr, has_full_access=True)
                 return Response({"success": True, "data": payload}, status=status.HTTP_200_OK)
@@ -325,32 +371,36 @@ class TechnicianUpdateLocationView(APIView):
         # Update ServiceRequest
         sr.technician_latitude = Decimal(str(round(lat, 6)))
         sr.technician_longitude = Decimal(str(round(lng, 6)))
-        sr.technician_heading = heading
-        sr.technician_speed = speed
-        sr.technician_accuracy = float(accuracy) if accuracy is not None else None
+        # heading/speed/accuracy/updated_at live on TechnicianLocation now
+        # (written below), not as duplicate columns here.
         if location_name:
             sr.technician_location_name = location_name
-        sr.technician_location_updated_at = now
 
         # If currently accepted and moving, transition to on_the_way
         if sr.status == "accepted":
             sr.status = ServiceRequest.Status.ON_THE_WAY
 
         sr.save(update_fields=[
-            "technician_latitude", "technician_longitude", "technician_heading",
-            "technician_speed", "technician_accuracy", "technician_location_name",
-            "technician_location_updated_at", "status", "updated_at"
+            "technician_latitude", "technician_longitude",
+            "technician_location_name", "status", "updated_at"
         ])
 
-        # Log telemetry history
+        # Log telemetry history -- the authoritative per-fix record.
+        # captured_at is stamped even though this transport has no device
+        # timestamp of its own: `now` is the closest thing to a capture time
+        # for a fix posted directly by the device, and stamping it keeps this
+        # path and the vendor webhook comparable on one ordering key. Leaving
+        # it null would make every fix written here look older than any
+        # webhook fix that carries a real capture time.
         TechnicianLocation.objects.create(
             booking=sr,
             technician=user,
             latitude=sr.technician_latitude,
             longitude=sr.technician_longitude,
-            accuracy=sr.technician_accuracy,
-            heading=sr.technician_heading,
-            speed=sr.technician_speed,
+            accuracy=float(accuracy) if accuracy is not None else None,
+            heading=heading,
+            speed=speed,
+            captured_at=now,
         )
 
         logger.info(f"[TRACKING] Location saved: booking_id={sr.id}, lat={lat}, lng={lng}")
@@ -404,7 +454,8 @@ class TechnicianStatusUpdateView(APIView):
             sr.status = ServiceRequest.Status.ON_THE_WAY
         elif target_status == "arrived":
             sr.status = ServiceRequest.Status.ARRIVED
-            sr.technician_arrived_at = now
+            # sr.technician_arrived_at was removed; the ARRIVED status change
+            # itself (and its status_events entry) is the record of arrival.
         elif target_status == "in_progress":
             # OTP verification check
             if sr.start_otp:
@@ -426,10 +477,8 @@ class TechnicianStatusUpdateView(APIView):
                 sr.otp_verified_at = now
 
             sr.status = ServiceRequest.Status.IN_PROGRESS
-            sr.started_at = now
         elif target_status == "completed":
             sr.status = ServiceRequest.Status.COMPLETED
-            sr.completed_at = now
             BookingAssignment.objects.filter(booking=sr, status=BookingAssignment.Status.ACCEPTED).update(
                 status=BookingAssignment.Status.COMPLETED
             )
@@ -487,8 +536,7 @@ class TechnicianVerifyStartOTPView(APIView):
         sr.otp_verified = True
         sr.otp_verified_at = now
         sr.status = ServiceRequest.Status.IN_PROGRESS
-        sr.started_at = now
-        sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "started_at", "updated_at"])
+        sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
 
         payload = _build_tracking_payload(sr, has_full_access=True)
         broadcast_tracking_event(sr, "otp_verification_success", payload)

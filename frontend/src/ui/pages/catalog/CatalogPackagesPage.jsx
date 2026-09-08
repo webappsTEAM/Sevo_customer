@@ -2617,6 +2617,14 @@ export function CatalogPackagesPage() {
         showToast(editing.id ? "Package updated successfully" : "Package created successfully")
         setEditing(null)
         loadData()
+      } else if (res.error_code === "PRICING_FORBIDDEN") {
+        // The package is linked to a Goods & Transport ServiceTier.
+        // Changing base_price requires pricing:modify_price — redirect the
+        // operator to the correct page rather than showing a generic error.
+        showToast(
+          "⚠️ GT Pricing Permission Required — Use Goods & Transport Rates to change this price.",
+          "error"
+        )
       } else {
         showToast(res?.message || "Save failed", "error")
       }
@@ -2636,6 +2644,7 @@ export function CatalogPackagesPage() {
       showToast(msg, "error")
     }
   }
+
 
   const openQuickPriceEdit = (pkg) => {
     const slug = pkg.slug || pkg.id || ""

@@ -47,7 +47,7 @@ CompanyScopedAPIView = StandardAPIView
 
 class StandardViewSet(VisibilityQuerysetMixin, viewsets.ModelViewSet):
     """Base for full CRUD ViewSet with standard authentication."""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes: list = [permissions.IsAuthenticated]
 
 
 # Backward-compatible alias
@@ -56,7 +56,7 @@ CompanyScopedViewSet = StandardViewSet
 
 class StandardReadOnlyViewSet(VisibilityQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     """Base for read-only ViewSet with standard authentication."""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes: list = [permissions.IsAuthenticated]
 
 
 # Backward-compatible alias

@@ -282,15 +282,24 @@ export function CatalogServicesPage() {
   ]
 
   // Always use live DB packages — no hardcoded fallbacks
-  const getPackagesForService = (svc) => {
+  const getPackagesForService = (svc, cat) => {
     const dbPkgs = dbPackages.filter((p) => p.service === svc.id || p.service_id === svc.id)
+    const catId = svc.category || svc.category_id || cat?.id
+    const catObj = cat || categories.find((c) => c.id === catId)
+    const isGt =
+      catObj?.slug === "goods_transport" ||
+      ["truck", "two-wheeler", "two_wheeler", "packers-and-movers", "goods_transport"].some((s) =>
+        (svc.slug || "").includes(s)
+      )
+
     return dbPkgs.map((p) => ({
       id: p.id,
       categoryName: svc.name,
       name: p.name,
       tag: p.tag || (p.popular ? "Popular" : "Standard"),
       tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: `\u20b9${p.base_price}`,
+      price: `₹${p.base_price}`,
+      isGtPrice: isGt,
       duration: p.duration || "1 hr",
       description: p.description,
       includes: Array.isArray(p.includes) ? p.includes : [],
@@ -508,7 +517,7 @@ export function CatalogServicesPage() {
                       </div>
                     ) : (
                       catServices.map((svc) => {
-                        const packages = getPackagesForService(svc)
+                        const packages = getPackagesForService(svc, cat)
                         const hasPackages = packages.length > 0
                         const isServiceExpanded = expandedServiceIds.has(svc.slug) || expandedServiceIds.has(String(svc.id))
 
@@ -657,7 +666,16 @@ export function CatalogServicesPage() {
                                         {/* Price & Duration */}
                                         <div className="flex items-center gap-2.5 text-xs font-medium text-slate-700 mb-2.5 pb-2.5 border-b border-slate-100">
                                           <span className="text-xs font-semibold text-slate-900">
-                                            {pkg.price}
+                                            {pkg.isGtPrice ? (
+                                              <span className="inline-flex items-center gap-1">
+                                                <span className="text-[10px] font-normal text-slate-500 uppercase tracking-wider">
+                                                  Starting from
+                                                </span>
+                                                <span className="font-semibold text-slate-900">{pkg.price}</span>
+                                              </span>
+                                            ) : (
+                                              pkg.price
+                                            )}
                                           </span>
                                           {pkg.duration && (
                                             <span className="flex items-center gap-1 text-[11px] text-slate-400 font-normal">

@@ -16,10 +16,10 @@ def sync_prices():
 
     # 1. Update/Ensure Goods & Transports ServiceTiers
     tiers_data = [
-        {"slug": "3-wheeler", "name": "3 Wheeler", "capacity_label": "500kg", "starting_price": Decimal("160.00"), "weight_class": "light", "category": "mini_truck"},
-        {"slug": "tata-ace", "name": "Tata Ace", "capacity_label": "750kg", "starting_price": Decimal("205.00"), "weight_class": "light", "category": "mini_truck"},
-        {"slug": "pickup-8ft", "name": "Pickup 8ft", "capacity_label": "1250 kg", "starting_price": Decimal("300.00"), "weight_class": "heavy", "category": "mini_truck"},
-        {"slug": "1-7-ton", "name": "1.7 ton", "capacity_label": "1700 kg", "starting_price": Decimal("380.00"), "weight_class": "heavy", "category": "mini_truck"},
+        {"slug": "3-wheeler", "name": "3 Wheeler", "capacity_label": "500kg", "starting_price": Decimal("160.00"), "weight_class": "light", "category": "truck"},
+        {"slug": "tata-ace", "name": "Tata Ace", "capacity_label": "750kg", "starting_price": Decimal("205.00"), "weight_class": "light", "category": "truck"},
+        {"slug": "pickup-8ft", "name": "Pickup 8ft", "capacity_label": "1250 kg", "starting_price": Decimal("300.00"), "weight_class": "heavy", "category": "truck"},
+        {"slug": "1-7-ton", "name": "1.7 ton", "capacity_label": "1700 kg", "starting_price": Decimal("380.00"), "weight_class": "heavy", "category": "truck"},
         {"slug": "2-wheeler", "name": "2 Wheeler", "capacity_label": "20 kg", "starting_price": Decimal("48.00"), "weight_class": "light", "category": "two_wheeler"},
         {"slug": "2-wheeler-electric-express", "name": "2 Wheeler Electric / Express", "capacity_label": "20 kg", "starting_price": Decimal("55.00"), "weight_class": "light", "category": "two_wheeler"},
     ]

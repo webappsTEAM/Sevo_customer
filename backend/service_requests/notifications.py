@@ -191,10 +191,15 @@ def send_completion_and_feedback_email(service_request, feedback_token: str) -> 
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     feedback_url = f"{frontend_url}/feedback/{feedback_token}"
 
-    technician_name = "Our technician"
-    if service_request.assigned_employee and service_request.assigned_employee.user:
-        u = service_request.assigned_employee.user
-        technician_name = u.get_full_name() or u.username
+    # ServiceRequest.assigned_employee was removed by migration 0038 when the
+    # workforce concern moved to the vendor app, so this raised AttributeError
+    # every time a feedback request was sent. The vendor now pushes the
+    # technician's identity in over the webhook, which writes
+    # BookingAssignment.technician_name and mirrors it onto
+    # ServiceRequest.technician_name (workforce_integration/views.py) -- that
+    # snapshot is the Customer app's technician identity now, and is what
+    # every other reader here already uses.
+    technician_name = (service_request.technician_name or "").strip() or "Our technician"
 
     category_name = _get_category_display_name(service_request)
     completed_on  = timezone.now().strftime("%d %b %Y, %I:%M %p")
@@ -855,6 +860,55 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
 # Slice 2b — Cancellation Notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
+def notify_painting_quote_sent(quote) -> None:
+    """
+    Tell the customer their painting/masonry quotation is ready to view.
+
+    Bug found: two endpoints in views.py called `send_quote_notification(quote)`
+    the moment a quote reached SENT_TO_CUSTOMER, but no such function existed
+    anywhere in the codebase -- so submitting a quotation raised
+    NameError and returned a 500, after the quote had already been saved.
+    The customer was never told, and the vendor saw a server error on a
+    request that had actually succeeded.
+
+    Implemented here rather than by deleting the call, because the intent
+    is unambiguous and every other customer-facing lifecycle event in this
+    module is notified the same way. Gated on booking_confirmations for
+    the same reason notify_customer_cancelled is: this app groups booking
+    lifecycle events under that one preference, and adding a dedicated
+    field would require a migration this fix does not need.
+    """
+    service_request = getattr(quote, "service_request", None)
+    if service_request is None:
+        return
+    customer = getattr(service_request, "customer", None)
+    customer_email = getattr(customer, "email", None) or service_request.email
+    if not customer_email:
+        return
+    if not _customer_wants(customer, "booking_confirmations"):
+        logger.info(
+            "[Quote] Customer opted out of booking_confirmations -- skipping "
+            "quote notification for %s.", getattr(quote, "quote_number", "?"),
+        )
+        return
+
+    subject = f"Your quotation {getattr(quote, 'quote_number', '')} is ready"
+    message = (
+        f"Hello {service_request.customer_name or 'there'},\n\n"
+        f"Your quotation for \"{service_request.issue_title}\" is ready to review.\n"
+        f"Quotation: {getattr(quote, 'quote_number', '')}\n"
+        f"Total: Rs. {getattr(quote, 'grand_total', '')}\n\n"
+        f"You can review and accept it from your bookings page.\n"
+    )
+    try:
+        send_mail(subject, message, None, [customer_email])
+    except Exception as exc:
+        logger.warning(
+            "[Quote] Could not send quote notification for %s: %s",
+            getattr(quote, "quote_number", "?"), exc,
+        )
+
+
 def notify_customer_cancelled(service_request, reason="") -> None:
     """
     Notify the customer that their booking has been cancelled.
@@ -1162,8 +1216,19 @@ def broadcast_tracking_event(service_request, event_type="job_updated", custom_d
     for this service request.
     """
     try:
-        import sys
-        if "test" in sys.argv:
+        # Was: `if "test" in sys.argv: return` -- a hard no-op whenever the
+        # word "test" appeared anywhere in the process arguments. That made
+        # every WebSocket broadcast unreachable under `manage.py test`, which
+        # is why the two tests covering the live-tracking bridge could only
+        # ever time out: the code they exercise was switched off by the fact
+        # that they were running. It is also a production branch keyed on
+        # argv, so any process launched with "test" in its arguments would
+        # silently lose live tracking with no error anywhere.
+        #
+        # Replaced with an explicit setting so the behaviour is chosen
+        # deliberately rather than inferred from a command line. Defaults to
+        # broadcasting, i.e. the same behaviour as production today.
+        if not getattr(settings, "TRACKING_BROADCAST_ENABLED", True):
             return
 
         from channels.layers import get_channel_layer

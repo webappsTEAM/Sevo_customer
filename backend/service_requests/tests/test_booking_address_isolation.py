@@ -87,6 +87,9 @@ class BookingAddressIsolationTests(TestCase):
         self.arya_client.force_authenticate(user=self.arya)
 
     def test_surya_books_with_own_address(self):
+        self.skipTest(
+            "Covers the server-side saved-address feature that was removed from this backend: ServiceRequest.saved_address_id and service_location_snapshot were dropped from the model, and views._resolve_customer_location() -- which turned a saved_address_id into booking coordinates and enforced cross-customer isolation on it -- no longer exists. The serializer now ignores saved_address_id entirely, and the booking pages resolve and send real coordinates themselves. Skipped visibly rather than deleted: whether to restore server-side saved-address resolution is a product decision, and test_arya_blocked_from_using_surya_address_id in particular encodes a tenant-isolation requirement worth keeping on record."
+        )
         resp = self.surya_client.post("/api/booking/", {
             "service_category": "home_cleaning",
             "issue_title": "Deep Cleaning",
@@ -112,6 +115,9 @@ class BookingAddressIsolationTests(TestCase):
         self.assertEqual(snapshot.get("street_address"), "45, Bagalur Rd")
 
     def test_arya_blocked_from_using_surya_address_id(self):
+        self.skipTest(
+            "Covers the server-side saved-address feature that was removed from this backend: ServiceRequest.saved_address_id and service_location_snapshot were dropped from the model, and views._resolve_customer_location() -- which turned a saved_address_id into booking coordinates and enforced cross-customer isolation on it -- no longer exists. The serializer now ignores saved_address_id entirely, and the booking pages resolve and send real coordinates themselves. Skipped visibly rather than deleted: whether to restore server-side saved-address resolution is a product decision, and test_arya_blocked_from_using_surya_address_id in particular encodes a tenant-isolation requirement worth keeping on record."
+        )
         """Arya sending Surya's saved_address_id is rejected with HTTP 403 Forbidden."""
         resp = self.arya_client.post("/api/booking/", {
             "service_category": "home_cleaning",
@@ -128,6 +134,9 @@ class BookingAddressIsolationTests(TestCase):
         self.assertIn("permission", resp.json().get("message", "").lower())
 
     def test_arya_books_with_own_address(self):
+        self.skipTest(
+            "Covers the server-side saved-address feature that was removed from this backend: ServiceRequest.saved_address_id and service_location_snapshot were dropped from the model, and views._resolve_customer_location() -- which turned a saved_address_id into booking coordinates and enforced cross-customer isolation on it -- no longer exists. The serializer now ignores saved_address_id entirely, and the booking pages resolve and send real coordinates themselves. Skipped visibly rather than deleted: whether to restore server-side saved-address resolution is a product decision, and test_arya_blocked_from_using_surya_address_id in particular encodes a tenant-isolation requirement worth keeping on record."
+        )
         resp = self.arya_client.post("/api/booking/", {
             "service_category": "home_cleaning",
             "issue_title": "Deep Cleaning",

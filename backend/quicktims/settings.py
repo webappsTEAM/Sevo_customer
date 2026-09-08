@@ -276,6 +276,27 @@ REST_FRAMEWORK = {
         "feedback": os.getenv("THROTTLE_FEEDBACK", "10/hour"),
         "coupon_validate": os.getenv("THROTTLE_COUPON", "20/minute"),
         "invoice_download": os.getenv("THROTTLE_INVOICE", "20/hour"),
+        # GT-B-01: the logistics quote endpoint is public (the booking
+        # pages are pre-login) and every cache miss costs a real, billed
+        # Google Distance Matrix call, so it needs a tighter limit than
+        # the blanket anon rate. Generous enough for a customer adjusting
+        # pickup/drop a few times, tight enough that it is not a free
+        # metered-API proxy.
+        "logistics_quote": os.getenv("THROTTLE_LOGISTICS_QUOTE", "30/minute"),
+        # The vendor app's webhook receiver. It was previously covered only
+        # by the blanket anon rate above (60/minute), which is the wrong
+        # control for authenticated machine-to-machine traffic and far too
+        # low for it: the vendor POSTs one request per event, and GPS alone
+        # is roughly six per minute PER ACTIVE DRIVER. Ten drivers on the
+        # road saturate 60/minute; twenty lose half their events. Delivery
+        # is fire-and-forget with no retry, so a throttled event is lost
+        # permanently -- the customer's map freezes, proof never arrives,
+        # the fare is never reconciled, and nothing errors anywhere.
+        #
+        # The real authentication for this endpoint is the HMAC/shared
+        # secret it verifies, not a rate limit; this scope exists only as
+        # DoS headroom. Sized for ~200 concurrent trips and configurable.
+        "workforce_webhook": os.getenv("THROTTLE_WORKFORCE_WEBHOOK", "1200/minute"),
     },
 }
 
@@ -447,12 +468,20 @@ ENABLE_LOCAL_STORAGE_FALLBACK = os.getenv(
 # ── Google Services & OAuth ──────────────────────────────────────────────────
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("Client_ID") or "").strip()
 GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("Client_secret") or "").strip()
+
+# — Google Maps (X-10: server-side routing/ETA & geocoding) ────────────────────
+# Backend-only key -- never send this to the frontend. The Vite
+# VITE_GOOGLE_MAPS_KEY/VITE_GOOGLE_MAPS_API_KEY vars are a separate,
+# browser-restricted key for the Maps JS SDK; this one is used server-side
+# by service_requests/services/routing.py for the Distance Matrix API, so
+# distance/ETA are computed server-side rather than trusting the client.
 GOOGLE_MAPS_API_KEY = (
-    os.getenv("GOOGLE_MAPS_API_KEY") or
-    os.getenv("VITE_GOOGLE_MAPS_KEY") or
-    os.getenv("VITE_GOOGLE_MAPS_API_KEY") or
-    ""
+    os.getenv("GOOGLE_MAPS_API_KEY")
+    or os.getenv("VITE_GOOGLE_MAPS_KEY")
+    or os.getenv("VITE_GOOGLE_MAPS_API_KEY")
+    or ""
 ).strip()
+
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")

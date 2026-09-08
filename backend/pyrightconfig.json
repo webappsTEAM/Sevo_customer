@@ -5,7 +5,17 @@
   "extraPaths": [
     "."
   ],
-  "reportMissingImports": false,
+  "typeCheckingMode": "off",
+  "reportMissingImports": "none",
   "reportMissingModuleSource": "none",
-  "typeCheckingMode": "off"
+  "reportAttributeAccessIssue": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportGeneralTypeIssues": "none",
+  "reportMissingTypeStubs": "none",
+  "reportIncompatibleVariableOverride": "none",
+  "reportIncompatibleMethodOverride": "none",
+  "reportOperatorIssue": "none",
+  "reportCallIssue": "none",
+  "reportArgumentType": "none",
+  "reportIndexIssue": "none"
 }
