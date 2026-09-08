@@ -240,14 +240,15 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # {name, price, quantity} with no package_id/addon_id back-reference
         # to the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md for the full
         # writeup and the schema change that would close this properly).
-        # This at least stops the crude cases: negative/zero submitted
-        # amounts and unreasonably large ones.
+        # This at least stops the crude cases: negative submitted amounts
+        # and unreasonably large ones. Zero amounts are allowed for site
+        # consultations/inspections (e.g. Painting/Masonry) and free promotions.
         try:
             amt = float(value)
         except (TypeError, ValueError):
             raise serializers.ValidationError("Enter a valid amount.")
-        if amt <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero.")
+        if amt < 0:
+            raise serializers.ValidationError("Amount cannot be negative.")
         if amt > 1000000:
             raise serializers.ValidationError("Amount is outside the allowed range.")
         return value
