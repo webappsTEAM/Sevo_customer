@@ -400,6 +400,12 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def create(self, validated_data):
+        # Strip transient AC estimation fields that belong to Estimation, not ServiceRequest
+        for key in ("ac_type", "ac_brand", "ac_capacity", "ac_quantity", "customer_symptom", "customer_notes"):
+            validated_data.pop(key, None)
+        return super().create(validated_data)
+
 
 class FeedbackTokenSummarySerializer(serializers.ModelSerializer):
     """Read-only summary shown to customer when they open the feedback link."""
