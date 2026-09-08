@@ -10561,7 +10561,7 @@ export function BookingPage() {
               setDbCatalogPackages(res.data);
             }
           })
-          .catch((err) => console.error("Failed to fetch public catalog packages in BookingPage:", err));
+          .catch((err) => console.warn("Public catalog packages in BookingPage unavailable, using local catalog fallback:", err?.message || err));
       }
     }
   }, [showPackageModal, category]);
@@ -11920,7 +11920,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             setLocalCatalogPackages(res.data);
           }
         })
-        .catch((err) => console.error("Failed to fetch public catalog packages in modal:", err));
+        .catch((err) => console.warn("Public catalog packages in modal unavailable, using local catalog fallback:", err?.message || err));
     }
   }, []);
 
@@ -14552,7 +14552,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             setLocalCatalogPackages(res.data);
           }
         })
-        .catch((err) => console.error("Failed to fetch public catalog packages in mason modal:", err));
+        .catch((err) => console.warn("Public catalog packages in mason modal unavailable, using local catalog fallback:", err?.message || err));
     }
   }, []);
 
@@ -16816,7 +16816,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           setDbCatalogPackages(res.data);
         }
       })
-      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+      .catch((err) => console.warn("Public catalog packages unavailable, using local catalog fallback:", err?.message || err));
 
     apiRequest("/catalog/services/")
       .then((res) => {
@@ -16824,7 +16824,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           setDbServicesList(res.data);
         }
       })
-      .catch((err) => console.error("Failed to fetch catalog services:", err));
+      .catch((err) => console.warn("Catalog services unavailable, using local services fallback:", err?.message || err));
   }, []);
 
   const subCategories = React.useMemo(() => {
@@ -16937,7 +16937,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
         }
       })
-      .catch((err) => console.error("Failed to fetch AC inspection tile config:", err));
+      .catch((err) => console.warn("AC inspection tile config unavailable, using default tile config:", err?.message || err));
   }, []);
 
   const handleSaveAcInspectionTile = async (field, value) => {
