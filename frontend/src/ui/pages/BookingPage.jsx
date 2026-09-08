@@ -2383,48 +2383,6 @@ export function RunningServiceManRadar() {
    RAPIDO-STYLE LIVE TRACKING PAGE (Real-Time WebSockets & Database Dispatch)
    ───────────────────────────────────────────────────────────────────────────── */
 
-function getAuthoritativeItemPrice(item, booking) {
-  if (!item) return 0;
-  const raw = item.price !== undefined ? item.price : item.estimated_price;
-  let parsed = 0;
-  if (typeof raw === 'string') {
-    const cleanStr = raw.replace(/[^\d.-]/g, '').trim();
-    parsed = parseFloat(cleanStr);
-  } else if (typeof raw === 'number') {
-    parsed = raw;
-  }
-
-  const isLogistics = ['goods_transport_truck', 'goods_transport_two_wheeler', 'packers_movers'].includes(booking?.service_category);
-  const bookingTotal = Number(booking?.total_amount || 0);
-  const breakdownSubtotal = parseFloat(booking?.fare_breakdown?.subtotal || booking?.fare_breakdown?.total || 0);
-
-  if (isLogistics) {
-    // For Packers & Movers: fare_breakdown.subtotal is the pre-GST transport-only
-    // component (e.g. Rs 2900.50), NOT the full package price which also includes
-    // packing, labor, dismantling charges, and GST (e.g. Rs 3422.59).
-    // total_amount is the authoritative full-package price captured at booking creation.
-    if (booking?.service_category === 'packers_movers') {
-      if (bookingTotal > 0) return bookingTotal;
-      if (breakdownSubtotal > 0) return breakdownSubtotal;
-    } else {
-      // Truck / Two-Wheeler: fare_breakdown.subtotal IS the complete vehicle fare.
-      // Prefer it over the cart string which may be an indicative 'starting from'
-      // price (e.g. the vehicle card shows '₹205' but the quoted fare is Rs 315.86).
-      if (breakdownSubtotal > 0) return breakdownSubtotal;
-      if (bookingTotal > 0) return bookingTotal;
-    }
-  }
-
-  if (!isNaN(parsed) && parsed > 0) {
-    return parsed;
-  }
-
-  if (breakdownSubtotal > 0) return breakdownSubtotal;
-  if (bookingTotal > 0) return bookingTotal;
-
-  return 0;
-}
-
 function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
   const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
   const [liveData, setLiveData] = useState(null)
@@ -2621,8 +2579,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   }, [liveData?.cart_data, successData?.cart_data, cart])
 
   const itemTotal = useMemo(() => {
-    return displayCart.reduce((a, c) => a + (getAuthoritativeItemPrice(c, liveData || successData) * (Number(c.quantity) || 1)), 0)
-  }, [displayCart, liveData, successData])
+    return displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0)
+  }, [displayCart])
 
   const totalGst = useMemo(() => {
     if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
@@ -4676,29 +4634,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   useEffect(() => {
     if (activeTab === "My Bookings" && user) {
-      const fetchBookings = (showLoading = false) => {
-        if (showLoading && (!realBookings || realBookings.length === 0)) {
-          setBookingsLoading(true)
-        }
-        apiFetchCustomerBookings()
-          .then(res => {
-            if (res?.data) setRealBookings(res.data)
-          })
-          .catch(console.error)
-          .finally(() => {
-            if (showLoading) setBookingsLoading(false)
-          })
+      if (!realBookings || realBookings.length === 0) {
+        setBookingsLoading(true)
       }
-
-      fetchBookings(true)
-      const interval = setInterval(() => fetchBookings(false), 5000)
-      const onFocus = () => fetchBookings(false)
-      window.addEventListener("focus", onFocus)
-
-      return () => {
-        clearInterval(interval)
-        window.removeEventListener("focus", onFocus)
-      }
+      apiFetchCustomerBookings()
+        .then(res => {
+          if (res?.data) setRealBookings(res.data)
+        })
+        .catch(console.error)
+        .finally(() => setBookingsLoading(false))
     }
   }, [activeTab, user])
 
@@ -5471,7 +5415,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 {item.categoryName ? <span style={{ color: '#64748b', fontWeight: 400 }}> ({item.categoryName})</span> : ''}
               </span>
               <span style={{ fontWeight: 700, color: '#059669' }}>
-                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
+                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
               </span>
             </div>
           ))}
@@ -6003,7 +5947,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 } else if (Array.isArray(b.cart_data)) {
                                   parsedCart = b.cart_data;
                                 }
-                                const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
+                                const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
                                 const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                                   ? Number(b.gst_amount)
                                   : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6059,7 +6003,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
-                            const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
+                            const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
                             const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                               ? Number(b.gst_amount)
                               : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6101,7 +6045,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                             {item.quantity || 1}
                                           </td>
                                           <td style={{ padding: '10px 12px', textAlign: 'right', color: '#059669', fontWeight: 800 }}>
-                                            ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                            ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
                                           </td>
                                         </tr>
                                       ))}
@@ -10324,6 +10268,24 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
   }
 
   return { id: "carpentry", name: "Carpentry", slug: "carpentry" };
+}
+
+// Sitewide DB-first catalog resolver -- single mapping from a category's
+// internal UI key (hvac, electrical, plumbing, ...) to its real DB category
+// slug. Used both to decide which live DB packages/services belong on a
+// category page and to grow that category's sub-tab bar automatically as
+// the catalog admin adds new services, instead of each category page
+// keeping its own private copy of this mapping.
+function getDbCategorySlugForKey(nk) {
+  if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
+    return "ac_appliance";
+  }
+  if (nk === "cleaning") return "deep-cleaning";
+  if (nk === "mason") return "mason";
+  if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
+    return "electrician_plumbing_carpentry";
+  }
+  return nk;
 }
 
 export function BookingPage() {
@@ -16735,8 +16697,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   ];
   const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
   const hvacSubtabs = [
+    "AC Inspection",
+    "Not Sure? Book Inspection",
     "AC Service & Cleaning",
     "AC Repair",
+    "AC Repair & Diagnostics",
     "AC Gas & Refrigerant",
     "AC Installation & Uninstallation",
     "AC PCB & Electrical",
@@ -16755,6 +16720,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (subtabParam === "AC Inspection" || subtabParam === "ac-inspection" || subtabParam === "Inspection" || subtabParam === "Not Sure? Book Inspection") return "AC Inspection";
     if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service" || subtabParam === "AC Service & Cleaning") return "AC Service & Cleaning";
     if (subtabParam === "TV & Display" || subtabParam === "TV Service & Repair") return "TV Service & Repair";
     if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair" || subtabParam === "Washing Machine Jet Service") return "Washing Machine Jet Service";
@@ -16864,15 +16830,34 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const subCategories = React.useMemo(() => {
     const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
 
-    if (CATEGORY_SUBCATEGORIES[effectiveKey]) {
-      return staticList;
-    }
+    const baseList = CATEGORY_SUBCATEGORIES[effectiveKey]
+      ? staticList
+      : staticList.map(tab => ({ ...tab, image: resolveImageUrl(tab.image, tab.image) }));
 
-    return staticList.map(tab => ({
-      ...tab,
-      image: resolveImageUrl(tab.image, tab.image)
-    }));
-  }, [effectiveKey]);
+    // Sitewide DB-first: grow this sub-tab bar automatically as the catalog
+    // admin adds new services under this category, instead of requiring a
+    // code change to CATEGORY_SUBCATEGORIES above. The hardcoded list stays
+    // as the bootstrap/default set for categories/tabs nobody has (re)built
+    // in the catalog yet; anything new that shows up in the DB is appended
+    // here so it reaches customers on their next page load.
+    if (!Array.isArray(dbCatalogPackages) || dbCatalogPackages.length === 0) {
+      return baseList;
+    }
+    const targetDbCategory = getDbCategorySlugForKey(effectiveKey);
+    const existingNames = new Set(baseList.map(t => (t.name || "").toLowerCase().trim()));
+    const seen = new Set();
+    const dynamicExtras = [];
+    dbCatalogPackages.forEach(p => {
+      const pCatSlug = (p.category_slug || "").toLowerCase();
+      if (pCatSlug !== targetDbCategory) return;
+      const sName = (p.service_name || "").trim();
+      const key = sName.toLowerCase();
+      if (!sName || existingNames.has(key) || seen.has(key)) return;
+      seen.add(key);
+      dynamicExtras.push({ name: sName, image: resolveImageUrl(p.service_image, baseList[0]?.image || "") });
+    });
+    return dynamicExtras.length > 0 ? [...baseList, ...dynamicExtras] : baseList;
+  }, [effectiveKey, dbCatalogPackages]);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -17218,6 +17203,230 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     hvac: {
+      "AC Inspection": [
+        {
+          id: "hvac-insp-comp",
+          name: "Comprehensive AC Inspection & Diagnosis",
+          price: 199,
+          duration: "45 mins",
+          badge: "Most Popular",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          description: "Complete multi-point diagnostic check-up covering cooling, electricals, gas pressure, compressor health, and airflow with upfront repair estimate.",
+          includes: [
+            "Indoor unit & cooling coil inspection",
+            "Outdoor condenser & compressor health scan",
+            "Cooling performance & airflow delta test",
+            "Electrical voltage, wiring & amp check",
+            "Gas / refrigerant pressure & leak check",
+            "Drain pipe & tray water leakage inspection",
+            "Noise, vibration & motor bearing check",
+            "Remote sensor & PCB control test",
+            "Detailed digital inspection report with quotation"
+          ],
+          image: "/mockups/service_inspection.png",
+          tools: [
+            "HVAC manifold pressure gauge",
+            "Digital clamp multimeter",
+            "Infrared laser thermometer",
+            "Electronic refrigerant sniffer"
+          ],
+          ready: [
+            "Keep AC remote control accessible",
+            "Ensure continuous power supply to the AC unit",
+            "Describe observed fault symptoms to technician"
+          ],
+          notes: "Inspection fee is fully adjusted into your final repair quote if service is availed during the visit.",
+          reviews: [
+            { name: "Suresh K.", rating: "5.0", text: "Identified a low refrigerant issue in under 15 minutes. Very professional and transparent." },
+            { name: "Pooja V.", rating: "4.9", text: "Accurate electrical fault diagnosis. Upfront pricing before doing any repair." }
+          ],
+          faqs: [
+            { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
+            { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
+          ]
+        },
+        {
+          id: "hvac-insp-split",
+          name: "Split AC Deep Inspection & Health Audit",
+          price: 249,
+          duration: "45 mins",
+          badge: "Split Specialist",
+          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+          description: "Specialized in-depth inspection for Split ACs covering blower wheel, flare joints, PCB communication lines, and copper piping.",
+          includes: [
+            "Indoor blower wheel & air louvers inspection",
+            "Copper flare nut & joint leak detection",
+            "Inverter PCB communication & voltage test",
+            "Compressor capacitor & contactor health audit",
+            "Cooling coil fin condition assessment",
+            "Drain line slope & blockage scan",
+            "Detailed repair estimate before any work"
+          ],
+          image: "/mockups/appliance_cleaning_thumb.png",
+          tools: [
+            "Electronic leak sniffer",
+            "Digital clamp meter",
+            "Digital anemometer & airflow gauge",
+            "Capacitor tester"
+          ],
+          ready: [
+            "Safe accessibility to indoor and outdoor units",
+            "AC remote control handy"
+          ],
+          notes: "Inspection fee is adjusted into the repair bill if service is approved during the visit.",
+          reviews: [
+            { name: "Raghav M.", rating: "5.0", text: "Deep inspection uncovered a tiny flare nut leak before all gas leaked out. Saved me thousands!" }
+          ],
+          faqs: [
+            { q: "Does this include checking inverter boards?", a: "Yes, both indoor and outdoor PCB modules and error codes are audited." }
+          ]
+        },
+        {
+          id: "hvac-insp-win",
+          name: "Window AC General Inspection & Diagnostics",
+          price: 199,
+          duration: "30 mins",
+          badge: "Window Care",
+          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
+          description: "Compact and thorough diagnostic check for Window ACs including front grill, thermostat sensor, compressor mounts, and fan motor.",
+          includes: [
+            "Front grill & mesh filter condition check",
+            "Thermostat calibration & cooling delta check",
+            "Motor shaft & fan blade balance audit",
+            "Compressor mount & vibration inspection",
+            "Electrical wiring & start capacitor test",
+            "Drain plug & base tray rust inspection"
+          ],
+          image: "/mockups/service_hvac.png",
+          tools: [
+            "Infrared laser thermometer",
+            "Digital multimeter",
+            "Capacitor tester"
+          ],
+          ready: [
+            "Ensure the AC power socket is switchable"
+          ],
+          notes: "Covers all window AC brands and capacities (0.75 Ton to 2 Ton).",
+          reviews: [
+            { name: "Nitin B.", rating: "4.8", text: "Technician fixed abnormal rattling and diagnosed cooling delay quickly." }
+          ],
+          faqs: [
+            { q: "How long does window AC inspection take?", a: "Typically 30 to 45 minutes for a full multi-point audit." }
+          ]
+        }
+      ],
+      "Not Sure? Book Inspection": [
+        {
+          id: "hvac-insp-comp",
+          name: "Comprehensive AC Inspection & Diagnosis",
+          price: 199,
+          duration: "45 mins",
+          badge: "Most Popular",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          description: "Complete multi-point diagnostic check-up covering cooling, electricals, gas pressure, compressor health, and airflow with upfront repair estimate.",
+          includes: [
+            "Indoor unit & cooling coil inspection",
+            "Outdoor condenser & compressor health scan",
+            "Cooling performance & airflow delta test",
+            "Electrical voltage, wiring & amp check",
+            "Gas / refrigerant pressure & leak check",
+            "Drain pipe & tray water leakage inspection",
+            "Noise, vibration & motor bearing check",
+            "Remote sensor & PCB control test",
+            "Detailed digital inspection report with quotation"
+          ],
+          image: "/mockups/service_inspection.png",
+          tools: [
+            "HVAC manifold pressure gauge",
+            "Digital clamp multimeter",
+            "Infrared laser thermometer",
+            "Electronic refrigerant sniffer"
+          ],
+          ready: [
+            "Keep AC remote control accessible",
+            "Ensure continuous power supply to the AC unit",
+            "Describe observed fault symptoms to technician"
+          ],
+          notes: "Inspection fee is fully adjusted into your final repair quote if service is availed during the visit.",
+          reviews: [
+            { name: "Suresh K.", rating: "5.0", text: "Identified a low refrigerant issue in under 15 minutes. Very professional and transparent." },
+            { name: "Pooja V.", rating: "4.9", text: "Accurate electrical fault diagnosis. Upfront pricing before doing any repair." }
+          ],
+          faqs: [
+            { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
+            { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
+          ]
+        },
+        {
+          id: "hvac-insp-split",
+          name: "Split AC Deep Inspection & Health Audit",
+          price: 249,
+          duration: "45 mins",
+          badge: "Split Specialist",
+          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+          description: "Specialized in-depth inspection for Split ACs covering blower wheel, flare joints, PCB communication lines, and copper piping.",
+          includes: [
+            "Indoor blower wheel & air louvers inspection",
+            "Copper flare nut & joint leak detection",
+            "Inverter PCB communication & voltage test",
+            "Compressor capacitor & contactor health audit",
+            "Cooling coil fin condition assessment",
+            "Drain line slope & blockage scan",
+            "Detailed repair estimate before any work"
+          ],
+          image: "/mockups/appliance_cleaning_thumb.png",
+          tools: [
+            "Electronic leak sniffer",
+            "Digital clamp meter",
+            "Digital anemometer & airflow gauge",
+            "Capacitor tester"
+          ],
+          ready: [
+            "Safe accessibility to indoor and outdoor units",
+            "AC remote control handy"
+          ],
+          notes: "Inspection fee is adjusted into the repair bill if service is approved during the visit.",
+          reviews: [
+            { name: "Raghav M.", rating: "5.0", text: "Deep inspection uncovered a tiny flare nut leak before all gas leaked out. Saved me thousands!" }
+          ],
+          faqs: [
+            { q: "Does this include checking inverter boards?", a: "Yes, both indoor and outdoor PCB modules and error codes are audited." }
+          ]
+        },
+        {
+          id: "hvac-insp-win",
+          name: "Window AC General Inspection & Diagnostics",
+          price: 199,
+          duration: "30 mins",
+          badge: "Window Care",
+          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
+          description: "Compact and thorough diagnostic check for Window ACs including front grill, thermostat sensor, compressor mounts, and fan motor.",
+          includes: [
+            "Front grill & mesh filter condition check",
+            "Thermostat calibration & cooling delta check",
+            "Motor shaft & fan blade balance audit",
+            "Compressor mount & vibration inspection",
+            "Electrical wiring & start capacitor test",
+            "Drain plug & base tray rust inspection"
+          ],
+          image: "/mockups/service_hvac.png",
+          tools: [
+            "Infrared laser thermometer",
+            "Digital multimeter",
+            "Capacitor tester"
+          ],
+          ready: [
+            "Ensure the AC power socket is switchable"
+          ],
+          notes: "Covers all window AC brands and capacities (0.75 Ton to 2 Ton).",
+          reviews: [
+            { name: "Nitin B.", rating: "4.8", text: "Technician fixed abnormal rattling and diagnosed cooling delay quickly." }
+          ],
+          faqs: [
+            { q: "How long does window AC inspection take?", a: "Typically 30 to 45 minutes for a full multi-point audit." }
+          ]
+        }
+      ],
       "AC Service & Cleaning": [
         { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
         { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
@@ -17648,6 +17857,23 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const tab = (activeSubTab || "").toLowerCase();
       const nk = (effectiveKey || normalizedKey || "").toLowerCase();
 
+      // Sitewide DB-first shortcuts -- checked before any of the per-category
+      // keyword heuristics below, so they take priority everywhere:
+      // 1. Exact Service-name match. Every dynamically-added sub-tab (see
+      //    subCategories above) IS a live Service name, so this alone makes
+      //    a brand-new tab work correctly with zero keyword guessing.
+      // 2. An explicit admin tag (service.customization.subtab), the same
+      //    mechanism the Kitchen category already uses -- lets a Super Admin
+      //    pin a package to an exact sub-tab from the catalog admin when the
+      //    tab label and the service name legitimately differ.
+      if (sName && tab && sName === tab) {
+        return true;
+      }
+      const explicitSubtab = (p.service_customization && p.service_customization.subtab) || p.subtab;
+      if (explicitSubtab && activeSubTab && explicitSubtab === activeSubTab) {
+        return true;
+      }
+
       if (normalizedKey === "mason") {
         if (tab.includes("minor") || tab.includes("masonry") || tab.includes("construction")) {
           return sSlug.includes("minor-masonry") || sName.includes("minor") || sName.includes("masonry") || pName.includes("minor") || pName.includes("masonry");
@@ -17781,7 +18007,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         // word like "reinstall" or "wall stand". Only fall back to the
         // old loose name/slug heuristics for legacy rows with no
         // service_slug at all.
-        const AC_SERVICE_SLUGS = ["ac-installation", "ac-repair", "ac-gas-refill", "ac-service-cleaning"];
+        const AC_SERVICE_SLUGS = ["ac-installation", "ac-repair", "ac-gas-refill", "ac-service-cleaning", "ac-inspection"];
         const hasKnownAcSlug = AC_SERVICE_SLUGS.includes(sSlug);
         const isAc = hasKnownAcSlug || (!sSlug && (
           sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") ||
@@ -17789,6 +18015,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         ));
         if (!isAc) return false;
 
+        if (tab.includes("inspect")) {
+          return pSlug.startsWith("hvac-insp-") || pSlug.includes("inspect") || pSlug.includes("diag") || pName.includes("inspect") || pName.includes("diagnosis");
+        }
         if (tab.includes("cleaning") || tab.includes("clean")) {
           if (hasKnownAcSlug) return sSlug === "ac-service-cleaning";
           return pSlug.startsWith("hvac-fj-") || pSlug.startsWith("hvac-pj-") || pSlug.startsWith("hvac-ar-") || pSlug.startsWith("hvac-2in1") || pSlug.startsWith("hvac-3in1") || pSlug.startsWith("hvac-airflow") || pSlug.startsWith("ac-cln") || pName.includes("foam") || pName.includes("power jet") || pName.includes("jet") || pName.includes("cleaning") || pName.includes("deep clean") || pName.includes("sanitization") || pName.includes("anti-rust") || pName.includes("combo");
@@ -17934,19 +18163,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       return normSName.includes(normTab) || normTab.includes(normSName) || pName.includes(normTab) || normTab.includes(pName);
     };
 
-    const getDbCategorySlug = (nk) => {
-      if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
-        return "ac_appliance";
-      }
-      if (nk === "cleaning") return "deep-cleaning";
-      if (nk === "mason") return "mason";
-      if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
-        return "electrician_plumbing_carpentry";
-      }
-      return nk;
-    };
-
-    const targetDbCategory = getDbCategorySlug(normalizedKey);
+    const targetDbCategory = getDbCategorySlugForKey(normalizedKey);
     // Filter database packages to only include those matching the target category and subtab
     const filteredDbPackages = dbCatalogPackages.filter(p => {
       const pCatSlug = (p.category_slug || "").toLowerCase();
@@ -18117,40 +18334,65 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   {acInspectionTile.visible ? <Eye size={10} /> : <EyeOff size={10} />}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => navigate("/ac-inspection")}
-                className="flex flex-col items-center justify-start bg-transparent cursor-pointer w-full"
-              >
-                <span className="text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5">
-                  {serviceEditMode ? (
-                    <EditableText
-                      active={true}
-                      value={acInspectionTile.badge}
-                      onSave={(v) => handleSaveAcInspectionTile("badge", v)}
-                      className="text-white"
-                    />
-                  ) : (
-                    acInspectionTile.badge
-                  )}
-                </span>
-                <div className="w-14 h-14 mb-1 flex items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 transition-all">
-                  <Wrench className="w-7 h-7 text-emerald-700" strokeWidth={1.5} />
-                </div>
-                <span className="text-[10px] block leading-tight tracking-tight mt-0.5 font-bold text-emerald-700 group-hover:text-emerald-800">
-                  {serviceEditMode ? (
-                    <EditableText
-                      active={true}
-                      value={acInspectionTile.label}
-                      multiline
-                      onSave={(v) => handleSaveAcInspectionTile("label", v)}
-                    />
-                  ) : (
-                    acInspectionTile.label
-                  )}
-                </span>
-                <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
-              </button>
+              {(() => {
+                const isInspectionSelected = activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection";
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSubTab("AC Inspection");
+                      setSearchQuery("");
+                      const params = new URLSearchParams(window.location.search);
+                      params.set("category", "hvac");
+                      params.set("subtab", "AC Inspection");
+                      params.set("subTab", "AC Inspection");
+                      navigate(`?${params.toString()}`, { replace: true });
+                    }}
+                    className="flex flex-col items-center justify-start bg-transparent cursor-pointer w-full transition-all"
+                  >
+                    <span className="text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5">
+                      {serviceEditMode ? (
+                        <EditableText
+                          active={true}
+                          value={acInspectionTile.badge}
+                          onSave={(v) => handleSaveAcInspectionTile("badge", v)}
+                          className="text-white"
+                        />
+                      ) : (
+                        acInspectionTile.badge
+                      )}
+                    </span>
+                    <div className={`w-14 h-14 mb-1 flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                      isInspectionSelected
+                        ? "bg-emerald-100 border-2 border-emerald-600 scale-110 drop-shadow-md shadow-xs"
+                        : "bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 group-hover:scale-105"
+                    }`}>
+                      <Wrench className="w-7 h-7 text-emerald-700" strokeWidth={1.5} />
+                    </div>
+                    <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                      isInspectionSelected
+                        ? "text-emerald-700 font-extrabold"
+                        : "text-emerald-700 font-bold group-hover:text-emerald-800"
+                    }`}>
+                      {serviceEditMode ? (
+                        <EditableText
+                          active={true}
+                          value={acInspectionTile.label}
+                          multiline
+                          onSave={(v) => handleSaveAcInspectionTile("label", v)}
+                        />
+                      ) : (
+                        acInspectionTile.label
+                      )}
+                    </span>
+                    {isInspectionSelected ? (
+                      <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                    ) : (
+                      <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           )}
           {subCategories.map(tab => {
@@ -19427,11 +19669,29 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   )}
                 </h3>
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-3">
                   <Star className="text-purple-600 fill-purple-600" size={13} />
                   <span className="text-slate-800 font-bold">4.82</span>
                   <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
                 </div>
+
+                {selectedPackageDetail.description && (
+                  <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                    {serviceEditMode && selectedPackageDetail.db_id ? (
+                      <EditableText
+                        active={true}
+                        value={selectedPackageDetail.description}
+                        multiline
+                        onSave={(v) => {
+                          handleSaveServiceField(selectedPackageDetail, "description", v);
+                          setSelectedPackageDetail(prev => (prev ? { ...prev, description: v } : prev));
+                        }}
+                      />
+                    ) : (
+                      selectedPackageDetail.description
+                    )}
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4">
                   <div>
@@ -19485,21 +19745,53 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 </div>
               </div>
 
+              {/* WHAT IS INCLUDED / INSPECTION INCLUSIONS */}
+              {Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0 && (
+                <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                      {selectedPackageDetail.includesTitle ||
+                        ((normalizedKey === "hvac" || isHvacTab) && (selectedPackageDetail.name?.toLowerCase().includes("inspect") || activeSubTab?.toLowerCase().includes("inspect"))
+                          ? "Inspection Checkpoints & Inclusions"
+                          : "What is Included")}
+                    </h4>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                      {selectedPackageDetail.includes.length} Checks Included
+                    </span>
+                  </div>
+                  <div className="space-y-2 bg-[#F5F0E6]/60 p-3.5 rounded-xl border border-[#E2DDD5]">
+                    {selectedPackageDetail.includes.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2.5 text-xs text-slate-700">
+                        <span className="text-emerald-600 font-bold mt-0.5 shrink-0">✓</span>
+                        <span className="leading-relaxed font-medium">{typeof item === "string" ? item : (item?.text || "")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* APPLICABLE SERVICE NOTES */}
+              {selectedPackageDetail.notes && (
+                <div className="space-y-1.5 border-t border-[#E8E3DB] pt-4 text-left">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Notes</h4>
+                  <p className="text-xs text-amber-900 bg-amber-50/70 border border-amber-200/70 p-3 rounded-xl leading-relaxed">
+                    {selectedPackageDetail.notes}
+                  </p>
+                </div>
+              )}
+
               {/* TOOLS & PRODUCTS WE USE */}
               <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
                   {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
                     ? selectedPackageDetail.tools
-                    : (Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0
-                      ? selectedPackageDetail.includes
-                      : [
-                        "Professional grade safety & service tools",
-                        "Microfiber cloths & non-abrasive scrubbers",
-                        "High performance diagnostic equipment",
-                        "Safety gear & protective floor covers"
-                      ]
-                    )
+                    : [
+                      "Professional grade safety & service tools",
+                      "Microfiber cloths & non-abrasive scrubbers",
+                      "High performance diagnostic equipment",
+                      "Safety gear & protective floor covers"
+                    ]
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />

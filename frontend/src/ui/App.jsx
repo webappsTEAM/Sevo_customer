@@ -343,7 +343,7 @@ export function App() {
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
-          <Route path="/ac-inspection" element={<ACInspectionBookingPage />} />
+          <Route path="/ac-inspection" element={<Navigate to="/booking?category=hvac&subtab=AC Inspection" replace />} />
           <Route path="/ac-inspection/status/:id" element={<ACInspectionStatusPage />} />
           <Route path={routes.vegetables} element={<VegetableFullScreenPage />} />
           <Route path="/vegetables" element={<VegetableFullScreenPage />} />
