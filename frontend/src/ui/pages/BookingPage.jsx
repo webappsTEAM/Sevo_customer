@@ -3496,7 +3496,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* PDF Download link */}
           <div style={{ marginBottom: 16 }}>
             <a
-              href={`http://localhost:8001/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
+              href={`${import.meta.env.VITE_WORKFORCE_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
@@ -3533,7 +3533,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                             {isExpanded ? "Hide Details" : "View Details"}
                           </button>
                           <a
-                            href={`http://localhost:8001/customer/quote-token/${prevQuote.decision_token}/pdf/`}
+                            href={`${import.meta.env.VITE_WORKFORCE_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
@@ -9133,7 +9133,8 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const [payMethod, setPayMethod] = useState("online")
+  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
+  const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
   const [showAddSearchModal, setShowAddSearchModal] = useState(false)
@@ -9689,22 +9690,24 @@ function StepWorkflowCheckout({
 
                 {isSlotSelected ? (
                   <div className="space-y-3">
-                    <div
-                      onClick={() => setPayMethod("online")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
-                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
-                        : "border-slate-200 hover:border-slate-300"
-                        }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
-                        <div>
-                          <span className="text-xs font-black text-slate-900 block">Pay Online</span>
-                          <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                    {isOnlinePaymentAvailable && (
+                      <div
+                        onClick={() => setPayMethod("online")}
+                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
+                          <div>
+                            <span className="text-xs font-black text-slate-900 block">Pay Online</span>
+                            <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                          </div>
                         </div>
+                        <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
                       </div>
-                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
-                    </div>
+                    )}
 
                     <div
                       onClick={() => setPayMethod("cash")}
@@ -11228,7 +11231,7 @@ export function BookingPage() {
 
             {/* Vendor Platform Link */}
             <a
-              href={import.meta.env.VITE_VENDOR_PLATFORM_URL || "http://localhost:5176/"}
+              href={import.meta.env.VITE_VENDOR_PLATFORM_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/workforce/` : "") : "http://localhost:5176/")}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"

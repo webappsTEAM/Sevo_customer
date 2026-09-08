@@ -328,9 +328,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5175",
     # Production VPS
     "https://caldimproducts.com",
-    "http://caldimproducts.com",
     "https://www.caldimproducts.com",
-    "http://www.caldimproducts.com",
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://.*\.localhost:517[3-5]$",
@@ -353,9 +351,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://*.127.0.0.1:5175",
     # Production VPS
     "https://caldimproducts.com",
-    "http://caldimproducts.com",
     "https://www.caldimproducts.com",
-    "http://www.caldimproducts.com",
 ]
 
 
