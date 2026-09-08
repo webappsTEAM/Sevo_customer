@@ -48,6 +48,7 @@ export const routes = {
   catalog_recommendations: "/catalog/recommendations",
   catalog_change_log: "/catalog/change-log",
   catalog_painting_rates: "/catalog/painting-rates",
+  catalog_gt_pricing: "/catalog/goods-transport-rates",
   marketing_coupons: "/marketing/coupons",
   marketing_offers: "/marketing/offers",
   marketing_referrals: "/marketing/referrals",

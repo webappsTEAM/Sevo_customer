@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=none, reportOperatorIssue=none, reportMissingTypeStubs=none, reportIncompatibleVariableOverride=none
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -8,7 +9,15 @@ from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q
 
 from common.drf import CompanyScopedViewSet
-from customer_care.models import CustomerCareTicket, CareAgentProfile, Escalation, MessageTemplate, CancellationRequest
+from customer_care.models import (
+    CustomerCareTicket,
+    CareAgentProfile,
+    Escalation,
+    MessageTemplate,
+    CancellationRequest,
+    CommunicationLog,
+)
+from service_requests.models import BookingAssignment
 from customer_care.permissions import IsCareAgent, CanAssignTickets
 from customer_care.serializers import (
     TicketListSerializer,
@@ -382,14 +391,33 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
             }
 
         booking_data = None
+        tech_data = None
         if booking:
-            tech = booking.assigned_employee
-            tech_data = None
-            if tech:
+            # ServiceRequest.assigned_employee was removed by migration 0038
+            # when the workforce concern moved to the vendor app, so reading it
+            # here raised AttributeError whenever a ticket had a linked
+            # booking. The technician's identity now arrives over the vendor
+            # webhook, which writes BookingAssignment.technician_* and mirrors
+            # the name/phone onto the booking itself
+            # (workforce_integration/views.py). Prefer the accepted assignment,
+            # which also carries the vendor's own technician id; fall back to
+            # the booking snapshot.
+            assignment = (
+                booking.assignments
+                .filter(status=BookingAssignment.Status.ACCEPTED)
+                .order_by("-id")
+                .first()
+            )
+            tech_name = (getattr(assignment, "technician_name", "") or booking.technician_name or "").strip()
+            tech_phone = (getattr(assignment, "technician_phone", "") or booking.technician_phone or "").strip()
+            if tech_name or tech_phone:
                 tech_data = {
-                    "id": tech.id,
-                    "name": tech.user.get_full_name() or tech.user.username,
-                    "phone": getattr(tech.user, "phone", ""),
+                    # The vendor's own technician reference, not a
+                    # Customer-side primary key. Omitted when unknown rather
+                    # than invented.
+                    "id": (getattr(assignment, "technician_id", "") or "") or None,
+                    "name": tech_name,
+                    "phone": tech_phone,
                 }
 
             booking_data = {
@@ -412,7 +440,10 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
         timeline = []
         if booking:
             timeline.append({"status": "created", "label": "Booking Created", "timestamp": booking.created_at})
-            if booking.assigned_employee:
+            # Same 0038 removal: "a technician is attached" is now the
+            # presence of the webhook-maintained snapshot, which is the signal
+            # service_requests/consumers.py already uses.
+            if tech_data:
                 timeline.append({"status": "assigned", "label": "Technician Assigned", "timestamp": booking.updated_at})
             if booking.status in ["completed", "closed"]:
                 timeline.append({"status": "completed", "label": "Service Completed", "timestamp": booking.updated_at})

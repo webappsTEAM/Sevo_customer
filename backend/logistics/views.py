@@ -42,6 +42,7 @@ class ServiceTierListView(APIView):
             qs = qs.filter(city__iexact=city)
         if weight_class:
             qs = qs.filter(weight_class=weight_class)
+        qs = qs.order_by("order", "id")
         data = ServiceTierSerializer(qs, many=True).data
         return success_response(data=data)
 
@@ -233,3 +234,106 @@ class LogisticsQuoteView(APIView):
             "tier_name": tier.name,
             "breakdown": payload,
         })
+
+
+class PackersMoversQuoteView(APIView):
+    """
+    POST /api/logistics/packers-movers/quote/
+
+    Server-authoritative estimation and quotation endpoint for Packers & Movers.
+    Calculates moving volume (CFT), recommended vehicle sizing, packing tiers,
+    loading/unloading crew labor, floor surcharges without elevator, furniture
+    dismantling/reassembly, unpacking, and 18% GST.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "logistics_quote"
+
+    def post(self, request):
+        from service_requests.services.packers_movers_pricing import compute_packers_movers_quote
+
+        data = request.data if isinstance(request.data, dict) else {}
+
+        pickup_lat = _coord(data.get("pickup_latitude") or data.get("latitude"))
+        pickup_lng = _coord(data.get("pickup_longitude") or data.get("longitude"))
+        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat"))
+        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng"))
+
+        if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "COORDINATES_REQUIRED",
+                    "message": (
+                        "Select both the pickup and drop locations from the "
+                        "suggestions so we can measure the route."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        inventory = data.get("inventory") or data.get("items") or data.get("cart_data") or {}
+        packing_tier = str(data.get("packing_tier") or "standard").strip()
+        dismantling_required = bool(data.get("dismantling_required", True))
+        unpacking_required = bool(data.get("unpacking_required", False))
+
+        try:
+            pickup_floor = int(data.get("pickup_floor") or 0)
+        except (TypeError, ValueError):
+            pickup_floor = 0
+
+        pickup_has_lift = bool(data.get("pickup_has_lift", True))
+
+        try:
+            drop_floor = int(data.get("drop_floor") or 0)
+        except (TypeError, ValueError):
+            drop_floor = 0
+
+        drop_has_lift = bool(data.get("drop_has_lift", True))
+        relocation_type = str(data.get("relocation_type") or "Within City").strip()
+
+        try:
+            quote = compute_packers_movers_quote(
+                pickup_lat=pickup_lat,
+                pickup_lng=pickup_lng,
+                drop_lat=drop_lat,
+                drop_lng=drop_lng,
+                inventory=inventory,
+                packing_tier=packing_tier,
+                dismantling_required=dismantling_required,
+                unpacking_required=unpacking_required,
+                pickup_floor=pickup_floor,
+                pickup_has_lift=pickup_has_lift,
+                drop_floor=drop_floor,
+                drop_has_lift=drop_has_lift,
+                relocation_type=relocation_type,
+            )
+        except Exception as e:
+            logger.exception("Error computing Packers & Movers quote: %s", e)
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "ESTIMATION_FAILED",
+                    "message": f"Could not calculate quote: {str(e)}",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(data={
+            "quotable": True,
+            "quote_id": quote["quote_id"],
+            "requires_survey": quote["requires_survey"],
+            "survey_status": quote["survey_status"],
+            "total": str(quote["pricing"]["total"]),
+            "subtotal": str(quote["pricing"]["subtotal"]),
+            "gst_amount": str(quote["pricing"]["gst_amount"]),
+            "currency": quote["pricing"]["currency"],
+            "valid_until": quote["valid_until"],
+            "vehicle": quote["vehicle"],
+            "inventory_summary": quote["inventory_summary"],
+            "route": quote["route"],
+            "access": quote["access"],
+            "pricing": quote["pricing"],
+            "signature_token": quote.get("signature_token"),
+        })
+

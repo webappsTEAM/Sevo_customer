@@ -89,3 +89,53 @@ export async function fetchLogisticsQuote({
     }
   }
 }
+
+/**
+ * Server-authoritative quote for Packers & Movers relocation.
+ */
+export async function fetchPackersMoversQuote({
+  pickup,
+  drop,
+  inventory,
+  packingTier = "standard",
+  dismantlingRequired = true,
+  unpackingRequired = false,
+  pickupFloor = 0,
+  pickupHasLift = true,
+  dropFloor = 0,
+  dropHasLift = true,
+  relocationType = "Within City",
+}) {
+  if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
+    return { error: true, errorCode: "COORDINATES_REQUIRED", message: "Pickup and drop coordinates are required." }
+  }
+  try {
+    const res = await apiRequest("/logistics/packers-movers/quote/", {
+      method: "POST",
+      body: {
+        pickup_latitude: pickup.lat,
+        pickup_longitude: pickup.lng,
+        drop_latitude: drop.lat,
+        drop_longitude: drop.lng,
+        inventory,
+        packing_tier: packingTier,
+        dismantling_required: dismantlingRequired,
+        unpacking_required: unpackingRequired,
+        pickup_floor: pickupFloor,
+        pickup_has_lift: pickupHasLift,
+        drop_floor: dropFloor,
+        drop_has_lift: dropHasLift,
+        relocation_type: relocationType,
+      },
+    })
+    const data = res?.data || res
+    return data
+  } catch (err) {
+    return {
+      error: true,
+      errorCode: err?.data?.error_code || "QUOTE_FAILED",
+      message: err?.data?.message || err?.message || "Failed to calculate quote.",
+    }
+  }
+}
+

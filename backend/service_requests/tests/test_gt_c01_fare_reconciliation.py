@@ -124,11 +124,17 @@ class ReconciliationTests(TestCase):
         self.assertEqual(recon.final_amount, Decimal("620.00"))
 
     def test_extra_completed_stops_are_charged(self):
-        quote = dict(QUOTE, additional_stops=0, additional_stop_charge="0.00")
+        # The quote locked a 50/stop rate; the tier has since been re-priced
+        # to 999/stop. The extra stop must cost 50 -- the rate the customer
+        # was quoted -- not whatever an administrator set afterwards.
+        quote = dict(
+            QUOTE, additional_stops=0, additional_stop_charge="0.00",
+            rate_additional_stop="50.00",
+        )
         tier = ServiceTier.objects.create(
             category=LogisticsCategory.TRUCK, city="hosur", slug="ace-stops",
             name="Ace", starting_price=Decimal("400.00"),
-            additional_stop_charge=Decimal("50.00"),
+            additional_stop_charge=Decimal("999.00"),
         )
         sr = _booking(fare_breakdown=quote, logistics_tier=tier)
         now = timezone.now()
@@ -187,12 +193,53 @@ class ReconciliationTests(TestCase):
         self.assertEqual([a["code"] for a in recon.adjustments], ["APPROVED_EXTRA_WORK"])
 
     def test_minimum_fare_floor_is_reapplied_after_a_reduction(self):
-        quote = dict(QUOTE, minimum_fare="500.00")
+        quote = dict(QUOTE, rate_minimum_fare="500.00")
         sr = _booking(fare_breakdown=quote)
         recon = reconcile_booking_fare(sr, actual_distance_km="5.00")
         # 530 - (7 x 18) = 404, floored back up to 500.
         self.assertEqual(recon.final_amount, Decimal("500.00"))
         self.assertIn("MINIMUM_FARE", [a["code"] for a in recon.adjustments])
+
+    def test_legacy_minimum_fare_key_is_still_honoured(self):
+        # Quotes written before rate_minimum_fare existed used the plain key.
+        # Both are values the QUOTE recorded, so reading either keeps the
+        # price lock intact; what is never read is the tier's current floor.
+        quote = dict(QUOTE, minimum_fare="500.00")
+        sr = _booking(fare_breakdown=quote)
+        recon = reconcile_booking_fare(sr, actual_distance_km="5.00")
+        self.assertEqual(recon.final_amount, Decimal("500.00"))
+        self.assertIn("MINIMUM_FARE", [a["code"] for a in recon.adjustments])
+
+    def test_extra_stops_are_not_charged_when_the_quote_locked_no_rate(self):
+        # A booking quoted before per-stop rates were recorded. The tier now
+        # charges 999/stop. Reaching for that would re-price a trip the
+        # customer agreed to at a different rate, so the stop is not charged
+        # -- but the reconciliation says so out loud rather than looking
+        # clean, because a chargeable component was dropped.
+        quote = dict(QUOTE, additional_stops=0, additional_stop_charge="0.00")
+        quote.pop("rate_additional_stop", None)
+        tier = ServiceTier.objects.create(
+            category=LogisticsCategory.TRUCK, city="hosur", slug="ace-legacy-stops",
+            name="Ace", starting_price=Decimal("400.00"),
+            additional_stop_charge=Decimal("999.00"),
+        )
+        sr = _booking(fare_breakdown=quote, logistics_tier=tier)
+        now = timezone.now()
+        for i, kind in enumerate(
+            [TripStop.StopType.PICKUP, TripStop.StopType.DROP, TripStop.StopType.DROP], start=1
+        ):
+            TripStop.objects.create(
+                booking=sr, sequence=i, stop_type=kind, address=f"Stop {i}",
+                arrived_at=now, completed_at=now,
+            )
+        recon = reconcile_booking_fare(sr, actual_distance_km="12.00")
+        codes = [a["code"] for a in recon.adjustments]
+        self.assertIn("STOP_RATE_UNAVAILABLE", codes)
+        self.assertNotIn("STOP_VARIANCE", codes)
+        self.assertEqual(recon.final_amount, Decimal("530.00"))
+        flagged = next(a for a in recon.adjustments if a["code"] == "STOP_RATE_UNAVAILABLE")
+        self.assertTrue(flagged["needs_review"])
+        self.assertEqual(flagged["amount"], "0.00")
 
     def test_is_idempotent_on_webhook_retry(self):
         sr = _booking()

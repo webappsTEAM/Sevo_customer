@@ -737,39 +737,43 @@ class WorkforceWebhookView(APIView):
         Turn the booking's estimate into the final fare once the trip is
         delivered.
 
-        There is already a call site for this: _reconcile_fare(), wired to
-        the `service_completed` event. The problem is that the vendor app
-        never emits `service_completed`. Its complete emission set is
-        technician.assigned, booking.dispatch_delayed, technician.delayed,
-        technician.location_updated, payment.collected, logistics.leg_changed,
-        trip.stop_arrived / trip.stop_completed and
-        job.completion_proof_submitted -- confirmed by enumerating every
-        notify_customer_app() call in that codebase. `service_completed`
-        appears there only in a docstring listing valid event names and in a
-        status filter, never as an emission.
+        This is the SECOND of two call sites, and both of them run in
+        production.
 
-        So the "final fare" step never actually ran: a trip that went 40 km
-        on a 20 km quote was charged the 20 km price, extra stops the driver
-        completed were charged for at all, and approved extra work never
-        reached the amount collected. This hook attaches the same
-        reconciliation to DELIVERED, which the vendor DOES emit (via
-        set_logistics_leg on the proof endpoint), so it runs for Goods &
-        Transport.
+        The first is _reconcile_fare(), wired to the `service_completed`
+        event. An earlier version of this docstring claimed the vendor app
+        never emits `service_completed` and that the final-fare step
+        therefore never ran. That was wrong, and it was wrong because the
+        claim rested on a truncated search of the vendor codebase. The
+        vendor DOES emit it: service_requests/state_machine.py maps
+        "completed" -> "service_completed" in _CUSTOMER_WEBHOOK_EVENT_MAP
+        and calls notify_customer_app() on every transition, and
+        apply_transition(job, "completed") is reached from three paths in
+        workforce_api/views.py plus the complete_stuck_paid_jobs management
+        command. Reconciliation at completion is live.
+
+        This hook attaches the same reconciliation to the DELIVERED leg,
+        which the vendor also emits (via set_logistics_leg on the proof
+        endpoint). For Goods & Transport that is the meaningful "the trip is
+        over" moment, and it can land before the status flips to completed,
+        so a delivered trip gets its final fare without waiting on the
+        status transition.
 
         Both call sites are safe together: reconcile_booking_fare is
-        idempotent (update_or_create keyed on the booking), so if
-        `service_completed` is ever wired up it simply refreshes the row --
-        with the distance, which this event does not carry.
+        idempotent (update_or_create keyed on the booking), so whichever
+        arrives second simply refreshes the row.
 
         `actual_distance_km` is used only when the vendor app reports a
-        measured trip distance. The DELIVERED event does not currently carry
-        one (emit_leg_changed sends only the leg), so in practice this
-        reconciles stops, approved extra work and the minimum fare -- all of
-        which are exact recorded facts -- and leaves distance variance
-        unapplied. Charging distance variance needs the vendor to include a
-        measured trip distance on this event; deriving one from the GPS
-        trail here was considered and rejected, because a haversine sum over
-        jittery fixes overstates distance and would quietly overcharge.
+        measured trip distance, and NEITHER event currently carries one --
+        no notify_customer_app() call in the vendor codebase sets
+        actual_distance_km, distance_km or trip_distance_km. So in practice
+        both call sites reconcile stops, approved extra work and the minimum
+        fare locked into the quote -- all exact recorded facts -- and leave
+        distance variance unapplied. Charging distance variance needs the
+        vendor to include a measured trip distance on one of these events;
+        deriving one from the GPS trail here was considered and rejected,
+        because a haversine sum over jittery fixes overstates distance and
+        would quietly overcharge.
 
         Fire-and-forget, and idempotent on the receiving side
         (update_or_create keyed on the booking), so a retried DELIVERED

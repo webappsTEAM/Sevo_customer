@@ -131,14 +131,15 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
         "groceries": {"groceries", "vegetables-groceries", "daily-essentials", "grocery"},
 
         # Goods & Logistics
-        "goods-and-transports": {"truck", "two-wheeler", "packers-movers", "goods-transports", "transport", "mini-truck", "instant-bike-courier", "house-shifting"},
+        "goods-and-transports": {"truck", "two-wheeler", "packers-movers", "goods-transports", "transport", "mini-truck", "instant-bike-courier", "house-shifting", "goods-transport-truck", "goods-transport-two-wheeler"},
         "goods-transports": {"truck", "two-wheeler", "packers-movers", "transport"},
-        "goods-transport-truck": {"truck", "mini-truck", "mini-truck-transport", "goods-and-transports"},
-        "goods-transport-bike": {"two-wheeler", "instant-bike-courier", "bike", "goods-and-transports"},
+        "goods-transport-truck": {"truck", "mini-truck", "mini-truck-transport", "goods-and-transports", "goods-transport-truck"},
+        "goods-transport-two-wheeler": {"two-wheeler", "instant-bike-courier", "bike", "goods-and-transports", "goods-transport-bike", "goods-transport-two-wheeler"},
+        "goods-transport-bike": {"two-wheeler", "instant-bike-courier", "bike", "goods-and-transports", "goods-transport-two-wheeler"},
         "goods-transport-packers": {"packers-movers", "house-shifting", "packers-and-movers", "goods-and-transports"},
         "truck": {"truck", "mini-truck", "mini-truck-transport", "goods-transport-truck"},
         "mini-truck": {"truck", "mini-truck", "mini-truck-transport", "goods-transport-truck"},
-        "two-wheeler": {"two-wheeler", "bike", "instant-bike-courier", "goods-transport-bike"},
+        "two-wheeler": {"two-wheeler", "bike", "instant-bike-courier", "goods-transport-bike", "goods-transport-two-wheeler"},
         "packers-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
         "packers-and-movers": {"packers-movers", "packers-and-movers", "house-shifting", "goods-transport-packers"},
 

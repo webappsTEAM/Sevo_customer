@@ -72,10 +72,14 @@ def _success(data=None, message="", status_code=200):
     )
 
 
-def _error(message, status_code=400, extra=None):
+def _error(message, status_code=400, extra=None, errors=None, **kwargs):
     body = {"success": False, "message": message}
+    if errors is not None:
+        body["errors"] = errors
     if extra:
         body.update(extra)
+    if kwargs:
+        body.update(kwargs)
     return Response(body, status=status_code)
 
 # Fixes EC-08: tracking_token never expired -- a link handed to a customer
@@ -378,6 +382,7 @@ class BookingCreateView(APIView):
                 pickup_lng=serializer.validated_data.get("longitude"),
                 drop_lat=serializer.validated_data.get("drop_latitude"),
                 drop_lng=serializer.validated_data.get("drop_longitude"),
+                cart_data=serializer.validated_data.get("cart_data"),
             )
         except UnresolvedLogisticsFareError:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -523,6 +528,27 @@ class BookingCreateView(APIView):
                 final_email = customer_user.email
             elif request.user and request.user.is_authenticated and request.user.email:
                 final_email = request.user.email
+
+        # Ensure cart_data carries clean numeric prices matching authoritative fare
+        clean_cart = serializer.validated_data.get("cart_data")
+        if clean_cart and isinstance(clean_cart, list):
+            for item in clean_cart:
+                if isinstance(item, dict):
+                    raw_p = str(item.get("price", "") or "")
+                    clean_str = "".join(ch for ch in raw_p if ch.isdigit() or ch in ".-")
+                    try:
+                        p_val = float(clean_str)
+                    except (ValueError, TypeError):
+                        p_val = float(corrected_fare)
+                    # For logistics bookings, if single vehicle item or placeholder indicative price, set to authoritative corrected_fare
+                    if serializer.validated_data.get("service_category") in LOGISTICS_CATEGORIES:
+                        if len(clean_cart) == 1 or p_val == 0:
+                            item["price"] = float(corrected_fare)
+                        else:
+                            item["price"] = p_val
+                    else:
+                        item["price"] = p_val
+            serializer.validated_data["cart_data"] = clean_cart
 
         sr = serializer.save(
             company=company,
@@ -796,6 +822,20 @@ class CustomerBookingCancelView(APIView):
             return _success(
                 data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
                 message="Booking is already cancelled.",
+            )
+
+        if getattr(sr, "otp_verified", False) or sr.status in [
+            ServiceRequest.Status.IN_PROGRESS,
+            ServiceRequest.Status.PROOF_SUBMITTED,
+            ServiceRequest.Status.COMPLETED,
+        ]:
+            return Response(
+                {
+                    "success": False,
+                    "code": "CANCELLATION_LOCKED_AFTER_OTP",
+                    "message": "Cancellation is locked because customer OTP has been verified.",
+                },
+                status=status.HTTP_409_CONFLICT,
             )
 
         reason = request.data.get("reason", "Customer requested cancellation")
@@ -1735,7 +1775,7 @@ class AdminSRUpdateTechnicianLocationView(APIView):
         is_staff_or_admin = (
             request.user and request.user.is_authenticated and (getattr(request.user, "is_staff", False) or getattr(request.user, "role", "") in ["admin", "staff", "manager"])
         )
-        from workforce_integration.views import _verify_webhook_signature
+        from workforce_integration.views import _verify_webhook_signature, parse_datetime_safe
         has_wf_secret = _verify_webhook_signature(request)
         if not is_staff_or_admin and not has_wf_secret:
             return _error("Only authorized staff or workforce services can update technician location.", 403)
@@ -1756,10 +1796,6 @@ class AdminSRUpdateTechnicianLocationView(APIView):
             sr.technician_photo = request.data.get("technician_photo")
         if "technician_rating" in request.data:
             sr.technician_rating = request.data.get("technician_rating")
-        if "latitude" in request.data or "technician_latitude" in request.data or "lat" in request.data:
-            sr.technician_latitude = request.data.get("latitude") or request.data.get("technician_latitude") or request.data.get("lat")
-        if "longitude" in request.data or "technician_longitude" in request.data or "lng" in request.data:
-            sr.technician_longitude = request.data.get("longitude") or request.data.get("technician_longitude") or request.data.get("lng")
         if "location_name" in request.data or "technician_location_name" in request.data or "current_location_name" in request.data:
             sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name") or request.data.get("current_location_name")
         if "status" in request.data and request.data.get("status") in dict(ServiceRequest.Status.choices):
@@ -1767,16 +1803,61 @@ class AdminSRUpdateTechnicianLocationView(APIView):
 
         sr.save()
 
-        # Broadcast live tracking update via WebSockets
-        try:
-            from .notifications import broadcast_tracking_event
-            full_payload = _build_tracking_payload(sr, has_full_access=True)
-            broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
-        except Exception as b_err:
-            logger.warning(f"Error broadcasting live location: {b_err}")
+        # Coordinates go through record_technician_fix -- the same service the
+        # technician app and the workforce webhook already use -- rather than
+        # being written straight onto the row.
+        #
+        # This endpoint used to assign technician_latitude/longitude directly
+        # and ignore `captured_at` entirely, so a GPS packet that arrived late
+        # overwrote a NEWER position: the marker jumped backwards along the
+        # route until the next fresh packet happened to arrive. It also stored
+        # no TechnicianLocation telemetry at all, so heading/speed/accuracy
+        # were dropped and there was no trail to reconstruct. Both are fixed
+        # by using the shared path, which drops stale fixes and persists the
+        # fix -- so the two transports cannot drift apart again.
+        lat = request.data.get("latitude") or request.data.get("technician_latitude") or request.data.get("lat")
+        lng = request.data.get("longitude") or request.data.get("technician_longitude") or request.data.get("lng")
+        outcome = None
+        if lat is not None and lng is not None:
+            from service_requests.services.technician_tracking import record_technician_fix
+
+            outcome, _fix = record_technician_fix(
+                sr,
+                latitude=lat,
+                longitude=lng,
+                accuracy=request.data.get("accuracy"),
+                heading=request.data.get("heading") or 0.0,
+                speed=request.data.get("speed") or 0.0,
+                captured_at=parse_datetime_safe(
+                    request.data.get("captured_at")
+                    or request.data.get("timestamp")
+                    or request.data.get("updated_at")
+                ),
+                technician=request.user if getattr(request.user, "is_authenticated", False) else None,
+            )
+            if outcome == "invalid":
+                return _error("Invalid coordinates.", 400)
+
+        # Only broadcast a position the server actually accepted. Broadcasting
+        # a rejected stale fix would push the old coordinates to every
+        # watching client, which is the very jump this guard exists to stop.
+        if outcome != "stale":
+            try:
+                from .notifications import broadcast_tracking_event
+                full_payload = _build_tracking_payload(sr, has_full_access=True)
+                broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
+            except Exception as b_err:
+                logger.warning(f"Error broadcasting live location: {b_err}")
+
+        payload = _build_tracking_payload(sr, has_full_access=True)
+        if outcome == "stale":
+            # Additive key only -- the existing response shape is unchanged,
+            # and the position returned is the newer one already stored.
+            payload["ignored"] = True
+            return _success(data=payload, message="Out-of-order location packet ignored.")
 
         return _success(
-            data=_build_tracking_payload(sr, has_full_access=True),
+            data=payload,
             message="Technician live location updated successfully."
         )
 

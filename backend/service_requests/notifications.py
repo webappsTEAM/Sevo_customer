@@ -191,10 +191,15 @@ def send_completion_and_feedback_email(service_request, feedback_token: str) -> 
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     feedback_url = f"{frontend_url}/feedback/{feedback_token}"
 
-    technician_name = "Our technician"
-    if service_request.assigned_employee and service_request.assigned_employee.user:
-        u = service_request.assigned_employee.user
-        technician_name = u.get_full_name() or u.username
+    # ServiceRequest.assigned_employee was removed by migration 0038 when the
+    # workforce concern moved to the vendor app, so this raised AttributeError
+    # every time a feedback request was sent. The vendor now pushes the
+    # technician's identity in over the webhook, which writes
+    # BookingAssignment.technician_name and mirrors it onto
+    # ServiceRequest.technician_name (workforce_integration/views.py) -- that
+    # snapshot is the Customer app's technician identity now, and is what
+    # every other reader here already uses.
+    technician_name = (service_request.technician_name or "").strip() or "Our technician"
 
     category_name = _get_category_display_name(service_request)
     completed_on  = timezone.now().strftime("%d %b %Y, %I:%M %p")

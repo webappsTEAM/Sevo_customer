@@ -159,6 +159,17 @@ class ServiceRequest(models.Model):
         EN_ROUTE_DROP   = "EN_ROUTE_DROP",   "En Route to Drop"
         UNLOADING       = "UNLOADING",       "Unloading"
         DELIVERED       = "DELIVERED",       "Delivered"
+        # Relocation / Packers & Movers legs
+        ASSIGNED        = "ASSIGNED",        "Assigned"
+        TEAM_EN_ROUTE   = "TEAM_EN_ROUTE",   "Team En Route"
+        ARRIVED_PICKUP  = "ARRIVED_PICKUP",  "Arrived at Pickup"
+        PACKING         = "PACKING",         "Packing"
+        DISMANTLING     = "DISMANTLING",     "Dismantling"
+        IN_TRANSIT      = "IN_TRANSIT",      "In Transit"
+        ARRIVED_DROP    = "ARRIVED_DROP",    "Arrived at Drop"
+        REASSEMBLY      = "REASSEMBLY",      "Reassembly"
+        UNPACKING       = "UNPACKING",       "Unpacking"
+        COMPLETED       = "COMPLETED",       "Completed"
 
     class PaymentMethod(models.TextChoices):
         COD    = "COD",    "Cash on Service"
@@ -963,6 +974,14 @@ class CatalogChangeLog(models.Model):
         SERVICE  = "SERVICE",  "Service"
         PACKAGE  = "PACKAGE",  "Package"
         ADDON    = "ADDON",    "Add-on"
+        # Goods & Transport vehicle tiers. Deliberately logged here rather
+        # than in a new audit model: this one already carries exactly the
+        # shape a rate change needs (entity, field, old value, new value,
+        # actor, reason, timestamp) and its soft entity_type + entity_id
+        # reference was built to span unrelated tables. ServiceTier lives in
+        # the `logistics` app, which is precisely the case a soft reference
+        # handles and a ForeignKey would not.
+        SERVICE_TIER = "SERVICE_TIER", "Goods & Transport Tier"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"

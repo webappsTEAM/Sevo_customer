@@ -82,6 +82,9 @@ const CatalogChangeLogPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const GTPricingPage = lazy(() =>
+  import("./pages/catalog/GTPricingPage.jsx").then(m => ({ default: m.GTPricingPage || m.default }))
+)
 const AdminRecipesPage = lazy(() =>
   import("./pages/catalog/AdminRecipesPage.jsx").then(m => ({ default: m.AdminRecipesPage || m.default }))
 )
@@ -447,6 +450,7 @@ export function App() {
               <Route path={routes.catalog_recommendations} element={<AdminRecommendationsPage />} />
               <Route path={routes.catalog_change_log} element={<CatalogChangeLogPage />} />
               <Route path={routes.catalog_painting_rates} element={<PaintingRateCardPage />} />
+              <Route path={routes.catalog_gt_pricing} element={<GTPricingPage />} />
               <Route path={routes.marketing_coupons} element={<CouponsPage />} />
               <Route path={routes.marketing_offers} element={<OffersPage />} />
               <Route path={routes.marketing_referrals} element={<ReferralsPage />} />

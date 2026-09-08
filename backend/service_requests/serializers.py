@@ -155,8 +155,37 @@ class CatalogChangeLogSerializer(serializers.ModelSerializer):
         return "System"
 
 
+class CoordinateField(serializers.DecimalField):
+    """
+    Coordinates from browser geolocation or map providers carry 7-14 decimal places.
+    ServiceRequest stores them in DecimalField(max_digits=9, decimal_places=6).
+    Rounds raw input coordinates to 6 decimal places before precision validation runs,
+    preventing spurious 'Ensure that there are no more than 6 decimal places' 400 rejections.
+    """
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_digits", 9)
+        kwargs.setdefault("decimal_places", 6)
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_null", True)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        if data is not None and data != "":
+            try:
+                val = round(float(data), 6)
+                data = f"{val:.6f}"
+            except (ValueError, TypeError):
+                pass
+        return super().to_internal_value(data)
+
+
 class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
     """Validates public booking submission from the React booking wizard."""
+
+    latitude = CoordinateField()
+    longitude = CoordinateField()
+    drop_latitude = CoordinateField()
+    drop_longitude = CoordinateField()
 
     class Meta:
         model = ServiceRequest
@@ -206,26 +235,24 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_latitude(self, value):
-        if value is not None and value != "":
-            try:
-                lat = round(float(value), 6)
-                if not (-90.0 <= lat <= 90.0):
-                    raise serializers.ValidationError("Latitude must be between -90 and 90.")
-                return lat
-            except (ValueError, TypeError):
-                return None
-        return None
+        if value is not None and not (-90.0 <= float(value) <= 90.0):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
 
     def validate_longitude(self, value):
-        if value is not None and value != "":
-            try:
-                lon = round(float(value), 6)
-                if not (-180.0 <= lon <= 180.0):
-                    raise serializers.ValidationError("Longitude must be between -180 and 180.")
-                return lon
-            except (ValueError, TypeError):
-                return None
-        return None
+        if value is not None and not (-180.0 <= float(value) <= 180.0):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+
+    def validate_drop_latitude(self, value):
+        if value is not None and not (-90.0 <= float(value) <= 90.0):
+            raise serializers.ValidationError("Drop latitude must be between -90 and 90.")
+        return value
+
+    def validate_drop_longitude(self, value):
+        if value is not None and not (-180.0 <= float(value) <= 180.0):
+            raise serializers.ValidationError("Drop longitude must be between -180 and 180.")
+        return value
 
     def validate_cart_data(self, value):
         import json
@@ -416,7 +443,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             # discount line and stop assuming it's always 0 (it was never in
             # this list before, even though ServiceRequest.discount_amount is
             # a real, populated field once a coupon is applied at booking).
-            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "transaction_id", "invoice_id",
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "fare_breakdown", "transaction_id", "invoice_id",
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
             "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
@@ -755,7 +782,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             # discount_amount exposed for the same reason as in
             # ServiceRequestListSerializer -- see comment there.
-            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data",
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "fare_breakdown",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
             "transaction_id", "payment_gateway",

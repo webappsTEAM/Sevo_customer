@@ -95,7 +95,8 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
     """
     from ..models import FareReconciliation
 
-    if booking.service_category not in DISTANCE_PRICED_CATEGORIES:
+    is_pm_quoted = (booking.service_category == "packers_movers" and bool(booking.fare_breakdown))
+    if booking.service_category not in DISTANCE_PRICED_CATEGORIES and not is_pm_quoted:
         return None
 
     estimate = booking.fare_breakdown or {}
@@ -147,11 +148,47 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
         quoted_extra = int(estimate.get("additional_stops") or 0)
         actual_extra = max(0, completed_stops - STANDARD_STOP_COUNT)
         if actual_extra != quoted_extra:
+            # The per-stop rate comes from the quote, never from the tier.
+            #
+            # This used to fall back to booking.logistics_tier.
+            # additional_stop_charge whenever the quote had no extra stops to
+            # divide -- which is the common case, since stops are usually
+            # added after booking. ServiceTier rates are administrator-
+            # editable, so that fallback meant changing a rate today
+            # retroactively re-priced trips quoted last week. Quotes now
+            # carry `rate_additional_stop`, so there is nothing to fall back
+            # to and nothing live to read.
             quoted_stop_charge = _dec(estimate.get("additional_stop_charge"))
-            per_stop = (
-                _money(quoted_stop_charge / quoted_extra) if quoted_extra > 0
-                else _dec(getattr(booking.logistics_tier, "additional_stop_charge", 0))
-            )
+            if quoted_extra > 0:
+                per_stop = _money(quoted_stop_charge / quoted_extra)
+            else:
+                per_stop = _dec(estimate.get("rate_additional_stop"), default=None)
+            if per_stop is None:
+                # A quote taken before rate_additional_stop was recorded.
+                # Charging nothing is the safe direction -- it can only ever
+                # undercharge, never bill a customer at a rate they were never
+                # quoted -- but it must not look like a clean reconciliation.
+                # A zero-amount line is what tells operations that a
+                # chargeable component was dropped rather than found absent.
+                logger.info(
+                    "Booking %s was quoted before per-stop rates were locked into "
+                    "the breakdown; not charging for %d extra stop(s).",
+                    getattr(booking, "request_id", booking.pk),
+                    actual_extra - quoted_extra,
+                )
+                adjustments.append({
+                    "code": "STOP_RATE_UNAVAILABLE",
+                    "label": (
+                        f"{actual_extra - quoted_extra} extra stop(s) completed but the "
+                        "quote recorded no per-stop rate; not charged"
+                    ),
+                    "amount": "0.00",
+                    "source": "recorded_stop_progress",
+                    "quoted_extra_stops": quoted_extra,
+                    "actual_extra_stops": actual_extra,
+                    "needs_review": True,
+                })
+                per_stop = Decimal("0.00")
             stop_adjustment = _money(per_stop * (actual_extra - quoted_extra))
             if stop_adjustment != 0:
                 final_amount = _money(final_amount + stop_adjustment)
@@ -175,8 +212,20 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
             "source": "work_extension",
         })
 
-    # --- 4. Never charge below the tier's floor -----------------------
-    minimum_fare = _dec(estimate.get("minimum_fare"), default=None) if estimate.get("minimum_fare") else None
+    # --- 4. Never charge below the floor THIS QUOTE was given ---------
+    # Read from `rate_minimum_fare`, which quote_logistics_fare now records.
+    # This block previously looked for `minimum_fare`, a key the breakdown
+    # never contained -- it stored only the boolean `minimum_fare_applied` --
+    # so the floor was silently never re-applied at reconciliation. Reading
+    # the tier's current minimum instead would have reintroduced the same
+    # retroactive-pricing problem as the per-stop rate above.
+    # `minimum_fare` is accepted as a legacy alias: both keys are values the
+    # QUOTE recorded, so reading either preserves the price lock. What is
+    # never read here is booking.logistics_tier.minimum_fare, which an
+    # administrator can change after the booking was taken.
+    minimum_fare = _dec(estimate.get("rate_minimum_fare"), default=None)
+    if minimum_fare is None:
+        minimum_fare = _dec(estimate.get("minimum_fare"), default=None)
     if minimum_fare is not None and final_amount < minimum_fare:
         floor_adjustment = _money(minimum_fare - final_amount)
         final_amount = minimum_fare

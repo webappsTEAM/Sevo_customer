@@ -26,7 +26,7 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck
 } from "lucide-react"
 
 const SUPER_ADMIN_NAV_ITEMS = [
@@ -84,6 +84,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
+      { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
     ]
   },
   {

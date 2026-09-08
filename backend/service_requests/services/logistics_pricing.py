@@ -211,9 +211,18 @@ class LogisticsFareBreakdown(dict):
         additional_stop_charge  Decimal
         subtotal            Decimal -- before surge
         surge_multiplier    Decimal
-        minimum_fare_applied  bool
+        minimum_fare_applied  bool -- whether the floor actually bit
+        rate_per_km         Decimal -- the per-km rate this quote used
+        rate_additional_stop  Decimal -- the per-stop rate this quote used
+        rate_minimum_fare   Decimal|None -- the floor this quote used
+        free_km             Decimal -- the allowance this quote used
         distance_source     str -- "google_maps" | "straight_line_estimate"
         currency            str
+
+    The four `rate_*`/`free_km` keys exist so that reconciliation can
+    re-price a delivered trip entirely from the quote, without reading the
+    tier again. A tier's rates are administrator-editable; a booking's
+    are not.
     """
 
 
@@ -317,6 +326,22 @@ def quote_logistics_fare(
         subtotal=subtotal,
         surge_multiplier=surge,
         minimum_fare_applied=minimum_applied,
+        # ── rates as they stood when this quote was made ──────────────────
+        # The breakdown recorded what was CHARGED but not what it was charged
+        # AT, which forced fare reconciliation to go back to the live tier
+        # for anything the quote had not already spent money on -- so an
+        # admin changing a rate silently re-priced bookings taken before the
+        # change. These three lock the rate card into the quote itself.
+        #
+        # `rate_minimum_fare` is the per-trip floor, distinct from
+        # `minimum_fare_applied` above, which only says whether it bit.
+        # `rate_per_km` is stored even though it can usually be recovered
+        # from distance_charge / chargeable_km, because that division is
+        # undefined for a trip entirely inside free_km.
+        rate_per_km=_money(per_km_rate),
+        rate_additional_stop=per_stop,
+        rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
+        free_km=free_km,
         distance_source=route.get("source"),
         currency=getattr(tier, "currency", "INR") or "INR",
     )
@@ -333,6 +358,7 @@ def resolve_logistics_fare_v2(
     drop_lat=None,
     drop_lng=None,
     stop_count=STANDARD_STOP_COUNT,
+    cart_data=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
@@ -341,17 +367,13 @@ def resolve_logistics_fare_v2(
       1. A distance-based quote, when the category is distance-priced,
          the selected tier has a per_km_rate, and we have real pickup and
          drop coordinates. This is the Porter-style path.
-      2. A selected Lane's fixed fare (a pre-agreed point-to-point route
+      2. A Packers & Movers relocation quote, based on inventory volume (CFT),
+         vehicle sizing, packing tiers, floor labor, and dismantling/reassembly.
+      3. A selected Lane's fixed fare (a pre-agreed point-to-point route
          price -- deliberately still wins over a tier's flat starting
          price, unchanged from before).
-      3. The tier's flat starting_price.
-      4. Nothing resolvable -> UnresolvedLogisticsFareError.
-
-    Note (2) sits *below* (1): a lane fare is a flat pre-agreed number,
-    so where a tier is genuinely configured for distance pricing and we
-    can measure the trip, the measured fare is the more accurate one.
-    Where distance pricing isn't configured, behaviour is byte-identical
-    to the previous resolve_logistics_fare().
+      4. The tier's flat starting_price.
+      5. Nothing resolvable -> UnresolvedLogisticsFareError.
 
     submitted_amount is still never trusted for a logistics category --
     it is only ever passed through for non-logistics bookings, exactly as
@@ -360,10 +382,9 @@ def resolve_logistics_fare_v2(
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount, None
 
-    # Same gate as the flat resolver, applied before the distance formula
+    # Same gate as the flat resolver, applied before the quote formulas
     # too -- otherwise a mismatched tier would be caught only on the flat
-    # fall-through path and would sail through distance pricing, which is
-    # the path that actually computes most goods-transport fares.
+    # fall-through path and would sail through distance pricing.
     assert_catalog_matches_category(
         service_category, tier=logistics_tier, lane=logistics_lane
     )
@@ -379,6 +400,73 @@ def resolve_logistics_fare_v2(
         )
         if breakdown is not None:
             return breakdown["total"], breakdown
+
+    if service_category == "packers_movers":
+        # Extract quote parameters or verified quote_id from cart_data
+        quote_id = None
+        inventory_items = None
+        packing_tier = "standard"
+        pickup_floor = 0
+        pickup_has_lift = True
+        drop_floor = 0
+        drop_has_lift = True
+        relocation_type = "Within City"
+        dismantling_req = True
+        unpacking_req = False
+
+        if isinstance(cart_data, list) and len(cart_data) > 0:
+            c0 = cart_data[0] if isinstance(cart_data[0], dict) else {}
+            quote_id = c0.get("quote_id")
+            inventory_items = c0.get("inventory") or c0.get("items")
+            packing_tier = c0.get("packing_tier") or "standard"
+            pickup_floor = c0.get("pickup_floor", 0)
+            pickup_has_lift = c0.get("pickup_has_lift", True)
+            drop_floor = c0.get("drop_floor", 0)
+            drop_has_lift = c0.get("drop_has_lift", True)
+            relocation_type = c0.get("relocation_type") or "Within City"
+            if "dismantling_required" in c0:
+                dismantling_req = bool(c0.get("dismantling_required"))
+            if "unpacking_required" in c0:
+                unpacking_req = bool(c0.get("unpacking_required"))
+        elif isinstance(cart_data, dict):
+            quote_id = cart_data.get("quote_id")
+            inventory_items = cart_data.get("inventory") or cart_data.get("items")
+            packing_tier = cart_data.get("packing_tier") or "standard"
+            pickup_floor = cart_data.get("pickup_floor", 0)
+            pickup_has_lift = cart_data.get("pickup_has_lift", True)
+            drop_floor = cart_data.get("drop_floor", 0)
+            drop_has_lift = cart_data.get("drop_has_lift", True)
+            relocation_type = cart_data.get("relocation_type") or "Within City"
+            if "dismantling_required" in cart_data:
+                dismantling_req = bool(cart_data.get("dismantling_required"))
+            if "unpacking_required" in cart_data:
+                unpacking_req = bool(cart_data.get("unpacking_required"))
+
+        if quote_id:
+            from .packers_movers_pricing import verify_packers_movers_quote
+            is_valid, cached_quote, err_msg = verify_packers_movers_quote(quote_id, submitted_total=submitted_amount)
+            if is_valid and cached_quote:
+                return _money(cached_quote["total"]), cached_quote
+
+        # Compute on-the-fly quote from inventory line items if coordinates are available
+        if inventory_items and None not in (pickup_lat, pickup_lng, drop_lat, drop_lng):
+            from .packers_movers_pricing import compute_packers_movers_quote
+            computed_quote = compute_packers_movers_quote(
+                pickup_lat=pickup_lat,
+                pickup_lng=pickup_lng,
+                drop_lat=drop_lat,
+                drop_lng=drop_lng,
+                inventory=inventory_items,
+                packing_tier=packing_tier,
+                dismantling_required=dismantling_req,
+                unpacking_required=unpacking_req,
+                pickup_floor=pickup_floor,
+                pickup_has_lift=pickup_has_lift,
+                drop_floor=drop_floor,
+                drop_has_lift=drop_has_lift,
+                relocation_type=relocation_type,
+            )
+            return _money(computed_quote["total"]), computed_quote
 
     # Fall through to the original flat resolver rather than duplicating
     # its lane-beats-tier ordering and its

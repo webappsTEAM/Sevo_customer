@@ -8,6 +8,7 @@ views" rule. Every view is IsAdminRole-gated (internal Ops tooling, not the
 public catalog read API in service_requests/views.py).
 """
 from django.core.exceptions import ValidationError as DjangoValidationError
+from service_requests.services.catalog import LogisticsPricingPermissionError
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -205,15 +206,15 @@ class AdminPackageListView(APIView):
         data = PackageSerializer(qs, many=True).data
         try:
             from logistics.models import ServiceTier
+            from service_requests.services.catalog import CANONICAL_LOGISTICS_TIER_SLUG_MAP
             tiers_by_slug = {t.slug: t for t in ServiceTier.objects.all()}
             for item in data:
                 slug = item.get("slug")
                 tier = tiers_by_slug.get(slug)
-                if not tier:
-                    for t_slug, t in tiers_by_slug.items():
-                        if t_slug in slug or slug in t_slug:
-                            tier = t
-                            break
+                if not tier and slug:
+                    canonical_slug = CANONICAL_LOGISTICS_TIER_SLUG_MAP.get(slug)
+                    if canonical_slug:
+                        tier = tiers_by_slug.get(canonical_slug)
                 if tier and tier.includes and len(tier.includes) > 0:
                     if not item.get("includes") or len(item["includes"]) == 0:
                         item["includes"] = tier.includes
@@ -256,7 +257,28 @@ class AdminPackageDetailView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         reason = request.data.get("reason")
-        package = catalog_service.update_package(package, serializer.validated_data, request.user, reason=reason)
+        try:
+            package = catalog_service.update_package(package, serializer.validated_data, request.user, reason=reason)
+        except LogisticsPricingPermissionError as exc:
+            # The caller changed base_price on a GT-linked package without
+            # holding pricing:modify_price.  Return a structured 403 so the
+            # frontend can show a targeted "use GT Rates page" warning rather
+            # than a generic error modal.
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "PRICING_FORBIDDEN",
+                    "message": str(exc),
+                    "detail": (
+                        "This package is linked to a Goods & Transport service tier. "
+                        "Changing its price requires the Pricing Admin role. "
+                        "Use \u2192 Goods & Transport Rates to update this price."
+                    ),
+                },
+                status=403,
+            )
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
         clear_catalog_cache()
         return Response({"success": True, "data": PackageSerializer(package).data})
 

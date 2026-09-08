@@ -205,9 +205,55 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
   return null;
 };
 
-let BOOKING_CURRENCY_SYMBOL = "₹";
-
 const extractTextList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => typeof i === "string" ? i : (typeof i === "object" && i !== null ? (i.text || i.title || "") : "")).filter(Boolean) : [];
+
+export function getAuthoritativeItemPrice(item, booking) {
+  if (!item) return 0;
+  if (typeof item.price === 'number' && !isNaN(item.price)) {
+    return item.price;
+  }
+  let raw = item.price;
+  if (raw == null || raw === '') {
+    raw = item.estimated_price || item.unit_price;
+  }
+  let parsed = NaN;
+  if (typeof raw === 'string') {
+    const cleanStr = raw.replace(/[^\d.-]/g, '').trim();
+    parsed = parseFloat(cleanStr);
+  } else if (typeof raw === 'number') {
+    parsed = raw;
+  }
+
+  const isLogistics = ['goods_transport_truck', 'goods_transport_two_wheeler', 'packers_movers'].includes(booking?.service_category);
+  const bookingTotal = Number(booking?.total_amount || 0);
+  const breakdownSubtotal = parseFloat(booking?.fare_breakdown?.subtotal || booking?.fare_breakdown?.total || 0);
+
+  if (isLogistics) {
+    // For Packers & Movers: fare_breakdown.subtotal is the pre-GST transport-only
+    // component (e.g. Rs 2900.50), NOT the full package price which also includes
+    // packing, labor, dismantling charges, and GST (e.g. Rs 3422.59).
+    // total_amount is the authoritative full-package price captured at booking creation.
+    if (booking?.service_category === 'packers_movers') {
+      if (bookingTotal > 0) return bookingTotal;
+      if (breakdownSubtotal > 0) return breakdownSubtotal;
+    } else {
+      // Truck / Two-Wheeler: fare_breakdown.subtotal IS the complete vehicle fare.
+      // Prefer it over the cart string which may be an indicative 'starting from'
+      // price (e.g. the vehicle card shows '₹205' but the quoted fare is Rs 315.86).
+      if (breakdownSubtotal > 0) return breakdownSubtotal;
+      if (bookingTotal > 0) return bookingTotal;
+    }
+  }
+
+  if (!isNaN(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  if (breakdownSubtotal > 0) return breakdownSubtotal;
+  if (bookingTotal > 0) return bookingTotal;
+
+  return 0;
+}
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    DATA
@@ -2578,8 +2624,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   }, [liveData?.cart_data, successData?.cart_data, cart])
 
   const itemTotal = useMemo(() => {
-    return displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0)
-  }, [displayCart])
+    return displayCart.reduce((a, c) => a + (getAuthoritativeItemPrice(c, liveData || successData) * (Number(c.quantity) || 1)), 0)
+  }, [displayCart, liveData, successData])
 
   const totalGst = useMemo(() => {
     if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
@@ -4633,15 +4679,29 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   useEffect(() => {
     if (activeTab === "My Bookings" && user) {
-      if (!realBookings || realBookings.length === 0) {
-        setBookingsLoading(true)
+      const fetchBookings = (showLoading = false) => {
+        if (showLoading && (!realBookings || realBookings.length === 0)) {
+          setBookingsLoading(true)
+        }
+        apiFetchCustomerBookings()
+          .then(res => {
+            if (res?.data) setRealBookings(res.data)
+          })
+          .catch(console.error)
+          .finally(() => {
+            if (showLoading) setBookingsLoading(false)
+          })
       }
-      apiFetchCustomerBookings()
-        .then(res => {
-          if (res?.data) setRealBookings(res.data)
-        })
-        .catch(console.error)
-        .finally(() => setBookingsLoading(false))
+
+      fetchBookings(true)
+      const interval = setInterval(() => fetchBookings(false), 5000)
+      const onFocus = () => fetchBookings(false)
+      window.addEventListener("focus", onFocus)
+
+      return () => {
+        clearInterval(interval)
+        window.removeEventListener("focus", onFocus)
+      }
     }
   }, [activeTab, user])
 
@@ -5414,7 +5474,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 {item.categoryName ? <span style={{ color: '#64748b', fontWeight: 400 }}> ({item.categoryName})</span> : ''}
               </span>
               <span style={{ fontWeight: 700, color: '#059669' }}>
-                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
               </span>
             </div>
           ))}
@@ -5946,7 +6006,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 } else if (Array.isArray(b.cart_data)) {
                                   parsedCart = b.cart_data;
                                 }
-                                const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                                const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
                                 const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                                   ? Number(b.gst_amount)
                                   : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6002,7 +6062,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
-                            const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                            const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
                             const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                               ? Number(b.gst_amount)
                               : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6044,7 +6104,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                             {item.quantity || 1}
                                           </td>
                                           <td style={{ padding: '10px 12px', textAlign: 'right', color: '#059669', fontWeight: 800 }}>
-                                            ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                            ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
                                           </td>
                                         </tr>
                                       ))}
