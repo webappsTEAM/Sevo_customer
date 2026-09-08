@@ -4,6 +4,7 @@ import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
 import { SOFA_DETAIL_DATA } from "./catalog/sofaDetailData.js";
 import sofaCleaningImg from "../../assets/cleaning/sofa_cleaning.png";
 import mattressCleaningImg from "../../assets/cleaning/mattress_cleaning.png";
@@ -245,12 +246,50 @@ const SOFA_ADDONS_SERVICES = [
 ];
 
 
+// Inline edit controls (EditableText/EditableImage/EditModeToggleBar) now
+// come from the shared ../components/SuperAdminEditControls.jsx so every
+// service modal uses the identical, correctly-implemented pattern instead
+// of each file having its own (previously incomplete) local copy.
+
 export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState("sofa");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
   const [dbPackages, setDbPackages] = useState([]);
+
+  // ── Super Admin Customer Web Edit Mode (Services) ───────────────────
+  // Smallest safe rollout of the same pattern already shipped for
+  // Groceries/Products (VegetableFullScreenPage): reuses the SAME catalog
+  // Package model/API (PUT /settings/catalog/v2/packages/<id>/), gated
+  // server-side by RequireModuleAccess("catalog","edit"). Only items that
+  // matched a real DB package (item.db_id set above) are editable -- a
+  // customer never sees this, canEnterServiceEditMode is false unless
+  // isSuperAdmin(user).
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode || !item.db_id) return;
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -297,20 +336,80 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
   const getDynamicServices = () => {
-    let list = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
-    list = JSON.parse(JSON.stringify(list));
+    const hardcodedList = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
+    let list = JSON.parse(JSON.stringify(hardcodedList));
+
+    // dbPackages here is unscoped (ALL platform packages), so before we can
+    // safely treat this tab as admin-driven we need to know which
+    // service/category it actually corresponds to. Discover that anchor
+    // from whichever hardcoded items on this tab already resolve to a real
+    // DB row -- WITHOUT mutating `list` yet, so we can decide below whether
+    // to go fully DB-driven or fall back to the hardcoded placeholder.
+    const seenServiceSlugs = new Set();
+    const seenCategorySlugs = new Set();
+    if (dbPackages.length > 0) {
+      const collectAnchor = (dbMatch) => {
+        if (!dbMatch) return;
+        if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+        if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+      };
+      hardcodedList.forEach(item => {
+        if (Array.isArray(item.subOptions)) {
+          collectAnchor(dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id)));
+          item.subOptions.forEach(subOpt => collectAnchor(dbPackages.find(p => p.slug === subOpt.id)));
+        } else {
+          collectAnchor(dbPackages.find(p => p.slug === item.id));
+        }
+      });
+    }
+
+    const dbItemsForTab = (seenServiceSlugs.size > 0 || seenCategorySlugs.size > 0)
+      ? dbPackages.filter(p => (p.service_slug && seenServiceSlugs.has(p.service_slug)) || (p.category_slug && seenCategorySlugs.has(p.category_slug)))
+      : [];
+
+    // Fully admin-driven once this tab's service/category is known to exist
+    // in the catalog: render straight from the database so add/edit/remove
+    // all just work, with nothing hardcoded lingering behind. The hardcoded
+    // list above is only a bootstrap placeholder for a tab nobody has
+    // populated in the catalog yet.
+    if (dbItemsForTab.length > 0) {
+      return dbItemsForTab.map(p => ({
+        id: p.slug || String(p.id),
+        db_id: p.id,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "1 hr",
+        description: p.description || "",
+        image: p.image || SOFA_SUB_TABS.find(t => t.id === activeTab)?.image || "",
+        includes: Array.isArray(p.includes) ? p.includes : [],
+        tools: Array.isArray(p.tools) ? p.tools : [],
+        ready: Array.isArray(p.ready) ? p.ready : [],
+        reviews_list: Array.isArray(p.reviews) ? p.reviews : [],
+        faqs: Array.isArray(p.faqs) ? p.faqs : [],
+        gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+        platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+      }));
+    }
 
     if (dbPackages.length > 0) {
+      const seenDbIds = new Set();
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
           if (parentDbMatch) {
+            seenDbIds.add(parentDbMatch.id);
+            if (parentDbMatch.service_slug) seenServiceSlugs.add(parentDbMatch.service_slug);
+            if (parentDbMatch.category_slug) seenCategorySlugs.add(parentDbMatch.category_slug);
+            // Real Package row id -- needed so Super Admin Edit Mode can PUT
+            // back to the exact row this card's content came from.
+            item.db_id = parentDbMatch.id;
             item.name = parentDbMatch.name;
             item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
             item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
             item.platform_fee = parentDbMatch.platform_fee !== undefined && parentDbMatch.platform_fee !== null ? parseFloat(parentDbMatch.platform_fee) : 29;
             item.duration = parentDbMatch.duration || item.duration;
             item.description = parentDbMatch.description || item.description;
+            item.image = parentDbMatch.image || item.image;
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             if (Array.isArray(parentDbMatch.tools) && parentDbMatch.tools.length > 0) item.tools = parentDbMatch.tools;
             if (Array.isArray(parentDbMatch.ready) && parentDbMatch.ready.length > 0) item.ready = parentDbMatch.ready;
@@ -321,13 +420,24 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              seenDbIds.add(dbMatch.id);
+              if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+              if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
               const updatedSub = {
                 ...subOpt,
+                // Real Package row id for THIS sub-option -- without this,
+                // nested sub-options (e.g. "Single door" / "Double door"
+                // under Fridge Cleaning) could never be individually
+                // edited in Super Admin Edit Mode even though the parent
+                // card was.
+                db_id: dbMatch.id,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
                 platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
+                image: dbMatch.image || subOpt.image,
                 includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes,
               };
               if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) updatedSub.tools = dbMatch.tools;
@@ -350,12 +460,21 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id);
           if (dbMatch) {
+            seenDbIds.add(dbMatch.id);
+            if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+            if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+            // Real Package row id -- needed so Super Admin Edit Mode can
+            // PUT back to the exact row this card's content came from
+            // (item.id above stays the local UI slug, e.g. "fridge-clean",
+            // not the database id).
+            item.db_id = dbMatch.id;
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
             item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
+            item.image = dbMatch.image || item.image;
             item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
@@ -386,6 +505,16 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
   return (
     <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
+      {/* Super Admin Customer Web Edit Mode toggle -- never rendered for a
+          normal customer; canEnterServiceEditMode is false unless
+          isSuperAdmin(user). Only items matched to a real catalog Package
+          (service.db_id) show edit controls when this is on. */}
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Tabs */}
       <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md shadow-xs border-b border-[var(--sevo-border)]">
         <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 px-4 sm:px-6">
@@ -481,15 +610,39 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
 
-                      {service.description && (
-                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      {(service.description || (serviceEditMode && service.db_id)) && (
+                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                         <span className="text-base font-black text-[var(--sevo-text-primary)]">
-                          {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                          {serviceEditMode && service.db_id ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            service.options ? `Starts at ₹${service.price}` : `₹${service.price}`
+                          )}
                         </span>
                         <span className="text-[var(--sevo-border)]">•</span>
                         <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
@@ -519,7 +672,15 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                     {/* Image + add button */}
                     <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
                       <div className="w-28 h-24 rounded-2xl overflow-hidden bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] flex items-center justify-center">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        <EditableImage
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.image}
+                          onSave={(url) => handleSaveServiceField(service, "image", url)}
+                          assetType="services"
+                          alt={service.name}
+                          className="w-full h-full"
+                          imgClassName="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
                         {count > 0 ? (
@@ -722,14 +883,40 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                       return (
                         <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
-                            <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                            <EditableImage
+                              active={Boolean(serviceEditMode && sub.db_id)}
+                              value={sub.image}
+                              onSave={(url) => handleSaveServiceField(sub, "image", url)}
+                              assetType="services"
+                              alt={sub.name}
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover"
+                            />
                           </div>
                           <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
-                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && sub.db_id)}
+                                  value={sub.name}
+                                  onSave={(v) => handleSaveServiceField(sub, "name", v)}
+                                />
+                              </h5>
                             </div>
                             <div className="w-full mt-auto">
-                              <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
+                              <div className="text-xs font-black text-slate-900 mb-2">
+                                {serviceEditMode && sub.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={sub.price}
+                                    onSave={(v) => handleSaveServiceField(sub, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${sub.price}`
+                                )}
+                              </div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
                                   <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>

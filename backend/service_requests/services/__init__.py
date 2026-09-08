@@ -19,13 +19,22 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 
 from workforce_integration.services import WorkforceIntegrationService
+from django.conf import settings
+import logging
+
 from service_requests.models import (
     RescheduleRequest, RescheduleStatus, RescheduleReason, TimeSlotChoices, RescheduleAttachment,
     RescheduleRejectionReason,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundInfoTarget, RefundEvidence,
     Complaint, ComplaintAttachment, ComplaintMessage, ComplaintStatusHistory,
-    ServiceRequest,
+    ServiceRequest, Payment,
+    CustomerWallet, WalletTransaction,
+    InsuranceClaim, InsuranceClaimAttachment,
+    TripStop,
+    BookingSeries,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -140,10 +149,14 @@ def auto_reassign_technician(reschedule_request):
     Notifies external workforce management system of reschedule request.
     """
     booking = reschedule_request.booking
+    # Bug found: this used to call reschedule_workforce_job(booking_id=...,
+    # new_time_slot=...), but that method's real signature is
+    # (service_request, new_date, new_time) -- the keyword-name mismatch
+    # raised an uncaught TypeError on every call. Fixed to match.
     return WorkforceIntegrationService.reschedule_workforce_job(
-        booking_id=booking.id,
+        booking,
         new_date=reschedule_request.new_date,
-        new_time_slot=reschedule_request.new_time_slot,
+        new_time=reschedule_request.new_time_slot,
     )
 
 
@@ -194,6 +207,54 @@ def get_real_technician_availability(company, target_date):
 # RESCHEDULE SERVICE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# HS-B-08: self-serve reschedule policy. A customer request landing at least
+# this many hours before their *current* scheduled slot, for a new slot that
+# still has capacity, is auto-approved instantly instead of waiting on an
+# admin. Anything closer to the appointment, or a slot at/over capacity,
+# still goes through the existing manual admin queue unchanged -- this is
+# additive, it never removes the manual path.
+RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS = int(getattr(settings, "RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS", 48))
+RESCHEDULE_MAX_BOOKINGS_PER_SLOT = int(getattr(settings, "RESCHEDULE_MAX_BOOKINGS_PER_SLOT", 20))
+
+
+def _slot_start_hour(time_slot):
+    """'09-10' -> 9. Falls back to None for anything unparseable."""
+    try:
+        return int(str(time_slot).split("-")[0])
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def _current_slot_datetime(booking):
+    """Best-effort datetime for the booking's *current* scheduled slot, used
+    only to measure how much notice a reschedule request gives. Returns None
+    if the booking has no usable preferred_date/preferred_time -- callers
+    must treat that as "can't confirm enough notice" and fall back to manual
+    review rather than guessing."""
+    if not booking.preferred_date:
+        return None
+    hour = _slot_start_hour(booking.preferred_time)
+    if hour is None:
+        return None
+    naive = timezone.datetime.combine(booking.preferred_date, timezone.datetime.min.time()).replace(hour=hour)
+    return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
+
+
+def _slot_has_capacity(new_date, new_time_slot, exclude_booking_id=None):
+    """Live capacity check against existing bookings in the same slot, across
+    active (non-cancelled/rejected/completed) service requests. There is no
+    dedicated slot-capacity model in this codebase -- this counts real rows,
+    which is the same shape of check the booking-create path would need if
+    slot capacity were enforced there too."""
+    qs = ServiceRequest.objects.filter(
+        preferred_date=new_date,
+        preferred_time=new_time_slot,
+    ).exclude(status__in=["cancelled", "rejected", "completed", "closed"])
+    if exclude_booking_id:
+        qs = qs.exclude(pk=exclude_booking_id)
+    return qs.count() < RESCHEDULE_MAX_BOOKINGS_PER_SLOT
+
+
 def create_reschedule_request(booking, requested_by, persona, new_date, new_time_slot, reason, additional_notes="", attachment=None):
     if booking.status in ["completed", "closed", "cancelled", "rejected"]:
         raise ValidationError({"detail": f"Cannot reschedule a booking in '{booking.get_status_display()}' status."})
@@ -220,6 +281,36 @@ def create_reschedule_request(booking, requested_by, persona, new_date, new_time
             changed_by=requested_by,
             note="Reschedule request created."
         )
+
+        # HS-B-08: attempt self-serve auto-approval for customer-initiated
+        # requests only (admin/system reschedules already bypass this queue
+        # via their own dedicated actions, and auto-approving an admin's own
+        # request would be meaningless).
+        if persona == "CUSTOMER":
+            current_dt = _current_slot_datetime(booking)
+            notice_ok = bool(
+                current_dt and
+                current_dt - timezone.now() >= timezone.timedelta(hours=RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS)
+            )
+            if notice_ok and _slot_has_capacity(new_date, new_time_slot, exclude_booking_id=booking.id):
+                try:
+                    apply_reschedule_transition(
+                        reschedule_request=rr,
+                        new_status=RescheduleStatus.RESCHEDULED,
+                        actor=requested_by,
+                        note=(
+                            f"Auto-approved: requested {RESCHEDULE_AUTO_APPROVE_WINDOW_HOURS}+ hours "
+                            f"ahead of the current slot, with capacity available in the new slot."
+                        ),
+                    )
+                    rr.refresh_from_db()
+                except ValidationError:
+                    # If the state machine ever rejects this transition for a
+                    # reason we haven't accounted for, fail safe: leave the
+                    # request PENDING for manual review rather than raising
+                    # and losing the reschedule request the customer just
+                    # submitted.
+                    logger.warning("HS-B-08 auto-approve transition failed for RescheduleRequest %s; leaving PENDING for manual review.", rr.pk)
 
     return rr
 
@@ -250,11 +341,19 @@ def apply_reschedule_transition(reschedule_request, new_status, actor, note=""):
             booking.status = "rescheduled"
             booking.save(update_fields=["preferred_date", "preferred_time", "status", "updated_at"])
 
-            # Notify workforce
+            # Notify workforce.
+            # Bug found: this call used to pass booking_id=/new_time_slot=,
+            # but reschedule_workforce_job()'s real signature is
+            # (service_request, new_date, new_time) -- the mismatch raised an
+            # uncaught TypeError here on every single reschedule, which
+            # rolled back this entire transaction.atomic() block (including
+            # the RescheduleRequest status update and history record above),
+            # so a reschedule could never actually complete or even be
+            # recorded as approved. Fixed to match the real signature.
             WorkforceIntegrationService.reschedule_workforce_job(
-                booking_id=booking.id,
+                booking,
                 new_date=reschedule_request.new_date,
-                new_time_slot=reschedule_request.new_time_slot,
+                new_time=reschedule_request.new_time_slot,
             )
 
     return reschedule_request
@@ -392,24 +491,403 @@ def admin_send_to_finance(admin_user, refund_id):
     )
 
 
+def _execute_gateway_refund(rr):
+    """
+    Fixes HS-C-04/HS-C-05: previously admin_complete_refund() just flipped
+    the status to COMPLETED with no gateway call at all -- and wasn't even
+    reachable from any view (see HS_C_04_05_REFUND_GATEWAY_NOTE.md for the
+    original diagnosis). This actually calls Razorpay's refund API against
+    the original payment before allowing completion.
+
+    Returns the gateway's refund id (str) on success. Raises ValidationError
+    on any failure -- the caller must NOT transition to COMPLETED if this
+    raises, so a refund that didn't actually happen can never be recorded
+    as if it had.
+    """
+    payment = (
+        Payment.objects.filter(
+            service_request=rr.booking,
+            status=ServiceRequest.PaymentStatus.PAID,
+        )
+        .exclude(razorpay_payment_id__isnull=True)
+        .exclude(razorpay_payment_id="")
+        .order_by("-created_at")
+        .first()
+    )
+    if not payment:
+        raise ValidationError({
+            "detail": "No paid, gateway-verified Payment record found for this booking -- "
+                      "cannot issue a gateway refund without knowing what to refund. If this "
+                      "booking was paid by cash (COD), settle it outside the payment gateway "
+                      "instead of completing it here."
+        })
+
+    # Fixes: no check existed for whether this exact payment was already
+    # refunded by a DIFFERENT, earlier-completed RefundRequest for the same
+    # booking -- admin_complete_refund()'s own status gate only prevents
+    # re-running this on the SAME request twice, not two separate requests
+    # both reaching SENT_TO_FINANCE and each independently calling
+    # Razorpay's refund API against the same underlying payment.
+    already_completed = RefundRequest.objects.filter(
+        booking=rr.booking,
+        status=RefundStatus.COMPLETED,
+    ).exclude(pk=rr.pk).exclude(gateway_reference="").exclude(gateway_reference__isnull=True).first()
+    if already_completed:
+        raise ValidationError({
+            "detail": f"This booking's payment was already refunded by a separate completed "
+                      f"refund request (ref: {already_completed.gateway_reference}). Refusing "
+                      f"to issue a second gateway refund against the same payment."
+        })
+
+    refund_amount = rr.approved_amount if rr.approved_amount else rr.requested_amount
+    if not refund_amount or refund_amount <= 0:
+        raise ValidationError({"detail": "Refund amount must be greater than zero."})
+    if refund_amount > payment.amount:
+        raise ValidationError({
+            "detail": f"Refund amount (Rs. {refund_amount}) exceeds the original payment "
+                      f"(Rs. {payment.amount}) -- cannot refund more than was paid."
+        })
+
+    gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+    if not gateway_configured:
+        # Same fail-closed rule as PaymentVerifyView (HS-C-01/EC-06): never
+        # silently pretend a refund happened. Sandbox mode exists only for
+        # local/dev testing where there is no real gateway to call.
+        if getattr(settings, "PAYMENT_SANDBOX_MODE", False):
+            return f"sandbox_refund_{payment.razorpay_payment_id}"
+        raise ValidationError({
+            "detail": "Payment gateway is not configured -- cannot issue a real refund. "
+                      "Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET, or process this refund "
+                      "manually outside the system and record the reference separately."
+        })
+
+    try:
+        import razorpay
+    except ImportError:
+        logger.error("razorpay package not installed but RAZORPAY_KEY_ID/SECRET are configured.")
+        raise ValidationError({"detail": "Payment gateway is misconfigured. Please contact support."})
+
+    try:
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        response = client.payment.refund(payment.razorpay_payment_id, {
+            "amount": int(Decimal(refund_amount) * 100),  # paise
+            "notes": {
+                "refund_id": rr.refund_id or "",
+                "booking_id": str(rr.booking_id),
+                "request_id": rr.booking.request_id if rr.booking else "",
+            },
+        })
+    except Exception as e:
+        logger.error(f"Razorpay refund failed for RefundRequest {rr.id} (payment {payment.razorpay_payment_id}): {e}")
+        raise ValidationError({"detail": f"Gateway refund failed: {e}"})
+
+    gateway_refund_id = response.get("id") if isinstance(response, dict) else None
+    if not gateway_refund_id:
+        logger.error(f"Razorpay refund for RefundRequest {rr.id} returned no id: {response}")
+        raise ValidationError({"detail": "Gateway refund did not return a reference id -- treat as failed and check the Razorpay dashboard before retrying."})
+
+    return gateway_refund_id
+
+
 def admin_complete_refund(admin_user, refund_id):
     try:
         rr = RefundRequest.objects.get(pk=refund_id)
     except RefundRequest.DoesNotExist:
         raise ValidationError({"detail": "RefundRequest not found."})
 
-    return apply_refund_transition(
+    if rr.status != RefundStatus.SENT_TO_FINANCE:
+        raise ValidationError({"detail": f"Refund must be in '{RefundStatus.SENT_TO_FINANCE}' status before it can be completed (currently '{rr.status}')."})
+
+    gateway_refund_id = _execute_gateway_refund(rr)
+    rr.gateway_reference = gateway_refund_id
+    rr.save(update_fields=["gateway_reference"])
+
+    result = apply_refund_transition(
         refund_request=rr,
         new_status=RefundStatus.COMPLETED,
         actor=admin_user,
-        note="Refund transaction completed."
+        note=f"Refund transaction completed via gateway (ref: {gateway_refund_id})."
     )
+
+    # Bug found (gap): a completed refund never told the Vendor app
+    # anything -- the technician's earnings for this job (a wallet ledger
+    # credit, held or already released) were left untouched, so a fully
+    # refunded customer could still leave a paid-out technician for the
+    # same job with no reconciling entry anywhere. Best-effort like the
+    # cancel/reschedule sync calls elsewhere in this module: never block
+    # or roll back a refund that already succeeded at the gateway just
+    # because this notification failed.
+    if rr.booking_id:
+        WorkforceIntegrationService.clawback_workforce_job(
+            rr.booking, reason=f"Refund #{rr.refund_id or rr.id} completed (gateway ref: {gateway_refund_id})."
+        )
+
+    return result
 
 
 def list_refund_requests(actor, persona, filters=None):
     qs = RefundRequest.objects.select_related("booking", "customer").prefetch_related("evidence")
     if persona == "CUSTOMER":
         qs = qs.filter(Q(customer=actor) | Q(requested_by=actor))
+    if filters and filters.get("status"):
+        qs = qs.filter(status=filters["status"].upper())
+    return qs.order_by("-created_at")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WALLET SERVICE FUNCTIONS (HS-C-07)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Deliberately NOT wired into checkout/booking-create yet: applying a wallet
+# debit at payment time means touching the same code path this session
+# already hardened carefully for payment integrity (PaymentInitiateView/
+# PaymentVerifyView), and doing that without a live environment to test the
+# debit-then-gateway-fails-then-must-reverse edge case would be exactly the
+# kind of money-movement change this remediation pass has been cautious
+# about elsewhere (see the refund-gateway wiring). What's here is the
+# complete, safe half: a real ledger customers and admins can already use
+# for goodwill credits and referral rewards -- "apply wallet balance at
+# checkout" is a natural, self-contained follow-up on top of this ledger.
+
+def get_or_create_wallet(user):
+    wallet, _ = CustomerWallet.objects.get_or_create(user=user)
+    return wallet
+
+
+def credit_wallet(user, amount, reason, note="", actor=None, reference_type="", reference_id=""):
+    """Adds funds to a customer's wallet. amount must be > 0."""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise ValidationError({"detail": "Credit amount must be greater than zero."})
+
+    with transaction.atomic():
+        wallet = CustomerWallet.objects.select_for_update().get_or_create(user=user)[0]
+        wallet.balance = wallet.balance + amount
+        wallet.save(update_fields=["balance", "updated_at"])
+
+        tx = WalletTransaction.objects.create(
+            wallet=wallet,
+            tx_type=WalletTransaction.TxType.CREDIT,
+            reason=reason,
+            amount=amount,
+            balance_after=wallet.balance,
+            note=note,
+            reference_type=reference_type,
+            reference_id=str(reference_id) if reference_id else "",
+            created_by=actor,
+        )
+    return tx
+
+
+def debit_wallet(user, amount, reason, note="", actor=None, reference_type="", reference_id=""):
+    """Removes funds from a customer's wallet. Fails closed on insufficient
+    balance -- never lets a wallet go negative."""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise ValidationError({"detail": "Debit amount must be greater than zero."})
+
+    with transaction.atomic():
+        wallet = CustomerWallet.objects.select_for_update().get_or_create(user=user)[0]
+        if wallet.balance < amount:
+            raise ValidationError({"detail": f"Insufficient wallet balance: have {wallet.balance}, need {amount}."})
+
+        wallet.balance = wallet.balance - amount
+        wallet.save(update_fields=["balance", "updated_at"])
+
+        tx = WalletTransaction.objects.create(
+            wallet=wallet,
+            tx_type=WalletTransaction.TxType.DEBIT,
+            reason=reason,
+            amount=amount,
+            balance_after=wallet.balance,
+            note=note,
+            reference_type=reference_type,
+            reference_id=str(reference_id) if reference_id else "",
+            created_by=actor,
+        )
+    return tx
+
+
+def list_wallet_transactions(user, limit=50):
+    wallet = get_or_create_wallet(user)
+    return wallet.transactions.all()[:limit]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REFERRAL SERVICE FUNCTIONS (HS-A-06)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+REFERRAL_REFERRER_REWARD = Decimal(str(getattr(settings, "REFERRAL_REFERRER_REWARD", "100.00")))
+REFERRAL_REFEREE_REWARD = Decimal(str(getattr(settings, "REFERRAL_REFEREE_REWARD", "50.00")))
+
+
+def link_referral(referee_user, code):
+    """
+    Called once, right after a new customer account is created, if a
+    referral code was supplied. Idempotent by construction: referee has a
+    OneToOneField, so a second call for the same referee simply fails the
+    uniqueness check, which we swallow -- a referee can only ever be
+    referred once, by whoever's code they used first.
+    """
+    from accounts.models import ReferralCode, Referral
+    code = (code or "").strip().upper()
+    if not code:
+        return None
+
+    ref_code = ReferralCode.objects.filter(code=code).select_related("user").first()
+    if not ref_code:
+        logger.info("[Referral] Unknown referral code '%s' -- ignored.", code)
+        return None
+    if ref_code.user_id == referee_user.id:
+        logger.info("[Referral] User %s tried to refer themselves -- ignored.", referee_user.id)
+        return None
+
+    try:
+        return Referral.objects.create(referrer=ref_code.user, referee=referee_user, code_used=code)
+    except Exception as exc:
+        # Most likely: referee already has a Referral row (OneToOne
+        # uniqueness). Not an error worth surfacing to the booking flow.
+        logger.info("[Referral] Could not link referral for user %s: %s", referee_user.id, exc)
+        return None
+
+
+def process_referral_completion(booking):
+    """
+    Called (best-effort, from the booking-completion webhook path) whenever
+    a booking transitions to completed. Rewards both referrer and referee
+    the first time the REFEREE's own booking count reaches exactly 1
+    completed booking -- this is what "qualifies" a referral, so a referee
+    who books, cancels, and rebooks doesn't trigger multiple payouts, and a
+    referrer isn't rewarded for a referee's 5th booking.
+    """
+    from accounts.models import Referral
+
+    customer = booking.customer
+    if not customer:
+        return
+
+    referral = Referral.objects.filter(referee=customer, status=Referral.Status.PENDING).select_related("referrer").first()
+    if not referral:
+        return
+
+    completed_count = ServiceRequest.objects.filter(customer=customer, status="completed").count()
+    if completed_count != 1:
+        # Either this isn't the referee's first completed booking (reward
+        # already should have fired earlier and referral is no longer
+        # PENDING -- so this branch is really just "not yet 1"), or something
+        # unusual -- either way, only qualify on exactly the first.
+        return
+
+    with transaction.atomic():
+        referral.refresh_from_db()
+        if referral.status != Referral.Status.PENDING:
+            return  # Already processed by a concurrent call.
+
+        try:
+            credit_wallet(
+                user=referral.referrer, amount=REFERRAL_REFERRER_REWARD, reason="REFERRAL",
+                note=f"Referral reward: {customer.get_full_name() or customer.username} completed their first booking.",
+                reference_type="Referral", reference_id=referral.pk,
+            )
+            credit_wallet(
+                user=referral.referee, amount=REFERRAL_REFEREE_REWARD, reason="REFERRAL",
+                note="Welcome reward for completing your first booking via a referral.",
+                reference_type="Referral", reference_id=referral.pk,
+            )
+        except Exception as exc:
+            logger.error("[Referral] Failed to credit reward for referral %s: %s", referral.pk, exc)
+            return
+
+        referral.status = Referral.Status.REWARDED
+        referral.referrer_reward_amount = REFERRAL_REFERRER_REWARD
+        referral.referee_reward_amount = REFERRAL_REFEREE_REWARD
+        referral.rewarded_at = timezone.now()
+        referral.save(update_fields=["status", "referrer_reward_amount", "referee_reward_amount", "rewarded_at"])
+        logger.info("[Referral] Rewarded referral %s (referrer=%s, referee=%s).", referral.pk, referral.referrer_id, referral.referee_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INSURANCE CLAIM SERVICE FUNCTIONS (GT-C-03)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def file_insurance_claim(booking, customer, description, claimed_amount, attachment_files=None):
+    if not booking.insurance_opted_in:
+        raise ValidationError({"detail": "This booking does not have insurance coverage."})
+    if booking.customer_id != customer.id:
+        raise PermissionDenied("You can only file a claim on your own booking.")
+    if booking.status != "completed":
+        raise ValidationError({"detail": "A claim can only be filed once the booking is completed."})
+
+    claimed_amount = Decimal(str(claimed_amount))
+    if claimed_amount <= 0:
+        raise ValidationError({"detail": "Claimed amount must be greater than zero."})
+
+    with transaction.atomic():
+        claim = InsuranceClaim.objects.create(
+            booking=booking,
+            filed_by=customer,
+            description=description,
+            claimed_amount=claimed_amount,
+        )
+        for f in (attachment_files or []):
+            att = InsuranceClaimAttachment.objects.create(file=f, original_name=f.name, uploaded_by=customer)
+            claim.attachments.add(att)
+    return claim
+
+
+def resolve_insurance_claim(admin_user, claim_id, decision, approved_amount=None, notes=""):
+    """decision: 'APPROVED', 'REJECTED', or 'PAID' (PAID is a separate step
+    after APPROVED, matching the refund workflow's approve-then-complete
+    shape elsewhere in this file)."""
+    try:
+        claim = InsuranceClaim.objects.select_related("booking").get(pk=claim_id)
+    except InsuranceClaim.DoesNotExist:
+        raise ValidationError({"detail": "Claim not found."})
+
+    if decision == InsuranceClaim.Status.APPROVED:
+        if claim.status != InsuranceClaim.Status.OPEN:
+            raise ValidationError({"detail": f"Claim must be OPEN to approve (currently {claim.status})."})
+        cap = claim.booking.insurance_liability_cap
+        amount = Decimal(str(approved_amount)) if approved_amount is not None else claim.claimed_amount
+        if cap is not None:
+            amount = min(amount, cap)  # GT-C-03: never approve above the stated liability cap
+        claim.approved_amount = amount
+        claim.status = InsuranceClaim.Status.APPROVED
+
+    elif decision == InsuranceClaim.Status.REJECTED:
+        if claim.status != InsuranceClaim.Status.OPEN:
+            raise ValidationError({"detail": f"Claim must be OPEN to reject (currently {claim.status})."})
+        claim.status = InsuranceClaim.Status.REJECTED
+
+    elif decision == InsuranceClaim.Status.PAID:
+        if claim.status != InsuranceClaim.Status.APPROVED:
+            raise ValidationError({"detail": f"Claim must be APPROVED before it can be paid (currently {claim.status})."})
+        # Pay out via the wallet ledger -- consistent with how referral
+        # rewards and goodwill credits move money in this codebase, and
+        # avoids re-touching the Razorpay refund-gateway code for a claim
+        # payout, which is a materially different transaction type.
+        credit_wallet(
+            user=claim.filed_by, amount=claim.approved_amount, reason="ADJUSTMENT",
+            note=f"Insurance claim #{claim.pk} payout for booking {claim.booking.request_id}.",
+            actor=admin_user, reference_type="InsuranceClaim", reference_id=claim.pk,
+        )
+        claim.status = InsuranceClaim.Status.PAID
+
+    else:
+        raise ValidationError({"detail": f"Unknown decision '{decision}'."})
+
+    claim.resolution_notes = notes
+    claim.resolved_by = admin_user
+    claim.resolved_at = timezone.now()
+    claim.save(update_fields=["status", "approved_amount", "resolution_notes", "resolved_by", "resolved_at", "updated_at"])
+    return claim
+
+
+def list_insurance_claims(actor, persona, filters=None):
+    qs = InsuranceClaim.objects.select_related("booking", "filed_by")
+    if persona == "CUSTOMER":
+        qs = qs.filter(filed_by=actor)
     if filters and filters.get("status"):
         qs = qs.filter(status=filters["status"].upper())
     return qs.order_by("-created_at")
@@ -565,3 +1043,176 @@ def list_admin_complaints(admin_actor, filters=None, company=None):
         if filters.get("category"):
             qs = qs.filter(category=filters["category"].upper())
     return list(qs.order_by("-created_at"))
+
+
+# GT-D-02: multi-stop trips (extra pickups/drops beyond ServiceRequest's
+# built-in address/drop_address pair). See TripStop's docstring for why
+# this is additive rather than a replacement of those two fields.
+LOGISTICS_STOP_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler", "goods_transport", "packers_movers"}
+
+
+def set_trip_stops(booking, customer, stops):
+    """
+    Replaces the full ordered list of extra stops for a booking in one
+    transaction (delete-then-recreate, never a partial update) -- so a
+    client always PUTs the complete route rather than PATCHing individual
+    stops, avoiding sequence-gap/duplicate bugs entirely.
+
+    `stops` is a list of dicts: address (required), stop_type (optional,
+    default WAYPOINT), contact_name, contact_phone, latitude, longitude,
+    notes. Sequence is assigned from list order (1-based), not client-
+    supplied, so the ordering a customer submits is always exactly what
+    gets stored.
+    """
+    if booking.customer_id != customer.id and getattr(customer, "role", "").upper() != "ADMIN":
+        raise PermissionError("You do not have permission to edit stops for this booking.")
+    if booking.service_category not in LOGISTICS_STOP_CATEGORIES:
+        raise ValueError("Multi-stop routing is only available for goods transport and packers & movers bookings.")
+    if len(stops) > 20:
+        raise ValueError("A single trip cannot have more than 20 stops.")
+    for s in stops:
+        if not (s.get("address") or "").strip():
+            raise ValueError("Every stop requires an address.")
+
+    with transaction.atomic():
+        TripStop.objects.filter(booking=booking).delete()
+        created = []
+        for i, s in enumerate(stops, start=1):
+            created.append(TripStop.objects.create(
+                booking=booking,
+                sequence=i,
+                stop_type=(s.get("stop_type") or TripStop.StopType.WAYPOINT).upper(),
+                address=s["address"].strip(),
+                contact_name=(s.get("contact_name") or "").strip(),
+                contact_phone=(s.get("contact_phone") or "").strip(),
+                latitude=s.get("latitude"),
+                longitude=s.get("longitude"),
+                notes=(s.get("notes") or "").strip(),
+            ))
+    return created
+
+
+def list_trip_stops(booking):
+    return list(booking.trip_stops.all())
+
+
+# HS-B-07: recurring bookings / AMC subscriptions. See BookingSeries'
+# docstring in models.py for the full design rationale (COD-only, snapshot
+# fields, no dispatch-path change needed).
+_AMC_FREQUENCY_DAYS = {
+    BookingSeries.Frequency.MONTHLY: 30,
+    BookingSeries.Frequency.QUARTERLY: 91,
+    BookingSeries.Frequency.HALF_YEARLY: 182,
+    BookingSeries.Frequency.YEARLY: 365,
+}
+
+
+def create_booking_series(customer, data):
+    """
+    `data` is a plain dict: service_category, issue_title, address,
+    first_service_date (the initial next_run_date), frequency, plus the
+    optional description/latitude/longitude/preferred_time/total_amount.
+    customer_name/phone/email are snapshotted from the customer user
+    object at creation, not taken from `data`.
+    """
+    frequency = data.get("frequency")
+    if frequency not in BookingSeries.Frequency.values:
+        raise ValueError(f"Invalid frequency. Choose one of: {', '.join(BookingSeries.Frequency.values)}")
+    if not (data.get("service_category") or "").strip():
+        raise ValueError("service_category is required.")
+    if not (data.get("issue_title") or "").strip():
+        raise ValueError("issue_title is required.")
+    if not (data.get("address") or "").strip():
+        raise ValueError("address is required.")
+    first_service_date = data.get("first_service_date")
+    if not first_service_date:
+        raise ValueError("first_service_date is required.")
+
+    return BookingSeries.objects.create(
+        customer=customer,
+        customer_name=getattr(customer, "get_full_name", lambda: "")() or getattr(customer, "username", "") or getattr(customer, "email", ""),
+        phone=getattr(customer, "phone", "") or getattr(customer, "phone_number", "") or "",
+        email=getattr(customer, "email", "") or "",
+        service_category=data["service_category"].strip(),
+        issue_title=data["issue_title"].strip(),
+        description=(data.get("description") or "").strip(),
+        address=data["address"].strip(),
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
+        preferred_time=(data.get("preferred_time") or "").strip(),
+        total_amount=data.get("total_amount") or 0,
+        frequency=frequency,
+        next_run_date=first_service_date,
+    )
+
+
+def set_booking_series_status(series, customer, new_status):
+    if series.customer_id != customer.id and getattr(customer, "role", "").upper() != "ADMIN":
+        raise PermissionError("You do not have permission to modify this AMC series.")
+    if new_status not in BookingSeries.Status.values:
+        raise ValueError("Invalid status.")
+    if series.status == BookingSeries.Status.CANCELLED:
+        raise ValueError("This series has already been cancelled and cannot be reactivated -- create a new one.")
+    series.status = new_status
+    series.save(update_fields=["status", "updated_at"])
+    return series
+
+
+def list_booking_series(customer):
+    return list(BookingSeries.objects.filter(customer=customer).order_by("-created_at"))
+
+
+def generate_due_bookings(as_of=None):
+    """
+    Intended to run once daily (see service_requests/tasks.py -- registered
+    as a Celery shared_task; wiring the actual periodic schedule is a
+    django_celery_beat PeriodicTask, deliberately left as an admin/ops
+    setup step rather than a data migration touching another app's tables
+    -- see the HS-B-07 commit message).
+
+    Every due series generates exactly one ServiceRequest per call, even if
+    next_run_date has drifted more than one period into the past (e.g. the
+    task didn't run for two weeks) -- this intentionally does not "catch up"
+    with multiple backdated bookings, it just advances to the next future
+    due date from today. Silently generating a backlog of past-dated
+    bookings would be more surprising to a customer than losing missed
+    occurrences.
+
+    Each series is processed in its own try/except so one bad series (e.g.
+    a service_category that no longer exists) never blocks the rest of the
+    batch; failures are logged, not raised.
+    """
+    as_of = as_of or timezone.localdate()
+    due = BookingSeries.objects.filter(status=BookingSeries.Status.ACTIVE, next_run_date__lte=as_of)
+    created, failed = [], []
+    for series in due:
+        try:
+            with transaction.atomic():
+                sr = ServiceRequest.objects.create(
+                    customer=series.customer,
+                    customer_name=series.customer_name,
+                    phone=series.phone,
+                    email=series.email or None,
+                    service_category=series.service_category,
+                    issue_title=series.issue_title,
+                    description=series.description,
+                    address=series.address,
+                    latitude=series.latitude,
+                    longitude=series.longitude,
+                    preferred_date=as_of,
+                    preferred_time=series.preferred_time,
+                    total_amount=series.total_amount,
+                    payment_method=ServiceRequest.PaymentMethod.COD,
+                    payment_status=ServiceRequest.PaymentStatus.PENDING,
+                    status=ServiceRequest.Status.CONFIRMED,
+                )
+                interval_days = _AMC_FREQUENCY_DAYS[series.frequency]
+                series.next_run_date = as_of + timezone.timedelta(days=interval_days)
+                series.occurrences_generated += 1
+                series.last_generated_booking = sr
+                series.save(update_fields=["next_run_date", "occurrences_generated", "last_generated_booking", "updated_at"])
+            created.append(sr)
+        except Exception:
+            logger.exception(f"AMC generation failed for BookingSeries #{series.id}")
+            failed.append(series.id)
+    return created, failed

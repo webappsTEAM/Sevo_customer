@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdminRole
+from accounts.permissions import IsAdminRole, RequireModuleAccess
 from service_requests.models import (
     CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
     VegetableRecipe, RecipeIngredient, VegetableRecommendation, PackageStatus
@@ -92,6 +92,20 @@ class PublicPackageListView(APIView):
 
 # ── Categories ──────────────────────────────────────────────────────────────
 
+class PublicCategoryListView(APIView):
+    """Read-only list of active categories for the customer-facing homepage.
+    No authentication required — mirrors PublicPackageListView so the
+    top-level service category tiles are just as admin-driven (add/update/
+    remove) as the package catalog underneath them."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        cats = CatalogCategory.objects.filter(is_active=True)
+        data = CatalogCategorySerializer(cats, many=True).data
+        return Response({"success": True, "data": data})
+
+
 class AdminCategoryListView(APIView):
     permission_classes = [IsAdminRole]
 
@@ -110,7 +124,14 @@ class AdminCategoryListView(APIView):
 
 
 class AdminCategoryDetailView(APIView):
+    """PUT is additionally gated by `catalog:edit` Global RBAC — same
+    reasoning as AdminPackageDetailView.put below."""
     permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAdminRole(), RequireModuleAccess("catalog", "edit")]
+        return super().get_permissions()
 
     def put(self, request, pk):
         if str(pk).isdigit():
@@ -130,8 +151,9 @@ class AdminCategoryDetailView(APIView):
             category = get_object_or_404(CatalogCategory, pk=int(pk))
         else:
             category = get_object_or_404(CatalogCategory, slug=str(pk))
+        cascade = str(request.query_params.get("cascade", "")).lower() in ("1", "true", "yes")
         try:
-            catalog_service.delete_category(category)
+            catalog_service.delete_category(category, actor=request.user, cascade=cascade)
             clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
@@ -161,7 +183,14 @@ class AdminServiceListView(APIView):
 
 
 class AdminServiceDetailView(APIView):
+    """PUT is additionally gated by `catalog:edit` Global RBAC — same
+    reasoning as AdminPackageDetailView.put below."""
     permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAdminRole(), RequireModuleAccess("catalog", "edit")]
+        return super().get_permissions()
 
     def put(self, request, pk):
         if str(pk).isdigit():
@@ -181,8 +210,9 @@ class AdminServiceDetailView(APIView):
             service = get_object_or_404(Service, pk=int(pk))
         else:
             service = get_object_or_404(Service, slug=str(pk))
+        cascade = str(request.query_params.get("cascade", "")).lower() in ("1", "true", "yes")
         try:
-            catalog_service.delete_service(service)
+            catalog_service.delete_service(service, actor=request.user, cascade=cascade)
             clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
@@ -233,8 +263,22 @@ class AdminPackageListView(APIView):
 class AdminPackageDetailView(APIView):
     """No DELETE — a Package cannot yet be safely hard-deleted (there is no
     linkage from a booking back to a specific Package to check against).
-    Use AdminPackageTransitionView to move a package to ARCHIVED instead."""
+    Use AdminPackageTransitionView to move a package to ARCHIVED instead.
+
+    PUT is additionally gated by the granular `catalog:edit` Global RBAC
+    action (accounts.permissions.can), not just the broad IsAdminRole check
+    — this is the endpoint the Super Admin "Customer UI Edit Mode" feature
+    saves through, so a role that is merely admin-ish (e.g. `support` or
+    `finance`, which pass IsAdminRole but have no catalog edit rights in
+    DEFAULT_GLOBAL_RBAC) must not be able to change live prices via it.
+    Super Admin always passes (RequireModuleAccess -> can() -> is_super_admin
+    bypass)."""
     permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAdminRole(), RequireModuleAccess("catalog", "edit")]
+        return super().get_permissions()
 
     def put(self, request, pk):
         package = None
@@ -263,7 +307,7 @@ class AdminPackageDetailView(APIView):
     def delete(self, request, pk):
         package = get_object_or_404(Package, pk=pk)
         try:
-            catalog_service.delete_package(package)
+            catalog_service.delete_package(package, actor=request.user)
             clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
@@ -271,7 +315,10 @@ class AdminPackageDetailView(APIView):
 
 
 class AdminPackageTransitionView(APIView):
-    permission_classes = [IsAdminRole]
+    """Status transitions (DRAFT->ACTIVE etc.) are gated by `catalog:publish`
+    Global RBAC — publishing a package to customers is a distinct action
+    from merely editing its fields."""
+    permission_classes = [IsAdminRole, RequireModuleAccess("catalog", "publish")]
 
     def post(self, request, pk):
         if str(pk).isdigit():
@@ -313,7 +360,14 @@ class AdminAddOnListView(APIView):
 
 
 class AdminAddOnDetailView(APIView):
+    """PUT is additionally gated by `catalog:edit` Global RBAC — same
+    reasoning as AdminPackageDetailView.put above."""
     permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAdminRole(), RequireModuleAccess("catalog", "edit")]
+        return super().get_permissions()
 
     def put(self, request, pk):
         addon = get_object_or_404(AddOn, pk=pk)

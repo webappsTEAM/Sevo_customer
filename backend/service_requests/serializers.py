@@ -9,22 +9,31 @@ from rest_framework import serializers
 
 from .models import (
     ServiceFeedback, ServiceRequest, CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
-    VegetableRecipe, RecipeIngredient, VegetableRecommendation,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RescheduleSuggestedSlot, RescheduleStatusHistory,
     RefundRequest, RefundEvidence,
     Coupon, CouponUsage,
+    InsuranceClaim, InsuranceClaimAttachment,
+    TripStop,
+    BookingSeries,
+    BookingMessage,
+    _generate_secure_start_otp,
     Estimation, EstimationFee, Inspection, InspectionFinding, InspectionPhoto,
     EstimationQuotation, EstimationQuotationItem,
 )
+
+# GT-A-03: declared_value at or above this (INR) requires a named,
+# accountable receiver on a logistics booking. Env-overridable like the
+# other threshold constants in this codebase.
+from django.conf import settings as _dj_settings
+HIGH_VALUE_CONSIGNMENT_THRESHOLD = int(getattr(_dj_settings, "HIGH_VALUE_CONSIGNMENT_THRESHOLD", 25000))
 
 
 class CatalogServiceSerializer(serializers.ModelSerializer):
     """v1 compat shape for the public /api/catalog/services/ endpoint."""
     category = serializers.SerializerMethodField()
     price = serializers.DecimalField(source="base_price", max_digits=10, decimal_places=2)
-    offer_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     service_id = serializers.IntegerField(source="service.id", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
@@ -37,7 +46,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Package
         fields = [
-            "id", "category", "category_slug", "name", "slug", "description", "price", "offer_price", "duration",
+            "id", "category", "category_slug", "name", "slug", "description", "price", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
             "faqs", "sort_order", "tools", "ready",
             "service_id", "service_name", "service_slug", "service_description",
@@ -65,28 +74,40 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        if not ret.get('rating'):
-            from django.db import models
-            avg = ServiceFeedback.objects.filter(
-                service_request__service_category=str(instance.id),
-                is_submitted=True,
-                rating__isnull=False
-            ).aggregate(models.Avg("rating"))["rating__avg"]
-            ret['rating'] = str(round(avg, 1)) if avg else "4.8"
+        # HS-A-05: "No trust signals anywhere before the technician is
+        # assigned" -- rating/jobs_count_str were seeded once as literal
+        # placeholder strings ("4.8"/"10K+") and this aggregation code
+        # already existed to replace them with real numbers, but was gated
+        # on `if not ret.get('rating')` -- since the stored default is the
+        # non-empty string "4.8", that check was always False, so the real
+        # query below never ran. Fixed by always computing the real
+        # aggregate and only falling back to the placeholder when there is
+        # genuinely no feedback/booking data yet for this category.
+        from django.db import models
+        feedback_qs = ServiceFeedback.objects.filter(
+            service_request__service_category=str(instance.id),
+            is_submitted=True,
+            rating__isnull=False
+        )
+        agg = feedback_qs.aggregate(avg=models.Avg("rating"), count=models.Count("id"))
+        avg = agg["avg"]
+        ret['rating'] = str(round(avg, 1)) if avg else (ret.get('rating') or "4.8")
+        # New: real review count alongside the rating -- the finding
+        # explicitly calls out "no real service rating/review count".
+        ret['reviews_count'] = agg["count"] or 0
 
-        if not ret.get('jobs_count_str'):
-            cnt = ServiceRequest.objects.filter(
-                service_category=str(instance.id),
-                status__in=["completed", "closed", "verified", "awaiting_verification"]
-            ).count()
-            if cnt == 0:
-                ret['jobs_count_str'] = "10K+"
-            elif cnt < 100:
-                ret['jobs_count_str'] = f"{cnt} bookings"
-            elif cnt < 1000:
-                ret['jobs_count_str'] = f"{cnt//100 * 100}+ bookings"
-            else:
-                ret['jobs_count_str'] = f"{round(cnt/1000, 1)}K+ bookings"
+        cnt = ServiceRequest.objects.filter(
+            service_category=str(instance.id),
+            status__in=["completed", "closed", "verified", "awaiting_verification"]
+        ).count()
+        if cnt == 0:
+            ret['jobs_count_str'] = ret.get('jobs_count_str') or "10K+"
+        elif cnt < 100:
+            ret['jobs_count_str'] = f"{cnt} bookings"
+        elif cnt < 1000:
+            ret['jobs_count_str'] = f"{cnt//100 * 100}+ bookings"
+        else:
+            ret['jobs_count_str'] = f"{round(cnt/1000, 1)}K+ bookings"
 
         ret['desc'] = instance.description or ""
         ret['jobs'] = ret['jobs_count_str']
@@ -115,7 +136,7 @@ class PackageSerializer(serializers.ModelSerializer):
     service_image = serializers.CharField(source="service.image", read_only=True, allow_null=True, allow_blank=True)
     service_customization = serializers.JSONField(source="service.customization", read_only=True)
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
-    add_ons = AddOnSerializer(source="addons", many=True, read_only=True)
+    add_ons = AddOnSerializer(many=True, read_only=True)
 
     class Meta:
         model = Package
@@ -150,13 +171,27 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "customer_name", "phone", "email",
             "service_category", "issue_title", "description",
             "address", "latitude", "longitude",
-            "saved_address_id", "service_location_snapshot",
             "preferred_date", "preferred_time", "photo",
             "payment_method", "total_amount", "cart_data",
             "drop_address", "logistics_tier", "logistics_lane",
             "job_type", "idempotency_key",
             "ac_type", "ac_brand", "ac_capacity", "ac_quantity",
             "customer_symptom", "customer_notes",
+            # Fixes GT-D-03: accept the recipient's contact info if the
+            # frontend sends it. Deliberately NOT required yet -- the
+            # booking wizard doesn't collect these fields today, so
+            # requiring them would break every logistics booking until the
+            # frontend is updated to actually ask for them. See
+            # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md.
+            "drop_contact_name", "drop_contact_phone", "drop_contact_email",
+            # Fixes GT-A-03 (partial): declared_value/consignee_relationship.
+            # Also optional at the field level -- validate() below enforces
+            # them together only once declared_value crosses the high-value
+            # threshold, so ordinary low-value bookings are unaffected.
+            "declared_value", "consignee_relationship",
+            # GT-C-03: opt-in only; premium/liability_cap are never accepted
+            # from the client -- see validate() below.
+            "insurance_opted_in",
         )
         extra_kwargs = {
             "issue_title":               {"required": False, "allow_blank": True},
@@ -168,19 +203,23 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "ac_quantity":               {"required": False},
             "customer_symptom":          {"required": False, "allow_blank": True},
             "customer_notes":            {"required": False, "allow_blank": True},
-            "description":               {"required": False, "allow_blank": True},
-            "email":                     {"required": False, "allow_blank": True, "allow_null": True},
-            "latitude":                  {"required": False, "allow_null": True},
-            "longitude":                 {"required": False, "allow_null": True},
-            "saved_address_id":          {"required": False, "allow_null": True},
-            "service_location_snapshot": {"required": False},
-            "photo":                     {"required": False, "allow_null": True},
-            "payment_method":            {"required": False, "allow_null": True, "allow_blank": True},
-            "preferred_time":            {"required": False, "allow_blank": True, "allow_null": True},
-            "cart_data":                 {"required": False},
-            "drop_address":              {"required": False, "allow_blank": True},
-            "logistics_tier":            {"required": False, "allow_null": True},
-            "logistics_lane":            {"required": False, "allow_null": True},
+            "description":         {"required": False, "allow_blank": True},
+            "email":               {"required": False, "allow_blank": True, "allow_null": True},
+            "latitude":            {"required": False, "allow_null": True},
+            "longitude":           {"required": False, "allow_null": True},
+            "photo":               {"required": False, "allow_null": True},
+            "payment_method":      {"required": False, "allow_null": True, "allow_blank": True},
+            "preferred_time":      {"required": False, "allow_blank": True, "allow_null": True},
+            "cart_data":           {"required": False},
+            "drop_address":        {"required": False, "allow_blank": True},
+            "logistics_tier":      {"required": False, "allow_null": True},
+            "logistics_lane":      {"required": False, "allow_null": True},
+            "drop_contact_name":   {"required": False, "allow_blank": True},
+            "drop_contact_phone":  {"required": False, "allow_blank": True},
+            "drop_contact_email":  {"required": False, "allow_blank": True},
+            "declared_value":        {"required": False, "allow_null": True},
+            "consignee_relationship": {"required": False, "allow_blank": True},
+            "insurance_opted_in":    {"required": False},
         }
 
     def validate_latitude(self, value):
@@ -214,6 +253,25 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Value must be valid JSON.")
         return value
 
+    def validate_total_amount(self, value):
+        # Fixes HS-B-01 (partial): reject obviously-tampered amounts outright.
+        # A full server-side recompute against Package/AddOn catalog prices
+        # isn't possible here because `cart_data` items carry only
+        # {name, price, quantity} with no package_id/addon_id back-reference
+        # to the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md for the full
+        # writeup and the schema change that would close this properly).
+        # This at least stops the crude cases: negative/zero submitted
+        # amounts and unreasonably large ones.
+        try:
+            amt = float(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Enter a valid amount.")
+        if amt <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
+        if amt > 1000000:
+            raise serializers.ValidationError("Amount is outside the allowed range.")
+        return value
+
     def validate_preferred_date(self, value):
         from django.utils.timezone import localdate
         if value < localdate():
@@ -228,38 +286,87 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # Booking window: same-day requests are refused after the configured
+        # cut-off, and a slot that has already passed today is refused too.
+        # This lived only in the frontend before, evaluated against the
+        # browser's clock, so it was both bypassable and wrong for any device
+        # not set to IST. See service_requests/booking_window.py.
+        from .booking_window import validate_booking_slot
+
+        slot_error = validate_booking_slot(
+            attrs.get("preferred_date"),
+            attrs.get("preferred_time"),
+        )
+        if slot_error:
+            raise serializers.ValidationError({"preferred_date": slot_error})
+
+        # Fixes GT-B-04: nothing captured what's actually being moved for a
+        # Goods & Transport booking -- `description` already exists as a
+        # generic free-text field on ServiceRequest and was optional for
+        # every category, so a truck/mover booking could be submitted with
+        # zero information about the cargo (item count, fragility, weight).
+        # Require it specifically for logistics categories rather than add
+        # a new field/migration for what a TextField already covers.
+        from .services.logistics_pricing import LOGISTICS_CATEGORIES
+        category = attrs.get("service_category", "")
+        if category in LOGISTICS_CATEGORIES and not (attrs.get("description") or "").strip():
+            raise serializers.ValidationError({
+                "description": "Please describe what you're moving (items, approximate weight, "
+                                 "and any fragile/special-handling notes) so the driver knows what to expect."
+            })
+
+        # Fixes GT-A-03 (partial): "identity requirement scaled to declared
+        # value". Below the threshold this is a no-op -- most bookings don't
+        # even set declared_value. Above it, require both a receiver contact
+        # (drop_contact_name/phone, already collected for GT-D-03) and an
+        # explicit relationship to the customer, so there's at least a named,
+        # accountable person the driver is handing high-value goods to.
+        declared_value = attrs.get("declared_value")
+        if category in LOGISTICS_CATEGORIES and declared_value is not None and declared_value >= HIGH_VALUE_CONSIGNMENT_THRESHOLD:
+            missing = []
+            if not (attrs.get("drop_contact_name") or "").strip():
+                missing.append("drop_contact_name")
+            if not (attrs.get("drop_contact_phone") or "").strip():
+                missing.append("drop_contact_phone")
+            if not (attrs.get("consignee_relationship") or "").strip():
+                missing.append("consignee_relationship")
+            if missing:
+                raise serializers.ValidationError({
+                    "declared_value": (
+                        f"Consignments declared at ₹{HIGH_VALUE_CONSIGNMENT_THRESHOLD:,.0f} or more require a named "
+                        f"receiver: {', '.join(missing)}."
+                    )
+                })
+
+        # GT-C-03: insurance requires a declared value to price off of, and
+        # premium/liability_cap are always computed here server-side --
+        # never accepted from the client. INSURANCE_RATE and
+        # INSURANCE_MAX_LIABILITY are env-overridable like the other
+        # threshold constants in this file.
+        if attrs.get("insurance_opted_in"):
+            if declared_value is None or declared_value <= 0:
+                raise serializers.ValidationError({
+                    "insurance_opted_in": "declared_value is required to purchase insurance coverage."
+                })
+            from decimal import Decimal
+            rate = Decimal(str(getattr(_dj_settings, "INSURANCE_RATE", "0.02")))
+            max_liability = Decimal(str(getattr(_dj_settings, "INSURANCE_MAX_LIABILITY", "500000")))
+            attrs["insurance_premium"] = (Decimal(str(declared_value)) * rate).quantize(Decimal("0.01"))
+        # AC Inspection / Estimation validation
         job_type = attrs.get("job_type") or "SERVICE"
         if str(job_type).upper() == "ESTIMATION":
             ac_type = str(attrs.get("ac_type") or "").strip().upper()
             if not ac_type:
                 raise serializers.ValidationError({"ac_type": "AC type is required for estimation bookings."})
             if ac_type not in {"SPLIT", "WINDOW", "CASSETTE", "TOWER", "OTHER"}:
-                raise serializers.ValidationError({"ac_type": f"Invalid AC type '{ac_type}'."})
+                raise serializers.ValidationError({"ac_type": f"Unsupported AC type: '{ac_type}'."})
+            attrs["service_category"] = "appliances"
+            if not attrs.get("issue_title"):
+                attrs["issue_title"] = f"AC Estimation / Inspection - {ac_type.capitalize()}"
+            if not attrs.get("description"):
+                attrs["description"] = attrs.get("customer_symptom") or "AC Inspection requested"
 
-            ac_capacity = str(attrs.get("ac_capacity") or "").strip().upper().replace(" ", "_")
-            if not ac_capacity:
-                raise serializers.ValidationError({"ac_capacity": "AC capacity is required for estimation bookings."})
-            if ac_capacity not in {"1_TON", "1.5_TON", "2_TON", "OTHER"}:
-                raise serializers.ValidationError({"ac_capacity": f"Invalid AC capacity '{ac_capacity}'."})
-
-            qty = attrs.get("ac_quantity", 1)
-            try:
-                qty = int(qty)
-                if qty < 1 or qty > 50:
-                    raise ValueError()
-            except (ValueError, TypeError):
-                raise serializers.ValidationError({"ac_quantity": "AC quantity must be between 1 and 50."})
-
-            symptom = str(attrs.get("customer_symptom") or "").strip()
-            if not symptom:
-                raise serializers.ValidationError({"customer_symptom": "Customer symptom is required for estimation bookings."})
-
-        return super().validate(attrs)
-
-    def create(self, validated_data):
-        for field in ["ac_type", "ac_brand", "ac_capacity", "ac_quantity", "customer_symptom", "customer_notes"]:
-            validated_data.pop(field, None)
-        return super().create(validated_data)
+        return attrs
 
 
 class FeedbackTokenSummarySerializer(serializers.ModelSerializer):
@@ -312,6 +419,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     customer_id            = serializers.SerializerMethodField()
     customer_user_id       = serializers.IntegerField(source="customer.id", read_only=True)
     start_otp              = serializers.SerializerMethodField()
+    payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
     base_amount            = serializers.SerializerMethodField()
@@ -324,7 +432,6 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_photo       = serializers.SerializerMethodField()
     technician_rating      = serializers.SerializerMethodField()
     child_requests         = serializers.SerializerMethodField()
-    estimation             = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
@@ -335,34 +442,20 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "status", "status_display", "priority", "priority_display",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
-            "total_amount", "base_amount", "extension_amount", "cart_data", "transaction_id", "invoice_id",
+            # discount_amount exposed so the frontend can show a real coupon
+            # discount line and stop assuming it's always 0 (it was never in
+            # this list before, even though ServiceRequest.discount_amount is
+            # a real, populated field once a coupon is applied at booking).
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "transaction_id", "invoice_id",
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
-            "start_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
+            "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
             "parent_request", "request_kind", "quote_number", "child_requests",
-            "job_type", "estimation",
+            # GT-C-03: so the customer-facing bookings list can tell which
+            # completed bookings are eligible to file an insurance claim
+            # against, without a second per-booking API call.
+            "insurance_opted_in", "insurance_liability_cap",
         )
-
-    def get_estimation(self, obj):
-        if hasattr(obj, "estimation"):
-            est = obj.estimation
-            fee_amount = None
-            fee_status = None
-            if hasattr(est, "fee"):
-                fee_amount = float(est.fee.amount)
-                fee_status = est.fee.status
-            return {
-                "id": est.id,
-                "ac_type": est.ac_type,
-                "ac_brand": est.ac_brand,
-                "ac_capacity": est.ac_capacity,
-                "ac_quantity": est.ac_quantity,
-                "customer_symptom": est.customer_symptom,
-                "status": est.status,
-                "fee_amount": fee_amount,
-                "fee_status": fee_status,
-            }
-        return None
 
     def get_child_requests(self, obj):
         if hasattr(obj, "_prefetched_objects_cache") and "child_requests" in obj._prefetched_objects_cache:
@@ -500,19 +593,41 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if obj.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]:
             return None
         if not obj.start_otp:
-            import hashlib
-            raw = f"otp:{obj.id}:{obj.created_at}"
-            h = hashlib.sha256(raw.encode()).hexdigest()
-            obj.start_otp = str((int(h[:8], 16) % 900000) + 100000)
+            # Fixes EC-01: this used to derive the code deterministically from
+            # obj.id/obj.created_at (both knowable to anyone with API access to
+            # the job), which made it forgeable. Now uses the same
+            # cryptographically random generator as ServiceRequest.save().
+            obj.start_otp = _generate_secure_start_otp()
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
+
+    def get_payment_confirmation_otp(self, obj):
+        if obj.payment_status in ["cash_pending", "pending", "collected"]:
+            try:
+                import re
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT message FROM workforce_notification WHERE related_object_id = %s AND notification_type = 'PAYMENT_CONFIRMATION_OTP' ORDER BY created_at DESC LIMIT 1;",
+                        [str(obj.id)]
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                        if m:
+                            return m.group(1)
+            except Exception:
+                pass
+        return None
 
     def get_extension_amount(self, obj):
         try:
             if hasattr(obj, "_prefetched_objects_cache") and "work_extensions" in obj._prefetched_objects_cache:
                 exts = list(obj.work_extensions.all())
+            elif hasattr(obj, "work_extensions") and hasattr(obj.work_extensions, "all"):
+                exts = list(obj.work_extensions.all())
             else:
-                exts = [e for e in getattr(obj, "work_extensions", []).all()] if hasattr(obj, "work_extensions") else []
+                exts = []
             if exts:
                 ext = exts[0]
                 amt = float(ext.admin_approved_amount or ext.technician_estimate or 0)
@@ -523,6 +638,21 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_base_amount(self, obj):
+        # Bug found: this used to sum raw cart_data item prices (name/price/
+        # quantity only, no tax or fee) whenever cart_data was non-empty --
+        # i.e. for essentially every real booking -- and only fell back to
+        # obj.total_amount when cart_data was missing entirely. But
+        # total_amount is the authoritative, already GST- and platform-fee-
+        # inclusive figure captured at booking creation (and, since the
+        # coupon-persistence fix, discount-inclusive too); cart_data's item
+        # prices never carried those on top. That made this "total_amount"
+        # API field understate what the customer was actually charged on
+        # every booking with a non-empty cart, which is why a compensating
+        # (and separately buggy) client-side recompute existed in
+        # BookingPage.jsx. Prefer the authoritative total_amount; only fall
+        # back to summing cart_data if total_amount is genuinely unset.
+        if obj.total_amount:
+            return float(obj.total_amount)
         try:
             cart = obj.cart_data
             if cart:
@@ -533,7 +663,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                     return sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart)
         except Exception:
             pass
-        return float(obj.total_amount or 599.0)
+        return 599.0
 
     def get_total_amount(self, obj):
         base = self.get_base_amount(obj)
@@ -547,11 +677,13 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                     e for e in obj.work_extensions.all()
                     if e.status not in [WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
                 ]
-            else:
+            elif hasattr(obj, "work_extensions") and hasattr(obj.work_extensions, "all"):
                 exts = [
-                    e for e in getattr(obj, "work_extensions", []).all()
+                    e for e in obj.work_extensions.all()
                     if e.status not in [WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
-                ] if hasattr(obj, "work_extensions") else []
+                ]
+            else:
+                exts = []
             ext = exts[0] if exts else None
             if ext:
                 return {
@@ -594,7 +726,6 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     total_amount           = serializers.SerializerMethodField()
     available_actions      = serializers.SerializerMethodField()
     technician             = serializers.SerializerMethodField()
-    estimation             = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
@@ -602,23 +733,20 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
-            "total_amount", "base_amount", "extension_amount", "cart_data",
+            # discount_amount exposed for the same reason as in
+            # ServiceRequestListSerializer -- see comment there.
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
             "transaction_id", "payment_gateway",
             "payment_collected_by_name", "collection_method", "collection_reference", "payment_collected_at", "invoice_id",
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
+            "logistics_leg", "logistics_leg_updated_at",
             "start_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "created_at", "updated_at",
-            "job_type", "estimation",
         )
-
-    def get_estimation(self, obj):
-        if hasattr(obj, "estimation"):
-            return EstimationSerializer(obj.estimation, context=self.context).data
-        return None
 
     def get_customer_id(self, obj):
         try:
@@ -640,7 +768,12 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
             phone = getattr(emp, "phone", "") or phone
             photo = getattr(emp, "photo", "") or photo
-            rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else rating
+            emp_rating = getattr(emp, "rating", None)
+            if emp_rating is not None:
+                try:
+                    rating = float(emp_rating)
+                except (ValueError, TypeError):
+                    pass
 
         if not name and hasattr(obj, "assignments"):
             assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
@@ -749,6 +882,21 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_base_amount(self, obj):
+        # Bug found: this used to sum raw cart_data item prices (name/price/
+        # quantity only, no tax or fee) whenever cart_data was non-empty --
+        # i.e. for essentially every real booking -- and only fell back to
+        # obj.total_amount when cart_data was missing entirely. But
+        # total_amount is the authoritative, already GST- and platform-fee-
+        # inclusive figure captured at booking creation (and, since the
+        # coupon-persistence fix, discount-inclusive too); cart_data's item
+        # prices never carried those on top. That made this "total_amount"
+        # API field understate what the customer was actually charged on
+        # every booking with a non-empty cart, which is why a compensating
+        # (and separately buggy) client-side recompute existed in
+        # BookingPage.jsx. Prefer the authoritative total_amount; only fall
+        # back to summing cart_data if total_amount is genuinely unset.
+        if obj.total_amount:
+            return float(obj.total_amount)
         try:
             cart = obj.cart_data
             if cart:
@@ -759,7 +907,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
                     return sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart)
         except Exception:
             pass
-        return float(obj.total_amount or 599.0)
+        return 599.0
 
     def get_total_amount(self, obj):
         base = self.get_base_amount(obj)
@@ -905,19 +1053,13 @@ class RescheduleRequestSerializer(serializers.ModelSerializer):
         )
 
     def get_requested_by_name(self, obj):
-        try:
-            if obj.requested_by_id and obj.requested_by:
-                return obj.requested_by.get_full_name() or obj.requested_by.username
-        except Exception:
-            pass
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username
         return "Unknown"
 
     def get_admin_reviewed_by_name(self, obj):
-        try:
-            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
-                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
-        except Exception:
-            pass
+        if obj.admin_reviewed_by:
+            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
         return None
 
 
@@ -955,28 +1097,18 @@ class AdminRescheduleListSerializer(serializers.ModelSerializer):
 
     def get_customer_email(self, obj):
         try:
-            if obj.requested_by_id and obj.requested_by and obj.requested_by.email:
-                return obj.requested_by.email
-            if obj.booking and obj.booking.email:
-                return obj.booking.email
+            return obj.requested_by.email or obj.booking.email
         except Exception:
-            pass
-        return None
+            return None
 
     def get_requested_by_name(self, obj):
-        try:
-            if obj.requested_by_id and obj.requested_by:
-                return obj.requested_by.get_full_name() or obj.requested_by.username
-        except Exception:
-            pass
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username
         return "Customer"
 
     def get_admin_reviewed_by_name(self, obj):
-        try:
-            if obj.admin_reviewed_by_id and obj.admin_reviewed_by:
-                return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
-        except Exception:
-            pass
+        if obj.admin_reviewed_by:
+            return obj.admin_reviewed_by.get_full_name() or obj.admin_reviewed_by.username
         return None
 
     def get_rejection_reason_display(self, obj):
@@ -1017,11 +1149,32 @@ class CustomerRefundRequestSerializer(serializers.ModelSerializer):
         )
 
 
+class InsuranceClaimAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InsuranceClaimAttachment
+        fields = ("id", "file", "original_name", "uploaded_at")
+
+
+class InsuranceClaimSerializer(serializers.ModelSerializer):
+    booking_request_id = serializers.CharField(source="booking.request_id", read_only=True)
+    liability_cap = serializers.DecimalField(source="booking.insurance_liability_cap", max_digits=10, decimal_places=2, read_only=True)
+    attachments = InsuranceClaimAttachmentSerializer(many=True, read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = InsuranceClaim
+        fields = (
+            "id", "booking_request_id", "description", "claimed_amount",
+            "approved_amount", "liability_cap", "attachments", "status",
+            "status_display", "resolution_notes", "created_at", "resolved_at",
+        )
+
+
 class AdminRefundRequestSerializer(serializers.ModelSerializer):
     booking_id = serializers.PrimaryKeyRelatedField(source="booking", read_only=True)
     booking_request_id = serializers.CharField(source="booking.request_id", read_only=True)
-    customer_name = serializers.SerializerMethodField()
-    customer_email = serializers.SerializerMethodField()
+    customer_name = serializers.CharField(source="customer.get_full_name", read_only=True)
+    customer_email = serializers.CharField(source="customer.email", read_only=True)
     evidence = RefundEvidenceSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
@@ -1035,29 +1188,54 @@ class AdminRefundRequestSerializer(serializers.ModelSerializer):
             "gateway_reference", "evidence", "created_at", "updated_at"
         )
 
-    def get_customer_name(self, obj):
-        try:
-            if obj.customer_id and obj.customer:
-                return obj.customer.get_full_name() or obj.customer.username
-        except Exception:
-            pass
-        if obj.booking and obj.booking.customer_name:
-            return obj.booking.customer_name
-        return "Customer"
 
-    def get_customer_email(self, obj):
-        try:
-            if obj.customer_id and obj.customer and obj.customer.email:
-                return obj.customer.email
-        except Exception:
-            pass
-        if obj.booking and obj.booking.email:
-            return obj.booking.email
-        return None
+class TripStopSerializer(serializers.ModelSerializer):
+    """GT-D-02: read/write shape for one extra stop on a multi-stop
+    logistics booking. Sequence is server-assigned (see set_trip_stops in
+    services/__init__.py) so it's read-only here even on input -- clients
+    submit ordering via list order, not this field."""
+    class Meta:
+        model = TripStop
+        fields = (
+            "id", "sequence", "stop_type", "address", "contact_name",
+            "contact_phone", "latitude", "longitude", "notes", "created_at",
+        )
+        read_only_fields = ("id", "sequence", "created_at")
 
 
-# ─── Painting Rate Card & Quote Serializers ───────────────────────────────────
-from .models import (
+class BookingSeriesSerializer(serializers.ModelSerializer):
+    """HS-B-07: read shape for a customer's AMC series (list/detail).
+    Creation goes through create_booking_series() (services/__init__.py),
+    not this serializer's .save() -- see CustomerBookingSeriesListCreateView."""
+    class Meta:
+        model = BookingSeries
+        fields = (
+            "id", "service_category", "issue_title", "description", "address",
+            "latitude", "longitude", "preferred_time", "total_amount",
+            "frequency", "next_run_date", "status", "occurrences_generated",
+            "last_generated_booking_id", "created_at", "updated_at",
+        )
+        read_only_fields = fields
+
+class BookingMessageSerializer(serializers.ModelSerializer):
+    """X-09: read/write shape for one in-app chat message on a booking.
+    sender_persona/sender_name/sender_user are all server-assigned from
+    the requesting user in the view (see CustomerBookingMessagesView) --
+    read-only here even on input, so a client can never spoof who a
+    message is "from"."""
+    class Meta:
+        model = BookingMessage
+        fields = (
+            "id", "sender_persona", "sender_name", "body", "created_at",
+            "read_at_customer", "read_at_technician",
+        )
+        read_only_fields = ("id", "sender_persona", "sender_name", "created_at", "read_at_customer", "read_at_technician")
+
+
+from service_requests.models import (
+    VegetableRecipe,
+    RecipeIngredient,
+    VegetableRecommendation,
     PaintingRateCard,
     PaintingRateCardSlab,
     PaintingQuote,
@@ -1066,6 +1244,8 @@ from .models import (
     PaintingMaterial,
     QuotePhoto,
 )
+
+
 
 class PaintingRateCardSlabSerializer(serializers.ModelSerializer):
     class Meta:

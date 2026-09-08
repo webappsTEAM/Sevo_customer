@@ -288,18 +288,31 @@ def set_global_rbac_permissions(matrix: dict) -> None:
     cache.set(GLOBAL_RBAC_CACHE_KEY, matrix, timeout=3600)
 
 
+_NON_SUPER_ROLES = {"admin", "manager", "support", "catalog", "finance", "customer", "employee"}
+
+
 def is_super_admin(user) -> bool:
     """
     Single canonical check for Super Admin.
     Universal unrestricted global bypass.
     Does NOT require tenant or company context.
+
+    Note: `is_superuser` alone does NOT grant Super Admin when the account
+    has an explicit non-super role (e.g. "admin"). This mirrors the
+    frontend's isSuperAdmin() guard (auth/authorization.js) and is
+    deliberate defense-in-depth: this codebase previously had (now
+    removed) code paths that force-set is_superuser=True on plain Admin
+    accounts, and an unconditional bypass here would have silently
+    honored that instead of catching it. A genuine Django superuser
+    account with no assigned role (role is empty/unset) still bypasses
+    normally, same as always.
     """
     if not user or not getattr(user, "is_authenticated", False):
         return False
     role = str(getattr(user, "role", "")).lower()
     if role in {"super_admin", "superadmin"}:
         return True
-    if getattr(user, "is_superuser", False):
+    if getattr(user, "is_superuser", False) and role not in _NON_SUPER_ROLES:
         return True
     return False
 
@@ -316,6 +329,78 @@ def is_admin_role(user) -> bool:
     return role in {"admin", "manager", "operations", "catalog", "finance", "support"}
 
 
+def get_effective_module_actions(user, module: str) -> list:
+    """
+    Single source of truth for "what actions can this user perform on this
+    module", combining the role-based Global RBAC matrix with a per-user
+    override on User.custom_permissions (set by a Super Admin via
+    Platform > Users — see platform_control.views.PlatformUserDetailView /
+    PlatformUserInviteView).
+
+    Override semantics:
+      - If the user has NEVER been through Customize Access (custom_permissions
+        is None/{} -- the common case for every account that predates this
+        feature, or any account a Super Admin invited without touching the
+        permission checklist), every module falls back to that user's role
+        default, unchanged -- exactly the original behavior, so there is
+        zero regression for existing accounts.
+      - If the user HAS been through Customize Access (custom_permissions is
+        a non-empty dict -- e.g. Admin 1 was only ever given {"catalog":
+        [...]}), custom_permissions becomes a COMPLETE allowlist, not a
+        sparse override on top of the role default. A module that IS a key
+        gets exactly that list (an empty list is an explicit "No Access").
+        A module that is NOT a key gets [] -- no fallback to the role
+        default. Without this, an Admin the Super Admin restricted to only
+        "Catalog" would silently keep every other module the base "admin"
+        role grants by default (marketing, cms, inventory, users export,
+        etc.), which contradicts both the Invite Admin UI's own promise
+        ("A module left fully unchecked means no access") and the
+        "Admin 1 can access only what was assigned" requirement this
+        feature exists for.
+
+    Used by both `can()` below and UserSerializer.get_permissions() so the
+    frontend's already-existing permission UI (auth/authorization.js) and
+    the backend's actual enforcement never disagree.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+
+    custom = getattr(user, "custom_permissions", None) or {}
+    has_been_customized = isinstance(custom, dict) and len(custom) > 0
+
+    if has_been_customized:
+        if module in custom:
+            value = custom.get(module)
+            return value if isinstance(value, list) else []
+        # Customize Access has been used for this account and this module
+        # was left unchecked -- that's an explicit "no access", not "fall
+        # back to whatever the role would normally get".
+        return []
+
+    role = str(getattr(user, "role", "customer")).lower()
+    rbac_matrix = get_global_rbac_permissions()
+    module_perms = rbac_matrix.get(module, {})
+    role_actions = list(module_perms.get(role, []))
+
+    # Specialized care agent role resolution — only reached when this
+    # module has no explicit per-user override (see docstring above).
+    # Merged with (not replacing) the role's own actions, matching the
+    # original behavior where this only ever added view/reply/export on
+    # top of whatever the role could already do.
+    if module in ("customer_care", "complaints", "customers"):
+        try:
+            from customer_care.permissions import get_care_access
+            care_access = get_care_access(user)
+            if care_access.get("has_access"):
+                for extra in ("view", "reply", "export"):
+                    if extra not in role_actions:
+                        role_actions.append(extra)
+        except Exception:
+            pass
+
+    return role_actions
+
+
 def can(user, module: str, action: str) -> bool:
     """
     Central permission evaluator for all roles and domain actions.
@@ -330,23 +415,7 @@ def can(user, module: str, action: str) -> bool:
     if is_super_admin(user):
         return True
 
-    role = str(getattr(user, "role", "customer")).lower()
-
-    # Specialized care agent role resolution
-    if module in ("customer_care", "complaints", "customers") and action in ("view", "reply", "export"):
-        try:
-            from customer_care.permissions import get_care_access
-            care_access = get_care_access(user)
-            if care_access.get("has_access"):
-                return True
-        except Exception:
-            pass
-
-    rbac_matrix = get_global_rbac_permissions()
-    module_perms = rbac_matrix.get(module, {})
-    role_actions = module_perms.get(role, [])
-
-    return action in role_actions
+    return action in get_effective_module_actions(user, module)
 
 
 class IsSuperAdmin(BasePermission):

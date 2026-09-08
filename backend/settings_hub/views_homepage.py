@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from utils.supabase_storage import SupabaseStorageService
+from accounts.permissions import IsAdminRole, RequireModuleAccess
 from .models import HomePageConfig, HomePageMedia
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _extract_image_paths(config_data):
 
     if isinstance(config_data, dict):
         for k, v in config_data.items():
-            if k in ("image_path", "image", "avatar", "photo", "icon", "cover") and isinstance(v, str):
+            if k in ("image_path", "image", "avatar", "photo", "icon", "cover", "heroImage", "heroIllustration") and isinstance(v, str):
                 _extract_val(v)
             elif isinstance(v, (dict, list)):
                 paths.update(_extract_image_paths(v))
@@ -64,7 +65,7 @@ def _resolve_image_urls(config_data):
         resolved = {}
         for k, v in config_data.items():
             resolved[k] = _resolve_image_urls(v)
-            if k in ("image_path", "image", "avatar", "photo", "cover") and isinstance(v, str) and v:
+            if k in ("image_path", "image", "avatar", "photo", "cover", "heroImage", "heroIllustration") and isinstance(v, str) and v:
                 resolved[f"{k}_url"] = SupabaseStorageService.get_public_url(v)
             if k == "collageImages" and isinstance(v, list):
                 resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
@@ -78,9 +79,19 @@ class HomePageConfigAPIView(APIView):
     """
     GET: Serves published homepage configuration from PostgreSQL with resolved CDN image URLs. Public access.
     PUT: Allows authenticated admins to update published homepage config.
+
+    Bug found (gap): get_permissions() previously returned AllowAny()
+    unconditionally for every method, including PUT — so PUT (which
+    overwrites the entire live homepage config straight into the DB) had
+    NO authorization check at all, despite the docstring's claim. Fixed to
+    only allow GET publicly; PUT now requires the same `cms:edit_sections`
+    Global RBAC action already defined for this module (matches `manager`
+    and `catalog` roles' existing rights, Super Admin always passes).
     """
 
     def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAdminRole(), RequireModuleAccess("cms", "edit_sections")]
         return [permissions.AllowAny()]
 
     def get(self, request):
@@ -288,8 +299,13 @@ class HomePageImageUploadAPIView(APIView):
     """
     POST: Uploads image file to Supabase Storage, validates via ImageOptimizer, converts to WebP,
           and saves HomePageMedia record in PostgreSQL.
+
+    Bug found (gap): this endpoint was `AllowAny` — any unauthenticated
+    caller could upload files straight into the platform's Supabase
+    Storage bucket. Fixed to require the same `cms:edit_sections` action
+    used for homepage config saves.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAdminRole, RequireModuleAccess("cms", "edit_sections")]
 
     def post(self, request):
         user = request.user if request.user and request.user.is_authenticated else None
@@ -390,8 +406,12 @@ class HomePageImageDeleteAPIView(APIView):
     """
     DELETE /api/settings/homepage/images/<media_id>/
     Deletes specified media record by ID and removes underlying file from Supabase Storage.
+
+    Bug found (gap): this endpoint was `AllowAny` — any unauthenticated
+    caller could delete homepage media. Fixed to require the same
+    `cms:edit_sections` action used for the other homepage-editing endpoints.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAdminRole, RequireModuleAccess("cms", "edit_sections")]
 
     def delete(self, request, media_id):
 

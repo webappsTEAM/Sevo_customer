@@ -27,6 +27,13 @@ staticfiles/
 .env
 backend/.env
 frontend/.env
+# Fixed: backend/.env.pre-cutover and backend/.env.production were tracked
+# in git (real DB/email/Maps/OAuth-looking secrets, confirmed by format
+# only -- never printed) because this file had no wildcard for
+# backend/.env.* / frontend/.env.* the way vendor/.gitignore already does.
+# Only the exact literal names above were ignored.
+backend/.env.*
+frontend/.env.*
 # Allow example/template files
 !backend/.env.example
 !frontend/.env.example
@@ -51,3 +58,7 @@ frontend/parse_check.cjs
 # Runtime data files — should not be version-controlled
 backend/caltrack_activation_dossier.json
 *.zip
+
+# Local keys and AI agent outputs
+.ssh/
+Claude outputs/

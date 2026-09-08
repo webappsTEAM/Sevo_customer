@@ -3,14 +3,15 @@
  * Canonical, Rapido-Style Customer Live Tracking Page for CalTrack.
  */
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield, Home
+  Wrench, WifiOff, Shield, Home, Send
 } from "lucide-react"
+import { apiRequest } from "../../../api/client.js"
 import { useCustomerTracking } from "./useCustomerTracking.js"
 import { CustomerTrackingMap } from "./CustomerTrackingMap.jsx"
 import { CustomerTrackingHeader } from "./CustomerTrackingHeader.jsx"
@@ -33,6 +34,12 @@ const STATUS_LABEL_MAP = {
   feedback_received: "Feedback Received",
   cancelled: "Booking Cancelled",
   rejected: "Booking Declined",
+  // X-03: the vendor app writes "redispatching" directly into this booking's
+  // shared status column when a technician cancels/is reassigned off the
+  // job -- without this entry it fell through to the ev.to_status || raw
+  // string fallback and customers briefly saw the literal word
+  // "redispatching" in their booking history instead of a real label.
+  redispatching: "Finding You a New Technician",
 }
 
 const TIMELINE_STEPS = [
@@ -81,17 +88,16 @@ export function CustomerTrackingPage({
 
   const [copiedOtp, setCopiedOtp] = useState(false)
 
-  // Keyboard shortcut: Escape to close modal
-  React.useEffect(() => {
-    if (!isModal || !onClose) return
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onClose()
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isModal, onClose])
+  // X-09: in-app chat. Polling-based (see BookingMessage's docstring on
+  // the backend for why) -- only attempted once technician assignment is
+  // known (isAccepted below), and silently disabled if the viewer isn't
+  // authenticated as the booking's owner (e.g. an anonymous tracking-link
+  // visitor) rather than showing a broken/erroring panel.
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState("")
+  const [chatSending, setChatSending] = useState(false)
+  const [chatUnavailable, setChatUnavailable] = useState(false)
+  const chatEndRef = useRef(null)
 
   const status = (data?.status || "").toLowerCase()
   // "assigned" deliberately excluded — the backend hides technician identity/GPS/OTP
@@ -107,6 +113,57 @@ export function CustomerTrackingPage({
   const isArrived = status === "arrived"
   const isInProgress = status === "in_progress"
   const isCompleted = ["completed", "closed", "feedback_pending", "feedback_received"].includes(status)
+
+  // X-09: chat is meaningful once there's a technician to talk to, and
+  // stays available through completion (e.g. "thanks, forgot my umbrella")
+  // but not once the booking is cancelled/rejected.
+  const chatAllowed = isAccepted && !isCancelled
+  const chatBookingId = data?.booking_id
+
+  useEffect(() => {
+    if (!chatAllowed || !chatBookingId || chatUnavailable) return
+    let cancelled = false
+    const fetchMessages = () => {
+      apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+        .then((res) => {
+          if (cancelled) return
+          const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
+          setChatMessages(list)
+        })
+        .catch((err) => {
+          // 401/403 -> viewer isn't authenticated as this booking's owner
+          // (e.g. an anonymous tracking-link visitor). Hide the panel
+          // rather than show a permanently-erroring one.
+          if (!cancelled && (err?.status === 401 || err?.status === 403)) {
+            setChatUnavailable(true)
+          }
+        })
+    }
+    fetchMessages()
+    const interval = setInterval(fetchMessages, 10000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [chatAllowed, chatBookingId, chatUnavailable])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [chatMessages.length])
+
+  const handleSendChat = async () => {
+    const body = chatInput.trim()
+    if (!body || chatSending || !chatBookingId) return
+    setChatSending(true)
+    try {
+      await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "POST", json: { body } })
+      setChatInput("")
+      const res = await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
+      setChatMessages(list)
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) setChatUnavailable(true)
+    } finally {
+      setChatSending(false)
+    }
+  }
 
   const vendorName = data?.vendor?.name || ""
   const rawTechName = data?.assigned_employee?.name || data?.technician?.name || data?.technician_name || ""

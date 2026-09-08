@@ -8,7 +8,7 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 
 
@@ -78,6 +78,23 @@ def _generate_request_id(category_or_slug=None):
     return req_id
 
 
+def _generate_secure_start_otp():
+    """
+    Generates a cryptographically random 6-digit service-start OTP.
+
+    Fixes EC-01: the previous implementation derived this code
+    deterministically from sha256(request_id, phone, customer_name) — values
+    the assigned technician (and anyone else with API access to the job)
+    already knows, so they could compute the "proof the technician actually
+    reached the customer" code themselves instead of the customer reading it
+    out on arrival. A randomly generated code cannot be derived from
+    anything else stored on the booking, so it has to come from the
+    customer.
+    """
+    import secrets
+    return str(secrets.randbelow(900000) + 100000)
+
+
 # ── Service categories (static list) ─────────────────────────────────────────
 SERVICE_CATEGORIES = [
     ("plumbing", "Plumbing"),
@@ -144,6 +161,23 @@ class ServiceRequest(models.Model):
         HIGH   = "high",   "High"
         URGENT = "urgent", "Urgent"
 
+    # GT-B-03: "trip states don't reflect a multi-leg goods-transport job"
+    # -- Status above is shared by every service category and drives
+    # ALLOWED_TRANSITIONS/webhook/gating logic in state_machine.py; adding
+    # new top-level statuses for logistics-only sub-phases would mean
+    # updating that transition table, the Customer<->vendor webhook event
+    # map, AND the vendor app's own mirrored status conditionals. LogisticsLeg
+    # is deliberately a separate, additive field (logistics_leg below)
+    # instead -- it can never conflict with an existing transition rule,
+    # gate check, or webhook mapping. Only meaningful when service_category
+    # is a logistics category; every other booking leaves it blank.
+    class LogisticsLeg(models.TextChoices):
+        EN_ROUTE_PICKUP = "EN_ROUTE_PICKUP", "En Route to Pickup"
+        LOADING         = "LOADING",         "Loading"
+        EN_ROUTE_DROP   = "EN_ROUTE_DROP",   "En Route to Drop"
+        UNLOADING       = "UNLOADING",       "Unloading"
+        DELIVERED       = "DELIVERED",       "Delivered"
+
     class PaymentMethod(models.TextChoices):
         COD    = "COD",    "Cash on Service"
         ONLINE = "ONLINE", "Online Payment"
@@ -157,6 +191,15 @@ class ServiceRequest(models.Model):
         CANCELLED          = "cancelled",          "Cancelled"
         REFUNDED           = "refunded",           "Refunded"
         PARTIALLY_REFUNDED = "partially_refunded", "Partially Refunded"
+        # HS-C-03/HS-C-06: the vendor app writes this directly onto this
+        # shared column (workforce_api/views.py, when a technician reports
+        # cash collected but the customer has not yet confirmed it) -- it
+        # was never a formally recognized value here, so get_payment_status_display()
+        # returned the raw string "cash_pending" instead of a real label, and it
+        # leaked into the customer-facing UI verbatim. See the payment
+        # reconciliation audit command for the broader three-way status
+        # divergence this is one instance of.
+        CASH_PENDING       = "cash_pending",       "Cash Collection Pending"
 
     class CancellationReason(models.TextChoices):
         CHANGE_OF_PLANS   = "CHANGE_OF_PLANS",   "Change of plans / Booked by mistake"
@@ -222,6 +265,48 @@ class ServiceRequest(models.Model):
     # own rule warns against. Revisit if Packers & Movers ever needs
     # multi-stop routing.
     drop_address     = models.TextField(blank=True, default="")
+    # Fixes GT-D-03: nothing captured who's actually receiving the goods at
+    # the drop address, so they could never be notified. See
+    # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md for the full write-up; this is
+    # the migration that note called for.
+    drop_contact_name  = models.CharField(max_length=200, blank=True, default="")
+    drop_contact_phone = models.CharField(max_length=20, blank=True, default="")
+    # Optional alongside phone -- there is no general-purpose outbound SMS
+    # sender in this codebase (Twilio is wired only for login OTPs), so an
+    # email is what actually lets notify_delivery_recipient() (added this
+    # pass) reach them using the existing, already-proven send_mail path.
+    drop_contact_email = models.EmailField(blank=True, default="")
+    # GT-A-03: "no sender or consignee identity for higher-value
+    # consignments" -- drop_contact_name/phone/email above already give the
+    # driver *someone* to hand goods to; declared_value and
+    # consignee_relationship are the two fields still missing to scale
+    # identity requirements to what's actually being moved. Serializer-level
+    # validation (see ServiceRequestPublicCreateSerializer.validate) requires
+    # both once declared_value crosses HIGH_VALUE_CONSIGNMENT_THRESHOLD.
+    # Verified sender identity + a receiver OTP at handover (the doc's full
+    # "how mature platforms do it") is a real feature -- OTP capture at
+    # drop-off, scaled by this threshold -- deliberately left as a follow-up
+    # rather than guessed at here; it touches the vendor app's handover flow,
+    # which needs its own careful pass like the Customer-side OTP hardening
+    # earlier this session, not a same-turn add-on.
+    declared_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    consignee_relationship = models.CharField(max_length=100, blank=True, default="")
+    # GT-C-03: "no goods insurance and no damage-claim path". Premium is
+    # always computed server-side from declared_value (see
+    # ServiceRequestPublicCreateSerializer) -- never trust a client-supplied
+    # premium, same principle as the HS-B-01 total_amount hardening.
+    # liability_cap is the actual payable ceiling: min(declared_value,
+    # INSURANCE_MAX_LIABILITY) -- what "a stated liability cap" in the
+    # finding refers to.
+    insurance_opted_in = models.BooleanField(default=False)
+    insurance_premium = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    insurance_liability_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # GT-B-03: logistics-only sub-phase, independent of Status -- see the
+    # LogisticsLeg docstring above. History is append-only, one entry per
+    # set_logistics_leg() call: {"leg": ..., "at": iso8601, "by": user_id}.
+    logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
+    logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
+    logistics_leg_history = models.JSONField(default=list, blank=True)
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
@@ -261,12 +346,6 @@ class ServiceRequest(models.Model):
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
 
     # Workforce Dispatch / Real-time Technician Snapshot
-    technician              = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="assigned_service_requests",
-    )
     workforce_job_id        = models.CharField(max_length=100, blank=True, null=True, default=None, db_index=True)
     external_assignment_id  = models.CharField(max_length=100, blank=True, null=True, default=None)
     technician_name         = models.CharField(max_length=150, blank=True, default="")
@@ -275,15 +354,7 @@ class ServiceRequest(models.Model):
     technician_rating       = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
     technician_latitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     technician_longitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    technician_heading      = models.FloatField(default=0.0, blank=True)
-    technician_speed        = models.FloatField(default=0.0, blank=True)
-    technician_accuracy     = models.FloatField(null=True, blank=True)
     technician_location_name= models.CharField(max_length=255, blank=True, default="")
-    technician_location_updated_at = models.DateTimeField(null=True, blank=True)
-    accepted_at             = models.DateTimeField(null=True, blank=True)
-    technician_arrived_at   = models.DateTimeField(null=True, blank=True)
-    started_at              = models.DateTimeField(null=True, blank=True)
-    completed_at            = models.DateTimeField(null=True, blank=True)
     start_otp               = models.CharField(max_length=10, blank=True, default="")
     otp_hash                = models.CharField(max_length=128, blank=True, default="")
     otp_expires_at          = models.DateTimeField(null=True, blank=True)
@@ -351,6 +422,7 @@ class ServiceRequest(models.Model):
     vendor_name = models.CharField(max_length=255, blank=True, default="", help_text="Vendor display name snapshot")
     vendor_confirmed_at = models.DateTimeField(null=True, blank=True)
 
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -378,8 +450,10 @@ class ServiceRequest(models.Model):
         if not is_new:
             old_status = ServiceRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first() or ""
 
+        _request_id_was_generated = False
         if not self.request_id:
             self.request_id = _generate_request_id(self.service_category)
+            _request_id_was_generated = True
         if self.customer and getattr(self.customer, "customer_id", None):
             self.customer_code = self.customer.customer_id
         elif not self.customer_code and (self.phone or self.email):
@@ -400,13 +474,30 @@ class ServiceRequest(models.Model):
                 if not self.customer:
                     self.customer = u
         if not self.start_otp:
-            import hashlib
-            h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()
-            self.start_otp = str((int(h[:8], 16) % 900000) + 100000)
+            self.start_otp = _generate_secure_start_otp()
         if not self.tracking_token:
             import uuid
             self.tracking_token = uuid.uuid4()
-        super().save(*args, **kwargs)
+
+        # Fixes EC-04: _generate_request_id() reads the current max id and
+        # loops checking existence, but that check-then-insert has a gap --
+        # two concurrent bookings can both pass the uniqueness check before
+        # either commits, and the second INSERT then fails with an
+        # IntegrityError on request_id's unique constraint (a 500 for that
+        # customer, not data corruption, but a real booking-creation failure
+        # under concurrent load). Retry with a freshly generated id a bounded
+        # number of times inside a savepoint, so one collision doesn't also
+        # abort whatever outer transaction the caller may be in.
+        _max_attempts = 5
+        for _attempt in range(1, _max_attempts + 1):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if not _request_id_was_generated or _attempt == _max_attempts:
+                    raise
+                self.request_id = _generate_request_id(self.service_category)
 
         if is_new or old_status != self.status:
             from service_requests.state_machine import record_transition
@@ -499,7 +590,6 @@ class WorkExtension(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
     def __str__(self):
         return f"Extension #{self.id} for {self.service_request.request_id} ({self.get_status_display()})"
 
@@ -558,7 +648,7 @@ class WorkExtensionItem(models.Model):
     )
     purchase_receipt = models.FileField(upload_to="service_requests/receipts/", null=True, blank=True)
 
-    # Additional Material & AddOn Tracking (Migration 0058)
+    # Additional Material & AddOn Tracking
     addon = models.ForeignKey(
         "AddOn",
         blank=True,
@@ -678,6 +768,17 @@ class ServiceFeedback(models.Model):
     # Token generated when admin verifies — used as public URL key
     feedback_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
+    # Fixes HS-E-01: a rating had no durable link to which technician it was
+    # about -- reading it off the booking's *current* assignment breaks the
+    # moment a job is reassigned after the fact. Snapshot fields (not an FK),
+    # matching BookingAssignment's own technician_id pattern -- same reason:
+    # no local FK to the vendor app's Employee table across the two Django
+    # projects. Populated at whichever point in the job lifecycle first makes
+    # the technician who did the work known (see notes below on where to set
+    # these); left blank for any ServiceFeedback rows that already exist.
+    technician_id            = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    technician_name_snapshot = models.CharField(max_length=200, blank=True, default="")
+
     # Populated only on submission
     rating              = models.PositiveSmallIntegerField(null=True, blank=True)
     employee_behaviour  = models.CharField(max_length=10, choices=Quality.choices, blank=True)
@@ -730,10 +831,6 @@ class CatalogCategory(models.Model):
 
 class Service(models.Model):
     """Groups one or more bookable Packages under a Category, e.g. 'AC Services'."""
-    PRICING_MODE_CHOICES = [
-        ("FIXED", "Fixed Price"),
-        ("QUOTATION", "Quotation Required"),
-    ]
     category    = models.ForeignKey(CatalogCategory, on_delete=models.PROTECT, related_name="services")
     name        = models.CharField(max_length=200)
     slug        = models.SlugField(unique=True)
@@ -743,7 +840,6 @@ class Service(models.Model):
     is_active   = models.BooleanField(default=True)
     sort_order  = models.PositiveIntegerField(default=0)
     customization = models.JSONField(default=dict, blank=True)
-    pricing_mode = models.CharField(max_length=20, choices=PRICING_MODE_CHOICES, default="FIXED")
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
 
@@ -899,17 +995,16 @@ class CatalogChangeLog(models.Model):
     of a soft reference instead."""
 
     class EntityType(models.TextChoices):
-        CATEGORY       = "CATEGORY", "Category"
-        SERVICE        = "SERVICE",  "Service"
-        PACKAGE        = "PACKAGE",  "Package"
-        ADDON          = "ADDON",    "Add-on"
-        RECIPE         = "RECIPE",   "Recipe"
-        RECOMMENDATION = "RECOMMENDATION", "Recommendation"
+        CATEGORY = "CATEGORY", "Category"
+        SERVICE  = "SERVICE",  "Service"
+        PACKAGE  = "PACKAGE",  "Package"
+        ADDON    = "ADDON",    "Add-on"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"
         UPDATE        = "UPDATE",        "Updated"
         STATUS_CHANGE = "STATUS_CHANGE", "Status Changed"
+        DELETE        = "DELETE",        "Deleted"
 
     entity_type = models.CharField(max_length=20, choices=EntityType.choices)
     entity_id   = models.PositiveIntegerField(db_index=True)
@@ -933,134 +1028,6 @@ class CatalogChangeLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} {self.entity_type} #{self.entity_id} ({self.field_name})"
-
-
-class VegetableRecipe(models.Model):
-    """
-    Recipe discovery model tied to a primary vegetable package.
-    Provides complete cooking instructions, nutrition breakdown, and health tips.
-    """
-    class Difficulty(models.TextChoices):
-        EASY   = "Easy",   "Easy"
-        MEDIUM = "Medium", "Medium"
-        HARD   = "Hard",   "Hard"
-
-    package = models.ForeignKey(
-        Package,
-        on_delete=models.CASCADE,
-        related_name="recipes",
-        help_text="Primary vegetable product in Calservices catalog"
-    )
-    name = models.CharField(max_length=200)
-    slug = models.SlugField(unique=True)
-    image = models.CharField(max_length=500, blank=True)
-    short_description = models.TextField(blank=True)
-    prep_time_minutes = models.PositiveIntegerField(default=10)
-    cook_time_minutes = models.PositiveIntegerField(default=15)
-    total_time_minutes = models.PositiveIntegerField(default=25)
-    difficulty = models.CharField(max_length=20, choices=Difficulty.choices, default=Difficulty.EASY)
-    servings = models.PositiveIntegerField(default=2, help_text="Base recipe serving size")
-    calories = models.PositiveIntegerField(default=120, help_text="Calories (kcal) per serving")
-    protein = models.CharField(max_length=50, blank=True, default="3g")
-    carbohydrates = models.CharField(max_length=50, blank=True, default="15g")
-    fat = models.CharField(max_length=50, blank=True, default="2g")
-    fiber = models.CharField(max_length=50, blank=True, default="4g")
-    health_benefits = models.JSONField(default=list, blank=True, help_text="List of informational health points")
-    health_tips = models.JSONField(default=list, blank=True, help_text="List of washing, cooking, or storage tips")
-    instructions = models.JSONField(default=list, blank=True, help_text="List of step-by-step cooking instructions")
-    tags = models.JSONField(default=list, blank=True, help_text="List of tags like Quick Recipes, Low Calorie, etc.")
-    is_active = models.BooleanField(default=True)
-    is_popular = models.BooleanField(default=False)
-    sort_order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["sort_order", "name"]
-
-    def __str__(self):
-        return f"{self.name} ({self.package.name})"
-
-
-class RecipeIngredient(models.Model):
-    """
-    Separates ingredients into:
-    1. Calservices Vegetables: Linked to a Package (purchasable, add to cart, recommend).
-    2. Other Cooking Ingredients (Pantry): Plain name/text only (salt, spices, oils, etc., NOT purchasable).
-    """
-    recipe = models.ForeignKey(VegetableRecipe, on_delete=models.CASCADE, related_name="ingredients")
-    package = models.ForeignKey(
-        Package,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="recipe_ingredients",
-        help_text="Referenced Calservices vegetable package if this is a catalog vegetable"
-    )
-    name = models.CharField(max_length=200, help_text="Ingredient name e.g. Tomato, Salt, Mustard seeds")
-    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
-    unit = models.CharField(max_length=50, default="pieces", help_text="e.g. pieces, g, kg, tsp, tbsp, cup, cloves")
-    notes = models.CharField(max_length=200, blank=True, default="", help_text="e.g. Finely chopped, Diced")
-    is_catalog_vegetable = models.BooleanField(default=False, help_text="True if linked to a vegetable sold by Calservices")
-    sort_order = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ["sort_order", "id"]
-
-    def save(self, *args, **kwargs):
-        if self.package_id:
-            self.is_catalog_vegetable = True
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.name} - {self.recipe.name}"
-
-
-class VegetableRecommendation(models.Model):
-    """
-    Database-driven vegetable recommendations (Goes Well With, Recipe Based, You May Also Like).
-    Both source and recommended products must reference existing Calservices vegetable products.
-    """
-    class RecommendationType(models.TextChoices):
-        GOES_WELL_WITH    = "GOES_WELL_WITH",    "Goes Well With"
-        RECIPE_BASED      = "RECIPE_BASED",      "Recipe Based"
-        YOU_MAY_ALSO_LIKE = "YOU_MAY_ALSO_LIKE", "You May Also Like"
-
-    source_product = models.ForeignKey(
-        Package,
-        on_delete=models.CASCADE,
-        related_name="source_recommendations",
-        help_text="Primary vegetable"
-    )
-    recommended_product = models.ForeignKey(
-        Package,
-        on_delete=models.CASCADE,
-        related_name="recommended_in",
-        help_text="Vegetable recommended with the primary vegetable"
-    )
-    recommendation_type = models.CharField(
-        max_length=30,
-        choices=RecommendationType.choices,
-        default=RecommendationType.GOES_WELL_WITH
-    )
-    priority = models.PositiveIntegerField(default=10, help_text="Higher priority items appear first")
-    display_order = models.PositiveIntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-priority", "display_order", "id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["source_product", "recommended_product", "recommendation_type"],
-                name="unique_vegetable_recommendation"
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.source_product.name} -> {self.recommended_product.name} ({self.get_recommendation_type_display()})"
-
 
 
 # ─── Slice 2: Reschedule ──────────────────────────────────────────────────────
@@ -1475,6 +1442,64 @@ class ComplaintAttachment(models.Model):
         return f"Attachment for {self.complaint.complaint_number}"
 
 
+class BookingMessage(models.Model):
+    """
+    X-09: "no in-app chat between customer and technician" -- previously
+    the only communication path was phone calls (no masking/proxying --
+    real numbers exchanged directly, itself a separate privacy concern)
+    or the generic ComplaintMessage thread (only exists once a complaint
+    has been raised, not for ordinary day-of-service coordination like
+    "I'm running 10 min late" or "please use the side gate").
+
+    Deliberately simple and polling-based (frontend re-fetches on an
+    interval, matching the tracking page's existing polling pattern) --
+    NOT a websocket/push implementation, which would require adopting new
+    real-time infra (Django Channels + a channel layer backend) this
+    codebase doesn't currently have. See HS-D-01/02/03 for that larger,
+    infra-level piece, deliberately left for a reviewed follow-up.
+
+    Deliberately NOT phone-number masking/proxying (X-09's other half) --
+    that needs a telephony vendor account (Twilio Proxy or equivalent)
+    and a real per-minute cost commitment, not something to pick
+    unilaterally in an autonomous pass.
+    """
+
+    class SenderPersona(models.TextChoices):
+        CUSTOMER   = "customer",   "Customer"
+        TECHNICIAN = "technician", "Technician"
+        ADMIN      = "admin",      "Admin"
+
+    booking = models.ForeignKey(
+        "service_requests.ServiceRequest",
+        on_delete=models.CASCADE,
+        related_name="chat_messages",
+    )
+    sender_persona = models.CharField(max_length=15, choices=SenderPersona.choices)
+    sender_name = models.CharField(max_length=200, blank=True, default="")
+    # Nullable: the vendor app (a separate Django project, separate user
+    # table) writes technician-sent messages directly against the shared
+    # table without a matching row in this app's AUTH_USER_MODEL -- see
+    # vendor/backend/service_requests/models.py's unmanaged mirror.
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_booking_messages",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at_customer = models.DateTimeField(null=True, blank=True)
+    read_at_technician = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        db_table = "service_requests_booking_message"
+
+    def __str__(self):
+        return f"{self.sender_persona}: {self.body[:40]}"
+
+
 class ComplaintMessage(models.Model):
     """The shared conversation thread for complaints."""
 
@@ -1787,7 +1812,429 @@ class Payment(models.Model):
         return f"Payment #{self.id} — Customer: {cid} | SR: {srid} | {self.status} (₹{self.amount})"
 
 
-# ─── Painting Rate Card & Slabs ──────────────────────────────────────────────
+class CustomerWallet(models.Model):
+    """
+    HS-C-07: payment was previously all-or-nothing on a single amount -- no
+    wallet, no credit balance from a goodwill gesture or referral reward, no
+    partial payment. This is the ledger-backed wallet: CustomerWallet holds
+    the current balance, WalletTransaction is the immutable append-only
+    ledger every balance change is derived from -- balance on the wallet
+    row is a cached total for fast reads, but the transaction log is the
+    source of truth and is never edited or deleted.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wallet",
+    )
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_customer_wallet"
+
+    def __str__(self):
+        return f"Wallet({self.user_id}) = {self.balance}"
+
+
+class WalletTransaction(models.Model):
+    class TxType(models.TextChoices):
+        CREDIT = "CREDIT", "Credit"
+        DEBIT  = "DEBIT",  "Debit"
+
+    class Reason(models.TextChoices):
+        REFUND        = "REFUND",        "Refund Credited to Wallet"
+        GOODWILL      = "GOODWILL",      "Goodwill Credit"
+        REFERRAL      = "REFERRAL",      "Referral Reward"
+        BOOKING_DEBIT = "BOOKING_DEBIT", "Applied to Booking Payment"
+        ADJUSTMENT    = "ADJUSTMENT",    "Manual Adjustment"
+        REVERSAL      = "REVERSAL",      "Reversal"
+
+    wallet = models.ForeignKey(
+        CustomerWallet,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    tx_type = models.CharField(max_length=10, choices=TxType.choices)
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, default="")
+
+    # Loose references -- avoids a hard FK to every possible source (refund,
+    # booking, referral) while still making the transaction traceable.
+    reference_type = models.CharField(max_length=50, blank=True, default="")
+    reference_id = models.CharField(max_length=50, blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="wallet_transactions_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_wallet_transaction"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.tx_type} {self.amount} ({self.reason}) -> wallet {self.wallet_id}"
+
+
+class InsuranceClaimAttachment(models.Model):
+    """Condition/damage evidence photo for an InsuranceClaim. Same shape as
+    RescheduleAttachment -- deliberately not reusing that model directly
+    since it's semantically a reschedule concept, not a claims one."""
+    file          = models.FileField(upload_to="insurance_claims/attachments/")
+    original_name = models.CharField(max_length=255, blank=True)
+    uploaded_by   = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="insurance_claim_attachments",
+    )
+    uploaded_at   = models.DateTimeField(auto_now_add=True)
+
+
+class InsuranceClaim(models.Model):
+    """
+    GT-C-03: the damage-claim path. Only filable on a booking that actually
+    opted into insurance (insurance_opted_in=True) -- an uninsured booking
+    still goes through the generic Complaint flow exactly as before, this
+    doesn't change that path at all.
+    """
+    class Status(models.TextChoices):
+        OPEN     = "OPEN",     "Open"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        PAID     = "PAID",     "Paid"
+
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="insurance_claims",
+    )
+    filed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="insurance_claims_filed",
+    )
+    description = models.TextField()
+    claimed_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # Never trust claimed_amount directly for payout -- approved_amount is
+    # separately set by whoever resolves the claim, and is clamped to
+    # booking.insurance_liability_cap at resolution time (see
+    # resolve_insurance_claim in services/__init__.py). This is the
+    # "stated liability cap... protects the platform when something breaks"
+    # the finding calls out.
+    approved_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    attachments = models.ManyToManyField(InsuranceClaimAttachment, blank=True, related_name="claims")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    resolution_notes = models.TextField(blank=True, default="")
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="insurance_claims_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_insurance_claim"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Claim #{self.pk} on booking {self.booking_id} ({self.status})"
+
+
+class NotificationOutbox(models.Model):
+    """
+    HS-D-04: "notifications are fire-and-forget with no delivery guarantee".
+    Every send_mail(...) call in notifications.py is transparently wrapped
+    (see notifications.send_mail) to persist one row per recipient per
+    attempt here, whether it succeeded or failed -- this is what actually
+    answers "was the customer told?", and what the retry management command
+    (notifications/management/commands/retry_failed_notifications.py)
+    replays for FAILED rows. This does not change delivery to be queued/
+    async -- sending is still inline in the request path, exactly as
+    before; this only adds the missing delivery record on top of it.
+    """
+    class Status(models.TextChoices):
+        SENT   = "SENT",   "Sent"
+        FAILED = "FAILED", "Failed"
+
+    recipient = models.EmailField(db_index=True)
+    subject = models.CharField(max_length=255)
+    body_text = models.TextField(blank=True, default="")
+    body_html = models.TextField(blank=True, default="")
+    from_email = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=10, choices=Status.choices, db_index=True)
+    error = models.TextField(blank=True, default="")
+    attempt_count = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_attempt_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_notification_outbox"
+        ordering = ["-created_at"]
+        indexes = [
+            # Explicit name (rather than Django's auto-generated hash) so
+            # this stays byte-for-byte consistent with the hand-written
+            # migration's AddIndex operation -- see the migration-authoring
+            # note there for why this migration couldn't be generated by
+            # `makemigrations` in this sandbox.
+            models.Index(fields=["status", "created_at"], name="notif_outbox_status_crt_idx"),
+        ]
+
+    def __str__(self):
+        return f"[{self.status}] {self.subject} -> {self.recipient}"
+
+
+class TripStop(models.Model):
+    """
+    GT-D-02: "goods-transport/packers & movers jobs with more than one
+    pickup or drop point have nowhere to record the extra stops" -- the
+    ServiceRequest model only ever had one pickup (`address`) and one drop
+    (`drop_address`), documented there as a deliberate 2-address-only
+    decision (see the comment above `drop_address`). This model is the
+    "revisit if Packers & Movers ever needs multi-stop routing" case that
+    comment called for -- added additively: `address`/`drop_address` on
+    ServiceRequest are untouched and remain the source of truth for the
+    common single-pickup/single-drop case. TripStop only exists, and is
+    only ever created, for bookings that opt into extra stops; a booking
+    with zero TripStop rows behaves exactly as it always has.
+    """
+    class StopType(models.TextChoices):
+        PICKUP   = "PICKUP",   "Pickup"
+        WAYPOINT = "WAYPOINT", "Intermediate Stop"
+        DROP     = "DROP",     "Drop"
+
+    booking       = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name="trip_stops")
+    sequence      = models.PositiveSmallIntegerField(help_text="Visit order, 1-based.")
+    stop_type     = models.CharField(max_length=10, choices=StopType.choices, default=StopType.WAYPOINT)
+    address       = models.TextField()
+    contact_name  = models.CharField(max_length=200, blank=True, default="")
+    contact_phone = models.CharField(max_length=20, blank=True, default="")
+    latitude      = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    notes         = models.CharField(max_length=500, blank=True, default="")
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_trip_stop"
+        ordering = ["booking", "sequence"]
+        unique_together = ("booking", "sequence")
+
+    def __str__(self):
+        return f"Stop {self.sequence} ({self.stop_type}) for booking #{self.booking_id}"
+
+
+class BookingSeries(models.Model):
+    """
+    HS-B-07: "no support for recurring bookings / AMC subscriptions" --
+    customers could only book a single one-off service; there was no way
+    to set up e.g. "service my AC every 3 months" and have future bookings
+    generated automatically.
+
+    A BookingSeries is a template + schedule, not a booking itself. Each
+    due date, generate_due_bookings() (services/__init__.py) creates a real
+    ServiceRequest row from the template -- the vendor app's existing
+    dispatch_pending_workforce_jobs polling loop then picks that row up
+    exactly like any manually-created booking (see the X-02 comment on
+    BookingCreateView: the "dispatch" happens by the vendor side polling
+    this same shared table, not by anything the creator calls). No new
+    dispatch path was needed for that reason.
+
+    Deliberately COD-only: there is no stored payment method/card-on-file
+    anywhere in this codebase, so an AMC booking cannot be auto-charged
+    online without building that (out of scope here) -- every generated
+    booking is created exactly like a COD booking today (status=CONFIRMED,
+    payment collected on service).
+    """
+    class Frequency(models.TextChoices):
+        MONTHLY     = "MONTHLY",     "Every Month"
+        QUARTERLY   = "QUARTERLY",   "Every 3 Months"
+        HALF_YEARLY = "HALF_YEARLY", "Every 6 Months"
+        YEARLY      = "YEARLY",      "Every 12 Months"
+
+    class Status(models.TextChoices):
+        ACTIVE    = "ACTIVE",    "Active"
+        PAUSED    = "PAUSED",    "Paused"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="booking_series")
+    # Snapshotted at series creation, same rationale as every other
+    # *_snapshot pattern in this file -- generation must not silently break
+    # or silently change if the user later edits their profile.
+    customer_name = models.CharField(max_length=200)
+    phone         = models.CharField(max_length=30)
+    email         = models.EmailField(blank=True, default="")
+
+    service_category = models.CharField(max_length=150)
+    issue_title       = models.CharField(max_length=300)
+    description       = models.TextField(blank=True, default="")
+    address           = models.TextField()
+    latitude          = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude         = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    preferred_time    = models.CharField(max_length=50, blank=True, default="")
+    # Snapshotted from the series-creation booking's price -- no live fare
+    # recomputation per generated occurrence in this pass (fares can change
+    # between occurrences; that reconciliation is a deliberate follow-up,
+    # not silently assumed away).
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    frequency     = models.CharField(max_length=12, choices=Frequency.choices)
+    next_run_date = models.DateField()
+    status        = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+
+    occurrences_generated = models.PositiveIntegerField(default=0)
+    last_generated_booking = models.ForeignKey(
+        "ServiceRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_booking_series"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"AMC series #{self.id} ({self.service_category}, {self.frequency}) for {self.customer_name}"
+
+class VegetableRecipe(models.Model):
+    """
+    Recipe discovery model tied to a primary vegetable package.
+    Provides complete cooking instructions, nutrition breakdown, and health tips.
+    """
+    class Difficulty(models.TextChoices):
+        EASY   = "Easy",   "Easy"
+        MEDIUM = "Medium", "Medium"
+        HARD   = "Hard",   "Hard"
+
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recipes",
+        help_text="Primary vegetable product in Calservices catalog"
+    )
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    image = models.CharField(max_length=500, blank=True)
+    short_description = models.TextField(blank=True)
+    prep_time_minutes = models.PositiveIntegerField(default=10)
+    cook_time_minutes = models.PositiveIntegerField(default=15)
+    total_time_minutes = models.PositiveIntegerField(default=25)
+    difficulty = models.CharField(max_length=20, choices=Difficulty.choices, default=Difficulty.EASY)
+    servings = models.PositiveIntegerField(default=2, help_text="Base recipe serving size")
+    calories = models.PositiveIntegerField(default=120, help_text="Calories (kcal) per serving")
+    protein = models.CharField(max_length=50, blank=True, default="3g")
+    carbohydrates = models.CharField(max_length=50, blank=True, default="15g")
+    fat = models.CharField(max_length=50, blank=True, default="2g")
+    fiber = models.CharField(max_length=50, blank=True, default="4g")
+    health_benefits = models.JSONField(default=list, blank=True, help_text="List of informational health points")
+    health_tips = models.JSONField(default=list, blank=True, help_text="List of washing, cooking, or storage tips")
+    instructions = models.JSONField(default=list, blank=True, help_text="List of step-by-step cooking instructions")
+    tags = models.JSONField(default=list, blank=True, help_text="List of tags like Quick Recipes, Low Calorie, etc.")
+    is_active = models.BooleanField(default=True)
+    is_popular = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.package.name})"
+
+
+class RecipeIngredient(models.Model):
+    """
+    Separates ingredients into:
+    1. Calservices Vegetables: Linked to a Package (purchasable, add to cart, recommend).
+    2. Other Cooking Ingredients (Pantry): Plain name/text only (salt, spices, oils, etc., NOT purchasable).
+    """
+    recipe = models.ForeignKey(VegetableRecipe, on_delete=models.CASCADE, related_name="ingredients")
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recipe_ingredients",
+        help_text="Referenced Calservices vegetable package if this is a catalog vegetable"
+    )
+    name = models.CharField(max_length=200, help_text="Ingredient name e.g. Tomato, Salt, Mustard seeds")
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    unit = models.CharField(max_length=50, default="pieces", help_text="e.g. pieces, g, kg, tsp, tbsp, cup, cloves")
+    notes = models.CharField(max_length=200, blank=True, default="", help_text="e.g. Finely chopped, Diced")
+    is_catalog_vegetable = models.BooleanField(default=False, help_text="True if linked to a vegetable sold by Calservices")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def save(self, *args, **kwargs):
+        if self.package_id:
+            self.is_catalog_vegetable = True
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} - {self.recipe.name}"
+
+
+class VegetableRecommendation(models.Model):
+    """
+    Database-driven vegetable recommendations (Goes Well With, Recipe Based, You May Also Like).
+    Both source and recommended products must reference existing Calservices vegetable products.
+    """
+    class RecommendationType(models.TextChoices):
+        GOES_WELL_WITH    = "GOES_WELL_WITH",    "Goes Well With"
+        RECIPE_BASED      = "RECIPE_BASED",      "Recipe Based"
+        YOU_MAY_ALSO_LIKE = "YOU_MAY_ALSO_LIKE", "You May Also Like"
+
+    source_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="source_recommendations",
+        help_text="Primary vegetable"
+    )
+    recommended_product = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="recommended_in",
+        help_text="Vegetable recommended with the primary vegetable"
+    )
+    recommendation_type = models.CharField(
+        max_length=30,
+        choices=RecommendationType.choices,
+        default=RecommendationType.GOES_WELL_WITH
+    )
+    priority = models.PositiveIntegerField(default=10, help_text="Higher priority items appear first")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_product", "recommended_product", "recommendation_type"],
+                name="unique_vegetable_recommendation"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.source_product.name} -> {self.recommended_product.name} ({self.get_recommendation_type_display()})"
+
+
+
+# ─── Slice 2: Reschedule ──────────────────────────────────────────────────────
 
 class PaintingRateCard(models.Model):
     category = models.CharField(max_length=100) # e.g. "Interior Painting", "Exterior Painting", "Waterproofing", "Wood & Metal", "Texture Decor"

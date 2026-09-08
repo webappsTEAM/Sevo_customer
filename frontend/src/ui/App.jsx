@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react"
 import { Navigate, Outlet, Route, Routes } from "react-router-dom"
 import { useAuth } from "../state/auth/useAuth.js"
 import { useRole } from "../state/auth/useRole.js"
-import { isSuperAdmin } from "../auth/authorization.js"
+import { isSuperAdmin, can as canAccess } from "../auth/authorization.js"
 import { routes } from "./routes.js"
 import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
@@ -116,6 +116,12 @@ const FeedbackManagementPage = lazy(() =>
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage || m.default }))
 )
+const ACInspectionBookingPage = lazy(() =>
+  import("./pages/ACInspectionBookingPage.jsx").then(m => ({ default: m.ACInspectionBookingPage || m.default }))
+)
+const ACInspectionStatusPage = lazy(() =>
+  import("./pages/ACInspectionStatusPage.jsx").then(m => ({ default: m.ACInspectionStatusPage || m.default }))
+)
 const VegetableFullScreenPage = lazy(() =>
   import("./pages/VegetableFullScreenPage.jsx").then(m => ({ default: m.VegetableFullScreenPage || m.default }))
 )
@@ -127,6 +133,9 @@ const TwoWheelerBookingHosurPage = lazy(() =>
 )
 const PackersMoversBookingHosurPage = lazy(() =>
   import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage || m.default }))
+)
+const LogisticsBookingPage = lazy(() =>
+  import("./pages/LogisticsBookingPage.jsx").then(m => ({ default: m.LogisticsBookingPage || m.default }))
 )
 const FeedbackPage = lazy(() =>
   import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage || m.default }))
@@ -191,6 +200,25 @@ function RequireAdminSettings() {
   if (!user) return <Navigate to={routes.login} replace />
   if (!isAdmin && !isSuper) return <Navigate to={routes.settings_profile} replace />
   return <Outlet />
+}
+
+/**
+ * Per-module frontend route gate. RequireAdmin only checks role (any
+ * Admin/Super Admin gets past it) — it doesn't know which modules a given
+ * Admin was actually granted via Super Admin > Admin Management >
+ * Customize Access. This wraps a single route element and additionally
+ * requires `can(user, module, action)` (same custom_permissions-aware
+ * check the backend enforces via accounts.permissions.can — see
+ * auth/authorization.js), so an Admin who wasn't granted a module can no
+ * longer even navigate to its page, not just have its API calls rejected.
+ * Super Admin always bypasses, same as everywhere else in the app.
+ */
+function RequireModule({ module, action = "view", children }) {
+  const { user } = useAuth()
+  const isSuper = isSuperAdmin(user)
+  if (!user) return <Navigate to={routes.login} replace />
+  if (!isSuper && !canAccess(user, module, action)) return <Navigate to={routes.dashboard} replace />
+  return children
 }
 
 function RequireCareAgentOrAdmin() {
@@ -312,11 +340,14 @@ export function App() {
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
+          <Route path="/ac-inspection" element={<ACInspectionBookingPage />} />
+          <Route path="/ac-inspection/status/:id" element={<ACInspectionStatusPage />} />
           <Route path={routes.vegetables} element={<VegetableFullScreenPage />} />
           <Route path="/vegetables" element={<VegetableFullScreenPage />} />
           <Route path="/vegetable" element={<VegetableFullScreenPage />} />
           <Route path="/fresh-vegetables" element={<VegetableFullScreenPage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
+          <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
@@ -334,6 +365,21 @@ export function App() {
           <Route path="/transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transports" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          {/* HS-A-03: logged-in customer account area -- real routes, not just a
+              modal reachable from the header. Each redirects into the existing
+              CustomerAccountModal on /home with the matching tab pre-selected via
+              location.state (same pattern as /goods, /transport above), so the tab
+              switch/fetch logic already built for that modal is reused as-is instead
+              of duplicating it as separate full pages. */}
+          <Route path={routes.account} element={<Navigate to="/home" state={{ openAccountTab: "My Profile" }} replace />} />
+          <Route path={routes.account_bookings} element={<Navigate to="/home" state={{ openAccountTab: "My Bookings" }} replace />} />
+          <Route path={routes.account_addresses} element={<Navigate to="/home" state={{ openAccountTab: "Saved Addresses" }} replace />} />
+          <Route path={routes.account_wallet} element={<Navigate to="/home" state={{ openAccountTab: "Wallet" }} replace />} />
+          <Route path={routes.account_referral} element={<Navigate to="/home" state={{ openAccountTab: "Referral Code" }} replace />} />
+          <Route path={routes.account_amc} element={<Navigate to="/home" state={{ openAccountTab: "AMC Bookings" }} replace />} />
+          <Route path={routes.account_insurance} element={<Navigate to="/home" state={{ openAccountTab: "Insurance Claims" }} replace />} />
+          <Route path={routes.account_notifications} element={<Navigate to="/home" state={{ openAccountTab: "Notification Settings" }} replace />} />
+          <Route path={routes.account_help} element={<Navigate to="/home" state={{ openAccountTab: "Help & Support" }} replace />} />
           <Route path="/courier/two-wheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
           <Route path="/courier/twowheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
           <Route path="/courier" element={<Navigate to="/two-wheelers/hosur" replace />} />
@@ -405,8 +451,12 @@ export function App() {
             <Route element={<RequireCareAgentOrAdmin />}>
               <Route path="/support/tickets" element={<CustomerCarePage />} />
             </Route>
-            <Route path={routes.inventory} element={<InventoryPage />} />
-            <Route path={routes.reports} element={<ReportsPage />} />
+            {/* Inventory previously had no route-level check at all (any
+                authenticated non-customer, including Support, could open it
+                by URL) — now requires the "inventory" module like the
+                backend already does on its API. */}
+            <Route path={routes.inventory} element={<RequireModule module="inventory"><InventoryPage /></RequireModule>} />
+            <Route path={routes.reports} element={<RequireModule module="reports"><ReportsPage /></RequireModule>} />
 
             {/* Profile settings */}
             <Route path={routes.settings} element={<SettingsPage />} />
@@ -416,24 +466,39 @@ export function App() {
             <Route path={routes.settings_security} element={<SettingsPage section="security" />} />
             <Route path={routes.settings_data} element={<SettingsPage section="data" />} />
 
-            {/* ── Admin-only routes ── */}
+            {/* ── Admin-only routes ──
+                RequireAdmin gates "must be Admin or Super Admin at all";
+                RequireModule additionally gates "was THIS module actually
+                granted to this Admin" (per Super Admin > Admin Management >
+                Customize Access), so Admin 1 (Groceries/catalog only) can no
+                longer even open Marketing or Homepage Builder by URL, and
+                Admin 2 (Products/catalog only) can't open Service Requests,
+                etc. Super Admin bypasses every RequireModule check. */}
             <Route element={<RequireAdmin />}>
               <Route path={routes.get_started} element={<GetStartedPage />} />
-              <Route path={routes.catalog_dashboard} element={<CatalogDashboardPage />} />
-              <Route path={routes.catalog_categories} element={<CatalogCategoriesPage />} />
-              <Route path={routes.catalog_services} element={<CatalogServicesPage />} />
-              <Route path={routes.catalog_packages} element={<CatalogPackagesPage />} />
-              <Route path={routes.catalog_addons} element={<CatalogAddOnsPage />} />
-              <Route path={routes.catalog_recipes} element={<AdminRecipesPage />} />
-              <Route path={routes.catalog_recommendations} element={<AdminRecommendationsPage />} />
-              <Route path={routes.catalog_change_log} element={<CatalogChangeLogPage />} />
-              <Route path={routes.catalog_painting_rates} element={<PaintingRateCardPage />} />
-              <Route path={routes.marketing_coupons} element={<CouponsPage />} />
-              <Route path={routes.marketing_offers} element={<OffersPage />} />
-              <Route path={routes.marketing_referrals} element={<ReferralsPage />} />
+              <Route path={routes.catalog_dashboard} element={<RequireModule module="catalog"><CatalogDashboardPage /></RequireModule>} />
+              <Route path={routes.catalog_categories} element={<RequireModule module="catalog"><CatalogCategoriesPage /></RequireModule>} />
+              <Route path={routes.catalog_services} element={<RequireModule module="catalog"><CatalogServicesPage /></RequireModule>} />
+              <Route path={routes.catalog_packages} element={<RequireModule module="catalog"><CatalogPackagesPage /></RequireModule>} />
+              <Route path={routes.catalog_addons} element={<RequireModule module="catalog"><CatalogAddOnsPage /></RequireModule>} />
+              <Route path={routes.catalog_recipes} element={<RequireModule module="catalog"><AdminRecipesPage /></RequireModule>} />
+              <Route path={routes.catalog_recommendations} element={<RequireModule module="catalog"><AdminRecommendationsPage /></RequireModule>} />
+              <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
+              <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
+              <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />
+              <Route path={routes.marketing_offers} element={<RequireModule module="marketing"><OffersPage /></RequireModule>} />
+              <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />
+              <Route path={routes.admin_service_requests} element={<RequireModule module="service_requests"><ServiceRequestsPage /></RequireModule>} />
+              <Route path={routes.admin_feedback} element={<RequireModule module="reviews"><FeedbackManagementPage /></RequireModule>} />
+            </Route>
+
+            {/* Homepage Builder edits Customer Web content that is public to
+                every visitor the moment it's published, so — matching the
+                "Customer Web Edit Mode is specifically for Super Admin"
+                requirement — this is Super Admin-exclusive, not a module a
+                Super Admin can hand out to a normal Admin. */}
+            <Route element={<RequireSuperAdmin />}>
               <Route path={routes.homepage_customizer} element={<HomePageCustomizerPage />} />
-              <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
-              <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
             </Route>
 
             {/* ── Customer module — accessible by Admins AND Care Agents ── */}

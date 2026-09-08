@@ -1,5 +1,6 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -101,6 +102,18 @@ class User(AbstractBaseUser):
         CUSTOMER = "customer", "Customer"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER)
+
+    # Per-user module permission overrides, layered on top of the role-based
+    # Global RBAC matrix (accounts/permissions.py DEFAULT_GLOBAL_RBAC).
+    # Shape: {"<module>": ["<action>", ...]}. A module key present here
+    # (including as an empty list, meaning "No Access") always wins over
+    # the role's default actions for that module; a module NOT present here
+    # simply falls back to the role default — so most Admin/Staff accounts
+    # need no entry at all. Only a Super Admin may set this (enforced in
+    # platform_control.views.PlatformUserDetailView/PlatformUserInviteView).
+    # See accounts.permissions.get_effective_module_actions() — the single
+    # place both `can()` and UserSerializer.get_permissions() read this from.
+    custom_permissions = models.JSONField(default=dict, blank=True)
 
     # Extended profile fields
     bio = models.TextField(blank=True, default="")
@@ -262,3 +275,118 @@ class SavedAddress(models.Model):
     def __str__(self):
         return f"{self.user.get_full_name()} — {self.get_label_display()} ({self.city})"
 
+
+class CustomerNotificationPreference(models.Model):
+    """
+    HS-D-05: the vendor app has WorkforceNotificationPreference per employee;
+    the customer app had no equivalent -- no opt-out, no channel choice, no
+    consent record for any of the ~12 notification types
+    service_requests/notifications.py sends. Mirrors the vendor model's shape
+    so both sides follow the same convention.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_preference",
+    )
+
+    # Booking lifecycle
+    booking_confirmations = models.BooleanField(default=True)
+    reschedule_updates    = models.BooleanField(default=True)
+    technician_updates    = models.BooleanField(default=True)
+    completion_feedback   = models.BooleanField(default=True)
+
+    # Money
+    payment_receipts  = models.BooleanField(default=True)
+    refund_updates    = models.BooleanField(default=True)
+
+    # Support
+    complaint_updates = models.BooleanField(default=True)
+
+    # Marketing / non-essential
+    promotional_offers = models.BooleanField(default=False)
+
+    # Channels -- account-created/security-relevant mail always sends
+    # regardless of these preferences (see notifications.py); these govern
+    # everything else.
+    channel_email = models.BooleanField(default=True)
+    channel_sms   = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "accounts_customer_notification_preference"
+
+    def __str__(self):
+        return f"Notification Preferences for {self.user.username}"
+
+
+def _generate_referral_code(user):
+    """8-char uppercase alphanumeric, derived from the user id so it's stable
+    and collision-free without a retry loop -- same spirit as this codebase's
+    existing deterministic-but-unguessable ID generators (request_id etc.),
+    but referral codes are meant to be shared, so they don't need the
+    cryptographic-randomness requirement OTPs do."""
+    import hashlib
+    digest = hashlib.sha256(f"referral-{user.pk}-{user.username}".encode()).hexdigest()
+    return digest[:8].upper()
+
+
+class ReferralCode(models.Model):
+    """
+    HS-A-06: every customer's own shareable referral code. Generated lazily
+    (get_or_create) rather than at signup for every user, so this is a no-op
+    for the vast majority of existing users who will never use it.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_code_obj",
+    )
+    code = models.CharField(max_length=16, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_referral_code"
+
+    def __str__(self):
+        return self.code
+
+
+class Referral(models.Model):
+    """
+    HS-A-06: referrals and loyalty existed only as an empty admin screen with
+    no backend and no customer-facing loop. This is the tracking record: one
+    row per referee (a person can only be referred once, by whoever's code
+    they used at signup), reward paid out once the referee's first booking
+    completes (see service_requests.services.process_referral_completion,
+    called from the completion webhook path).
+    """
+    class Status(models.TextChoices):
+        PENDING   = "PENDING",   "Pending (referee has not completed a booking yet)"
+        REWARDED  = "REWARDED",  "Rewarded"
+        EXPIRED   = "EXPIRED",   "Expired (unused)"
+
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referrals_made",
+    )
+    referee = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referred_by",
+    )
+    code_used = models.CharField(max_length=16, blank=True, default="")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    referrer_reward_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    referee_reward_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rewarded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_referral"
+
+    def __str__(self):
+        return f"Referral {self.referrer_id} -> {self.referee_id} ({self.status})"

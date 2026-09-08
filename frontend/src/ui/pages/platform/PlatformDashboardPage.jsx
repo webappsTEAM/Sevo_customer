@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { Shield, Users, Calendar, DollarSign, AlertTriangle, Activity, Lock, RefreshCw, ArrowRight } from "lucide-react"
+import { Shield, Users, Calendar, DollarSign, AlertTriangle, Activity, Lock, RefreshCw, ArrowRight, Eye } from "lucide-react"
 import { Link } from "react-router-dom"
 import { apiRequest } from "../../../api/client.js"
 
@@ -184,6 +184,30 @@ export default function PlatformDashboardPage() {
             Live chronological timeline of all privileged Super Admin actions, role elevations, and state modifications.
           </p>
         </Link>
+
+        {/* Enter the real Customer UI (not a copy) with authorized inline
+            Edit Mode — see VegetableFullScreenPage / VegetableProductCard.
+            Opens in a new tab so the Super Admin's platform session here is
+            undisturbed; the customer page is protected by the same
+            AuthProvider session, and edit affordances only render because
+            isSuperAdmin(user) is true — a normal customer visiting the same
+            URL sees the ordinary storefront with no edit controls. */}
+        <a
+          href="/vegetables?admin_edit=1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:border-indigo-500/50 hover:shadow-md transition-all group"
+        >
+          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform">
+            <Eye className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-semibold text-slate-900 group-hover:text-rose-600 transition-colors">
+            View Customer App
+          </h3>
+          <p className="text-slate-500 text-xs mt-2 leading-relaxed">
+            Open the live customer storefront exactly as customers see it, with an authorized Edit Mode toggle to update product pricing inline.
+          </p>
+        </a>
       </div>
     </div>
   )

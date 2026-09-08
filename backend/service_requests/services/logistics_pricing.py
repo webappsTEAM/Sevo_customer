@@ -21,6 +21,17 @@ LOGISTICS_CATEGORIES = {
 }
 
 
+class UnresolvedLogisticsFareError(Exception):
+    """
+    Fixes GT-B-01: raised instead of silently trusting submitted_amount when
+    a logistics booking has neither a resolvable Lane nor ServiceTier. The
+    caller (BookingCreateView) is expected to catch this and return a 400
+    telling the customer to pick a valid route/tier, rather than recording
+    an unverified, client-supplied price.
+    """
+    pass
+
+
 def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, submitted_amount):
     """
     Returns the fare that should actually be recorded on the ServiceRequest.
@@ -34,12 +45,12 @@ def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, 
       price.
     - Logistics booking with only a resolvable `ServiceTier` → the tier's
       starting_price wins.
-    - Logistics booking with neither → falls back to submitted_amount.
-      There's nothing authoritative to check it against yet — this can
-      happen if the frontend didn't resolve a tier/lane id (e.g. it fell
-      back to its static data because /api/logistics/ was unreachable).
-      Once every booking reliably carries a tier or lane id, this branch
-      should be tightened to reject the booking instead of trusting it.
+    - Logistics booking with neither → raises UnresolvedLogisticsFareError.
+      Previously this fell back to trusting submitted_amount outright; this
+      is exactly the client-trusted-price gap the payment fixes elsewhere
+      in this pass (HS-C-01) closed for the payment-verification path, so
+      the same standard applies here now that logistics bookings are a live
+      feature rather than an MVP slice with unreliable tier/lane data.
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount
@@ -48,4 +59,6 @@ def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, 
         return logistics_lane.fare
     if logistics_tier is not None:
         return logistics_tier.starting_price
-    return submitted_amount
+    raise UnresolvedLogisticsFareError(
+        f"Cannot verify a fare for '{service_category}' without a resolvable logistics tier or lane."
+    )

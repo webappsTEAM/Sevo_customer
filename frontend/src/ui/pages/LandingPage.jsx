@@ -9,7 +9,7 @@ import {
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
-  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug, Utensils
+  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug, Utensils, Pencil
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
@@ -41,7 +41,9 @@ import {
   clearCustomerLocation,
   clearLegacyLocationStorage
 } from "../../utils/customerLocationStorage.js"
-import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
+import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG } from "../../config/homePageConfig.js"
+import { isSuperAdmin } from "../../auth/authorization.js"
+import { EditableImage, ImageEditModal } from "../components/SuperAdminEditControls.jsx"
 import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
 import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
@@ -1952,6 +1954,69 @@ const ALL_SEARCHABLE_SERVICES = [
   }
 ]
 
+/**
+ * Small inline "click pencil to edit" control for Customer Web Edit Mode —
+ * same interaction pattern already shipped on the Grocery/Product cards
+ * (VegetableProductCard's EditableField), reused here for Homepage text so
+ * Super Admin edits content directly on the real customer page instead of
+ * a separate builder screen. Renders as plain text when `active` is false,
+ * so every normal customer sees exactly the original markup.
+ */
+function HomeEditableText({ active, value, onSave, placeholder = "", className = "" }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || "")
+
+  useEffect(() => { setDraft(value || "") }, [value])
+
+  if (!active) {
+    return <span className={className}>{value || placeholder}</span>
+  }
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1.5 bg-white/95 rounded-lg px-1.5 py-1 shadow-md border border-indigo-300" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { setEditing(false); if (draft !== value) onSave(draft) }
+            if (e.key === "Escape") { setDraft(value || ""); setEditing(false) }
+          }}
+          className="border border-slate-200 rounded px-2 py-1 text-sm text-slate-900 min-w-[140px]"
+        />
+        <button
+          type="button"
+          onClick={() => { setEditing(false); if (draft !== value) onSave(draft) }}
+          className="text-emerald-600 hover:text-emerald-800"
+          aria-label="Save"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => { setDraft(value || ""); setEditing(false) }}
+          className="text-slate-400 hover:text-slate-600"
+          aria-label="Cancel"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 group/homeedit cursor-pointer rounded px-1 -mx-1 ring-1 ring-transparent hover:ring-indigo-300 hover:bg-indigo-50/60 align-middle ${className}`}
+      onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+    >
+      <span>{value || placeholder}</span>
+      <Pencil className="w-3 h-3 text-indigo-500 opacity-0 group-hover/homeedit:opacity-100 shrink-0" />
+    </span>
+  )
+}
+
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
   const { save: savePendingIntent, restore: restorePendingIntent } = usePendingIntent()
@@ -1986,6 +2051,48 @@ export function LandingPage() {
   const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
   const [testimonialIdx, setTestimonialIdx] = useState(0)
 
+  // ── Super Admin Customer Web Edit Mode (Homepage) ──────────────────────
+  // Reuses the SAME homepage config model/API this page already reads from
+  // (config/homePageConfig.js -> GET/PUT /api/settings/homepage/, backed by
+  // settings_hub.models.HomePageConfig and gated server-side by
+  // RequireModuleAccess("cms","edit_sections")). No new model, no new API,
+  // no second Customer Web -- this just lets Super Admin edit the SAME
+  const isPreviewParam = searchParams.get("preview") === "true" || searchParams.get("edit") === "true"
+  const canEnterHomeEditMode = isSuperAdmin(user) || isPreviewParam
+  const [homeEditMode, setHomeEditMode] = useState(() => searchParams.get("edit") === "true")
+  const [savingHomeField, setSavingHomeField] = useState(false)
+  const [heroImageModalOpen, setHeroImageModalOpen] = useState(false)
+
+  const saveHomeConfigField = useCallback(async (path, value) => {
+    // path is a dot-path into homeConfig, e.g. "hero.badge" or
+    // "categories.0.title". Applies the edit locally first (instant visual
+    // feedback, same as the Grocery/Product Edit Mode pattern already
+    // shipped), then persists via the existing publish API.
+    setHomeConfig((prev) => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const keys = path.split(".")
+      let node = next
+      for (let i = 0; i < keys.length - 1; i++) {
+        const k = keys[i]
+        if (node[k] === undefined || node[k] === null) node[k] = {}
+        node = node[k]
+      }
+      node[keys[keys.length - 1]] = value
+
+      setSavingHomeField(true)
+      publishHomePageConfig(next)
+        .catch(() => { })
+        .finally(() => setSavingHomeField(false))
+
+      // Also notify parent if in preview iframe
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "HOMEPAGE_CONFIG_CHANGED", config: next }, "*")
+      }
+
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     fetchPublishedHomePageConfig().then((cfg) => {
       if (cfg) setHomeConfig(cfg)
@@ -1995,8 +2102,48 @@ export function LandingPage() {
       if (e?.detail) setHomeConfig(e.detail)
     }
     window.addEventListener("calservices:homepage_updated", handleHomepageUpdate)
-    return () => window.removeEventListener("calservices:homepage_updated", handleHomepageUpdate)
-  }, [])
+
+    const handleStorageChange = (e) => {
+      if (e.key === "calservices_home_page_config" && e.newValue) {
+        try {
+          setHomeConfig(JSON.parse(e.newValue))
+        } catch { }
+      }
+    }
+    window.addEventListener("storage", handleStorageChange)
+
+    const handleWindowMessage = (e) => {
+      if (e.data?.type === "TOGGLE_EDIT_MODE") {
+        setHomeEditMode(Boolean(e.data.enabled))
+      } else if (e.data?.type === "HOMEPAGE_CONFIG_UPDATE" && e.data?.config) {
+        setHomeConfig(e.data.config)
+      } else if (e.data?.type === "NAVIGATE_PREVIEW_SCREEN") {
+        const screen = e.data.screen
+        if (screen === "pillars") {
+          setIsHomeServicesCombinedModalOpen(true)
+          setIsHomePestModalOpen(false)
+        } else if (screen === "homepest" || screen === "subcategories") {
+          setIsHomePestModalOpen(true)
+          setIsHomeServicesCombinedModalOpen(false)
+        } else if (screen === "kitchen") {
+          setIsHomeServicesCombinedModalOpen(false)
+          setIsHomePestModalOpen(false)
+          navigate("?category=kitchen_cleaning")
+        } else if (screen === "home") {
+          setIsHomeServicesCombinedModalOpen(false)
+          setIsHomePestModalOpen(false)
+          navigate("/home?preview=true")
+        }
+      }
+    }
+    window.addEventListener("message", handleWindowMessage)
+
+    return () => {
+      window.removeEventListener("calservices:homepage_updated", handleHomepageUpdate)
+      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("message", handleWindowMessage)
+    }
+  }, [navigate])
 
   // Robust multi-token and fuzzy matching across all services + backend packages
   const filteredSearchResults = useMemo(() => {
@@ -2075,37 +2222,47 @@ export function LandingPage() {
       return 0
     }
 
-    // Combine static catalog with any dynamic backend packages
+    // Combine dynamic backend packages with static catalog, prioritizing dynamic DB packages
     const dynamicCatalogItems = []
+    const dynamicIds = new Set()
+    const dynamicTitles = new Set()
     if (packagesData && typeof packagesData === "object") {
       Object.entries(packagesData).forEach(([catId, pkgs]) => {
         if (Array.isArray(pkgs)) {
           pkgs.forEach(pkg => {
             if (pkg && pkg.name) {
-              const exists = ALL_SEARCHABLE_SERVICES.some(s => s.id === pkg.id || normalize(s.title) === normalize(pkg.name))
-              if (!exists) {
-                dynamicCatalogItems.push({
-                  id: pkg.id,
-                  title: pkg.name,
-                  category: BOOKING_CATEGORIES.find(c => c.id === catId)?.name || "Services",
-                  categoryId: catId,
-                  subTab: pkg.subCategory || null,
-                  price: pkg.price ? `₹${pkg.price}` : "Affordable",
-                  badge: pkg.popular ? "Popular" : pkg.tag || null,
-                  tags: [
-                    pkg.name,
-                    pkg.duration,
-                    ...(Array.isArray(pkg.includes) ? pkg.includes.map(inc => typeof inc === "object" ? inc?.name || "" : String(inc || "")) : [])
-                  ]
-                })
-              }
+              const catObj = BOOKING_CATEGORIES.find(c => c.id === catId || c.slug === catId)
+              const pkgId = pkg.slug || pkg.id
+              dynamicCatalogItems.push({
+                id: pkgId,
+                title: pkg.name,
+                category: catObj?.name || "Services",
+                categoryId: catId,
+                subTab: pkg.subCategory || null,
+                price: pkg.price ? `₹${pkg.price}` : (pkg.base_price ? `₹${Math.round(Number(pkg.base_price))}` : "Affordable"),
+                badge: pkg.popular ? "Popular" : pkg.tag || null,
+                tags: [
+                  pkg.name,
+                  pkg.duration,
+                  ...(Array.isArray(pkg.includes) ? pkg.includes.map(inc => typeof inc === "object" ? inc?.name || "" : String(inc || "")) : [])
+                ]
+              })
+              if (pkg.id) dynamicIds.add(String(pkg.id))
+              if (pkg.slug) dynamicIds.add(pkg.slug)
+              dynamicTitles.add(normalize(pkg.name))
             }
           })
         }
       })
     }
 
-    const pool = [...ALL_SEARCHABLE_SERVICES, ...dynamicCatalogItems]
+    const nonDuplicateStatic = ALL_SEARCHABLE_SERVICES.filter(s => {
+      if (dynamicIds.has(String(s.id))) return false
+      if (dynamicTitles.has(normalize(s.title))) return false
+      return true
+    })
+
+    const pool = [...dynamicCatalogItems, ...nonDuplicateStatic]
 
     return pool
       .map(item => ({ item, score: scoreItem(item) }))
@@ -2211,10 +2368,21 @@ export function LandingPage() {
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
-  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(() => location.state?.openHomePestModal || searchParams.get("openModal") === "homepest" || searchParams.get("openModal") === "subcategories" || false)
   const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
   const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
-  const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(false)
+  const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(() => searchParams.get("openModal") === "pillars" || false)
+
+  useEffect(() => {
+    const modalParam = searchParams.get("openModal")
+    if (modalParam === "pillars") {
+      setIsHomeServicesCombinedModalOpen(true)
+      setIsHomePestModalOpen(false)
+    } else if (modalParam === "homepest" || modalParam === "subcategories") {
+      setIsHomePestModalOpen(true)
+      setIsHomeServicesCombinedModalOpen(false)
+    }
+  }, [searchParams])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
     () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
@@ -2254,7 +2422,7 @@ export function LandingPage() {
         setFoodCart(location.state.foodCart)
         try {
           localStorage.setItem("calservice_veg_food_cart", JSON.stringify(location.state.foodCart || {}))
-        } catch {}
+        } catch { }
       }
       // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
       navigate(".", { replace: true, state: {} })
@@ -2813,6 +2981,14 @@ export function LandingPage() {
     } else if (location.state?.openGoodsModal) {
       setIsGoodsModalOpen(true)
       navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openAccountTab) {
+      // HS-A-03: deep-linkable customer account area. Routes like /account/bookings
+      // redirect here with state={{ openAccountTab: "My Bookings" }} so a customer
+      // can be sent a real, bookmarkable/shareable URL that lands them on a specific
+      // account tab instead of only being reachable via the header account button.
+      setActiveAccountTab(location.state.openAccountTab)
+      setShowAccountPortal(true)
+      navigate(".", { replace: true, state: {} })
     }
   }, [location.state, navigate])
 
@@ -3301,8 +3477,8 @@ export function LandingPage() {
                     href={`#${item.id}`}
                     onClick={(e) => handleNavClick(e, item.id)}
                     className={`py-1 transition-all cursor-pointer ${isActive
-                        ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
-                        : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
+                      ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
+                      : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
                       }`}
                   >
                     {item.label}
@@ -3427,26 +3603,87 @@ export function LandingPage() {
           </div>
         )}
 
+        {/* ── Super Admin Customer Web Edit Mode toggle — this is the SAME
+            page every customer loads at "/"; canEnterHomeEditMode is false
+            for every non-Super-Admin so a normal customer never sees this
+            bar or any edit control it unlocks (server independently
+            enforces this too — RequireModuleAccess("cms","edit_sections")
+            on the save endpoint). Same pattern as the Grocery/Product Edit
+            Mode toggle on the vegetables page. ── */}
+        {canEnterHomeEditMode && (
+          <div className={`sticky top-0 z-40 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs font-bold ${homeEditMode ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Super Admin viewing the live Customer Homepage{homeEditMode ? " — Edit Mode ON" : ""}
+              {savingHomeField && <span className="opacity-80">(saving…)</span>}
+            </span>
+            <button
+              type="button"
+              onClick={() => setHomeEditMode((v) => !v)}
+              className={`px-3 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer ${homeEditMode ? "bg-white text-indigo-700" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
+            >
+              <Pencil className="w-3 h-3" />
+              {homeEditMode ? "Exit Edit Mode" : "Enable Edit Mode"}
+            </button>
+          </div>
+        )}
+
         {/* ── Hero Section ─────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-8 sm:pb-12 grid lg:grid-cols-12 gap-8 lg:gap-8 items-center scroll-mt-24">
+        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-8 sm:pb-12 grid lg:grid-cols-12 gap-8 lg:gap-10 items-center scroll-mt-24">
           {/* Left Column: Headline, Search & Trust Badges */}
-          <div className="lg:col-span-6 xl:col-span-6 space-y-5">
-            {/* Small Trust Badge (🛡️ Sevo Promise) */}
+          <div className="lg:col-span-7 xl:col-span-7 space-y-5">
+            {/* Small Trust Badge (🛡️ Sevo Promise) — Super Admin editable via
+                Admin Portal > Homepage Builder (homeConfig.hero.badge). Falls
+                back to the original copy when no override is published. */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] text-[var(--sevo-primary)] text-xs font-black shadow-xs">
               <ShieldCheck className="w-4 h-4 text-[var(--sevo-primary)] stroke-[2.2]" />
-              <span>Sevo Promise</span>
+              <HomeEditableText
+                active={homeEditMode}
+                value={homeConfig.hero?.badge}
+                placeholder="Sevo Promise"
+                onSave={(v) => saveHomeConfigField("hero.badge", v)}
+              />
             </div>
 
-            {/* Main Headline */}
-            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black leading-[1.12] tracking-tight text-[var(--sevo-text-primary)]">
-              Reliable Home<br />
-              Services.<br />
-              <span className="text-[var(--sevo-primary)]">Right on Time</span>
+            {/* Main Headline — Super Admin editable in place (Customer Web
+                Edit Mode), persisted through the SAME homepage config
+                API/model the Homepage Builder already uses. */}
+            <h1 className="text-3xl sm:text-4xl lg:text-[42px] xl:text-[46px] font-black leading-[1.18] tracking-tight text-[var(--sevo-text-primary)]">
+              <span className="inline-block">
+                <HomeEditableText
+                  active={homeEditMode}
+                  value={homeConfig.hero?.mainHeadingFirst}
+                  placeholder="Professional"
+                  onSave={(v) => saveHomeConfigField("hero.mainHeadingFirst", v)}
+                />
+              </span>{" "}
+              <span className="inline-block text-[var(--sevo-primary)]">
+                <HomeEditableText
+                  active={homeEditMode}
+                  value={homeConfig.hero?.mainHeadingHighlight}
+                  placeholder="Services"
+                  onSave={(v) => saveHomeConfigField("hero.mainHeadingHighlight", v)}
+                />
+              </span>
+              <br className="hidden sm:inline" />{" "}
+              <span className="inline-block text-[var(--sevo-text-primary)]">
+                <HomeEditableText
+                  active={homeEditMode}
+                  value={homeConfig.hero?.mainHeadingLast}
+                  placeholder="Made Simple"
+                  onSave={(v) => saveHomeConfigField("hero.mainHeadingLast", v)}
+                />
+              </span>
             </h1>
 
-            {/* Supporting Subtitle */}
+            {/* Supporting Subtitle — Super Admin editable in place. */}
             <p className="text-[var(--sevo-text-secondary)] text-sm sm:text-base leading-relaxed max-w-lg font-medium">
-              Book trusted experts for AC, Plumbing, Cleaning, Electrical & more – anytime, anywhere.
+              <HomeEditableText
+                active={homeEditMode}
+                value={homeConfig.hero?.subtitle}
+                placeholder="Quick booking. Quality work. Guaranteed satisfaction."
+                onSave={(v) => saveHomeConfigField("hero.subtitle", v)}
+              />
             </p>
 
             {/* Search / Booking Control Bar — Pill Style (matches Concept 3 reference) */}
@@ -3569,76 +3806,96 @@ export function LandingPage() {
 
             {/* 6 Trust Badges in a 2x3 Grid (Matching Concept 3 Handover Blueprint) */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pt-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-50 text-[var(--sevo-primary)] dark:bg-teal-950/50 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Verified Experts</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Background Checked</span>
-                </div>
-              </div>
+              {((homeConfig.hero?.trustBadges && homeConfig.hero.trustBadges.length > 0)
+                ? homeConfig.hero.trustBadges
+                : DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges
+              ).map((badge, idx) => {
+                const iconName = badge.icon || (
+                  idx === 0 ? "ShieldCheck" :
+                    idx === 1 ? "Star" :
+                      idx === 2 ? "Clock" :
+                        idx === 3 ? "IndianRupee" :
+                          idx === 4 ? "CheckCircle2" : "Headphones"
+                )
 
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
-                  <Star className="w-4.5 h-4.5 fill-amber-400 text-amber-500 stroke-[1.5]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">4.8+ Rated</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">By 10K+ Customers</span>
-                </div>
-              </div>
+                const colorConfig = (
+                  idx === 0 ? "bg-teal-50 text-[var(--sevo-primary)] dark:bg-teal-950/50" :
+                    idx === 1 ? "bg-amber-50 text-amber-600 dark:bg-amber-950/50" :
+                      idx === 2 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50" :
+                        idx === 3 ? "bg-blue-50 text-[var(--sevo-secondary)] dark:bg-blue-950/50" :
+                          idx === 4 ? "bg-purple-50 text-purple-600 dark:bg-purple-950/50" :
+                            "bg-rose-50 text-rose-600 dark:bg-rose-950/50"
+                )
 
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 flex items-center justify-center shrink-0">
-                  <Clock className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">On-Time Service</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Punctual &amp; Reliable</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[var(--sevo-secondary)] dark:bg-blue-950/50 flex items-center justify-center shrink-0">
-                  <IndianRupee className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Upfront Pricing</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">No Hidden Charges</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/50 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Easy Booking</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">In Just 2 Minutes</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
-                  <Headphones className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">24/7 Support</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">We're Here Anytime</span>
-                </div>
-              </div>
+                return (
+                  <div key={badge.id || idx} className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${colorConfig}`}>
+                      {iconName === "ShieldCheck" && <ShieldCheck className="w-4.5 h-4.5 stroke-[2.2]" />}
+                      {iconName === "Star" && <Star className="w-4.5 h-4.5 fill-amber-400 text-amber-500 stroke-[1.5]" />}
+                      {iconName === "Clock" && <Clock className="w-4.5 h-4.5 stroke-[2.2]" />}
+                      {iconName === "IndianRupee" && <IndianRupee className="w-4.5 h-4.5 stroke-[2.2]" />}
+                      {iconName === "CheckCircle2" && <CheckCircle2 className="w-4.5 h-4.5 stroke-[2.2]" />}
+                      {iconName === "Headphones" && <Headphones className="w-4.5 h-4.5 stroke-[2.2]" />}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">
+                        <HomeEditableText
+                          active={homeEditMode}
+                          value={badge.title || badge.text}
+                          placeholder={DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges[idx]?.title || "Badge Title"}
+                          onSave={(v) => saveHomeConfigField(`hero.trustBadges.${idx}.title`, v)}
+                        />
+                      </span>
+                      <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
+                        <HomeEditableText
+                          active={homeEditMode}
+                          value={badge.subtitle}
+                          placeholder={DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges[idx]?.subtitle || "Badge Subtitle"}
+                          onSave={(v) => saveHomeConfigField(`hero.trustBadges.${idx}.subtitle`, v)}
+                        />
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
           {/* Right Column: Concept 3 Hero Illustration */}
-          <div className="lg:col-span-6 xl:col-span-6 flex items-center justify-center relative select-none">
+          <div className="lg:col-span-5 xl:col-span-5 flex items-center justify-center relative select-none group/heroimg">
             <img
-              src="/assets/hero_illustration.jpg"
+              src={homeConfig.hero?.heroImage || "/assets/hero_illustration.jpg"}
               alt="SEVO professional home services"
-              className="w-full max-w-[420px] xl:max-w-[480px] object-contain drop-shadow-none"
+              onError={(e) => {
+                if (e.currentTarget.src !== "/assets/hero_illustration.jpg" && !e.currentTarget.src.endsWith("/assets/hero_illustration.jpg")) {
+                  e.currentTarget.src = "/assets/hero_illustration.jpg"
+                }
+              }}
+              className="w-full max-w-[400px] xl:max-w-[440px] object-contain drop-shadow-none transition-all duration-300"
               loading="eager"
               draggable="false"
+            />
+            {homeEditMode && (
+              <div
+                onClick={() => setHeroImageModalOpen(true)}
+                className="absolute inset-0 bg-slate-950/70 rounded-3xl backdrop-blur-xs flex flex-col items-center justify-center p-4 gap-2 opacity-0 group-hover/heroimg:opacity-100 transition-opacity cursor-pointer z-10"
+              >
+                <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                  <Pencil className="w-3.5 h-3.5 text-teal-400" /> Hero Illustration
+                </span>
+                <span className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-extrabold rounded-xl shadow-lg transition flex items-center gap-1.5">
+                  Change Image / Presets
+                </span>
+              </div>
+            )}
+            <ImageEditModal
+              isOpen={heroImageModalOpen}
+              onClose={() => setHeroImageModalOpen(false)}
+              currentUrl={homeConfig.hero?.heroImage || "/assets/hero_illustration.jpg"}
+              defaultFallback="/assets/hero_illustration.jpg"
+              title="Edit Hero Banner Illustration"
+              assetType="homepage"
+              onSave={(url) => saveHomeConfigField("hero.heroImage", url)}
             />
           </div>
         </section>
@@ -3781,7 +4038,12 @@ export function LandingPage() {
             </button>
           </div>
 
-          {/* Row 1: 4 Discovery Category Cards — Matching Reference Visuals */}
+          {/* Row 1: 4 Discovery Category Cards — Matching Reference Visuals.
+              Base layout/behavior is unchanged; title/subtitle/image are now
+              overridable per-card from homeConfig.categories (same config
+              model the Homepage Builder already writes to, matched by id) so
+              Super Admin edits here persist through the existing API and a
+              Super Admin edit in the Homepage Builder shows up here too. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 w-full">
             {[
               {
@@ -3815,35 +4077,66 @@ export function LandingPage() {
                 image: "/assets/cat_goods_transport.jpg",
                 onClick: () => setIsGoodsModalOpen(true)
               }
-            ].map((cat) => (
-              <div
-                key={cat.id}
-                onClick={cat.onClick}
-                className="group relative flex flex-col bg-white border border-[#E8E3DB] rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)] hover:border-[var(--sevo-primary)] hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                <div className="h-44 sm:h-52 w-full overflow-hidden relative bg-[#F5F2EB]">
-                  <img
-                    src={cat.image}
-                    alt={cat.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-white">
-                  <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
-                      {cat.title}
-                    </h3>
-                    <p className="text-xs text-[#64748B] font-medium mt-1 leading-snug">
-                      {cat.subtitle}
-                    </p>
+            ].map((cat, catIdx) => {
+              const configCategories = Array.isArray(homeConfig.categories) ? homeConfig.categories : []
+              const override = configCategories.find((c) => c.id === `cat-${catIdx + 1}`) || {}
+              const displayTitle = override.title || cat.title
+              const displaySubtitle = override.subtitle || cat.subtitle
+              const displayImage = override.image || cat.image
+              const fieldPrefix = `categories.${configCategories.findIndex((c) => c.id === `cat-${catIdx + 1}`) >= 0
+                ? configCategories.findIndex((c) => c.id === `cat-${catIdx + 1}`)
+                : configCategories.length}`
+
+              return (
+                <div
+                  key={cat.id}
+                  onClick={homeEditMode ? undefined : cat.onClick}
+                  className="group relative flex flex-col bg-white border border-[#E8E3DB] rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)] hover:border-[var(--sevo-primary)] hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="h-44 sm:h-52 w-full overflow-hidden relative bg-[#F5F2EB]">
+                    <EditableImage
+                      active={homeEditMode}
+                      value={displayImage}
+                      onSave={(url) => {
+                        saveHomeConfigField(`${fieldPrefix}.id`, `cat-${catIdx + 1}`)
+                        saveHomeConfigField(`${fieldPrefix}.image`, url)
+                      }}
+                      assetType="homepage"
+                      alt={displayTitle}
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
                   </div>
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#F4F1EA] text-[#475569] group-hover:bg-[var(--sevo-primary)] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-200 shadow-2xs">
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  <div className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-white">
+                    <div className="min-w-0">
+                      <h3 className="text-sm sm:text-base font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
+                        <HomeEditableText
+                          active={homeEditMode}
+                          value={displayTitle}
+                          onSave={(v) => {
+                            saveHomeConfigField(`${fieldPrefix}.id`, `cat-${catIdx + 1}`)
+                            saveHomeConfigField(`${fieldPrefix}.title`, v)
+                          }}
+                        />
+                      </h3>
+                      <p className="text-xs text-[#64748B] font-medium mt-1 leading-snug">
+                        <HomeEditableText
+                          active={homeEditMode}
+                          value={displaySubtitle}
+                          onSave={(v) => {
+                            saveHomeConfigField(`${fieldPrefix}.id`, `cat-${catIdx + 1}`)
+                            saveHomeConfigField(`${fieldPrefix}.subtitle`, v)
+                          }}
+                        />
+                      </p>
+                    </div>
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#F4F1EA] text-[#475569] group-hover:bg-[var(--sevo-primary)] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-200 shadow-2xs">
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Row 2: 7 Compact Quick-Action Cards with Realistic 3D Icons */}
@@ -4025,7 +4318,14 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── Immediate Booking CTA Banner ───────────────────── */}
+        {/* ── Immediate Booking CTA Banner ─────────────────────
+            The one promotional banner that's actually rendered on the live
+            homepage today (the "vendorBanner"/"offers" config sections
+            exist in the model but nothing on this page renders them yet —
+            see the gap report). Title/subtitle are now Super-Admin editable
+            in place, saved into the SAME homepage config JSON under a new
+            "ctaBanner" key -- same model, same PUT API, no new banner
+            system. */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="bg-gradient-to-r from-[var(--sevo-primary)] to-[#087060] dark:from-[#102956] dark:to-[#0B1E43] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-5">
             <div className="flex items-center gap-4 text-center sm:text-left">
@@ -4033,8 +4333,24 @@ export function LandingPage() {
                 <CalendarDays className="w-6 h-6 stroke-[2]" />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-black">Need Immediate Service?</h3>
-                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">Book now and get your problem solved quickly.</p>
+                <h3 className="text-lg sm:text-xl font-black">
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={homeConfig.ctaBanner?.title}
+                    placeholder="Need Immediate Service?"
+                    className="text-white"
+                    onSave={(v) => saveHomeConfigField("ctaBanner.title", v)}
+                  />
+                </h3>
+                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={homeConfig.ctaBanner?.subtitle}
+                    placeholder="Book now and get your problem solved quickly."
+                    className="text-teal-100"
+                    onSave={(v) => saveHomeConfigField("ctaBanner.subtitle", v)}
+                  />
+                </p>
               </div>
             </div>
 
@@ -4247,7 +4563,12 @@ export function LandingPage() {
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
-                    Home Cleaning &amp; Pest Control
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.title}
+                      placeholder="Home Cleaning & Pest Control"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.title", v)}
+                    />
                   </h3>
                 </div>
 
@@ -4271,14 +4592,20 @@ export function LandingPage() {
                 {/* Cleaning Section */}
                 <div className="mb-6">
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Home Cleaning
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.cleaningSectionTitle}
+                      placeholder="Home Cleaning"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.cleaningSectionTitle", v)}
+                    />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {HOME_SERVICES_SUB.map((item) => {
+                    {(homeConfig.subServicesModal?.cleaningItems || HOME_SERVICES_SUB).map((item, cIdx) => {
                       const isAvailable = isServiceAvailableInZone(item.name)
+                      const GraphicComponent = item.graphic || HOME_SERVICES_SUB[cIdx]?.graphic || Sparkles
                       return (
                         <button
-                          key={item.name}
+                          key={item.name || cIdx}
                           type="button"
                           onClick={() => {
                             if (!isAvailable) {
@@ -4296,13 +4623,13 @@ export function LandingPage() {
                             } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
                               navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
                             } else {
-                              navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                              navigate(`?category=${item.categoryId || 'cleaning'}&subtab=${encodeURIComponent(item.name)}`)
                             }
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
                           <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -4314,7 +4641,12 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            {item.name}
+                            <HomeEditableText
+                              active={homeEditMode}
+                              value={item.name}
+                              placeholder={item.name}
+                              onSave={(v) => saveHomeConfigField(`subServicesModal.cleaningItems.${cIdx}.name`, v)}
+                            />
                           </span>
                         </button>
                       )
@@ -4325,14 +4657,20 @@ export function LandingPage() {
                 {/* Pest Control Section */}
                 <div>
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Pest Control
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.pestSectionTitle}
+                      placeholder="Pest Control"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.pestSectionTitle", v)}
+                    />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {PEST_CONTROL_SUB.map((item) => {
+                    {(homeConfig.subServicesModal?.pestItems || PEST_CONTROL_SUB).map((item, pIdx) => {
                       const isAvailable = isServiceAvailableInZone(item.name)
+                      const GraphicComponent = item.graphic || PEST_CONTROL_SUB[pIdx]?.graphic || Sparkles
                       return (
                         <button
-                          key={item.name}
+                          key={item.name || pIdx}
                           type="button"
                           onClick={() => {
                             if (!isAvailable) {
@@ -4341,12 +4679,12 @@ export function LandingPage() {
                             }
                             setIsHomePestModalOpen(false)
                             document.body.style.overflow = "unset"
-                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                            navigate(`?category=${item.categoryId || 'pest_control'}&subtab=${encodeURIComponent(item.name)}`)
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
                           <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -4358,7 +4696,12 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            {item.name}
+                            <HomeEditableText
+                              active={homeEditMode}
+                              value={item.name}
+                              placeholder={item.name}
+                              onSave={(v) => saveHomeConfigField(`subServicesModal.pestItems.${pIdx}.name`, v)}
+                            />
                           </span>
                         </button>
                       )
@@ -5685,16 +6028,31 @@ export function LandingPage() {
 
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                    ⚡ 5 Core Specialized Pillars
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.badge}
+                      placeholder="⚡ 5 Core Specialized Pillars"
+                      onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
+                    />
                   </div>
                   <h3
                     id="home-combined-modal-title"
                     className="text-xl sm:text-2xl font-extrabold text-slate-900"
                   >
-                    Home &amp; Repair Services
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.title}
+                      placeholder="Home & Repair Services"
+                      onSave={(v) => saveHomeConfigField("pillarModal.title", v)}
+                    />
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
-                    Select any service below to explore specific options, verified technicians, and transparent pricing.
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.subtitle}
+                      placeholder="Select any service below to explore specific options, verified technicians, and transparent pricing."
+                      onSave={(v) => saveHomeConfigField("pillarModal.subtitle", v)}
+                    />
                   </p>
                 </div>
 
@@ -5717,12 +6075,19 @@ export function LandingPage() {
 
                 {/* 5 Combined Services Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                  {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => {
+                  {(homeConfig.pillarModal?.pillars && homeConfig.pillarModal.pillars.length > 0 ? homeConfig.pillarModal.pillars : CATEGORIES).map((catItem, pIdx) => {
+                    const defaultCat = CATEGORIES[pIdx] || {}
+                    const label = catItem.label || defaultCat.label || ""
+                    const photo = catItem.photo || catItem.image || defaultCat.photo
+                    const Icon = defaultCat.icon || Wrench
+                    const serviceCategoryId = catItem.serviceCategoryId || defaultCat.serviceCategoryId
                     const isAvailable = isServiceAvailableInZone(label)
+
                     return (
-                      <button
-                        key={label}
+                      <div
+                        key={catItem.id || label || pIdx}
                         onClick={() => {
+                          if (homeEditMode) return
                           if (!isAvailable) {
                             showUnavailableServiceAlert(label)
                             return
@@ -5745,11 +6110,30 @@ export function LandingPage() {
                       >
                         {photo ? (
                           <div className="h-24 w-full overflow-hidden bg-slate-100 relative">
-                            <img
-                              src={photo}
-                              alt={label}
-                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
-                            />
+                            {homeEditMode ? (
+                              <EditableImage
+                                active={true}
+                                value={photo}
+                                defaultFallback={defaultCat.photo || "/mockups/service_cleaning.png"}
+                                assetType="services"
+                                title={`Edit ${label} Photo`}
+                                alt={label}
+                                className="w-full h-full"
+                                imgClassName="w-full h-full object-cover"
+                                onSave={(url) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.photo`, url)}
+                              />
+                            ) : (
+                              <img
+                                src={photo}
+                                alt={label}
+                                onError={(e) => {
+                                  if (defaultCat.photo && e.currentTarget.src !== defaultCat.photo) {
+                                    e.currentTarget.src = defaultCat.photo
+                                  }
+                                }}
+                                className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
+                              />
+                            )}
                             {!isAvailable && (
                               <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -5767,9 +6151,14 @@ export function LandingPage() {
                           </div>
                         )}
                         <span className={`text-xs font-extrabold leading-snug p-3 transition-colors ${isAvailable ? 'text-slate-700 group-hover:text-teal-800' : 'text-slate-400'}`}>
-                          {label}
+                          <HomeEditableText
+                            active={homeEditMode}
+                            value={label}
+                            placeholder={label}
+                            onSave={(v) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.label`, v)}
+                          />
                         </span>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -6788,15 +7177,15 @@ export function LandingPage() {
                                       containIntrinsicSize: "0 230px",
                                     }}
                                   >
-                                      <div
-                                        onClick={() => {
-                                          if (selectedFoodSubModule?.id === "vegetables") {
-                                            setSelectedRecipeVegetable(item)
-                                            setIsRecipeModalOpen(true)
-                                          }
-                                        }}
-                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
-                                      >
+                                    <div
+                                      onClick={() => {
+                                        if (selectedFoodSubModule?.id === "vegetables") {
+                                          setSelectedRecipeVegetable(item)
+                                          setIsRecipeModalOpen(true)
+                                        }
+                                      }}
+                                      className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                    >
                                       {/* Real Studio Photographic Product Image */}
                                       <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                         <img
@@ -7208,10 +7597,10 @@ export function LandingPage() {
                         })
                       }}
                       className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
-                            ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
+                          ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <span>

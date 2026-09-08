@@ -4,6 +4,7 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react"
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
 import fullHouseOccupiedAptImg from "../../assets/cleaning/fullhouse_occupied_apt.png";
 import fullHouseUnoccupiedAptImg from "../../assets/cleaning/fullhouse_unoccupied_apt.png";
 import fullHouseOccupiedBungalowImg from "../../assets/cleaning/fullhouse_occupied_bungalow.png";
@@ -777,6 +778,39 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   const [activeFaq, setActiveFaq] = useState(null);
   const [dbPackages, setDbPackages] = useState([]);
 
+  // ── Super Admin Customer Web Edit Mode (Services) ───────────────────
+  // Smallest safe rollout of the same pattern already shipped for
+  // Groceries/Products (VegetableFullScreenPage): reuses the SAME catalog
+  // Package model/API (PUT /settings/catalog/v2/packages/<id>/), gated
+  // server-side by RequireModuleAccess("catalog","edit"). Only items that
+  // matched a real DB package (item.db_id set above) are editable -- a
+  // customer never sees this, canEnterServiceEditMode is false unless
+  // isSuperAdmin(user).
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode || !item.db_id) return;
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {
@@ -866,8 +900,81 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   };
 
   const getActiveServices = () => {
-    let list = FULL_HOUSE_SERVICES[activeTab] || [];
-    list = JSON.parse(JSON.stringify(list));
+    const hardcodedList = FULL_HOUSE_SERVICES[activeTab] || [];
+
+    // Fully admin-driven: once any real package exists in the database for
+    // this tab's service/category, it is the single source of truth --
+    // render straight from it, so admin add/update/remove all just work and
+    // nothing hardcoded lingers behind a deleted or renamed package. The
+    // hardcoded list below is only a bootstrap placeholder for a tab nobody
+    // has populated in the catalog yet. To find which service/category this
+    // tab belongs to, we do a discovery-only pass (no mutation) over the
+    // hardcoded items to see which ones already resolve to a real DB row.
+    const seenServiceSlugs = new Set();
+    const seenCategorySlugs = new Set();
+    if (dbPackages.length > 0) {
+      const collectAnchor = (dbMatch) => {
+        if (!dbMatch) return;
+        if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+        if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+      };
+      hardcodedList.forEach(item => {
+        if (Array.isArray(item.subOptions)) {
+          collectAnchor(dbPackages.find(p => p.slug === item.id || p.id === item.id));
+          item.subOptions.forEach(subOpt => collectAnchor(dbPackages.find(p => p.slug === subOpt.id || p.id === subOpt.id)));
+        } else {
+          collectAnchor(dbPackages.find(p => p.slug === item.id || p.id === item.id));
+        }
+      });
+    }
+
+    let dbItemsForTab = (seenServiceSlugs.size > 0 || seenCategorySlugs.size > 0)
+      ? dbPackages.filter(p => (p.service_slug && seenServiceSlugs.has(p.service_slug)) || (p.category_slug && seenCategorySlugs.has(p.category_slug)))
+      : [];
+
+    // A brand-new package (e.g. a whole new "2 BHK Deep Cleaning Package")
+    // has no hardcoded counterpart to anchor off of, and if the admin
+    // hasn't tagged it to a specific sub-tab yet, it would otherwise be
+    // invisible everywhere. Surface untagged Deep Cleaning packages on the
+    // default landing tab ("full_apartment" / "Occupied Apartment") so
+    // nothing admin adds silently vanishes -- once tagged to a tab/subtab,
+    // ordinary tag-based routing (used by the sibling cleaning modals)
+    // takes over instead.
+    if (activeTab === "full_apartment" && dbPackages.length > 0) {
+      const alreadyIncludedIds = new Set(dbItemsForTab.map(p => p.id));
+      const untaggedDeepCleaningExtras = dbPackages.filter(p =>
+        p.category_slug === "deep-cleaning" &&
+        !p.tag && !p.subtab && !(p.service_customization && p.service_customization.subtab) &&
+        !alreadyIncludedIds.has(p.id)
+      );
+      if (untaggedDeepCleaningExtras.length > 0) {
+        dbItemsForTab = [...dbItemsForTab, ...untaggedDeepCleaningExtras];
+      }
+    }
+
+    if (dbItemsForTab.length > 0) {
+      const mapped = dbItemsForTab.map(p => ({
+        id: p.slug || String(p.id),
+        db_id: p.id,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "1 hr",
+        description: p.description || "",
+        image: p.image || "",
+        includes: Array.isArray(p.includes) ? p.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : [],
+        tools: Array.isArray(p.tools) ? p.tools : [],
+        ready: Array.isArray(p.ready) ? p.ready : [],
+        reviews_list: Array.isArray(p.reviews) ? p.reviews.map(r => ({ ...r, comment: r.comment || r.text || "" })) : [],
+        faqs: Array.isArray(p.faqs) ? p.faqs : [],
+        badge: p.tag || "",
+        gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+        platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+      }));
+      if (!searchQuery) return mapped;
+      return mapped.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.includes || []).some(inc => (typeof inc === 'string' ? inc : (inc.text || '')).toLowerCase().includes(searchQuery.toLowerCase())));
+    }
+
+    let list = JSON.parse(JSON.stringify(hardcodedList));
 
     const applyStaticDetails = (item) => {
       const staticDetails = HOUSE_DETAILS_CONTENT[item.id] || {};
@@ -898,11 +1005,16 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
               return {
                 ...subOpt,
                 ...dbMatch,
+                // Real Package row id for THIS sub-option -- without this,
+                // nested sub-options could never be individually edited in
+                // Super Admin Edit Mode even though the parent card was.
+                db_id: dbMatch.id,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
                 platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
                 includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : subOpt.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : inc),
                 tools: (dbMatch.tools && dbMatch.tools.length > 0) ? dbMatch.tools : subOpt.tools,
                 ready: (dbMatch.ready && dbMatch.ready.length > 0) ? dbMatch.ready : subOpt.ready,
@@ -928,6 +1040,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
+            // Real Package row id -- needed so Super Admin Edit Mode can PUT
+            // back to the exact row this card's content came from (item.id
+            // above stays the local UI slug, not the database id).
+            item.db_id = dbMatch.id;
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
@@ -1039,6 +1155,16 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
   return (
     <div className="w-full text-slate-700 bg-[#FAF7F0] min-h-screen">
+      {/* Super Admin Customer Web Edit Mode toggle -- never rendered for a
+          normal customer; canEnterServiceEditMode is false unless
+          isSuperAdmin(user). Only items matched to a real catalog Package
+          (service.db_id) show edit controls when this is on. */}
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-[#FEFCF8] shadow-sm border-b border-[#E8E3DB]">
         <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#FEFCF8] py-4 px-6">
@@ -1136,16 +1262,40 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-[#E8E3DB] p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
-                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
 
-                      {service.description && (
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      {(service.description || (serviceEditMode && service.db_id)) && (
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                         <span className="text-base font-black text-slate-900">
                           {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
-                          ₹{service.price}
+                          {serviceEditMode && service.db_id ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            `₹${service.price}`
+                          )}
                         </span>
                         <span className="text-slate-300">•</span>
                         <span className="text-slate-500 font-semibold">{service.duration}</span>
@@ -1172,14 +1322,14 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
                     <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                       <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
-                        <img
-                          src={resolveImageUrl(service.image, "/mockups/icons/fullhouse_occupied_apt.png")}
+                        <EditableImage
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={resolveImageUrl(service.image, "/mockups/icons/fullhouse_occupied_apt.png")}
+                          onSave={(url) => handleSaveServiceField(service, "image", url)}
+                          assetType="services"
                           alt={service.name}
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = "/mockups/icons/fullhouse_occupied_apt.png";
-                          }}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full"
+                          imgClassName="w-full h-full object-cover"
                         />
                       </div>
                       <div className="w-24 z-10">

@@ -12,6 +12,18 @@ export function FeedbackPage() {
   const [success, setSuccess] = useState(false)
   const [srData, setSrData] = useState(null)
 
+  // Fixes GT-E-01: this form's copy used to be hardcoded for home-services
+  // jobs ("service completed", "Service Professional") even when the
+  // booking was a Goods & Transport delivery/move -- srData.service_category
+  // (already returned by /feedback/<token>/) lets us pick wording that
+  // actually matches what the customer booked.
+  const LOGISTICS_CATEGORIES = new Set([
+    "goods_transport_truck",
+    "goods_transport_two_wheeler",
+    "packers_movers",
+  ])
+  const isLogistics = LOGISTICS_CATEGORIES.has(srData?.service_category)
+
   const [formData, setFormData] = useState({
     rating: 5,
     employee_behaviour: "good",
@@ -216,7 +228,7 @@ export function FeedbackPage() {
                         </div>
                         <div>
                           <div className="text-xs font-extrabold text-[var(--sevo-text-primary)]">{srData.assigned_employee.full_name}</div>
-                          <div className="text-[10px] text-[var(--sevo-text-muted)]">Service Professional</div>
+                          <div className="text-[10px] text-[var(--sevo-text-muted)]">{isLogistics ? "Delivery Partner" : "Service Professional"}</div>
                         </div>
                       </div>
                     )}
@@ -280,7 +292,7 @@ export function FeedbackPage() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold uppercase tracking-wider text-[var(--sevo-text-secondary)] flex items-center gap-2">
                           <Wrench className="w-4 h-4 text-[var(--sevo-primary)]" />
-                          Quality of Work
+                          {isLogistics ? "Quality of Handling" : "Quality of Work"}
                         </label>
                         <div className="grid grid-cols-3 gap-2 bg-[var(--sevo-surface-raised)] p-1.5 rounded-xl border border-[var(--sevo-border)]">
                           {["poor", "average", "good"].map((val) => {
@@ -309,9 +321,9 @@ export function FeedbackPage() {
                       <div className="space-y-0.5">
                         <div className="text-xs font-extrabold text-[var(--sevo-text-primary)] uppercase tracking-wide flex items-center gap-2">
                           <ThumbsUp className="w-4 h-4 text-[var(--sevo-primary)]" />
-                          Was the service completed satisfactorily?
+                          {isLogistics ? "Was your delivery/move completed satisfactorily?" : "Was the service completed satisfactorily?"}
                         </div>
-                        <div className="text-[10px] text-[var(--sevo-text-muted)]">Please confirm if the requested work is finished.</div>
+                        <div className="text-[10px] text-[var(--sevo-text-muted)]">{isLogistics ? "Please confirm if your shipment arrived / your move was completed as expected." : "Please confirm if the requested work is finished."}</div>
                       </div>
                       <div className="flex bg-[var(--sevo-surface)] p-1 rounded-xl border border-[var(--sevo-border)]">
                         <button

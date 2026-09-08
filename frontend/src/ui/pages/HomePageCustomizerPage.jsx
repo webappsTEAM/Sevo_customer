@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useSearchParams } from "react-router-dom"
 import {
   Globe, Layout, Sparkles, ShieldCheck, Clock, Award, Headphones,
@@ -6,12 +7,40 @@ import {
   Eye, Save, ArrowUp, ArrowDown, Image as ImageIcon, MessageSquare,
   Users, Gift, Repeat2, BarChart3, FileText, Phone, Mail, ChevronRight,
   Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight,
-  ChefHat, Utensils
+  ChefHat, Utensils, Monitor, Tablet, Smartphone, Maximize2, RefreshCw,
+  IndianRupee, CheckCircle2, ChevronDown, ChevronUp, Pencil, Search, X
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
 import { AdminRecipesPage } from "./catalog/AdminRecipesPage.jsx"
 import { AdminRecommendationsPage } from "./catalog/AdminRecommendationsPage.jsx"
+
+const HERO_ILLUSTRATION_PRESETS = [
+  {
+    id: "concept3",
+    title: "Concept 3 3D Hero Illustration (Default)",
+    description: "3D isometric characters: plumber, electrician, cleaner, painter",
+    url: "/assets/hero_illustration.jpg"
+  },
+  {
+    id: "repair",
+    title: "Professional Home & Repair Services",
+    description: "Technician & repair tools showcase photo",
+    url: "/assets/sevo_photo_home_repair.jpg"
+  },
+  {
+    id: "grocery",
+    title: "Food, Health & Farm Fresh Delivery",
+    description: "Fresh groceries & vegetables delivery photo",
+    url: "/assets/sevo_photo_food_health.jpg"
+  },
+  {
+    id: "transport",
+    title: "Goods & Doorstep Cargo Transport",
+    description: "Mini truck & logistics service photo",
+    url: "/assets/sevo_photo_goods_transport.jpg"
+  }
+]
 
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -20,10 +49,60 @@ export default function HomePageCustomizerPage() {
   const [config, setConfig] = useState(getHomePageConfig())
   const [showSavedToast, setShowSavedToast] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewViewport, setPreviewViewport] = useState("full") // "full", "desktop", "tablet", "mobile"
+  const [previewEditMode, setPreviewEditMode] = useState(false)
+  const [previewScreen, setPreviewScreen] = useState("home") // "home", "pillars", "subcategories", "kitchen"
+  const [showPreviewQuickEdit, setShowPreviewQuickEdit] = useState(false)
+  const [previewQuickEditTab, setPreviewQuickEditTab] = useState("hero")
+  const [showLegacyCollage, setShowLegacyCollage] = useState(false)
+  const [iframeKey, setIframeKey] = useState(0)
+  const [sidebarOffset, setSidebarOffset] = useState(360)
+  const [keepSidebarVisible, setKeepSidebarVisible] = useState(true)
   const [activeTab, setActiveTab] = useState(activeTabParam)
   const [isPublishing, setIsPublishing] = useState(false)
 
   const [resolvingUrls, setResolvingUrls] = useState({})
+  const iframeRef = useRef(null)
+
+  // Measure active admin sidebar width dynamically so preview docks perfectly beside it
+  useEffect(() => {
+    if (!showPreviewModal) return
+
+    const updateSidebarWidth = () => {
+      const asides = document.querySelectorAll("aside")
+      let totalW = 0
+      asides.forEach((aside) => {
+        const rect = aside.getBoundingClientRect()
+        if (rect.width > 0 && rect.left < 50) {
+          totalW += rect.width
+        }
+      })
+      // If 2 sidebars found (primary + drilldown) total is ~360px, else fallback to 100px or 360px
+      setSidebarOffset(totalW > 50 ? totalW : 360)
+    }
+
+    updateSidebarWidth()
+    window.addEventListener("resize", updateSidebarWidth)
+    const interval = setInterval(updateSidebarWidth, 400)
+
+    return () => {
+      window.removeEventListener("resize", updateSidebarWidth)
+      clearInterval(interval)
+    }
+  }, [showPreviewModal])
+
+  // Close preview modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowPreviewModal(false)
+      }
+    }
+    if (showPreviewModal) {
+      window.addEventListener("keydown", handleKeyDown)
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showPreviewModal])
 
   // Fetch initial config from PostgreSQL database
   useEffect(() => {
@@ -80,6 +159,133 @@ export default function HomePageCustomizerPage() {
       return next
     })
   }
+
+  const updateTrustBadge = (idx, field, value) => {
+    setConfig(prev => {
+      const badges = [...(prev.hero?.trustBadges || DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges)]
+      badges[idx] = { ...badges[idx], [field]: value }
+      if (field === "title") {
+        badges[idx].text = value
+      }
+      const next = {
+        ...prev,
+        hero: {
+          ...prev.hero,
+          trustBadges: badges,
+          quickBadges: badges.map(b => ({ id: b.id, text: b.title, title: b.title, subtitle: b.subtitle, icon: b.icon }))
+        }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const resetTrustBadges = () => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        hero: {
+          ...prev.hero,
+          trustBadges: DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges,
+          quickBadges: DEFAULT_HOME_PAGE_CONFIG.hero.quickBadges
+        }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const updatePillarModal = (field, value) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        pillarModal: { ...(prev.pillarModal || DEFAULT_HOME_PAGE_CONFIG.pillarModal), [field]: value }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const updatePillarItem = (idx, field, value) => {
+    setConfig(prev => {
+      const currentPillars = [...(prev.pillarModal?.pillars || DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars)]
+      currentPillars[idx] = { ...currentPillars[idx], [field]: value }
+      const next = {
+        ...prev,
+        pillarModal: { ...(prev.pillarModal || DEFAULT_HOME_PAGE_CONFIG.pillarModal), pillars: currentPillars }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const updateSubServicesModal = (field, value) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        subServicesModal: { ...(prev.subServicesModal || DEFAULT_HOME_PAGE_CONFIG.subServicesModal), [field]: value }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const updateCleaningSubItem = (idx, name) => {
+    setConfig(prev => {
+      const current = [...(prev.subServicesModal?.cleaningItems || DEFAULT_HOME_PAGE_CONFIG.subServicesModal.cleaningItems)]
+      current[idx] = { ...current[idx], name }
+      const next = {
+        ...prev,
+        subServicesModal: { ...(prev.subServicesModal || DEFAULT_HOME_PAGE_CONFIG.subServicesModal), cleaningItems: current }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  const updatePestSubItem = (idx, name) => {
+    setConfig(prev => {
+      const current = [...(prev.subServicesModal?.pestItems || DEFAULT_HOME_PAGE_CONFIG.subServicesModal.pestItems)]
+      current[idx] = { ...current[idx], name }
+      const next = {
+        ...prev,
+        subServicesModal: { ...(prev.subServicesModal || DEFAULT_HOME_PAGE_CONFIG.subServicesModal), pestItems: current }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
+  }
+
+  // Synchronize edit mode with preview iframe
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({
+        type: "TOGGLE_EDIT_MODE",
+        enabled: previewEditMode
+      }, "*")
+    }
+  }, [previewEditMode, iframeKey])
+
+  // Synchronize config updates with preview iframe
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({
+        type: "HOMEPAGE_CONFIG_UPDATE",
+        config
+      }, "*")
+    }
+  }, [config])
+
+  // Listen for edits made inside preview iframe
+  useEffect(() => {
+    const handleChildMessage = (e) => {
+      if (e.data?.type === "HOMEPAGE_CONFIG_CHANGED" && e.data?.config) {
+        setConfig(e.data.config)
+      }
+    }
+    window.addEventListener("message", handleChildMessage)
+    return () => window.removeEventListener("message", handleChildMessage)
+  }, [])
 
   const updateOffersMain = (field, value) => {
     setConfig(prev => {
@@ -335,175 +541,297 @@ export default function HomePageCustomizerPage() {
                 </div>
               </div>
 
-              {/* Hero Badges */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Quick Trust Badges Below Search
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {config.hero.quickBadges.map((badge, idx) => (
-                    <div key={badge.id || idx} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <input
-                        type="text"
-                        value={badge.text}
-                        onChange={(e) => {
-                          const newBadges = [...config.hero.quickBadges]
-                          newBadges[idx].text = e.target.value
-                          updateHero("quickBadges", newBadges)
-                        }}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Hero Images Collage Customization */}
+              {/* 6 Trust Badges in a 2x3 Grid (Matching Customer Homepage) */}
               <div className="space-y-4 pt-6 border-t border-slate-100">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Right Hero Side Image Customization (4 Grid Collage Cards)
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-teal-600" />
+                      6 Trust Badges (2x3 Grid Below Search Bar)
                     </label>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Upload custom images, pick high-resolution service presets, or edit direct image links for the landing page hero side cards.
+                      Live on the customer homepage under the search bar. Each badge displays an icon, bold title, and subtitle.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetTrustBadges}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset 6 Badges to Default
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {(config.hero.trustBadges || DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges).map((badge, idx) => {
+                    const badgeColors = [
+                      { bg: "bg-teal-50 text-teal-700 border-teal-200", icon: ShieldCheck, label: "Badge 1 (Teal)" },
+                      { bg: "bg-amber-50 text-amber-700 border-amber-200", icon: Star, label: "Badge 2 (Amber)" },
+                      { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Clock, label: "Badge 3 (Emerald)" },
+                      { bg: "bg-blue-50 text-blue-700 border-blue-200", icon: IndianRupee, label: "Badge 4 (Blue)" },
+                      { bg: "bg-purple-50 text-purple-700 border-purple-200", icon: CheckCircle2, label: "Badge 5 (Purple)" },
+                      { bg: "bg-rose-50 text-rose-700 border-rose-200", icon: Headphones, label: "Badge 6 (Rose)" }
+                    ]
+                    const col = badgeColors[idx % badgeColors.length]
+                    const IconComponent = col.icon
+
+                    return (
+                      <div key={badge.id || idx} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-bold border ${col.bg}`}>
+                            <IconComponent className="w-3.5 h-3.5 stroke-[2.2]" />
+                            {col.label}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">Position #{idx + 1}</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                              Title
+                            </label>
+                            <input
+                              type="text"
+                              value={badge.title || badge.text || ""}
+                              onChange={(e) => updateTrustBadge(idx, "title", e.target.value)}
+                              placeholder="e.g. Verified Experts"
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-teal-500 outline-none bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                              Subtitle
+                            </label>
+                            <input
+                              type="text"
+                              value={badge.subtitle || ""}
+                              onChange={(e) => updateTrustBadge(idx, "subtitle", e.target.value)}
+                              placeholder="e.g. Background Checked"
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 focus:ring-2 focus:ring-teal-500 outline-none bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Concept 3 Hero Illustration Customization */}
+              <div className="space-y-4 pt-6 border-t border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-teal-600" />
+                      Right Hero Side Illustration (Concept 3 Layout)
+                    </label>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Customize the 3D isometric hero illustration or upload a high-resolution hero photo for the right side of the customer landing page.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      updateHero("collageImages", [
-                        "/mockups/service_hvac.png",
-                        "/mockups/service_electrical.png",
-                        "/mockups/service_cleaning.png",
-                        "/mockups/service_plumbing.png"
-                      ])
+                      updateHero("heroImage", "/assets/hero_illustration.jpg")
+                      updateHero("heroIllustration", "/assets/hero_illustration.jpg")
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition shrink-0"
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
-                    Reset All 4 Cards to Default Presets
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset to Concept 3 Hero
                   </button>
                 </div>
 
-                {/* Live Collage Visualizer Box */}
+                {/* Real-time Hero Live Visualizer Mockup */}
                 <div className="bg-slate-900 rounded-2xl p-4 sm:p-6 border border-slate-800 shadow-inner space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-400" /> Landing Page Collage Live Visual Preview
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Current Homepage Hero Live Visual Mockup
                     </span>
-                    <span className="text-[11px] text-slate-400 font-mono">Real-time Layout</span>
+                    <span className="text-[11px] text-slate-400 font-mono">Real-time Concept 3 Layout</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 h-[290px] sm:h-[340px] w-full max-w-xl mx-auto overflow-hidden rounded-3xl bg-slate-800/60 p-3 border border-slate-700/60 backdrop-blur-xs">
-                    {/* Left Column */}
-                    <div className="flex flex-col gap-3 h-full">
-                      {/* Card 1: Top-Left (58% height) */}
-                      <div className="relative h-[58%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
-                        <img
-                          src={resolveDisplayImageUrl(config.hero.collageImages[0], "/mockups/service_hvac.png")}
-                          onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
-                          alt="Hero Card 1"
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                          style={{ imageRendering: "-webkit-optimize-contrast" }}
-                        />
-                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
-                          Card 1 (Top-Left)
+                  <div className="p-4 sm:p-6 rounded-2xl bg-slate-950/80 border border-slate-800/80 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                    {/* Mockup Left Column */}
+                    <div className="lg:col-span-7 space-y-3">
+                      <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-400 text-[11px] font-bold">
+                        <ShieldCheck className="w-3 h-3 text-teal-400" />
+                        <span>{config.hero.badge || "Reliable. Affordable. Right at Your Doorstep."}</span>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-white leading-tight">
+                        <span>{config.hero.mainHeadingFirst || "Professional"} </span>
+                        <span className="text-teal-400">{config.hero.mainHeadingHighlight || "Services"}</span>
+                        <br />
+                        <span>{config.hero.mainHeadingLast || "Made Simple"}</span>
+                      </div>
+                      <p className="text-slate-400 text-xs font-medium line-clamp-2">
+                        {config.hero.subtitle || "Quick booking. Quality work. Guaranteed satisfaction."}
+                      </p>
+                      {/* Search mockup */}
+                      <div className="flex items-center bg-slate-800 rounded-full px-3 py-1.5 border border-slate-700 max-w-md">
+                        <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+                        <span className="text-xs text-slate-400 flex-1 truncate">
+                          {config.hero.searchPlaceholder || "What service do you need?"}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold px-2 py-0.5 rounded bg-slate-700/60 mr-2">
+                          {config.hero.searchLocation || "Hosur"}
+                        </span>
+                        <div className="w-6 h-6 rounded-full bg-teal-600 flex items-center justify-center text-white shrink-0">
+                          <Search className="w-3 h-3" />
                         </div>
                       </div>
-
-                      {/* Card 2: Bottom-Left (42% height) */}
-                      <div className="relative h-[42%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
-                        <img
-                          src={resolveDisplayImageUrl(config.hero.collageImages[1], "/mockups/service_electrical.png")}
-                          onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
-                          alt="Hero Card 2"
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                          style={{ imageRendering: "-webkit-optimize-contrast" }}
-                        />
-                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
-                          Card 2 (Bottom-Left)
-                        </div>
+                      {/* Mockup 6 Badges */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                        {(config.hero.trustBadges || DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges).slice(0, 6).map((b, i) => (
+                          <div key={b.id || i} className="flex items-center gap-1.5 p-1 rounded bg-slate-900/60 border border-slate-800">
+                            <div className="w-5 h-5 rounded bg-teal-900/60 text-teal-400 flex items-center justify-center shrink-0">
+                              <Check className="w-3 h-3 stroke-[2.5]" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[10px] font-bold text-slate-200 block truncate">{b.title || b.text}</span>
+                              <span className="text-[8px] text-slate-400 block truncate">{b.subtitle}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Right Column (Staggered offset) */}
-                    <div className="flex flex-col gap-3 h-full pt-3 sm:pt-4">
-                      {/* Card 3: Top-Right (42% height) */}
-                      <div className="relative h-[42%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
-                        <img
-                          src={resolveDisplayImageUrl(config.hero.collageImages[2], "/mockups/service_cleaning.png")}
-                          onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
-                          alt="Hero Card 3"
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                          style={{ imageRendering: "-webkit-optimize-contrast" }}
-                        />
-                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
-                          Card 3 (Top-Right)
-                        </div>
-                      </div>
-
-                      {/* Card 4: Bottom-Right (58% height) */}
-                      <div className="relative h-[58%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
-                        <img
-                          src={resolveDisplayImageUrl(config.hero.collageImages[3], "/mockups/service_plumbing.png")}
-                          onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
-                          alt="Hero Card 4"
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                          style={{ imageRendering: "-webkit-optimize-contrast" }}
-                        />
-                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
-                          Card 4 (Bottom-Right)
-                        </div>
-                      </div>
+                    {/* Mockup Right Column */}
+                    <div className="lg:col-span-5 flex items-center justify-center p-2 bg-slate-900/50 rounded-xl border border-slate-800/60">
+                      <img
+                        src={resolveDisplayImageUrl(config.hero.heroImage || config.hero.heroIllustration, "/assets/hero_illustration.jpg")}
+                        onError={(e) => { e.currentTarget.src = "/assets/hero_illustration.jpg" }}
+                        alt="Current Hero Illustration"
+                        className="max-h-[220px] w-auto object-contain drop-shadow-md"
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* 4 Collage Cards Editor Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { id: 0, title: "Collage Card 1 (Top-Left)", defaultPreset: "/mockups/service_hvac.png" },
-                    { id: 1, title: "Collage Card 2 (Bottom-Left)", defaultPreset: "/mockups/service_electrical.png" },
-                    { id: 2, title: "Collage Card 3 (Top-Right)", defaultPreset: "/mockups/service_cleaning.png" },
-                    { id: 3, title: "Collage Card 4 (Bottom-Right)", defaultPreset: "/mockups/service_plumbing.png" }
-                  ].map((card) => {
-                    const currentVal = config.hero.collageImages[card.id] || ""
+                {/* Hero Illustration Controls & Presets */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="lg:col-span-6 space-y-3">
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Upload or Replace Hero Image
+                    </label>
+                    <ImageUploadField
+                      value={config.hero.heroImage || config.hero.heroIllustration || "/assets/hero_illustration.jpg"}
+                      onChange={(newPath) => {
+                        updateHero("heroImage", newPath)
+                        updateHero("heroIllustration", newPath)
+                      }}
+                      section="hero"
+                      fallbackSrc="/assets/hero_illustration.jpg"
+                      aspectRatio="aspect-[4/3]"
+                    />
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Or Enter Direct Image URL / Path:
+                      </label>
+                      <input
+                        type="text"
+                        value={config.hero.heroImage || config.hero.heroIllustration || ""}
+                        onChange={(e) => {
+                          updateHero("heroImage", e.target.value)
+                          updateHero("heroIllustration", e.target.value)
+                        }}
+                        placeholder="/assets/hero_illustration.jpg"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 font-mono focus:ring-2 focus:ring-teal-500 outline-none bg-white"
+                      />
+                    </div>
+                  </div>
 
-                    return (
-                      <div key={card.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                            <ImageIcon className="w-4 h-4 text-teal-600" /> {card.title}
-                          </span>
+                  {/* Preset Selector */}
+                  <div className="lg:col-span-6 space-y-3">
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Curated Hero Showcase Presets
+                    </label>
+                    <div className="space-y-2">
+                      {HERO_ILLUSTRATION_PRESETS.map((preset) => {
+                        const isSelected = (config.hero.heroImage === preset.url) ||
+                          (!config.hero.heroImage && preset.id === "concept3")
+
+                        return (
                           <button
+                            key={preset.id}
                             type="button"
                             onClick={() => {
-                              const newImgs = [...config.hero.collageImages]
-                              newImgs[card.id] = card.defaultPreset
-                              updateHero("collageImages", newImgs)
+                              updateHero("heroImage", preset.url)
+                              updateHero("heroIllustration", preset.url)
                             }}
-                            className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 hover:underline"
+                            className={`w-full p-2.5 rounded-xl border text-left transition flex items-center gap-3 cursor-pointer ${
+                              isSelected
+                                ? "bg-teal-50 border-teal-400 text-teal-950 shadow-xs"
+                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100/80"
+                            }`}
                           >
-                            Reset Card {card.id + 1}
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-12 h-12 rounded-lg object-contain bg-slate-100 shrink-0 border border-slate-200"
+                              onError={(e) => { e.currentTarget.src = "/assets/hero_illustration.jpg" }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold block truncate">{preset.title}</span>
+                              <span className="text-[10px] text-slate-500 block truncate">{preset.description}</span>
+                            </div>
+                            {isSelected && (
+                              <Check className="w-4 h-4 text-teal-600 shrink-0 mr-1" />
+                            )}
                           </button>
-                        </div>
-
-                        {/* Image Upload Component */}
-                        <ImageUploadField
-                          value={currentVal}
-                          onChange={(newPath) => {
-                            const newImgs = [...config.hero.collageImages]
-                            newImgs[card.id] = newPath
-                            updateHero("collageImages", newImgs)
-                          }}
-                          section="hero"
-                          fallbackSrc={card.defaultPreset}
-                          aspectRatio="aspect-[16/9]"
-                        />
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              {/* Collapsible Legacy 4-Grid Collage (Optional Archive) */}
+              <div className="pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowLegacyCollage(v => !v)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  {showLegacyCollage ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <span>Legacy 4-Grid Collage Settings (Archived / Optional)</span>
+                </button>
+
+                {showLegacyCollage && (
+                  <div className="mt-4 p-4 bg-slate-100/70 rounded-2xl border border-slate-200 space-y-4">
+                    <p className="text-xs text-slate-500">
+                      These 4 collage cards were part of the early mockup. The active customer homepage now uses the Concept 3 Hero Illustration above. You may still customize them below if needed.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { id: 0, title: "Collage Card 1 (Top-Left)", defaultPreset: "/mockups/service_hvac.png" },
+                        { id: 1, title: "Collage Card 2 (Bottom-Left)", defaultPreset: "/mockups/service_electrical.png" },
+                        { id: 2, title: "Collage Card 3 (Top-Right)", defaultPreset: "/mockups/service_cleaning.png" },
+                        { id: 3, title: "Collage Card 4 (Bottom-Right)", defaultPreset: "/mockups/service_plumbing.png" }
+                      ].map((card) => {
+                        const currentVal = config.hero.collageImages?.[card.id] || ""
+
+                        return (
+                          <div key={card.id} className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                            <span className="text-xs font-bold text-slate-800 block">{card.title}</span>
+                            <ImageUploadField
+                              value={currentVal}
+                              onChange={(newPath) => {
+                                const newImgs = [...(config.hero.collageImages || [])]
+                                newImgs[card.id] = newPath
+                                updateHero("collageImages", newImgs)
+                              }}
+                              section="hero"
+                              fallbackSrc={card.defaultPreset}
+                              aspectRatio="aspect-[16/9]"
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1535,32 +1863,855 @@ export default function HomePageCustomizerPage() {
         </div>
       </div>
 
-      {/* LIVE PREVIEW MODAL */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-rose-500" />
-                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-xs font-mono text-slate-400 ml-2">Live Home Page Preview Frame</span>
+      {/* LIVE PREVIEW MODAL - SIDEBAR ACCESSIBLE & PROPER FIT ALIGNMENT VIEW */}
+      {showPreviewModal && createPortal(
+        <div className="fixed inset-0 z-[99990] flex pointer-events-none select-none">
+          {/* Frosted Glass Blur Overlay over Admin Sidebar (keeps sidebar accessible & blurred) */}
+          {keepSidebarVisible && (
+            <div
+              style={{ width: `${sidebarOffset}px` }}
+              className="h-full bg-slate-950/25 backdrop-blur-xs border-r border-slate-700/40 pointer-events-auto transition-all duration-300 relative flex flex-col justify-between p-3 shrink-0"
+            >
+              {/* Subtle top indicator badge */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/85 backdrop-blur-md border border-slate-700/60 text-white text-[11px] font-bold shadow-xl">
+                <span className="flex items-center gap-1.5 text-teal-400">
+                  <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+                  Admin Sidebar Active
+                </span>
+                <span className="text-[10px] text-slate-300 font-mono">Easy Access</span>
               </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="text-slate-400 hover:text-white font-bold text-sm px-3 py-1 rounded-lg hover:bg-slate-800"
-              >
-                Close Preview ✕
-              </button>
+
+              {/* Quick helper note at bottom of sidebar dock */}
+              <div className="px-3 py-2 rounded-xl bg-slate-900/70 backdrop-blur-md border border-slate-700/40 text-slate-300 text-[10px] font-medium leading-relaxed">
+                Click any section on the left to navigate admin tabs while previewing.
+              </div>
+            </div>
+          )}
+
+          {/* Live Preview Container (starts cleanly after sidebar - 100% visible, zero text cut-off!) */}
+          <div
+            style={{
+              width: keepSidebarVisible ? `calc(100vw - ${sidebarOffset}px)` : "100vw",
+            }}
+            className="h-full bg-slate-950/90 backdrop-blur-md pointer-events-auto flex flex-col transition-all duration-300 overflow-hidden shadow-2xl"
+          >
+            {/* Top Toolbar */}
+            <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between gap-3 border-b border-slate-800 shrink-0 select-none z-20 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviewModal(false)}
+                    className="w-3 h-3 rounded-full bg-rose-500 hover:bg-rose-600 transition-colors cursor-pointer"
+                    title="Close Preview (Esc)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setKeepSidebarVisible(v => !v)}
+                    className="w-3 h-3 rounded-full bg-amber-500 hover:bg-amber-600 transition-colors cursor-pointer"
+                    title={keepSidebarVisible ? "Maximize Preview (Hide Sidebar)" : "Dock Beside Sidebar"}
+                  />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                </div>
+                <span className="text-xs font-mono text-slate-300 font-semibold hidden sm:inline">
+                  Live Home Page Preview Frame
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-teal-400 font-bold border border-slate-700">
+                  {previewViewport === "full" ? "Proper Fit View" : previewViewport === "desktop" ? "1200px" : previewViewport === "tablet" ? "768px" : "390px"}
+                </span>
+              </div>
+
+              {/* Viewport Switcher Buttons */}
+              <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewport("full")}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                    previewViewport === "full"
+                      ? "bg-teal-600 text-white shadow-sm font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Proper Fit Alignment View (100% of workspace)"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Proper Fit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewport("desktop")}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                    previewViewport === "desktop"
+                      ? "bg-teal-600 text-white shadow-sm font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Desktop View (1200px)"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Desktop</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewport("tablet")}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                    previewViewport === "tablet"
+                      ? "bg-teal-600 text-white shadow-sm font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Tablet View (768px)"
+                >
+                  <Tablet className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Tablet</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewport("mobile")}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                    previewViewport === "mobile"
+                      ? "bg-teal-600 text-white shadow-sm font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Mobile View (390px)"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Mobile</span>
+                </button>
+              </div>
+
+              {/* Screen Quick Switcher (Home, 5 Pillars, Subcategories, Kitchen Packages) */}
+              <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewScreen("home")
+                    if (iframeRef.current?.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "home" }, "*")
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    previewScreen === "home" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Preview Live Homepage"
+                >
+                  <span>🏠 Home</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewScreen("pillars")
+                    if (iframeRef.current?.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "pillars" }, "*")
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Preview & Edit 5 Core Specialized Pillars Modal"
+                >
+                  <span>⚡ 5 Pillars</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewScreen("subcategories")
+                    if (iframeRef.current?.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "subcategories" }, "*")
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    previewScreen === "subcategories" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Preview & Edit Subcategories Modal"
+                >
+                  <span>🧹 Subcategories</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewScreen("kitchen")
+                    if (iframeRef.current?.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "kitchen" }, "*")
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    previewScreen === "kitchen" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Preview & Edit Kitchen Cleaning Packages Details Page"
+                >
+                  <span>🍽️ Kitchen Packages</span>
+                </button>
+              </div>
+
+              {/* In-Page Edit Mode Toggle & Quick Edit Panel Buttons */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewEditMode(v => !v)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                    previewEditMode
+                      ? "bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-400/50"
+                      : "bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700"
+                  }`}
+                  title="Toggle Interactive In-Page Edit Mode inside preview iframe"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>{previewEditMode ? "In-Page Edit: ON" : "In-Page Edit"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewQuickEdit(v => !v)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                    showPreviewQuickEdit
+                      ? "bg-teal-600 text-white hover:bg-teal-500 ring-2 ring-teal-400/50"
+                      : "bg-slate-800 text-teal-400 hover:text-white hover:bg-slate-700 border border-slate-700"
+                  }`}
+                  title="Toggle Quick Edit side panel to edit hero banner and all sections alongside preview"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>{showPreviewQuickEdit ? "Hide Editor" : "Quick Edit Panel"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setKeepSidebarVisible(v => !v)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 cursor-pointer ${
+                    keepSidebarVisible
+                      ? "bg-slate-800 text-teal-400 hover:bg-slate-700"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  title={keepSidebarVisible ? "Sidebar is Visible (Click to Maximize)" : "Sidebar is Hidden (Click to Dock Beside Sidebar)"}
+                >
+                  <Layout className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline">{keepSidebarVisible ? "Docked" : "Sidebar"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIframeKey(k => k + 1)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  title="Reload Preview Frame"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <a
+                  href="/home?preview=true"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Open live homepage in a new tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tab</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(false)}
+                  className="text-slate-400 hover:text-white hover:bg-rose-600/80 font-bold text-xs px-2 py-1 rounded-lg transition ml-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <iframe
-              src="/home?preview=true"
-              className="w-full flex-1 border-none"
-              title="Home Page Preview"
-            />
+            {/* Split View Container (Quick Edit Panel + Iframe Viewport) */}
+            <div className="w-full flex-1 flex overflow-hidden relative">
+              {/* Collapsible Quick Edit Panel on the Preview Side */}
+              {showPreviewQuickEdit && (
+                <div className="w-[360px] sm:w-[400px] shrink-0 h-full bg-slate-900 border-r border-slate-800 flex flex-col text-slate-200 z-10 shadow-2xl overflow-hidden">
+                  {/* Panel Top Header */}
+                  <div className="p-3 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-teal-400" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Preview Side Editor</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isPublishing}
+                      className="px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isPublishing ? "Saving…" : "Publish"}</span>
+                    </button>
+                  </div>
+
+                  {/* Panel Tab Bar */}
+                  <div className="flex items-center gap-1 p-2 bg-slate-900/90 border-b border-slate-800/80 overflow-x-auto shrink-0 scrollbar-none">
+                    {[
+                      { id: "hero", label: "Hero Banner", icon: Globe },
+                      { id: "pillars", label: "5 Pillars", icon: Sparkles },
+                      { id: "subcategories", label: "Subcategories", icon: Layers },
+                      { id: "categories", label: "Categories", icon: Layout },
+                      { id: "offers", label: "Offers", icon: Gift },
+                      { id: "vendor", label: "Vendor", icon: Users },
+                      { id: "trust", label: "Why Us", icon: ShieldCheck },
+                      { id: "footer", label: "Footer", icon: FileText }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPreviewQuickEditTab(tab.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1 cursor-pointer ${
+                          previewQuickEditTab === tab.id
+                            ? "bg-teal-600 text-white shadow-xs font-bold"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800"
+                        }`}
+                      >
+                        <tab.icon className="w-3 h-3" />
+                        <span>{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Panel Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs">
+                    {previewQuickEditTab === "hero" && (
+                      <div className="space-y-3.5">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Top Pill Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={config.hero.badge}
+                            onChange={(e) => updateHero("badge", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-medium focus:ring-1 focus:ring-teal-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Hero Headline (3 Parts)
+                          </label>
+                          <input
+                            type="text"
+                            value={config.hero.mainHeadingFirst}
+                            onChange={(e) => updateHero("mainHeadingFirst", e.target.value)}
+                            placeholder="Prefix (e.g. Professional)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-medium focus:ring-1 focus:ring-teal-500 outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={config.hero.mainHeadingHighlight}
+                            onChange={(e) => updateHero("mainHeadingHighlight", e.target.value)}
+                            placeholder="Highlight Word (Teal)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-teal-400 text-xs font-bold focus:ring-1 focus:ring-teal-500 outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={config.hero.mainHeadingLast}
+                            onChange={(e) => updateHero("mainHeadingLast", e.target.value)}
+                            placeholder="Suffix (e.g. Made Simple)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-medium focus:ring-1 focus:ring-teal-500 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Subtitle Description
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={config.hero.subtitle}
+                            onChange={(e) => updateHero("subtitle", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-medium focus:ring-1 focus:ring-teal-500 outline-none resize-none"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Search Placeholder
+                            </label>
+                            <input
+                              type="text"
+                              value={config.hero.searchPlaceholder}
+                              onChange={(e) => updateHero("searchPlaceholder", e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs focus:ring-1 focus:ring-teal-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Location Tag
+                            </label>
+                            <input
+                              type="text"
+                              value={config.hero.searchLocation}
+                              onChange={(e) => updateHero("searchLocation", e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs focus:ring-1 focus:ring-teal-500 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Hero Illustration in Quick Edit */}
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                              Hero Illustration Image
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateHero("heroImage", "/assets/hero_illustration.jpg")
+                                updateHero("heroIllustration", "/assets/hero_illustration.jpg")
+                              }}
+                              className="text-[10px] text-teal-400 hover:underline cursor-pointer"
+                            >
+                              Reset Concept 3
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={config.hero.heroImage || config.hero.heroIllustration || ""}
+                            onChange={(e) => {
+                              updateHero("heroImage", e.target.value)
+                              updateHero("heroIllustration", e.target.value)
+                            }}
+                            placeholder="/assets/hero_illustration.jpg"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-mono focus:ring-1 focus:ring-teal-500 outline-none"
+                          />
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {HERO_ILLUSTRATION_PRESETS.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  updateHero("heroImage", p.url)
+                                  updateHero("heroIllustration", p.url)
+                                }}
+                                className={`px-2 py-1 rounded text-[10px] font-bold truncate text-left border transition cursor-pointer ${
+                                  (config.hero.heroImage === p.url)
+                                    ? "bg-teal-900/60 text-teal-300 border-teal-500"
+                                    : "bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white"
+                                }`}
+                              >
+                                {p.id === "concept3" ? "★ Concept 3" : p.id === "repair" ? "🔧 Home Repair" : p.id === "grocery" ? "🥗 Produce" : "🚚 Logistics"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 6 Trust Badges in Quick Edit */}
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                              6 Trust Badges
+                            </label>
+                            <button
+                              type="button"
+                              onClick={resetTrustBadges}
+                              className="text-[10px] text-teal-400 hover:underline cursor-pointer"
+                            >
+                              Reset Badges
+                            </button>
+                          </div>
+                          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                            {(config.hero.trustBadges || DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges).map((b, idx) => (
+                              <div key={b.id || idx} className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/80 space-y-1">
+                                <div className="flex items-center justify-between text-[10px] font-bold text-teal-400">
+                                  <span>Badge #{idx + 1}</span>
+                                  <span className="text-[9px] text-slate-400">{b.icon}</span>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={b.title || b.text || ""}
+                                  onChange={(e) => updateTrustBadge(idx, "title", e.target.value)}
+                                  placeholder="Title"
+                                  className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-[11px] font-bold outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={b.subtitle || ""}
+                                  onChange={(e) => updateTrustBadge(idx, "subtitle", e.target.value)}
+                                  placeholder="Subtitle"
+                                  className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-[10px] outline-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5 PILLARS MODAL QUICK EDIT */}
+                    {previewQuickEditTab === "pillars" && (
+                      <div className="space-y-3.5">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Modal Top Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={config.pillarModal?.badge || "⚡ 5 Core Specialized Pillars"}
+                            onChange={(e) => updatePillarModal("badge", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Modal Title
+                          </label>
+                          <input
+                            type="text"
+                            value={config.pillarModal?.title || "Home & Repair Services"}
+                            onChange={(e) => updatePillarModal("title", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Modal Subtitle
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={config.pillarModal?.subtitle || ""}
+                            onChange={(e) => updatePillarModal("subtitle", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                          />
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            5 Pillar Service Cards
+                          </span>
+                          {(config.pillarModal?.pillars || DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars).map((pillar, pIdx) => (
+                            <div key={pillar.id || pIdx} className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-teal-400">Pillar #{pIdx + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => updatePillarItem(pIdx, "enabled", !pillar.enabled)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                    pillar.enabled !== false ? "bg-emerald-900 text-emerald-300" : "bg-slate-700 text-slate-400"
+                                  }`}
+                                >
+                                  {pillar.enabled !== false ? "Active" : "Disabled"}
+                                </button>
+                              </div>
+
+                              <input
+                                type="text"
+                                value={pillar.label}
+                                onChange={(e) => updatePillarItem(pIdx, "label", e.target.value)}
+                                placeholder="Pillar Name"
+                                className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs outline-none font-bold"
+                              />
+
+                              <div>
+                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Photo URL or Path</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={pillar.photo || pillar.image || ""}
+                                    onChange={(e) => updatePillarItem(pIdx, "photo", e.target.value)}
+                                    placeholder="/mockups/service_cleaning.png"
+                                    className="flex-1 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 text-[11px] font-mono outline-none"
+                                  />
+                                  {pillar.photo && (
+                                    <div className="w-7 h-7 rounded overflow-hidden bg-slate-950 shrink-0 border border-slate-700">
+                                      <img src={pillar.photo} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SUBCATEGORIES QUICK EDIT */}
+                    {previewQuickEditTab === "subcategories" && (
+                      <div className="space-y-3.5">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Drawer/Modal Title
+                          </label>
+                          <input
+                            type="text"
+                            value={config.subServicesModal?.title || "Home Cleaning & Pest Control"}
+                            onChange={(e) => updateSubServicesModal("title", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500 font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Cleaning Section Title
+                          </label>
+                          <input
+                            type="text"
+                            value={config.subServicesModal?.cleaningSectionTitle || "Home Cleaning"}
+                            onChange={(e) => updateSubServicesModal("cleaningSectionTitle", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Home Cleaning Items
+                          </span>
+                          {(config.subServicesModal?.cleaningItems || DEFAULT_HOME_PAGE_CONFIG.subServicesModal.cleaningItems).map((item, idx) => (
+                            <input
+                              key={item.id || idx}
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => updateCleaningSubItem(idx, e.target.value)}
+                              className="w-full px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none mb-1 font-medium"
+                            />
+                          ))}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Pest Control Section Title
+                          </label>
+                          <input
+                            type="text"
+                            value={config.subServicesModal?.pestSectionTitle || "Pest Control"}
+                            onChange={(e) => updateSubServicesModal("pestSectionTitle", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Pest Control Items
+                          </span>
+                          {(config.subServicesModal?.pestItems || DEFAULT_HOME_PAGE_CONFIG.subServicesModal.pestItems).map((item, idx) => (
+                            <input
+                              key={item.id || idx}
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => updatePestSubItem(idx, e.target.value)}
+                              className="w-full px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none mb-1 font-medium"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {previewQuickEditTab === "categories" && (
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Categories ({config.categories?.length || 0})
+                        </span>
+                        {(config.categories || []).map((cat, idx) => (
+                          <div key={cat.id || idx} className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white">{cat.title}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextCats = [...config.categories]
+                                  nextCats[idx].enabled = !nextCats[idx].enabled
+                                  setConfig(prev => ({ ...prev, categories: nextCats }))
+                                  saveHomePageConfig({ ...config, categories: nextCats })
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                  cat.enabled ? "bg-emerald-900 text-emerald-300" : "bg-slate-700 text-slate-400"
+                                }`}
+                              >
+                                {cat.enabled ? "Active" : "Disabled"}
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={cat.title}
+                              onChange={(e) => {
+                                const nextCats = [...config.categories]
+                                nextCats[idx].title = e.target.value
+                                setConfig(prev => ({ ...prev, categories: nextCats }))
+                                saveHomePageConfig({ ...config, categories: nextCats })
+                              }}
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs outline-none font-bold"
+                            />
+                            <input
+                              type="text"
+                              value={cat.subtitle}
+                              onChange={(e) => {
+                                const nextCats = [...config.categories]
+                                nextCats[idx].subtitle = e.target.value
+                                setConfig(prev => ({ ...prev, categories: nextCats }))
+                                saveHomePageConfig({ ...config, categories: nextCats })
+                              }}
+                              placeholder="Subtitle"
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-[10px] outline-none"
+                            />
+                            <div>
+                              <label className="text-[9px] text-slate-400 uppercase block mb-1">Photo URL or Path</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={cat.image || ""}
+                                  onChange={(e) => {
+                                    const nextCats = [...config.categories]
+                                    nextCats[idx].image = e.target.value
+                                    setConfig(prev => ({ ...prev, categories: nextCats }))
+                                    saveHomePageConfig({ ...config, categories: nextCats })
+                                  }}
+                                  placeholder="/assets/..."
+                                  className="flex-1 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-[10px] font-mono outline-none"
+                                />
+                                {cat.image && (
+                                  <div className="w-7 h-7 rounded overflow-hidden bg-slate-950 shrink-0 border border-slate-700">
+                                    <img src={cat.image} alt="" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {previewQuickEditTab === "offers" && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Offers Title</label>
+                          <input
+                            type="text"
+                            value={config.offers?.title || ""}
+                            onChange={(e) => {
+                              const next = { ...config, offers: { ...config.offers, title: e.target.value } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Offers Subtitle</label>
+                          <input
+                            type="text"
+                            value={config.offers?.subtitle || ""}
+                            onChange={(e) => {
+                              const next = { ...config, offers: { ...config.offers, subtitle: e.target.value } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {previewQuickEditTab === "vendor" && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendor Banner Title</label>
+                          <input
+                            type="text"
+                            value={config.vendorBanner?.titleHighlight || ""}
+                            onChange={(e) => {
+                              const next = { ...config, vendorBanner: { ...config.vendorBanner, titleHighlight: e.target.value } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-teal-400 font-bold text-xs outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">CTA Text</label>
+                          <input
+                            type="text"
+                            value={config.vendorBanner?.ctaText || ""}
+                            onChange={(e) => {
+                              const next = { ...config, vendorBanner: { ...config.vendorBanner, ctaText: e.target.value } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {previewQuickEditTab === "trust" && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Section Title</label>
+                          <input
+                            type="text"
+                            value={config.whyChooseUs?.title || ""}
+                            onChange={(e) => {
+                              const next = { ...config, whyChooseUs: { ...config.whyChooseUs, title: e.target.value } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {previewQuickEditTab === "footer" && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Support Phone</label>
+                          <input
+                            type="text"
+                            value={config.footer?.phone || ""}
+                            onChange={(e) => updateFooter("phone", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Support Email</label>
+                          <input
+                            type="text"
+                            value={config.footer?.email || ""}
+                            onChange={(e) => updateFooter("email", e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Iframe Viewport Container (Proper Fit & Alignment, 0 pixels cut off!) */}
+              <div className="flex-1 h-full bg-slate-900/50 overflow-hidden flex items-center justify-center relative p-0 sm:p-2">
+                <div
+                  className={`h-full transition-all duration-300 overflow-hidden bg-white shadow-xl ${
+                    previewViewport === "full"
+                      ? "w-full rounded-none"
+                      : previewViewport === "desktop"
+                      ? "w-full max-w-[1200px] rounded-xl border border-slate-700/60"
+                      : previewViewport === "tablet"
+                      ? "w-[768px] max-w-full rounded-2xl border-2 border-slate-700"
+                      : "w-[390px] max-w-full rounded-3xl border-4 border-slate-700 shadow-2xl"
+                  }`}
+                >
+                  <iframe
+                    ref={iframeRef}
+                    key={iframeKey}
+                    src={`/home?preview=true${previewScreen === 'pillars' ? '&openModal=pillars' : previewScreen === 'subcategories' ? '&openModal=homepest' : previewScreen === 'kitchen' ? '&category=kitchen_cleaning' : ''}${previewEditMode ? '&edit=true' : ''}`}
+                    className="w-full h-full border-none bg-white"
+                    title="Home Page Preview"
+                    onLoad={() => {
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage({
+                          type: "TOGGLE_EDIT_MODE",
+                          enabled: previewEditMode
+                        }, "*")
+                        if (previewScreen !== "home") {
+                          iframeRef.current.contentWindow.postMessage({
+                            type: "NAVIGATE_PREVIEW_SCREEN",
+                            screen: previewScreen
+                          }, "*")
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

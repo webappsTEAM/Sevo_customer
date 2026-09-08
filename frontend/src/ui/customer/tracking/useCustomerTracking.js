@@ -430,11 +430,31 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
         }
       },
       // onStatusChange callback
-      (isConnected) => {
+      (state) => {
         if (!mountedRef.current) return
+        // Bug found: this callback used to receive websocketService's
+        // connection-state string ("connecting" | "connected" |
+        // "reconnecting" | "disconnected") but treated it as a boolean --
+        // every one of those strings is truthy in JS, so wsConnected/online
+        // were ALWAYS true and this never actually reflected real
+        // connection health: the "Live" badge never turned off, the fast
+        // 5s REST-polling fallback below (which only kicks in when
+        // wsConnected is false) never activated, and reconnecting/
+        // disconnected states were never shown -- even though the REST
+        // polling fallback was quietly doing the real work underneath the
+        // whole time.
+        const isConnected = state === "connected"
         setWsConnected(isConnected)
-        setOnline(isConnected)
-        setConnectionState(isConnected ? "LIVE" : "POLLING")
+        if (isConnected) {
+          setOnline(true)
+          setConnectionState("LIVE")
+        } else if (state === "reconnecting") {
+          setConnectionState("RECONNECTING")
+        } else if (state === "connecting") {
+          setConnectionState("CONNECTING")
+        } else {
+          setConnectionState("POLLING")
+        }
       }
     )
 

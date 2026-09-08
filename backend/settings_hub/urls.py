@@ -8,7 +8,7 @@ from .views_catalog_v2 import (
     AdminCatalogChangeLogView,
     AdminRecipeListView, AdminRecipeDetailView,
     AdminRecommendationListView, AdminRecommendationDetailView,
-    PublicPackageListView,
+    PublicPackageListView, PublicCategoryListView,
 )
 from .views import (
     NotificationPreferenceView,
@@ -30,6 +30,7 @@ from .views_service_zones import (
     ServiceZoneListCreateView,
     ServiceZoneDetailView,
     ServiceZoneCheckView,
+    CityListView,
 )
 from .views_legal import PublicLegalConfigAPIView
 from service_requests.payment_views import InvoiceDownloadView
@@ -89,6 +90,7 @@ urlpatterns = [
 
     # Public (no-auth) read-only catalog — used by customer-facing booking UI
     path("catalog/public/packages/", PublicPackageListView.as_view(), name="settings-catalog-public-packages"),
+    path("catalog/public/categories/", PublicCategoryListView.as_view(), name="settings-catalog-public-categories"),
 
     # Data / Privacy
     path("data/export/", DataExportView.as_view(), name="data-export"),
@@ -100,4 +102,7 @@ urlpatterns = [
     path("service-zones/", ServiceZoneListCreateView.as_view(), name="service-zone-list"),
     path("service-zones/check/", ServiceZoneCheckView.as_view(), name="service-zone-check"),
     path("service-zones/<int:pk>/", ServiceZoneDetailView.as_view(), name="service-zone-detail"),
+
+    # GT-B-06: public city registry
+    path("cities/", CityListView.as_view(), name="city-list"),
 ]

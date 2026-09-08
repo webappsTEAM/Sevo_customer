@@ -22,7 +22,16 @@ SECRET_KEY = _SECRET_KEY
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = ["*"]
+# Fixed: this used to hardcode ALLOWED_HOSTS = ["*"] unconditionally,
+# ignoring the DJANGO_ALLOWED_HOSTS env var that's already set correctly in
+# every .env file this app ships with -- host-header validation was fully
+# disabled in the app actually running. Mirrors the pattern already used
+# correctly on the Vendor app's settings.py.
+_allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
@@ -117,10 +126,6 @@ elif USE_POSTGRES:
         except Exception:
             _db_host = "3.111.105.85"
 
-    _db_port = os.getenv("DB_PORT", "")
-    if not _db_port:
-        _db_port = "6543" if "pooler.supabase.com" in _db_host else "5432"
-
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -128,10 +133,10 @@ elif USE_POSTGRES:
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": _db_host,
-            "PORT": _db_port,
+            "PORT": os.getenv("DB_PORT", "5432"),
             "OPTIONS": _db_options,
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
-            "CONN_HEALTH_CHECKS": False if os.getenv("DB_CONN_MAX_AGE", "0") == "0" else True,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 else:
@@ -176,6 +181,14 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Kolkata")
 USE_I18N = True
 USE_TZ = True
+
+# ── Booking window ──────────────────────────────────────────────────────────
+# Same-day bookings close at this local hour; afterwards customers are offered
+# the next day's slots. Enforced server-side in
+# service_requests/booking_window.py, which the booking serializer calls -- the
+# frontend filter is a convenience, not the control. Tunable per environment.
+BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
 
 STATIC_URL = "static/"
 
@@ -284,7 +297,8 @@ AUTH_COOKIE_DOMAIN = os.getenv("AUTH_COOKIE_DOMAIN", None)
 # ── CORS — must name origins explicitly when credentials=True ────────────────
 # CORS_ALLOW_ALL_ORIGINS + CORS_ALLOW_CREDENTIALS together are rejected by browsers.
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
+
+_default_cors_origins = [
     # Local development
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -292,18 +306,33 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5174",
     "http://localhost:5175",
     "http://127.0.0.1:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5176",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     # Production VPS
     "https://caldimproducts.com",
     "http://caldimproducts.com",
     "https://www.caldimproducts.com",
     "http://www.caldimproducts.com",
 ]
+
+_env_cors = os.getenv("CORS_ALLOWED_ORIGINS")
+if _env_cors:
+    _parsed_cors = [o.strip() for o in _env_cors.split(",") if o.strip()]
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys(_parsed_cors + _default_cors_origins))
+else:
+    CORS_ALLOWED_ORIGINS = _default_cors_origins
+
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://.*\.localhost:517[3-5]$",
-    r"^http://.*\.127\.0\.0\.1:517[3-5]$",
+    r"^http://.*\.localhost:517[0-9]$",
+    r"^http://.*\.127\.0\.0\.1:517[0-9]$",
+    r"^http://localhost:517[0-9]$",
+    r"^http://127\.0\.0\.1:517[0-9]$",
 ]
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
+
+_default_csrf_origins = [
     # Local development
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -311,18 +340,29 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5174",
     "http://localhost:5175",
     "http://127.0.0.1:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5176",
     "http://*.localhost:5173",
     "http://*.localhost:5174",
     "http://*.localhost:5175",
+    "http://*.localhost:5176",
     "http://*.127.0.0.1:5173",
     "http://*.127.0.0.1:5174",
     "http://*.127.0.0.1:5175",
+    "http://*.127.0.0.1:5176",
     # Production VPS
     "https://caldimproducts.com",
     "http://caldimproducts.com",
     "https://www.caldimproducts.com",
     "http://www.caldimproducts.com",
 ]
+
+_env_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
+if _env_csrf:
+    _parsed_csrf = [o.strip() for o in _env_csrf.split(",") if o.strip()]
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_parsed_csrf + CORS_ALLOWED_ORIGINS + _default_csrf_origins))
+else:
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS + _default_csrf_origins))
 
 
 MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
@@ -374,12 +414,45 @@ AUTO_GENERATE_OTP = os.getenv("AUTO_GENERATE_OTP", "False").strip().lower() in (
 # when live gateway keys are configured. When they are not, PaymentVerifyView
 # refuses to mark bookings paid instead of trusting an unauthenticated,
 # client-supplied "mock_success" flag (the previous behaviour).
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAYX_KEY_ID") or "").strip()
+RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or os.getenv("RAZORPAYX_KEY_SECRET") or "").strip()
+RAZORPAYX_KEY_ID = (os.getenv("RAZORPAYX_KEY_ID") or os.getenv("RAZORPAY_KEY_ID") or "").strip()
+RAZORPAYX_KEY_SECRET = (os.getenv("RAZORPAYX_KEY_SECRET") or os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
+RAZORPAYX_ACCOUNT_NUMBER = os.getenv("RAZORPAYX_ACCOUNT_NUMBER", "").strip()
+RAZORPAYX_WEBHOOK_SECRET = os.getenv("RAZORPAYX_WEBHOOK_SECRET", "").strip()
+RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
+
 # Explicit opt-in only: lets a developer exercise the payment flow end-to-end
 # on a machine with no gateway credentials. Must never be enabled outside
 # local development.
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
+
+# ── Workforce Integration ────────────────────────────────────────────────────
+WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
+WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default").strip()
+WORKFORCE_WEBHOOK_SECRET = os.getenv(
+    "WORKFORCE_WEBHOOK_SECRET",
+    "dev-insecure-workforce-webhook-secret-local-testing-only" if DEBUG else ""
+).strip()
+
+# ── Supabase Storage ─────────────────────────────────────────────────────────
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "admin-media").strip()
+ENABLE_LOCAL_STORAGE_FALLBACK = os.getenv(
+    "ENABLE_LOCAL_STORAGE_FALLBACK",
+    "1" if DEBUG else "0"
+).strip().lower() in ("1", "true", "yes")
+
+# ── Google Services & OAuth ──────────────────────────────────────────────────
+GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or os.getenv("Client_ID") or "").strip()
+GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("Client_secret") or "").strip()
+GOOGLE_MAPS_API_KEY = (
+    os.getenv("GOOGLE_MAPS_API_KEY") or
+    os.getenv("VITE_GOOGLE_MAPS_KEY") or
+    os.getenv("VITE_GOOGLE_MAPS_API_KEY") or
+    ""
+).strip()
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")

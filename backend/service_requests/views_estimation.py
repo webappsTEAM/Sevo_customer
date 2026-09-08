@@ -35,11 +35,11 @@ def _get_booking(request, identifier):
     try:
         if str(identifier).isdigit():
             sr = ServiceRequest.objects.select_related(
-                "customer", "technician", "estimation", "estimation__fee"
+                "customer", "estimation", "estimation__fee"
             ).get(pk=int(identifier))
         else:
             sr = ServiceRequest.objects.select_related(
-                "customer", "technician", "estimation", "estimation__fee"
+                "customer", "estimation", "estimation__fee"
             ).get(request_id=identifier)
     except ServiceRequest.DoesNotExist:
         return None, Response(

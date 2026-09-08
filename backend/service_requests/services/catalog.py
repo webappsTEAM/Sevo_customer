@@ -111,9 +111,30 @@ def update_category(category, data, actor, reason=None):
     return _apply_updates(category, data, CatalogChangeLog.EntityType.CATEGORY, actor, reason=reason)
 
 
-def delete_category(category):
+def delete_category(category, actor=None, cascade=False):
+    """
+    Deletes a category. Blocked by default if it still has services attached
+    -- this is intentional data-integrity protection, not a bug: deleting a
+    category out from under live services/packages would orphan them.
+
+    Pass cascade=True (surfaced to the admin as an explicit "delete everything
+    inside this category too" confirmation, never the default) to instead
+    delete every service under this category -- and every package under each
+    of those services -- before deleting the category itself, all inside one
+    transaction so a mid-way failure can't leave a half-deleted category.
+    """
     if category.services.exists():
-        raise ValidationError({"detail": "Cannot delete a category that still has services. Move or delete its services first."})
+        if not cascade:
+            raise ValidationError({"detail": "Cannot delete a category that still has services. Move or delete its services first."})
+        from django.db import transaction
+        with transaction.atomic():
+            for service in list(category.services.all()):
+                delete_service(service, actor=actor, cascade=True)
+            _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.DELETE, actor,
+                 reason="Cascade delete: removed with all child services and packages.")
+            category.delete()
+        return
+    _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.DELETE, actor)
     category.delete()
 
 
@@ -129,9 +150,28 @@ def update_service(service, data, actor, reason=None):
     return _apply_updates(service, data, CatalogChangeLog.EntityType.SERVICE, actor, reason=reason)
 
 
-def delete_service(service):
+def delete_service(service, actor=None, cascade=False):
+    """
+    Deletes a service. Blocked by default if it still has packages attached
+    -- same reasoning as delete_category above.
+
+    Pass cascade=True to delete every package under this service first. When
+    called directly (not via delete_category's cascade), this runs in its
+    own transaction so a partial package-delete failure can't leave the
+    service in a half-deleted state.
+    """
     if service.packages.exists():
-        raise ValidationError({"detail": "Cannot delete a service that still has packages. Move or delete its packages first."})
+        if not cascade:
+            raise ValidationError({"detail": "Cannot delete a service that still has packages. Move or delete its packages first."})
+        from django.db import transaction
+        with transaction.atomic():
+            for package in list(service.packages.all()):
+                delete_package(package, actor=actor)
+            _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor,
+                 reason="Cascade delete: removed with all child packages.")
+            service.delete()
+        return
+    _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor)
     service.delete()
 
 
@@ -380,7 +420,7 @@ def transition_package_status(package, new_status, actor, reason=None):
     return package
 
 
-def delete_package(package):
+def delete_package(package, actor=None):
     try:
         from logistics.models import ServiceTier
         ServiceTier.objects.filter(slug=package.slug).delete()
@@ -391,6 +431,7 @@ def delete_package(package):
         cache.clear()
     except Exception:
         pass
+    _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.DELETE, actor)
     package.delete()
 
 

@@ -5,6 +5,7 @@ import {
   HelpCircle, ChevronRight, Check
 } from "lucide-react"
 import { VegetableRecommendationSection } from "./VegetableRecommendationSection.jsx"
+import { getVegetableProducePhoto } from "../../../utils/vegetablePhotoMap.js"
 
 function getProducePhotoFallback(name) {
   const n = (name || "").toLowerCase()
@@ -126,75 +127,181 @@ export function RecipeDetails({
 
   return (
     <div className="space-y-6 pb-6">
-      {/* ── Recipe Header / Hero ── */}
-      <div className="relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-200/80 shadow-md">
-        <div className="h-48 sm:h-64 w-full relative">
-          <img
-            src={recipe.image || fallbackPhoto}
-            alt={recipe.name}
-            className="w-full h-full object-cover opacity-85"
-            onError={(e) => {
-              e.currentTarget.onerror = null
-              e.currentTarget.src = fallbackPhoto
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-          
-          {/* Top badges */}
-          <div className="absolute top-4 left-4 flex flex-wrap gap-2">
-            <span className="bg-emerald-600/90 backdrop-blur-md text-white text-xs font-black px-3 py-1 rounded-full shadow-md flex items-center gap-1.5">
-              <ChefHat className="w-3.5 h-3.5" />
-              <span>{recipe.package_name || "Farm Produce Recipe"}</span>
-            </span>
-          </div>
+      {/* ── Top Split: Recipe Info & Metadata (Left) + Compact Recipe Image (Right) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Header Title & Badges & Quick Metadata Strip */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black px-3 py-1 rounded-lg flex items-center gap-1.5">
+                  <ChefHat className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{recipe.package_name || "Farm Produce Recipe"}</span>
+                </span>
+                <span className="text-xs font-semibold text-slate-400">
+                  • Homestyle Dish
+                </span>
+              </div>
 
-          {/* Title & Short Description */}
-          <div className="absolute bottom-4 left-4 right-4 text-white">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-              {recipe.name}
-            </h2>
-            {recipe.short_description && (
-              <p className="text-xs sm:text-sm text-slate-200 mt-1 line-clamp-2 leading-relaxed">
-                {recipe.short_description}
-              </p>
-            )}
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                {recipe.name}
+              </h2>
+
+              {recipe.short_description && (
+                <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed font-medium">
+                  {recipe.short_description}
+                </p>
+              )}
+            </div>
+
+            {/* Quick Metadata Strip */}
+            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prep</div>
+                <div className="text-xs sm:text-sm font-black text-slate-800 mt-0.5">
+                  {recipe.prep_time_minutes || 10}m
+                </div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cook</div>
+                <div className="text-xs sm:text-sm font-black text-slate-800 mt-0.5">
+                  {recipe.cook_time_minutes || 15}m
+                </div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Servings</div>
+                <div className="text-xs sm:text-sm font-black text-slate-800 mt-0.5 flex items-center justify-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{recipe.servings || 2}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Quick Metadata Strip */}
-        <div className="grid grid-cols-3 bg-white/95 dark:bg-slate-900 divide-x divide-slate-100 p-3 sm:p-4 text-center">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prep</div>
-            <div className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 mt-0.5">
-              {recipe.prep_time_minutes || 10}m
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cook</div>
-            <div className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 mt-0.5">
-              {recipe.cook_time_minutes || 15}m
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Servings</div>
-            <div className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 mt-0.5 flex items-center justify-center gap-1">
-              <Users className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{recipe.servings || 2}</span>
+        {/* Right Column: Compact Recipe Image Showcase */}
+        <div className="lg:col-span-5 flex flex-col justify-center">
+          <div className="w-full h-full min-h-[200px] aspect-[4/3] rounded-3xl overflow-hidden bg-slate-900 border border-slate-200/80 shadow-md relative group">
+            <img
+              src={recipe.image || fallbackPhoto}
+              alt={recipe.name}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={(e) => {
+                e.currentTarget.onerror = null
+                e.currentTarget.src = fallbackPhoto
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute bottom-3 left-3 right-3 text-white">
+              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-950/60 backdrop-blur-md px-2.5 py-1 rounded-lg">
+                Fresh Cooked Dish
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Complete Your Recipe (Produce Cards) ── */}
+      {/* ── Step-by-Step Cooking Instructions (Full Width) ── */}
+      {recipe.instructions && recipe.instructions.length > 0 && (
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">
+          <h4 className="text-sm sm:text-base font-black text-slate-900 mb-4 flex items-center gap-2">
+            <ChefHat className="w-4 h-4 text-emerald-600" />
+            <span>Step-by-Step Cooking Instructions</span>
+          </h4>
+          <div className="space-y-3.5">
+            {recipe.instructions.map((step, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                  {idx + 1}
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                  {typeof step === "string" ? step.replace(/^\d+\.\s*/, "") : step}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Nutritional Value (Per Serving) ── */}
+      <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs">
+        <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3.5 flex items-center gap-1.5">
+          <Flame className="w-4 h-4 text-amber-500" />
+          <span>Nutritional Value (Per Serving)</span>
+        </h4>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Calories</div>
+            <div className="text-sm font-black text-slate-800 mt-0.5">{recipe.calories || 120} kcal</div>
+          </div>
+          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Protein</div>
+            <div className="text-sm font-black text-emerald-700 mt-0.5">{recipe.protein || "3g"}</div>
+          </div>
+          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Carbs</div>
+            <div className="text-sm font-black text-blue-700 mt-0.5">{recipe.carbohydrates || "15g"}</div>
+          </div>
+          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Dietary Fiber</div>
+            <div className="text-sm font-black text-teal-700 mt-0.5">{recipe.fiber || "4g"}</div>
+          </div>
+          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Fat</div>
+            <div className="text-sm font-black text-slate-700 mt-0.5">{recipe.fat || "2g"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Health Benefits & Freshness Tips ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Nutritional Benefits */}
+        {recipe.health_benefits && recipe.health_benefits.length > 0 && (
+          <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-3xl p-5 shadow-xs">
+            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 mb-3 flex items-center gap-1.5">
+              <Heart className="w-4 h-4 text-emerald-600" />
+              <span>Nutritional Benefits</span>
+            </h4>
+            <ul className="space-y-2.5">
+              {recipe.health_benefits.map((point, i) => (
+                <li key={i} className="text-xs sm:text-sm text-emerald-950 font-medium flex items-start gap-2 leading-relaxed">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-2 shrink-0" />
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Freshness & Cooking Tips */}
+        {recipe.health_tips && recipe.health_tips.length > 0 && (
+          <div className="bg-amber-50/50 border border-amber-200/80 rounded-3xl p-5 shadow-xs">
+            <h4 className="text-xs font-black uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-amber-600" />
+              <span>Freshness &amp; Cooking Tips</span>
+            </h4>
+            <ul className="space-y-2.5">
+              {recipe.health_tips.map((tip, i) => (
+                <li key={i} className="text-xs sm:text-sm text-amber-950 font-medium flex items-start gap-2 leading-relaxed">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-2 shrink-0" />
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* ── Complete Your Recipe (Ingredients Required) ── */}
       {catalogVegetables.length > 0 && (
-        <div className="bg-gradient-to-br from-emerald-50/70 to-teal-50/50 border-2 border-emerald-500/30 rounded-3xl p-4 sm:p-5 shadow-sm">
+        <div className="bg-gradient-to-br from-emerald-50/70 to-teal-50/50 border-2 border-emerald-500/30 rounded-3xl p-4 sm:p-5 shadow-xs">
           {/* Section Title */}
           <div className="flex items-center gap-2 mb-3.5">
             <span className="p-1 rounded-lg bg-emerald-600 text-white shadow-xs">
               <ShoppingCart className="w-3.5 h-3.5" />
             </span>
             <h3 className="text-sm sm:text-base font-black text-emerald-950">
-              Complete Your Recipe
+              Complete Your Recipe (Ingredients Required)
             </h3>
           </div>
 
@@ -206,7 +313,7 @@ export function RecipeDetails({
               const price = ing.package_price ? Math.round(Number(ing.package_price)) : 30
               const mrp = ing.package_offer_price ? Math.round(Number(ing.package_offer_price)) : (price > 20 ? price + 8 : null)
               const unit = ing.package_unit || (ing.quantity && ing.unit ? `${ing.quantity} ${ing.unit}` : "500 g")
-              const image = getProducePhotoFallback(name) || ing.package_image || fallbackPhoto
+              const image = getVegetableProducePhoto(name) || ing.package_image || fallbackPhoto
 
               return (
                 <div
@@ -293,97 +400,6 @@ export function RecipeDetails({
                 </div>
               )
             })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Nutrition Facts ── */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-1.5">
-          <Flame className="w-4 h-4 text-amber-500" />
-          <span>Nutritional Value (Per Serving)</span>
-        </h4>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Calories</div>
-            <div className="text-sm font-black text-slate-800 mt-0.5">{recipe.calories || 120} kcal</div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Protein</div>
-            <div className="text-sm font-black text-emerald-700 mt-0.5">{recipe.protein || "3g"}</div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Carbs</div>
-            <div className="text-sm font-black text-blue-700 mt-0.5">{recipe.carbohydrates || "15g"}</div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Dietary Fiber</div>
-            <div className="text-sm font-black text-teal-700 mt-0.5">{recipe.fiber || "4g"}</div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Fat</div>
-            <div className="text-sm font-black text-slate-700 mt-0.5">{recipe.fat || "2g"}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Health Benefits & Tips ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Health Benefits */}
-        {recipe.health_benefits && recipe.health_benefits.length > 0 && (
-          <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl p-4 sm:p-5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 mb-3 flex items-center gap-1.5">
-              <Heart className="w-4 h-4 text-emerald-600" />
-              <span>Nutritional Benefits</span>
-            </h4>
-            <ul className="space-y-2">
-              {recipe.health_benefits.map((point, i) => (
-                <li key={i} className="text-xs text-emerald-950 font-medium flex items-start gap-2 leading-relaxed">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
-                  <span>{point}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Kitchen Health Tips */}
-        {recipe.health_tips && recipe.health_tips.length > 0 && (
-          <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 sm:p-5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-amber-600" />
-              <span>Freshness &amp; Cooking Tips</span>
-            </h4>
-            <ul className="space-y-2">
-              {recipe.health_tips.map((tip, i) => (
-                <li key={i} className="text-xs text-amber-950 font-medium flex items-start gap-2 leading-relaxed">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0" />
-                  <span>{tip}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* ── Cooking Instructions ── */}
-      {recipe.instructions && recipe.instructions.length > 0 && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6">
-          <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-            <ChefHat className="w-4 h-4 text-emerald-600" />
-            <span>Step-by-Step Cooking Instructions</span>
-          </h4>
-          <div className="space-y-3.5">
-            {recipe.instructions.map((step, idx) => (
-              <div key={idx} className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
-                  {idx + 1}
-                </div>
-                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
-                  {typeof step === "string" ? step.replace(/^\d+\.\s*/, "") : step}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
       )}

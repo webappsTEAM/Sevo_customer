@@ -9,11 +9,23 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     subtitle: "Quick booking. Quality work. Guaranteed satisfaction.",
     searchPlaceholder: "What service do you need?",
     searchLocation: "Hosur",
+    heroImage: "/assets/hero_illustration.jpg",
+    heroIllustration: "/assets/hero_illustration.jpg",
+    trustBadges: [
+      { id: "tb-1", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck", color: "teal" },
+      { id: "tb-2", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star", color: "amber" },
+      { id: "tb-3", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock", color: "emerald" },
+      { id: "tb-4", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee", color: "blue" },
+      { id: "tb-5", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2", color: "purple" },
+      { id: "tb-6", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones", color: "rose" }
+    ],
     quickBadges: [
-      { id: "b-1", text: "Verified Pros", icon: "ShieldCheck" },
-      { id: "b-2", text: "4.8★ Rated", icon: "Star" },
-      { id: "b-3", text: "1M+ Happy Homes", icon: "HeartPulse" },
-      { id: "b-4", text: "30 Day Guarantee", icon: "Clock" }
+      { id: "b-1", text: "Verified Experts", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck" },
+      { id: "b-2", text: "4.8★ Rated", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star" },
+      { id: "b-3", text: "On-Time Service", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock" },
+      { id: "b-4", text: "Upfront Pricing", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee" },
+      { id: "b-5", text: "Easy Booking", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2" },
+      { id: "b-6", text: "24/7 Support", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones" }
     ],
     collageImages: [
       "/mockups/hero_plumber_thumbsup.jpg",
@@ -64,6 +76,33 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       enabled: true
     }
   ],
+  pillarModal: {
+    badge: "⚡ 5 Core Specialized Pillars",
+    title: "Home & Repair Services",
+    subtitle: "Select any service below to explore specific options, verified technicians, and transparent pricing.",
+    pillars: [
+      { id: "pillar-1", label: "Home Services & Pest Control", photo: "/mockups/service_cleaning.png", serviceCategoryId: "pest_control", enabled: true },
+      { id: "pillar-2", label: "Paintings", photo: "/mockups/service_maintenance.png", serviceCategoryId: "painting", enabled: true },
+      { id: "pillar-3", label: "Mason", photo: "/mockups/service_building.png", serviceCategoryId: "mason", enabled: true },
+      { id: "pillar-4", label: "AC & Appliance", photo: "/mockups/service_hvac.png", serviceCategoryId: "hvac", enabled: true },
+      { id: "pillar-5", label: "Electrician, Plumbing & Carpentry", photo: "/mockups/service_electrical.png", serviceCategoryId: "electrical", enabled: true }
+    ]
+  },
+  subServicesModal: {
+    title: "Home Cleaning & Pest Control",
+    cleaningSectionTitle: "Home Cleaning",
+    pestSectionTitle: "Pest Control",
+    cleaningItems: [
+      { id: "clean-1", name: "Kitchen Cleaning", categoryId: "kitchen_cleaning", enabled: true },
+      { id: "clean-2", name: "Sofa Cleaning", categoryId: "sofa_cleaning", enabled: true },
+      { id: "clean-3", name: "Bathroom Cleaning", categoryId: "bathroom_cleaning", enabled: true },
+      { id: "clean-4", name: "Full House Cleaning", categoryId: "cleaning", enabled: true }
+    ],
+    pestItems: [
+      { id: "pest-1", name: "Cockroach & Termite Control", categoryId: "pest_control", enabled: true },
+      { id: "pest-2", name: "Ants & Bed Bugs Control", categoryId: "pest_control", enabled: true }
+    ]
+  },
   vendorBanner: {
     enabled: true,
     badgeText: "We're Looking for Professionals",
@@ -329,6 +368,32 @@ function mergeWithDefaultConfig(parsed) {
     return resolveDisplayImageUrl(rawVal, defaultCollage[i])
   })
 
+  let mergedHeroImage = resolveDisplayImageUrl(
+    parsedHero.heroImage || parsedHero.heroIllustration,
+    DEFAULT_HOME_PAGE_CONFIG.hero.heroImage
+  )
+  if (!mergedHeroImage || mergedHeroImage === "undefined" || mergedHeroImage === "null") {
+    mergedHeroImage = "/assets/hero_illustration.jpg"
+  }
+
+  const defaultTrustBadges = DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges
+  const rawTrustBadges = Array.isArray(parsedHero.trustBadges) && parsedHero.trustBadges.length > 0
+    ? parsedHero.trustBadges
+    : (Array.isArray(parsedHero.quickBadges) && parsedHero.quickBadges[0]?.title
+        ? parsedHero.quickBadges
+        : defaultTrustBadges)
+
+  const mergedTrustBadges = defaultTrustBadges.map((defBadge, idx) => {
+    const userBadge = rawTrustBadges[idx] || {}
+    return {
+      ...defBadge,
+      ...userBadge,
+      title: userBadge.title || userBadge.text || defBadge.title,
+      subtitle: userBadge.subtitle || defBadge.subtitle,
+      icon: userBadge.icon || defBadge.icon
+    }
+  })
+
   const defaultCategoryImages = [
     "/mockups/category_for_you.png",
     "/mockups/category_food_health.png",
@@ -345,15 +410,76 @@ function mergeWithDefaultConfig(parsed) {
     }
   })
 
+  // Pillar Modal merge
+  const defaultPillars = DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars
+  const parsedPillars = parsed.pillarModal?.pillars || []
+  const mergedPillars = defaultPillars.map((defPillar, idx) => {
+    const userPillar = parsedPillars[idx] || parsedPillars.find(p => p.id === defPillar.id) || {}
+    const resolvedPhoto = resolveDisplayImageUrl(userPillar.photo || userPillar.image, defPillar.photo)
+    return {
+      ...defPillar,
+      ...userPillar,
+      label: userPillar.label || defPillar.label,
+      photo: resolvedPhoto,
+      image: resolvedPhoto,
+      enabled: userPillar.enabled !== undefined ? userPillar.enabled : defPillar.enabled
+    }
+  })
+
+  const mergedPillarModal = {
+    ...DEFAULT_HOME_PAGE_CONFIG.pillarModal,
+    ...(parsed.pillarModal || {}),
+    pillars: mergedPillars
+  }
+
+  // SubServices Modal merge
+  const defaultCleaning = DEFAULT_HOME_PAGE_CONFIG.subServicesModal.cleaningItems
+  const defaultPest = DEFAULT_HOME_PAGE_CONFIG.subServicesModal.pestItems
+  const parsedCleaning = parsed.subServicesModal?.cleaningItems || []
+  const parsedPest = parsed.subServicesModal?.pestItems || []
+
+  const mergedCleaningItems = defaultCleaning.map((defItem, idx) => {
+    const userItem = parsedCleaning[idx] || parsedCleaning.find(i => i.id === defItem.id) || {}
+    return {
+      ...defItem,
+      ...userItem,
+      name: userItem.name || defItem.name,
+      badge: userItem.badge || defItem.badge
+    }
+  })
+
+  const mergedPestItems = defaultPest.map((defItem, idx) => {
+    const userItem = parsedPest[idx] || parsedPest.find(i => i.id === defItem.id) || {}
+    return {
+      ...defItem,
+      ...userItem,
+      name: userItem.name || defItem.name,
+      badge: userItem.badge || defItem.badge
+    }
+  })
+
+  const mergedSubServicesModal = {
+    ...DEFAULT_HOME_PAGE_CONFIG.subServicesModal,
+    ...(parsed.subServicesModal || {}),
+    cleaningItems: mergedCleaningItems,
+    pestItems: mergedPestItems
+  }
+
   return {
     ...DEFAULT_HOME_PAGE_CONFIG,
     ...parsed,
     hero: {
       ...DEFAULT_HOME_PAGE_CONFIG.hero,
       ...parsedHero,
+      heroImage: mergedHeroImage,
+      heroIllustration: mergedHeroImage,
+      trustBadges: mergedTrustBadges,
+      quickBadges: mergedTrustBadges.map(b => ({ id: b.id, text: b.title, title: b.title, subtitle: b.subtitle, icon: b.icon })),
       collageImages: mergedCollage
     },
     categories: mergedCategories,
+    pillarModal: mergedPillarModal,
+    subServicesModal: mergedSubServicesModal,
     vendorBanner: { ...DEFAULT_HOME_PAGE_CONFIG.vendorBanner, ...(parsed.vendorBanner || {}) },
     offers: { ...DEFAULT_HOME_PAGE_CONFIG.offers, ...(parsed.offers || {}) },
     howItWorks: { ...DEFAULT_HOME_PAGE_CONFIG.howItWorks, ...(parsed.howItWorks || {}) },

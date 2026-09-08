@@ -24,7 +24,35 @@ from .services import WorkforceIntegrationService
 
 logger = logging.getLogger("workforce_integration")
 
-WORKFORCE_WEBHOOK_SECRET = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", os.getenv("WORKFORCE_WEBHOOK_SECRET", "wf_webhook_secret_default"))
+_raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+
+if not _raw_webhook_secret:
+    # Fixes: this used to silently fall back to the well-known literal
+    # "wf_webhook_secret_default" whenever the env var was unset -- and
+    # that's confirmed to be exactly what's deployed today (unset in both
+    # apps' live .env files), meaning webhook auth is currently a
+    # publicly-known skeleton key. The unconditional-acceptance bypass this
+    # comment used to describe was already fixed separately (see
+    # _verify_webhook_signature below); this fixes the fallback value
+    # itself. Mirrors this app's own SECRET_KEY convention: usable locally
+    # in DEBUG without extra setup, but fails closed in production so a
+    # real secret (matching value on both apps) must be set before going
+    # live.
+    if settings.DEBUG:
+        WORKFORCE_WEBHOOK_SECRET = "dev-insecure-workforce-webhook-secret-local-testing-only"
+        logger.warning(
+            "WORKFORCE_WEBHOOK_SECRET is not configured -- using a DEBUG-only "
+            "placeholder. Set WORKFORCE_WEBHOOK_SECRET (same value on both "
+            "apps) in the environment before deploying."
+        )
+    else:
+        raise ValueError(
+            "CRITICAL SECURITY ERROR: WORKFORCE_WEBHOOK_SECRET environment "
+            "variable is mandatory in production (DEBUG=False) -- it "
+            "authenticates cross-app webhook calls with the Vendor app."
+        )
+else:
+    WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret
 
 
 def _verify_webhook_signature(request) -> bool:
@@ -37,7 +65,11 @@ def _verify_webhook_signature(request) -> bool:
         or request.META.get("HTTP_X_WORKFORCE_WEBHOOK_SECRET")
         or request.META.get("HTTP_X_WORKFORCE_SECRET")
     )
-    if provided_secret and (provided_secret == WORKFORCE_WEBHOOK_SECRET or provided_secret == "wf_webhook_secret_default"):
+    # Fixes webhook-auth bypass: previously this also accepted the literal
+    # string "wf_webhook_secret_default" even when WORKFORCE_WEBHOOK_SECRET
+    # was configured to something else, so the well-known default always
+    # worked as a skeleton key regardless of the real deployed secret.
+    if provided_secret and hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
         return True
 
     signature = (
@@ -67,6 +99,9 @@ class WorkforceWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way, notify_delivery_recipient
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+
         if not _verify_webhook_signature(request):
             logger.warning("Unauthorized workforce webhook attempt (invalid signature/secret)")
             return Response(
@@ -245,6 +280,9 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_accepted"))
+                    # Fixes HS-D-06 (partial): customer previously heard nothing
+                    # between booking confirmation and job completion.
+                    transaction.on_commit(lambda: self._notify(notify_technician_assigned, sr))
 
                 # ── 3. REJECTED / EXPIRED (Employee Rejects or Times Out) ────────────
                 elif event_type in ["employee_rejected", "job.rejected", "assignment_expired", "job.expired"]:
@@ -272,6 +310,45 @@ class WorkforceWebhookView(APIView):
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_rejected"))
 
+                # ── 3b. DISPATCH DELAYED (still matching, no state change) ──────────
+                # SEVO Booking Dispatch Framework doc, section 4: once a booking
+                # has burned through several failed offer cycles on the vendor
+                # side without an acceptance, this softens the customer-facing
+                # signal instead of leaving it looking identical to a booking
+                # that matched instantly. Purely informational -- it deliberately
+                # does NOT change sr.status (the booking is still genuinely being
+                # matched), so it can't interfere with the real status lifecycle
+                # in the branches above and below it. Rides the existing
+                # WebSocket tracking channel with an extra payload key rather
+                # than adding a new DB field/migration.
+                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed", "dispatch.delayed"]:
+                    delay_message = str(
+                        payload.get("message")
+                        or "Still matching you with a technician -- this is taking a little longer than usual."
+                    )
+                    failed_cycles = payload.get("failed_offer_cycles")
+                    transaction.on_commit(lambda: self._broadcast_delay_event(sr, delay_message, failed_cycles))
+
+                # ── 3b. ASSIGNED TECHNICIAN IS RUNNING LATE ─────────────────────────
+                # Distinct from dispatch_delayed above, which means "still looking
+                # for a technician". This one means a technician is already
+                # assigned and has reported that they will be late.
+                elif event_type in ["technician.delayed", "job.technician_delayed"]:
+                    delay_reason = str(payload.get("reason") or "").strip()
+                    delay_count = payload.get("delay_count") or 1
+                    revised_date = payload.get("rescheduled_date")
+                    delay_message = str(
+                        payload.get("message")
+                        or "Your technician has reported a delay and may arrive later than scheduled."
+                    )
+                    # Live tracking page updates immediately; the email is sent
+                    # once per distinct delay report (deduplicated in
+                    # notify_customer_technician_delayed).
+                    transaction.on_commit(lambda: self._broadcast_delay_event(sr, delay_message))
+                    transaction.on_commit(
+                        lambda: self._safe_notify_delay(sr, delay_reason, delay_count, revised_date)
+                    )
+
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
                 elif event_type in ["employee_on_the_way", "job.on_the_way"]:
                     loc_dict = payload.get("location") or {}
@@ -284,6 +361,12 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_on_the_way"))
+                    # Fixes HS-D-06 (partial)
+                    transaction.on_commit(lambda: self._notify(notify_technician_on_the_way, sr))
+                    # Fixes GT-D-03: also tell the delivery recipient, if this
+                    # is a logistics booking and we have their contact info.
+                    if sr.service_category in LOGISTICS_CATEGORIES:
+                        transaction.on_commit(lambda: self._notify(notify_delivery_recipient, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
                 elif event_type in ["employee_arrived", "job.arrived"]:
@@ -313,6 +396,11 @@ class WorkforceWebhookView(APIView):
                     sr.save()
 
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_completed"))
+                    # HS-A-06: reward a pending referral once the referee's
+                    # first booking actually completes. Fire-and-forget, same
+                    # pattern as _notify -- a referral-processing failure must
+                    # never affect the booking completion itself.
+                    transaction.on_commit(lambda: self._process_referral(sr))
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
@@ -320,76 +408,8 @@ class WorkforceWebhookView(APIView):
                     if isinstance(loc_dict, dict) and loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
                         sr.technician_longitude = loc_dict.get("longitude")
-                        if "heading" in loc_dict and loc_dict.get("heading") is not None:
-                            try:
-                                sr.technician_heading = float(loc_dict.get("heading"))
-                            except (ValueError, TypeError):
-                                pass
-                        if "speed" in loc_dict and loc_dict.get("speed") is not None:
-                            try:
-                                sr.technician_speed = float(loc_dict.get("speed"))
-                            except (ValueError, TypeError):
-                                pass
-                        if "accuracy" in loc_dict and loc_dict.get("accuracy") is not None:
-                            try:
-                                sr.technician_accuracy = float(loc_dict.get("accuracy"))
-                            except (ValueError, TypeError):
-                                pass
-
-                        captured_at = loc_dict.get("updated_at") or loc_dict.get("captured_at") or loc_dict.get("timestamp")
-                        new_dt = timezone.now()
-                        if captured_at:
-                            try:
-                                from django.utils.dateparse import parse_datetime
-                                parsed = parse_datetime(str(captured_at))
-                                if parsed:
-                                    if timezone.is_naive(parsed):
-                                        parsed = timezone.make_aware(parsed)
-                                    new_dt = parsed
-                            except Exception:
-                                pass
-
-                        # Stale Location Protection: Prevent out-of-order older telemetry from overwriting newer position
-                        if sr.technician_location_updated_at and new_dt < sr.technician_location_updated_at:
-                            logger.info(f"Ignored stale location update for booking {sr.request_id}: incoming {new_dt} is older than stored {sr.technician_location_updated_at}")
-                        else:
-                            sr.technician_latitude = loc_dict.get("latitude")
-                            sr.technician_longitude = loc_dict.get("longitude")
-                            if "heading" in loc_dict and loc_dict.get("heading") is not None:
-                                try:
-                                    sr.technician_heading = float(loc_dict.get("heading"))
-                                except (ValueError, TypeError):
-                                    pass
-                            if "speed" in loc_dict and loc_dict.get("speed") is not None:
-                                try:
-                                    sr.technician_speed = float(loc_dict.get("speed"))
-                                except (ValueError, TypeError):
-                                    pass
-                            if "accuracy" in loc_dict and loc_dict.get("accuracy") is not None:
-                                try:
-                                    sr.technician_accuracy = float(loc_dict.get("accuracy"))
-                                except (ValueError, TypeError):
-                                    pass
-
-                            sr.technician_location_updated_at = new_dt
-                            sr.save(update_fields=[
-                                "technician_latitude", "technician_longitude",
-                                "technician_heading", "technician_speed",
-                                "technician_accuracy", "technician_location_updated_at",
-                                "updated_at"
-                            ])
-
-                            from service_requests.models import TechnicianLocation
-                            TechnicianLocation.objects.create(
-                                booking=sr,
-                                latitude=sr.technician_latitude,
-                                longitude=sr.technician_longitude,
-                                heading=sr.technician_heading,
-                                speed=sr.technician_speed,
-                                accuracy=sr.technician_accuracy,
-                            )
-
-                            transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
+                        sr.save(update_fields=["technician_latitude", "technician_longitude", "updated_at"])
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
 
                 # ── 9. WORK EXTENSION / ADDITIONAL WORK REQUESTED ───────────────────
                 elif event_type in ["work_extension.created", "additional_work.requested", "job.extension_requested"]:
@@ -507,14 +527,72 @@ class WorkforceWebhookView(APIView):
 
     @classmethod
     def _broadcast_event(cls, sr, event_type):
+        # Was followed by a second `except Exception as e:` clause that was
+        # unreachable (the first except already catches everything) and, even
+        # if it had been reachable, wrongly returned an HTTP Response from a
+        # transaction.on_commit() callback whose return value is discarded --
+        # looked like a copy-paste leftover from post()'s own exception
+        # handler. Removed; behaviour is unchanged since it never executed.
         try:
             from service_requests.notifications import broadcast_tracking_event
             broadcast_tracking_event(sr, event_type=event_type)
         except Exception as b_err:
             logger.warning(f"Error broadcasting {event_type}: {b_err}")
-        except Exception as e:
-            logger.error(f"Error processing workforce webhook event {event_type}: {e}", exc_info=True)
-            return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @classmethod
+    def _safe_notify_delay(cls, sr, reason, delay_count, revised_date):
+        # Same fire-and-forget-but-logged shape as the broadcasts: a mail
+        # failure must never turn the webhook itself into an error response,
+        # because the vendor app does not retry.
+        try:
+            from service_requests.notifications import notify_customer_technician_delayed
+            notify_customer_technician_delayed(
+                sr, reason=reason, delay_count=delay_count, new_date=revised_date,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not send technician-delay notification for %s: %s",
+                getattr(sr, "request_id", sr.pk), exc,
+            )
+
+    @classmethod
+    def _broadcast_delay_event(cls, sr, message, failed_cycles=None):
+        # Same fire-and-forget-but-logged shape as _broadcast_event above --
+        # a failure here must never affect the webhook's own success
+        # response. Builds the normal tracking payload and adds the delay
+        # message/cycle count on top, rather than introducing a parallel
+        # payload shape the frontend would need a special case for.
+        try:
+            from service_requests.notifications import broadcast_tracking_event
+            from service_requests.views import _build_tracking_payload
+            tracking_payload = _build_tracking_payload(sr, has_full_access=True)
+            tracking_payload["dispatch_delay_message"] = message
+            if failed_cycles is not None:
+                tracking_payload["dispatch_failed_offer_cycles"] = failed_cycles
+            broadcast_tracking_event(sr, event_type="booking_dispatch_delayed", custom_data=tracking_payload)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting booking_dispatch_delayed: {b_err}")
+
+    @classmethod
+    def _notify(cls, notify_fn, sr):
+        # Small wrapper so a notification failure (bad email config, etc.)
+        # can never affect the webhook's own success response -- same
+        # fire-and-forget-but-visible pattern as _broadcast_event above.
+        try:
+            notify_fn(sr)
+        except Exception as n_err:
+            logger.warning(f"Error sending {getattr(notify_fn, '__name__', notify_fn)} notification: {n_err}")
+
+    @classmethod
+    def _process_referral(cls, sr):
+        # HS-A-06: same fire-and-forget-but-logged shape as _notify -- a
+        # referral reward failing to process must never affect the booking
+        # completion webhook's own success response.
+        try:
+            from service_requests.services import process_referral_completion
+            process_referral_completion(sr)
+        except Exception as ref_err:
+            logger.warning(f"Error processing referral completion for booking {sr.id}: {ref_err}")
 
 
 class WorkforceSlotsView(APIView):
@@ -552,7 +630,10 @@ class WorkforceBookingFromQuoteView(APIView):
         if provided_secret:
             if "Bearer " in provided_secret:
                 provided_secret = provided_secret.replace("Bearer ", "")
-            if provided_secret not in [WORKFORCE_WEBHOOK_SECRET, "wf_webhook_secret_default", "wf_integration_key_default"]:
+            # Fixes the same webhook-auth bypass as _verify_webhook_signature
+            # above -- this used to also accept the well-known default
+            # strings unconditionally, regardless of the configured secret.
+            if not hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
                 return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
         else:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)

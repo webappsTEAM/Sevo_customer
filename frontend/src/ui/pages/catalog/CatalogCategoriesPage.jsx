@@ -52,18 +52,26 @@ export function CatalogCategoriesPage() {
     }
   }
 
-  const handleDelete = async (cat) => {
-    if (!window.confirm(`Delete category "${cat.name}"? This is blocked if it still has services.`)) return
+  const handleDelete = async (cat, cascade = false) => {
+    if (!cascade && !window.confirm(`Delete category "${cat.name}"? This is blocked if it still has services.`)) return
     try {
-      const res = await apiRequest(`/settings/catalog/v2/categories/${cat.id}/`, { method: "DELETE" })
+      const qs = cascade ? "?cascade=true" : ""
+      const res = await apiRequest(`/settings/catalog/v2/categories/${cat.id}/${qs}`, { method: "DELETE" })
       if (res.success) {
-        showToast("Category deleted")
+        showToast(cascade ? "Category and all its services/packages deleted" : "Category deleted")
         load()
       } else {
         showToast(res.message || "Delete blocked", "error")
       }
-    } catch {
-      showToast("Delete failed", "error")
+    } catch (err) {
+      const reason = err?.body?.errors?.detail || err?.body?.message || err?.body?.error
+      if (reason && /still has services/i.test(reason)) {
+        if (window.confirm(`${reason}\n\nDelete "${cat.name}" AND every service (and their packages) inside it? This cannot be undone.`)) {
+          return handleDelete(cat, true)
+        }
+        return
+      }
+      showToast(reason || "Delete failed", "error")
     }
   }
 

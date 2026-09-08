@@ -8,6 +8,7 @@ Two primary groups of views:
 Decoupled from local employee models — dispatches and tracking queries delegate to WorkforceIntegrationService.
 """
 import logging
+import os
 import re
 import uuid
 from decimal import Decimal
@@ -18,6 +19,7 @@ from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole, IsCustomer, is_admin_role
@@ -30,6 +32,8 @@ from .models import (
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
     Coupon, CouponUsage,
+    BookingSeries,
+    BookingMessage,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -42,11 +46,15 @@ from .serializers import (
     RescheduleRequestSerializer, AdminRescheduleListSerializer,
     RefundEvidenceSerializer,
     CustomerRefundRequestSerializer, AdminRefundRequestSerializer,
+    InsuranceClaimSerializer,
+    TripStopSerializer,
+    BookingSeriesSerializer,
+    BookingMessageSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
-from .services.logistics_pricing import resolve_logistics_fare
+from .services.logistics_pricing import resolve_logistics_fare, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
 from .services.address_service import AddressService
 
 
@@ -62,11 +70,29 @@ def _success(data=None, message="", status_code=200):
     )
 
 
-def _error(message, status_code=400, extra=None):
+def _error(message, status_code=400, extra=None, errors=None):
     body = {"success": False, "message": message}
+    if errors is not None:
+        body["errors"] = errors
     if extra:
         body.update(extra)
     return Response(body, status=status_code)
+
+# Fixes EC-08: tracking_token never expired -- a link handed to a customer
+# (or forwarded, screenshotted, left in an old SMS/email) stayed a valid
+# bearer credential for that booking's live location/status forever. 180
+# days after booking creation is a deliberately generous default -- long
+# enough that no active or recently-rescheduled job is ever cut off, short
+# enough that a link from months-old bookings stops working. This is a
+# judgment call on the window, not a hard product requirement; adjust the
+# constant below if a different retention period is wanted.
+TRACKING_TOKEN_VALID_DAYS = 180
+
+
+def _tracking_token_is_expired(sr):
+    if not getattr(sr, "created_at", None):
+        return False
+    return (timezone.now() - sr.created_at).days > TRACKING_TOKEN_VALID_DAYS
 
 
 def _standard_response(success=True, data=None, error=None, meta=None, status_code=200):
@@ -86,6 +112,30 @@ def _get_company(request):
     if company:
         return company
     from companies.models import Company
+    # BUGFIX: this used to fall back to "if there's exactly 1 Company row,
+    # use it" -- CompanyMiddleware is a documented no-op ("operates as a
+    # unified global single-application architecture"), so request.company
+    # is NEVER set and this count()==1 fallback was the ONLY mechanism that
+    # ever resolved a company here. It worked by accident whenever the table
+    # happened to hold exactly one row, and silently returned None the
+    # moment a second row existed for any reason (e.g. leftover test-suite
+    # fixture companies) -- with no error anywhere. A booking created with
+    # company=None can NEVER be dispatched: automatic_dispatch.dispatch_job()
+    # hard-refuses any job with no company_id. Found live during end-to-end
+    # testing: the companies table had accumulated 168 rows (mostly
+    # obviously-synthetic e2e fixture companies -- "Acme Service Co", "GPS
+    # Trace Corp", "Solar Wave Solutions 716581", etc.), silently breaking
+    # dispatch for every booking made after the 2nd company appeared.
+    #
+    # Fixed to resolve the real operating company by its stable slug first
+    # (configurable via DEFAULT_COMPANY_SLUG, defaulting to this org's own
+    # company), and only fall back to the old count()==1 heuristic if that
+    # slug isn't found -- so a clean single-company environment (e.g. a
+    # fresh install) still works without any extra configuration.
+    default_slug = os.environ.get("DEFAULT_COMPANY_SLUG", "calservices")
+    company = Company.objects.filter(slug=default_slug).first()
+    if company:
+        return company
     if Company.objects.count() == 1:
         return Company.objects.first()
     return None
@@ -187,7 +237,7 @@ class CatalogServiceListView(APIView):
             if cached_res is not None:
                 return Response(cached_res)
 
-        qs = Package.objects.select_related("service", "service__category").all().order_by('id')
+        qs = Package.objects.select_related("service", "service__category").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         if service_slug:
@@ -226,195 +276,6 @@ class CatalogSubServiceListView(APIView):
         return Response({"success": True, "data": data})
 
 
-# ── Public Vegetable Recipes & Recommendations ──────────────────────────────
-
-class VegetableRecipeListView(APIView):
-    """
-    Public endpoint: GET /api/catalog/vegetables/recipes/
-    Supports filtering by:
-    - package_id / product_id / vegetable_name
-    - search
-    - difficulty (Easy, Medium, Hard)
-    - tag (quick, easy, low_calorie, high_fiber, popular)
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        from .models import VegetableRecipe
-        from .serializers import VegetableRecipeListSerializer
-
-        package_id = request.GET.get("package_id") or request.GET.get("product_id")
-        veg_query = request.GET.get("vegetable") or ""
-        search = request.GET.get("search") or ""
-        difficulty = request.GET.get("difficulty") or ""
-        tag = request.GET.get("tag") or ""
-        is_popular = request.GET.get("popular")
-
-        qs = VegetableRecipe.objects.filter(is_active=True).select_related("package")
-
-        if package_id:
-            # Check if any recipes have this vegetable as the primary featured package
-            primary_matches = qs.filter(package_id=package_id)
-            if primary_matches.exists():
-                qs = primary_matches
-            else:
-                qs = qs.filter(
-                    Q(package_id=package_id) | Q(ingredients__package_id=package_id)
-                ).distinct()
-        elif veg_query:
-            primary_name_matches = qs.filter(package__name__icontains=veg_query)
-            if primary_name_matches.exists():
-                qs = primary_name_matches
-            else:
-                qs = qs.filter(
-                    Q(package__name__icontains=veg_query) |
-                    Q(ingredients__name__icontains=veg_query) |
-                    Q(ingredients__package__name__icontains=veg_query)
-                ).distinct()
-
-        if search:
-            qs = qs.filter(
-                Q(name__icontains=search) |
-                Q(short_description__icontains=search) |
-                Q(ingredients__name__icontains=search)
-            ).distinct()
-
-        if difficulty:
-            qs = qs.filter(difficulty__iexact=difficulty)
-
-        if is_popular and is_popular.lower() in ("true", "1", "yes"):
-            qs = qs.filter(is_popular=True)
-
-        if tag:
-            # Matches against tags JSON field or preset filters
-            tag_clean = tag.lower().replace("-", " ").replace("_", " ")
-            if "quick" in tag_clean:
-                qs = qs.filter(total_time_minutes__lte=20)
-            elif "easy" in tag_clean:
-                qs = qs.filter(difficulty="Easy")
-            elif "low calorie" in tag_clean or "low_calorie" in tag:
-                qs = qs.filter(calories__lte=150)
-            elif "high fiber" in tag_clean or "high_fiber" in tag:
-                qs = qs.filter(fiber__icontains="g")
-            else:
-                qs = qs.filter(tags__icontains=tag)
-
-        data = VegetableRecipeListSerializer(qs.order_by("sort_order", "id"), many=True).data
-        return Response({"success": True, "data": data, "count": len(data)})
-
-
-class VegetableRecipeDetailView(APIView):
-    """
-    Public endpoint: GET /api/catalog/vegetables/recipes/<id_or_slug>/
-    Returns full recipe details, nutrition, health tips, numbered cooking steps,
-    and separated ingredients (Calservices vegetable catalog products vs pantry items).
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, pk):
-        from .models import VegetableRecipe
-        from .serializers import VegetableRecipeDetailSerializer
-
-        recipe = None
-        if str(pk).isdigit():
-            recipe = VegetableRecipe.objects.filter(id=int(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
-        if not recipe:
-            recipe = VegetableRecipe.objects.filter(slug=str(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
-
-        if not recipe:
-            return Response({"success": False, "message": "Recipe not found"}, status=404)
-
-        data = VegetableRecipeDetailSerializer(recipe).data
-        return Response({"success": True, "data": data})
-
-
-class VegetableRecommendationListView(APIView):
-    """
-    Public endpoint: GET /api/catalog/vegetables/<product_id>/recommendations/
-    Returns database-configured and recipe-derived recommendations for a vegetable product.
-    Only returns active Calservices vegetable products.
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, product_id):
-        from .models import Package, VegetableRecommendation, VegetableRecipe, RecipeIngredient
-        from .serializers import VegetableRecommendationSerializer
-
-        # 1. Fetch direct DB-configured recommendations
-        db_recs = VegetableRecommendation.objects.filter(
-            source_product_id=product_id,
-            is_active=True,
-            recommended_product__status="ACTIVE"
-        ).select_related("source_product", "recommended_product").order_by("-priority", "display_order")
-
-        rec_data = list(VegetableRecommendationSerializer(db_recs, many=True).data)
-        seen_recommended_ids = {r["recommended_product"] for r in rec_data}
-        seen_recommended_ids.add(int(product_id))
-
-        # 2. If fewer than 6, derive recipe-based co-occurring vegetables from DB
-        if len(rec_data) < 8:
-            co_occurring_pkg_ids = RecipeIngredient.objects.filter(
-                recipe__in=VegetableRecipe.objects.filter(
-                    Q(package_id=product_id) | Q(ingredients__package_id=product_id),
-                    is_active=True
-                ),
-                package__isnull=False,
-                package__status="ACTIVE"
-            ).exclude(
-                package_id__in=seen_recommended_ids
-            ).values_list("package_id", flat=True).distinct()[:8]
-
-            for pkg_id in co_occurring_pkg_ids:
-                pkg = Package.objects.filter(id=pkg_id, status="ACTIVE").first()
-                if pkg:
-                    seen_recommended_ids.add(pkg.id)
-                    rec_data.append({
-                        "id": None,
-                        "source_product": int(product_id),
-                        "source_name": "",
-                        "recommended_product": pkg.id,
-                        "recommended_name": pkg.name,
-                        "recommended_price": str(pkg.base_price),
-                        "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
-                        "recommended_unit": pkg.duration or "1 unit",
-                        "recommended_image": pkg.image or "",
-                        "recommended_status": pkg.status,
-                        "recommendation_type": "RECIPE_BASED",
-                        "priority": 5,
-                        "display_order": len(rec_data) + 1,
-                        "is_active": True,
-                    })
-
-        # 3. If still fewer, fill with active popular vegetables
-        if len(rec_data) < 4:
-            fallback_pkgs = Package.objects.filter(
-                service__slug="vegetables",
-                status="ACTIVE"
-            ).exclude(
-                id__in=seen_recommended_ids
-            ).order_by("-popular", "sort_order")[: (4 - len(rec_data))]
-
-            for pkg in fallback_pkgs:
-                rec_data.append({
-                    "id": None,
-                    "source_product": int(product_id),
-                    "source_name": "",
-                    "recommended_product": pkg.id,
-                    "recommended_name": pkg.name,
-                    "recommended_price": str(pkg.base_price),
-                    "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
-                    "recommended_unit": pkg.duration or "1 unit",
-                    "recommended_image": pkg.image or "",
-                    "recommended_status": pkg.status,
-                    "recommendation_type": "YOU_MAY_ALSO_LIKE",
-                    "priority": 1,
-                    "display_order": len(rec_data) + 1,
-                    "is_active": True,
-                })
-
-        return Response({"success": True, "data": rec_data, "count": len(rec_data)})
-
-
 class BookingCreateView(APIView):
     """
     POST /api/booking/
@@ -422,8 +283,30 @@ class BookingCreateView(APIView):
     """
     permission_classes = [permissions.AllowAny]
     parser_classes     = [MultiPartParser, FormParser, JSONParser]
+    # Fixes EC-06: booking creation only had the blanket 60/min anon rate —
+    # tight enough to fit real customer behaviour, loose enough to still let
+    # a bot script bookings for enumeration/spam. Scoped down separately.
+    throttle_classes  = [ScopedRateThrottle]
+    throttle_scope    = "booking_create"
 
     def post(self, request):
+        # Fixes EC-03 (partial): booking creation has no idempotency
+        # protection, so a double-tap submit or a client retry after a
+        # timed-out-but-actually-succeeded request creates a second, separate
+        # booking. A client-supplied Idempotency-Key header lets us return the
+        # original response instead of creating a duplicate. This is opt-in --
+        # if the frontend doesn't send the header, behaviour is byte-for-byte
+        # unchanged from before, since we can't safely infer "duplicate" from
+        # payload contents alone without risking two genuinely different
+        # bookings from the same customer being wrongly deduplicated.
+        idem_key = (request.headers.get("Idempotency-Key") or "").strip()
+        idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
+        if idem_cache_key:
+            from django.core.cache import cache
+            cached = cache.get(idem_cache_key)
+            if cached is not None:
+                return Response(cached["body"], status=cached["status"])
+
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -432,94 +315,137 @@ class BookingCreateView(APIView):
             )
         company = _get_company(request)
 
-        # Masonry Backend Validations
-        cart_data = request.data.get("cart_data", [])
-        if isinstance(cart_data, str):
-            import json
-            try:
-                cart_data = json.loads(cart_data)
-            except Exception:
-                cart_data = []
+        # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
+        # This is the authoritative zone check. It runs on EVERY booking API
+        # call regardless of what the frontend did or did not validate.
+        # A customer cannot bypass this by calling the API directly.
+        #
+        # Uses the current DB state (race-condition safe — if admin disabled a
+        # zone between the frontend check and submission, this will catch it).
+        from settings_hub.service_zone_engine import check_booking_eligibility
 
-        for item in cart_data:
-            item_id = str(item.get("id") or "").lower()
-            if "mason" in item_id or item.get("categoryName") == "Mason":
-                # Verify package and properties against database
-                if "minor-masonry" in item_id:
-                    # Validate area
-                    area = item.get("selectedArea")
-                    if area is None:
-                        return Response(
-                            {"success": False, "message": "Area is required for Minor Masonry."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    try:
-                        area_val = float(area)
-                        # Fetch dynamic minimum_area from database customization
-                        from service_requests.models import Package
-                        pkg = Package.objects.filter(slug="minor-masonry", status="ACTIVE").first()
-                        min_area = 500
-                        if pkg and pkg.service and isinstance(pkg.service.customization, dict):
-                            min_area = float(pkg.service.customization.get("minimum_area", 500))
-                        
-                        if area_val < min_area:
-                            return Response(
-                                {"success": False, "message": f"Minimum service area is {int(min_area)} sq.ft. Please enter an area of {int(min_area)} sq.ft or more."},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
-                    except (ValueError, TypeError):
-                        return Response(
-                            {"success": False, "message": "Invalid area value. Area must be a number."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                elif "tile-fixing" in item_id:
-                    size = str(item.get("selectedBathroomSize") or "").strip()
-                    if not size:
-                        return Response(
-                            {"success": False, "message": "Bathroom size choice is required."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    
-                    # Fetch dynamic pricing_slabs from database customization
-                    from service_requests.models import Package
-                    pkg = Package.objects.filter(slug="bathroom-tile-fixing", status="ACTIVE").first()
-                    pricing_slabs = {"Small": 10000, "Medium": 10000, "Large": 20000}
-                    if pkg and pkg.service and isinstance(pkg.service.customization, dict):
-                        pricing_slabs = pkg.service.customization.get("pricing_slabs", pricing_slabs)
-                    
-                    allowed_sizes = [s.strip().lower() for s in pricing_slabs.keys()]
-                    if size.lower() not in allowed_sizes:
-                        return Response(
-                            {"success": False, "message": f"Invalid bathroom size choice. Allowed values: {', '.join(pricing_slabs.keys())}."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    
-                    # Get exact expected price
-                    expected_price = None
-                    for key, val in pricing_slabs.items():
-                        if key.strip().lower() == size.lower():
-                            expected_price = float(val)
-                            break
-                    
-                    submitted_price = item.get("predefinedPrice")
-                    if submitted_price is not None:
-                        try:
-                            if float(submitted_price) != expected_price:
-                                return Response(
-                                    {"success": False, "message": f"Predefined price mismatch for {size} bathroom."},
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
-                        except (ValueError, TypeError):
-                            return Response(
-                                {"success": False, "message": "Invalid predefined price value."},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
+        _lat = serializer.validated_data.get("latitude")
+        _lng = serializer.validated_data.get("longitude")
+        if _lat is None or _lng is None:
+            # Fixes HS-B-04: this used to silently substitute a hardcoded
+            # Bangalore coordinate here ONLY for the zone-eligibility check
+            # below, while the ServiceRequest itself was still saved with
+            # latitude/longitude = None (serializer.save() uses the real
+            # submitted values, not this fallback). That let a booking with
+            # no coordinates pass the zone check and get created, then sit
+            # with no location for any distance-based technician dispatch to
+            # work from -- exactly the "created, then never dispatched" gap.
+            # Reject it up front instead.
+            return _error(
+                "We couldn't determine your location. Please select your address "
+                "on the map and try again.",
+                400,
+            )
+        _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
+
+        zone_result = check_booking_eligibility(
+            lat=_lat,
+            lng=_lng,
+            service_slug=_service_slug,
+            company=company,
+        )
+
+        if not zone_result.allowed:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": zone_result.error_code,
+                    "message": zone_result.message,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # ── END ZONE GATE ─────────────────────────────────────────────────────
+
+        try:
+            corrected_fare = resolve_logistics_fare(
+                service_category=serializer.validated_data.get("service_category", ""),
+                logistics_tier=serializer.validated_data.get("logistics_tier"),
+                logistics_lane=serializer.validated_data.get("logistics_lane"),
+                submitted_amount=serializer.validated_data.get("total_amount", 0),
+            )
+        except UnresolvedLogisticsFareError:
+            # Fixes GT-B-01: a logistics booking with neither a resolvable
+            # Lane nor ServiceTier has no server-verifiable price, so reject
+            # it with a clear message instead of recording a client-supplied
+            # amount unchecked.
+            return _error(
+                "We couldn't verify a fare for this route/tier. Please pick a valid "
+                "route or service tier and try again.",
+                400,
+            )
+
+        # Fixes HS-B-01 (partial): for non-logistics (home-services) bookings,
+        # `corrected_fare` above is just the client-submitted total_amount —
+        # resolve_logistics_fare() only verifies logistics categories. A full
+        # recompute against Package/AddOn catalog prices isn't possible here
+        # because `cart_data` items don't carry a package_id/addon_id back to
+        # the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md). As a bounded,
+        # safe-to-ship mitigation, we at least check that the submitted total
+        # is internally consistent with the submitted cart line items — this
+        # catches the common tampering/bug pattern of a total_amount that
+        # doesn't match what the cart itself lists, without needing catalog
+        # resolution.
+        #
+        # BUGFIX (same day): the original version of this check compared
+        # total_amount against the raw cart line-item sum with only a
+        # +/-1%/Rs.5 symmetric tolerance. That's wrong -- total_amount
+        # legitimately includes GST/taxes and platform fees on top of the
+        # cart subtotal (the frontend adds these; cart_data only carries the
+        # per-item price), so it is normally *higher* than the raw cart sum,
+        # often by 15-25%+. The tight symmetric tolerance rejected every real
+        # booking with tax/fees, not just tampered ones. The actual security
+        # concern this check exists for is a submitted total *lower* than
+        # what the cart should cost (underpaying), so the bound is now
+        # one-sided: total_amount must not be noticeably below the cart
+        # subtotal, and is capped at a generous multiple to still catch
+        # wildly-wrong/corrupted totals without false-positiving on normal
+        # tax/fee/delivery-charge/tip overhead.
+        _cart_for_check = serializer.validated_data.get("cart_data") or []
+        if (
+            serializer.validated_data.get("service_category", "") not in LOGISTICS_CATEGORIES
+            and isinstance(_cart_for_check, list)
+            and len(_cart_for_check) > 0
+        ):
+            try:
+                _cart_total = sum(
+                    float(item.get("price", 0)) * int(item.get("quantity", 1))
+                    for item in _cart_for_check
+                    if isinstance(item, dict)
+                )
+            except (TypeError, ValueError):
+                _cart_total = None
+            if _cart_total is not None and _cart_total > 0:
+                _submitted = float(corrected_fare)
+                _lower_bound = _cart_total - max(5.0, _cart_total * 0.01)
+                _upper_bound = (_cart_total * 1.75) + 100.0
+                if _submitted < _lower_bound or _submitted > _upper_bound:
+                    return _error(
+                        "The submitted amount doesn't match the selected services. "
+                        "Please refresh and try booking again.",
+                        400,
+                    )
+
+        payment_method = (request.data.get("payment_method") or "COD").upper()
+        if payment_method == "ONLINE":
+            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
+            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
+        else:
+            payment_method = "COD"
+            initial_status = ServiceRequest.Status.CONFIRMED
+            initial_payment_status = ServiceRequest.PaymentStatus.PENDING
+
 
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
         customer_user = None
         is_admin_booking_on_behalf = False
+        _new_account_created = False  # Fixes HS-A-02 (partial)
 
         if request.user and request.user.is_authenticated:
             if request.user.role == getattr(User.Role, "CUSTOMER", "customer"):
@@ -561,162 +487,31 @@ class BookingCreateView(APIView):
                         last_name=last_name,
                         role=getattr(User.Role, 'CUSTOMER', 'CUSTOMER')
                     )
+                    _new_account_created = True
+                    # HS-A-06: link a referral if the booking request carried
+                    # a referral code (e.g. from a shared link). Best-effort
+                    # -- link_referral() already swallows unknown codes and
+                    # self-referrals, and this must never block booking
+                    # creation over a referral problem.
+                    referral_code = str(request.data.get("referral_code") or "").strip()
+                    if referral_code:
+                        try:
+                            sr_services.link_referral(customer_user, referral_code)
+                        except Exception as ref_err:
+                            logger.warning(f"Could not link referral code for new customer {customer_user.id}: {ref_err}")
                 except Exception:
                     if phone_clean:
                         customer_user = User.objects.filter(phone=phone_clean).first()
                     if not customer_user and email_clean:
                         customer_user = User.objects.filter(email__iexact=email_clean).first()
 
-        # Address, Coordinates & Location Snapshot Resolution
-        saved_address_id = request.data.get("saved_address_id") or serializer.validated_data.get("saved_address_id")
-        saved_addr = None
-        if saved_address_id:
-            from accounts.models import SavedAddress
-            saved_addr = SavedAddress.objects.filter(id=saved_address_id).first()
-            if not saved_addr:
-                return Response({"success": False, "message": "Saved address not found."}, status=status.HTTP_404_NOT_FOUND)
-            if customer_user and saved_addr.user_id != customer_user.id:
-                return Response({"success": False, "message": "You do not have permission to use this saved address."}, status=status.HTTP_403_FORBIDDEN)
-
-        final_lat = serializer.validated_data.get("latitude")
-        final_lng = serializer.validated_data.get("longitude")
-        final_address = serializer.validated_data.get("address", "").strip()
-        flat_house_no = str(request.data.get("flat_house_no") or "").strip()
-        landmark = str(request.data.get("landmark") or "").strip()
-        location_snapshot = {}
-
-        if saved_addr:
-            if saved_addr.latitude is not None and saved_addr.longitude is not None:
-                final_lat = Decimal(str(saved_addr.latitude))
-                final_lng = Decimal(str(saved_addr.longitude))
-            if not final_address or final_address == "Address":
-                final_address = saved_addr.formatted_address or f"{saved_addr.address_line1}, {saved_addr.city}, {saved_addr.state} {saved_addr.pincode}"
-            location_snapshot = {
-                "saved_address_id": saved_addr.id,
-                "street_address": saved_addr.address_line1,
-                "address_line1": saved_addr.address_line1,
-                "flat_house_no": saved_addr.flat_house_no or flat_house_no or "",
-                "landmark": saved_addr.landmark or landmark or "",
-                "city": saved_addr.city,
-                "state": saved_addr.state,
-                "pincode": saved_addr.pincode,
-                "country": saved_addr.country or "India",
-                "formatted_address": saved_addr.formatted_address or final_address,
-                "latitude": float(saved_addr.latitude) if saved_addr.latitude is not None else None,
-                "longitude": float(saved_addr.longitude) if saved_addr.longitude is not None else None,
-                "location_available": bool(saved_addr.latitude is not None and saved_addr.longitude is not None),
-                "location_source": saved_addr.location_source or "saved_address",
-                "geocoding_status": saved_addr.geocoding_status or "verified",
-                "confirmed_at": timezone.now().isoformat(),
-            }
-        else:
-            # If coordinates not supplied, geocode the address
-            if (final_lat is None or final_lng is None) and final_address:
-                from service_requests.services.address_service import AddressService
-                geo = AddressService.resolve_address_coordinates(street_address=final_address)
-                if geo.get("location_available"):
-                    final_lat = Decimal(str(geo["latitude"]))
-                    final_lng = Decimal(str(geo["longitude"]))
-                    location_snapshot = {
-                        "saved_address_id": None,
-                        "street_address": final_address,
-                        "address_line1": final_address,
-                        "flat_house_no": flat_house_no,
-                        "landmark": landmark,
-                        "city": geo.get("city", ""),
-                        "state": geo.get("state", ""),
-                        "pincode": geo.get("pincode", ""),
-                        "country": geo.get("country", "India"),
-                        "formatted_address": geo.get("formatted_address", final_address),
-                        "latitude": float(geo["latitude"]),
-                        "longitude": float(geo["longitude"]),
-                        "location_available": True,
-                        "location_source": "geocoding",
-                        "geocoding_status": geo.get("geocoding_status", "verified"),
-                        "confirmed_at": timezone.now().isoformat(),
-                    }
-                else:
-                    location_snapshot = {
-                        "saved_address_id": None,
-                        "street_address": final_address,
-                        "address_line1": final_address,
-                        "flat_house_no": flat_house_no,
-                        "landmark": landmark,
-                        "city": "",
-                        "state": "",
-                        "pincode": "",
-                        "country": "India",
-                        "formatted_address": final_address,
-                        "latitude": None,
-                        "longitude": None,
-                        "location_available": False,
-                        "location_source": "geocoding",
-                        "geocoding_status": "failed",
-                        "confirmed_at": timezone.now().isoformat(),
-                    }
-            elif final_lat is not None and final_lng is not None:
-                location_snapshot = {
-                    "saved_address_id": None,
-                    "street_address": final_address,
-                    "address_line1": final_address,
-                    "flat_house_no": flat_house_no,
-                    "landmark": landmark,
-                    "city": str(request.data.get("city") or ""),
-                    "state": str(request.data.get("state") or ""),
-                    "pincode": str(request.data.get("pincode") or ""),
-                    "country": "India",
-                    "formatted_address": final_address,
-                    "latitude": float(final_lat),
-                    "longitude": float(final_lng),
-                    "location_available": True,
-                    "location_source": request.data.get("location_source") or "map_picker",
-                    "geocoding_status": "verified",
-                    "confirmed_at": timezone.now().isoformat(),
-                }
-
-        # Validate coordinate numerical bounds
-        if final_lat is not None and final_lng is not None:
-            try:
-                lat_f = float(final_lat)
-                lng_f = float(final_lng)
-                if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lng_f <= 180.0):
-                    return Response(
-                        {"success": False, "message": "Invalid latitude or longitude coordinate bounds."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-            except (ValueError, TypeError):
-                return Response(
-                    {"success": False, "message": "Latitude and longitude must be valid numbers."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
-        from settings_hub.service_zone_engine import check_booking_eligibility
-
-        _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
-
-        if final_lat is not None and final_lng is not None:
-            zone_result = check_booking_eligibility(
-                lat=float(final_lat),
-                lng=float(final_lng),
-                service_slug=_service_slug,
-                company=company,
-            )
-            if not zone_result.allowed:
-                return Response(
-                    {
-                        "success": False,
-                        "error_code": zone_result.error_code,
-                        "message": zone_result.message,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            zone_id_snapshot = zone_result.zone_id
-            zone_name_snapshot = zone_result.zone_name or ""
-        else:
-            zone_id_snapshot = None
-            zone_name_snapshot = ""
-        # ── END ZONE GATE ─────────────────────────────────────────────────────
+        # Resolve email if missing in validated_data but present on customer_user
+        final_email = serializer.validated_data.get("email")
+        if not final_email:
+            if customer_user and customer_user.email:
+                final_email = customer_user.email
+            elif request.user and request.user.is_authenticated and request.user.email:
+                final_email = request.user.email
 
         job_type = str(serializer.validated_data.get("job_type") or request.data.get("job_type") or "SERVICE").upper()
         if job_type == "ESTIMATION":
@@ -737,12 +532,12 @@ class BookingCreateView(APIView):
             booking_data = {
                 "customer_name": serializer.validated_data.get("customer_name") or (customer_user.get_full_name() if customer_user else ""),
                 "phone": serializer.validated_data.get("phone") or (getattr(customer_user, "phone", "") if customer_user else ""),
-                "email": serializer.validated_data.get("email") or (getattr(customer_user, "email", "") if customer_user else ""),
-                "address": final_address,
-                "latitude": final_lat,
-                "longitude": final_lng,
-                "saved_address_id": saved_address_id,
-                "service_location_snapshot": location_snapshot,
+                "email": final_email or (getattr(customer_user, "email", "") if customer_user else ""),
+                "address": serializer.validated_data.get("address", ""),
+                "latitude": serializer.validated_data.get("latitude"),
+                "longitude": serializer.validated_data.get("longitude"),
+                "saved_address_id": request.data.get("saved_address_id"),
+                "service_location_snapshot": request.data.get("service_location_snapshot") or {},
                 "preferred_date": serializer.validated_data.get("preferred_date"),
                 "preferred_time": serializer.validated_data.get("preferred_time", ""),
                 "payment_method": request.data.get("payment_method", "COD"),
@@ -788,73 +583,18 @@ class BookingCreateView(APIView):
                 status_code=201 if created else 200,
             )
 
-        corrected_fare = resolve_logistics_fare(
-            service_category=serializer.validated_data.get("service_category", ""),
-            logistics_tier=serializer.validated_data.get("logistics_tier"),
-            logistics_lane=serializer.validated_data.get("logistics_lane"),
-            submitted_amount=serializer.validated_data.get("total_amount", 0),
-        )
-
-        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
-        is_painting_booking = False
-        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
-            is_painting_booking = True
-        else:
-            if any(it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id")) for it in cart_data):
-                is_painting_booking = True
-
-        is_mason_booking = False
-        if _service_category in ["mason", "masonry"]:
-            is_mason_booking = True
-        else:
-            if any(it.get("categoryName") == "Mason" or "mason" in str(it.get("id")) for it in cart_data):
-                is_mason_booking = True
-
-        if is_painting_booking or is_mason_booking:
-            dist_km = 0.0
-            if final_lat is not None and final_lng is not None:
-                dist_m = _haversine_meters(12.7409, 77.8253, float(final_lat), float(final_lng))
-                if dist_m is not None:
-                    dist_km = dist_m / 1000.0
-            if dist_km > 15.0:
-                corrected_fare = Decimal("300.00")
-            else:
-                corrected_fare = Decimal("0.00")
-
-        payment_method = (request.data.get("payment_method") or "COD").upper()
-        if payment_method == "ONLINE":
-            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
-            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
-        else:
-            payment_method = "COD"
-            initial_status = ServiceRequest.Status.CONFIRMED
-            initial_payment_status = ServiceRequest.PaymentStatus.PENDING
-
-        # Resolve email if missing in validated_data but present on customer_user
-        final_email = serializer.validated_data.get("email")
-        if not final_email:
-            if customer_user and customer_user.email:
-                final_email = customer_user.email
-            elif request.user and request.user.is_authenticated and request.user.email:
-                final_email = request.user.email
-
         sr = serializer.save(
             company=company,
             customer=customer_user,
             email=final_email,
-            address=final_address,
-            latitude=final_lat,
-            longitude=final_lng,
-            saved_address_id=saved_addr.id if saved_addr else None,
-            service_location_snapshot=location_snapshot,
             status=initial_status,
             payment_method=payment_method,
             payment_status=initial_payment_status,
             total_amount=corrected_fare,
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
-            service_zone_id_snapshot=zone_id_snapshot,
-            service_zone_name_snapshot=zone_name_snapshot,
+            service_zone_id_snapshot=zone_result.zone_id,
+            service_zone_name_snapshot=zone_result.zone_name or "",
         )
 
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
@@ -880,7 +620,25 @@ class BookingCreateView(APIView):
                 sr.subtotal_amount = subtotal
                 sr.discount_amount = disc
                 sr.final_amount = final_tot
-                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount"])
+                # Bug found: total_amount (set a few lines above to the
+                # pre-discount corrected_fare, via serializer.save()) was
+                # never corrected here -- final_amount was computed and
+                # stored but nothing downstream ever reads it (confirmed: no
+                # serializer field, no other view references sr.final_amount).
+                # total_amount IS the field every downstream consumer reads
+                # as the authoritative price -- most importantly the vendor
+                # app's cash-collection flow (JobPayment.amount_due is built
+                # directly from job.total_amount) and wallet settlement gross
+                # calculation. Leaving it un-discounted meant a technician
+                # could be told to collect the full pre-coupon amount in cash
+                # from a customer who was shown (and charged online, where
+                # applicable) the discounted price -- a real overcharge risk.
+                # A sibling booking-creation path elsewhere in this same file
+                # (the inspection/quote flow) already does this correctly
+                # (total_amount=final_amount), confirming this is the
+                # intended pattern.
+                sr.total_amount = final_tot
+                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount", "total_amount"])
 
                 with transaction.atomic():
                     cpn.current_usage += 1
@@ -894,8 +652,47 @@ class BookingCreateView(APIView):
                         final_amount=final_tot
                     )
 
-        # Dispatch booking notification to workforce management system
-        WorkforceIntegrationService.dispatch_job(sr.id)
+        # Dispatch booking notification to workforce management system.
+        #
+        # Fixes X-02: this used to call dispatch_job() synchronously and
+        # unwrap nothing from the result. WorkforceIntegrationService.dispatch_job()
+        # POSTs to a vendor endpoint (/jobs/dispatch/) that does not exist in
+        # workforce_api/urls.py, so it always fails after paying its full
+        # `timeout=5` cost (or whatever the network needs to fail) on every
+        # single booking creation request, before ever reaching the customer's
+        # response — and the vendor app dispatches independently anyway, via
+        # its own dispatch_pending_workforce_jobs polling loop reading this
+        # same shared table. Firing it in a background thread means a booking
+        # confirms immediately regardless of whether that integration call
+        # ever succeeds; if/when a real dispatch-webhook endpoint exists on
+        # the vendor side, this still delivers it, just without blocking the
+        # request that doesn't need to wait on it.
+        try:
+            import threading
+            threading.Thread(
+                target=WorkforceIntegrationService.dispatch_job,
+                args=(sr.id,),
+                daemon=True,
+            ).start()
+        except Exception as dispatch_err:
+            logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
+
+        # Fixes HS-A-02 (partial): tell the customer an account was
+        # created for them by this booking, since User.objects.create()
+        # above did that silently. Background thread, same reasoning as
+        # the dispatch call above -- this must never delay the booking
+        # response.
+        if _new_account_created:
+            try:
+                import threading
+                from .notifications import notify_account_created
+                threading.Thread(
+                    target=notify_account_created,
+                    args=(customer_user, sr),
+                    daemon=True,
+                ).start()
+            except Exception as notify_err:
+                logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
         if is_admin_booking_on_behalf:
             try:
@@ -918,7 +715,7 @@ class BookingCreateView(APIView):
             except Exception:
                 pass
 
-        return _success(
+        response = _success(
             data={
                 "request_id": sr.request_id,
                 "id": sr.id,
@@ -933,6 +730,9 @@ class BookingCreateView(APIView):
             message="Your service request has been submitted successfully.",
             status_code=201,
         )
+        if idem_cache_key:
+            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code}, timeout=600)
+        return response
 
 
 class CustomerMyBookingsView(APIView):
@@ -974,9 +774,7 @@ class CustomerMyBookingsView(APIView):
 
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related(
-            "customer", "feedback", "estimation", "estimation__fee"
-        ).prefetch_related(
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -1012,7 +810,7 @@ class CustomerBookingCancelView(APIView):
     def post(self, request, pk=None, identifier=None):
         sr_id = pk or identifier
         try:
-            if str(sr_id).isdigit():
+            if sr_id is not None and str(sr_id).isdigit():
                 sr = ServiceRequest.objects.get(pk=int(sr_id))
             else:
                 sr = ServiceRequest.objects.get(request_id=sr_id)
@@ -1023,7 +821,8 @@ class CustomerBookingCancelView(APIView):
         token_matches = bool(
             provided_token and
             sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+            not _tracking_token_is_expired(sr)  # Fixes EC-08
         )
         if request.user and request.user.is_authenticated:
             from accounts.permissions import is_super_admin, can
@@ -1041,6 +840,19 @@ class CustomerBookingCancelView(APIView):
             phone_matches = bool(provided_phone and sr.phone and provided_phone[-10:] == sr.phone.strip()[-10:])
             if not (token_matches or phone_matches):
                 return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
+
+        # Fixes idempotency gap: apply_transition() allows CANCELLED ->
+        # CANCELLED as a no-op self-loop rather than rejecting it, and this
+        # view had no "already cancelled" guard of its own -- so a duplicate
+        # POST (double-click, a retried request after a slow/dropped
+        # response) re-ran this entire handler, including auto-creating a
+        # second PENDING RefundRequest for a booking that was already
+        # cancelled and possibly already being refunded.
+        if sr.status == ServiceRequest.Status.CANCELLED:
+            return _success(
+                data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+                message="Booking is already cancelled.",
+            )
 
         reason = request.data.get("reason", "Customer requested cancellation")
         previous_status = sr.status
@@ -1094,7 +906,38 @@ class CustomerBookingCancelView(APIView):
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
+            # Fixes HS-C-04: cancelling an already-paid booking used to charge
+            # and refund nothing automatically -- the customer or an admin had
+            # to separately go create a refund request through a different
+            # flow. This only creates the RefundRequest (status PENDING) --
+            # it does NOT move any money by itself. An admin still has to
+            # approve -> send to finance -> complete (which now actually
+            # calls the gateway, see HS-C-05/admin_complete_refund) before
+            # anything is refunded.
+            if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+                try:
+                    sr_services.create_refund_request(
+                        booking=sr,
+                        customer=sr.customer,
+                        amount=sr.total_amount,
+                        reason=RefundReason.OTHER,
+                        additional_notes=f"Auto-created on booking cancellation. Cancellation reason: {reason}",
+                    )
+                except Exception as refund_err:
+                    logger.warning(f"Could not auto-create refund request for cancelled+paid booking {sr.id}: {refund_err}")
+
+        # Fixes gap: unlike assignment/reschedule/refund/complaints, no
+        # notification existed for cancellation at all -- add it here,
+        # outside the atomic block so a notification failure can never
+        # roll back a cancellation that already succeeded.
+        try:
+            from .notifications import notify_customer_cancelled
+            notify_customer_cancelled(sr, reason=reason)
+        except Exception as notify_err:
+            logger.warning(f"Could not send cancellation notification for booking {sr.id}: {notify_err}")
+
         return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
+
 
 import math
 
@@ -1111,160 +954,46 @@ def _haversine_meters(lat1, lon1, lat2, lon2):
         return None
 
 
-def _resolve_customer_location(sr):
-    """
-    Authoritative customer location resolver in strict compliance with production hierarchy:
-    1. Booking service_location_snapshot coordinates
-    2. ServiceRequest latitude + longitude (if already stored & valid)
-    3. Customer's selected saved address coordinates (if available)
-    4. Server-side geocoding of the real booking address
-    5. Explicit location_unavailable (NEVER silently substitute fake or default coordinates)
-
-    Returns dict:
-    {
-        "available": bool,
-        "latitude": float | None,
-        "longitude": float | None,
-        "address": str,
-        "pincode": str,
-        "source": "booking_snapshot" | "booking" | "saved_address" | "geocoded" | None
-    }
-    """
-    # 1. Booking location snapshot (immutable snapshot taken at creation time)
-    snapshot = getattr(sr, "service_location_snapshot", None)
-    if isinstance(snapshot, dict) and snapshot.get("location_available") and snapshot.get("latitude") is not None and snapshot.get("longitude") is not None:
-        try:
-            lat = float(snapshot["latitude"])
-            lng = float(snapshot["longitude"])
-            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
-                return {
-                    "available": True,
-                    "latitude": lat,
-                    "longitude": lng,
-                    "address": snapshot.get("formatted_address") or sr.address or "",
-                    "pincode": snapshot.get("pincode") or "",
-                    "source": "booking_snapshot",
-                }
-        except (ValueError, TypeError):
-            pass
-
-    # 2. Stored coordinates on ServiceRequest
-    if sr.latitude is not None and sr.longitude is not None:
-        try:
-            lat = float(sr.latitude)
-            lng = float(sr.longitude)
-            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
-                import re
-                pincode_match = re.search(r"\b(\d{6})\b", sr.address or "")
-                pincode = pincode_match.group(1) if pincode_match else ""
-                return {
-                    "available": True,
-                    "latitude": lat,
-                    "longitude": lng,
-                    "address": sr.address or "",
-                    "pincode": pincode,
-                    "source": "booking",
-                }
-        except (ValueError, TypeError):
-            pass
-
-    # 3. Coordinates from selected saved address (for legacy records)
-    saved_addr = None
-    if getattr(sr, "saved_address_id", None):
-        try:
-            from accounts.models import SavedAddress
-            saved_addr = SavedAddress.objects.filter(id=sr.saved_address_id).first()
-        except Exception:
-            pass
-    elif sr.customer_id:
-        try:
-            from accounts.models import SavedAddress
-            saved_addr = SavedAddress.objects.filter(user_id=sr.customer_id).first()
-        except Exception:
-            pass
-
-    if saved_addr and saved_addr.latitude is not None and saved_addr.longitude is not None:
-        try:
-            lat = float(saved_addr.latitude)
-            lng = float(saved_addr.longitude)
-            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0 and not (lat == 0.0 and lng == 0.0):
-                try:
-                    from decimal import Decimal
-                    sr.latitude = Decimal(str(lat))
-                    sr.longitude = Decimal(str(lng))
-                    sr.save(update_fields=["latitude", "longitude"])
-                except Exception:
-                    pass
-                return {
-                    "available": True,
-                    "latitude": lat,
-                    "longitude": lng,
-                    "address": sr.address or saved_addr.formatted_address or "",
-                    "pincode": saved_addr.pincode or "",
-                    "source": "saved_address",
-                }
-        except (ValueError, TypeError):
-            pass
-
-    # 4. Server-side forward geocoding of the real booking address
-    if sr.address and sr.address.strip():
-        try:
-            from .services.address_service import AddressService
-            coords = AddressService.forward_geocode(sr.address.strip())
-            if coords:
-                lat, lng = coords
-                try:
-                    from decimal import Decimal
-                    sr.latitude = Decimal(str(lat))
-                    sr.longitude = Decimal(str(lng))
-                    sr.save(update_fields=["latitude", "longitude"])
-                except Exception:
-                    pass
-                import re
-                pincode_match = re.search(r"\b(\d{6})\b", sr.address or "")
-                pincode = pincode_match.group(1) if pincode_match else ""
-                return {
-                    "available": True,
-                    "latitude": lat,
-                    "longitude": lng,
-                    "address": sr.address,
-                    "pincode": pincode,
-                    "source": "geocoded",
-                }
-        except Exception as e:
-            logger.warning("_resolve_customer_location geocoding error: %s", e)
-
-    # 5. Explicitly unavailable (NEVER use fallback default coordinates)
-    return {
-        "available": False,
-        "latitude": None,
-        "longitude": None,
-        "address": sr.address or "",
-        "pincode": "",
-        "source": None,
-    }
-
-
 def _build_tracking_payload(sr, has_full_access):
     """
-    Constructs the canonical authoritative live tracking response payload for a booking.
-    Strictly adheres to production rules:
-    - Real customer coordinates or location_unavailable (NO fallback Hosur coords).
-    - Authoritative User FK relationship for assigned employee.
-    - Verified identity without inventing ratings, jobs, or placeholder photos.
-    - Strict validation: location.booking_id == sr.id AND location.technician_id == sr.technician_id.
-    - Status and GPS coordinates remain separate.
+    Constructs the canonical live tracking response payload for a booking.
+    Sensitive data (technician phone, Service Start OTP) is strictly omitted
+    unless has_full_access is True.
     """
-    # 1. Authoritative Customer Location
-    cust_loc = _resolve_customer_location(sr)
-    dest_lat = cust_loc["latitude"]
-    dest_lng = cust_loc["longitude"]
+    dest_lat = float(sr.latitude) if sr.latitude is not None else None
+    dest_lng = float(sr.longitude) if sr.longitude is not None else None
 
-    # 2. Lifecycle & Acceptance flags
-    technician_assigned = bool(
-        sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
-        or sr.technician_id or sr.workforce_job_id or sr.external_assignment_id
-    )
+    # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
+    db_heading = 0.0
+    db_speed = 0.0
+    db_accuracy = None
+
+    assigned_emp = getattr(sr, "assigned_employee", None)
+    if assigned_emp:
+        if not sr.technician_name:
+            sr.technician_name = getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else "")
+        if not sr.technician_phone and getattr(assigned_emp, "phone", None):
+            sr.technician_phone = assigned_emp.phone
+        if not sr.technician_photo and getattr(assigned_emp, "photo", None):
+            sr.technician_photo = assigned_emp.photo
+
+    # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
+    # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
+    tracking = None
+    active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
+    if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
+        # Must be the numeric pk: the vendor's tracking routes are <int:pk>, so
+        # passing request_id (an alphanumeric like "HM0001") never matched any
+        # route. Every call fell through all three candidate URLs and returned
+        # None, burning three cross-service round trips per cache miss while
+        # silently disabling the ETA enrichment it exists to provide.
+        tracking = WorkforceIntegrationService.get_technician_tracking(sr.id)
+
+    # Authoritative acceptance check:
+    # ASSIGNED != ACCEPTED.
+    # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
+    # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
+    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
     technician_accepted = bool(
         sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
     )
@@ -1272,274 +1001,6 @@ def _build_tracking_payload(sr, has_full_access):
     tracking_available = bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
-    # 3. Authoritative Assigned Employee Profile
-    tech_user = getattr(sr, "technician", None)
-    emp_payload = None
-
-    if is_accepted and tech_user:
-        # Hierarchy: 1. Full Name, 2. First + Last Name, 3. Clean Username, 4. "Assigned Service Professional"
-        u_full = tech_user.get_full_name().strip()
-        if not u_full and tech_user.first_name:
-            u_full = f"{tech_user.first_name} {tech_user.last_name or ''}".strip()
-
-        slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
-        if not u_full and tech_user.username:
-            u_raw = tech_user.username.replace("_", " ").replace("-", " ").strip()
-            if u_raw.lower().replace(" ", "") != slug_match:
-                u_full = u_raw.title()
-
-        emp_name = u_full if u_full else "Assigned Service Professional"
-        emp_phone = None
-        if has_full_access:
-            emp_phone = getattr(tech_user, "phone", None) or getattr(tech_user, "mobile_number", None) or sr.technician_phone or None
-
-        emp_photo = None
-        if getattr(tech_user, "avatar", None):
-            try:
-                if bool(tech_user.avatar):
-                    emp_photo = tech_user.avatar.url
-            except Exception:
-                pass
-        if not emp_photo and sr.technician_photo:
-            emp_photo = sr.technician_photo
-
-        emp_rating = None
-        if sr.technician_rating is not None:
-            try:
-                emp_rating = float(sr.technician_rating)
-            except (ValueError, TypeError):
-                emp_rating = None
-
-        emp_jobs = None
-        if getattr(sr, "technician_jobs_completed", None) is not None:
-            try:
-                emp_jobs = int(sr.technician_jobs_completed)
-            except (ValueError, TypeError):
-                emp_jobs = None
-
-        emp_job_id = sr.workforce_job_id or sr.external_assignment_id or f"TECH-{tech_user.id:04d}"
-
-        emp_payload = {
-            "assigned": True,
-            "id": tech_user.id,
-            "job_id": emp_job_id,
-            "name": emp_name,
-            "photo": emp_photo,
-            "phone": emp_phone,
-            "rating": emp_rating,
-            "jobs_completed": emp_jobs,
-            "verified": bool(tech_user.is_active),
-            "service_category": sr.service_category or "",
-        }
-    elif is_accepted and sr.technician_name:
-        # Fallback if external workforce sync provided details without local User FK
-        emp_name = sr.technician_name
-        slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
-        if emp_name.lower().replace(" ", "").replace("_", "") == slug_match:
-            emp_name = "Assigned Service Professional"
-
-        emp_payload = {
-            "assigned": True,
-            "id": sr.external_assignment_id or None,
-            "job_id": sr.workforce_job_id or sr.external_assignment_id or None,
-            "name": emp_name,
-            "photo": sr.technician_photo or None,
-            "phone": sr.technician_phone if has_full_access else None,
-            "rating": float(sr.technician_rating) if sr.technician_rating is not None else None,
-            "jobs_completed": getattr(sr, "technician_jobs_completed", None),
-            "verified": True,
-            "service_category": sr.service_category or "",
-        }
-    elif is_accepted:
-        # Check BookingAssignment table if direct FK or denormalized name were empty
-        latest_assignment = sr.assignments.filter(status__in=["accepted", "completed"]).order_by("-id").first()
-        if latest_assignment and (latest_assignment.technician_name or latest_assignment.technician_id):
-            emp_name = latest_assignment.technician_name or "Assigned Service Professional"
-            slug_match = (sr.service_category or "").lower().replace("_", "").replace("-", "").replace(" ", "")
-            if emp_name.lower().replace(" ", "").replace("_", "") == slug_match:
-                emp_name = "Assigned Service Professional"
-
-            emp_payload = {
-                "assigned": True,
-                "id": latest_assignment.technician_id or None,
-                "job_id": latest_assignment.workforce_job_id or latest_assignment.assignment_id or None,
-                "name": emp_name,
-                "photo": latest_assignment.technician_photo or None,
-                "phone": latest_assignment.technician_phone if has_full_access else None,
-                "rating": float(latest_assignment.technician_rating) if latest_assignment.technician_rating is not None else None,
-                "jobs_completed": None,
-                "verified": bool(latest_assignment.technician_verified),
-                "service_category": sr.service_category or "",
-            }
-
-    if is_accepted and not emp_payload:
-        emp_payload = {
-            "assigned": True,
-            "id": sr.technician_id or sr.external_assignment_id or "PARTNER",
-            "job_id": sr.workforce_job_id or sr.external_assignment_id or f"SR-{sr.request_id}",
-            "name": "Assigned Service Professional",
-            "photo": sr.technician_photo or None,
-            "phone": sr.technician_phone if has_full_access else None,
-            "rating": float(sr.technician_rating) if sr.technician_rating is not None else None,
-            "jobs_completed": getattr(sr, "technician_jobs_completed", None),
-            "verified": True,
-            "service_category": sr.service_category or "",
-        }
-
-    # 4. Real Live GPS Coordinates (Validated: location.booking == sr AND location.technician == sr.technician)
-    tech_lat = None
-    tech_lng = None
-    resolved_heading = 0.0
-    resolved_speed = 0.0
-    resolved_accuracy = None
-    loc_updated_at = None
-    freshness = "UNAVAILABLE"
-
-    if is_accepted and not is_terminal:
-        from .models import TechnicianLocation
-        loc_qs = TechnicianLocation.objects.filter(booking=sr)
-        if sr.technician_id:
-            loc_qs = loc_qs.filter(technician_id=sr.technician_id)
-        latest_telemetry = loc_qs.order_by("-created_at").first()
-
-        if latest_telemetry:
-            tech_lat = float(latest_telemetry.latitude)
-            tech_lng = float(latest_telemetry.longitude)
-            resolved_heading = float(latest_telemetry.heading or 0.0)
-            resolved_speed = float(latest_telemetry.speed or 0.0)
-            resolved_accuracy = float(latest_telemetry.accuracy) if latest_telemetry.accuracy is not None else None
-            loc_updated_at = latest_telemetry.created_at.isoformat()
-            loc_time = latest_telemetry.created_at
-        elif sr.technician_latitude is not None and sr.technician_longitude is not None:
-            tech_lat = float(sr.technician_latitude)
-            tech_lng = float(sr.technician_longitude)
-            resolved_heading = float(getattr(sr, "technician_heading", 0.0) or 0.0)
-            resolved_speed = float(getattr(sr, "technician_speed", 0.0) or 0.0)
-            resolved_accuracy = float(sr.technician_accuracy) if getattr(sr, "technician_accuracy", None) is not None else None
-            loc_time = sr.technician_location_updated_at or timezone.now()
-            loc_updated_at = loc_time.isoformat()
-        else:
-            loc_time = None
-
-        if tech_lat is not None and tech_lng is not None and loc_time:
-            age_seconds = max(0, (timezone.now() - loc_time).total_seconds())
-            if sr.status == "arrived":
-                freshness = "ARRIVED"
-            elif age_seconds <= 15:
-                freshness = "LIVE"
-            elif age_seconds <= 60:
-                freshness = "RECENT"
-            elif age_seconds <= 300:
-                freshness = "STALE"
-            else:
-                freshness = "LAST_KNOWN"
-        else:
-            freshness = "UNAVAILABLE"
-    elif is_terminal:
-        freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
-
-    # 5. Real Distance & ETA calculation (Separate from Status)
-    distance_m = None
-    distance_km = None
-    eta_seconds = None
-    eta_minutes = None
-
-    # Check external workforce tracking if available
-    try:
-        from workforce_integration.services import WorkforceIntegrationService
-        is_mocked = hasattr(WorkforceIntegrationService.get_technician_tracking, "mock") or hasattr(WorkforceIntegrationService.get_technician_tracking, "return_value")
-        if sr.workforce_job_id or sr.external_assignment_id or is_mocked:
-            wf_tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id)
-            if wf_tracking and isinstance(wf_tracking, dict):
-                if wf_tracking.get("technician"):
-                    wf_tech = wf_tracking["technician"]
-                    if not emp_payload:
-                        emp_payload = {
-                            "assigned": True,
-                            "id": sr.technician_id or sr.external_assignment_id or "WF-TECH",
-                            "job_id": sr.workforce_job_id or sr.external_assignment_id or f"SR-{sr.request_id}",
-                            "name": wf_tech.get("name") or "Assigned Service Professional",
-                            "photo": wf_tech.get("photo") or None,
-                            "phone": wf_tech.get("phone") if has_full_access else None,
-                            "rating": float(wf_tech.get("rating")) if wf_tech.get("rating") is not None else None,
-                            "jobs_completed": wf_tech.get("jobs_completed"),
-                            "verified": True,
-                            "service_category": sr.service_category or "",
-                        }
-                    else:
-                        if wf_tech.get("phone") and has_full_access:
-                            emp_payload["phone"] = wf_tech["phone"]
-                        if wf_tech.get("name"):
-                            emp_payload["name"] = wf_tech["name"]
-                        if wf_tech.get("rating") is not None:
-                            emp_payload["rating"] = float(wf_tech["rating"])
-                if wf_tracking.get("location") and tech_lat is None:
-                    wf_loc = wf_tracking["location"]
-                    if wf_loc.get("latitude") is not None and wf_loc.get("longitude") is not None:
-                        tech_lat = float(wf_loc["latitude"])
-                        tech_lng = float(wf_loc["longitude"])
-                        resolved_heading = float(wf_loc.get("heading") or 0.0)
-                        resolved_speed = float(wf_loc.get("speed") or 0.0)
-                        freshness = "LIVE"
-                        loc_updated_at = timezone.now().isoformat()
-                if wf_tracking.get("eta_minutes") is not None:
-                    eta_minutes = int(wf_tracking["eta_minutes"])
-                    eta_seconds = eta_minutes * 60
-                if wf_tracking.get("distance_km") is not None:
-                    distance_km = float(wf_tracking["distance_km"])
-                    distance_m = int(distance_km * 1000)
-    except Exception:
-        pass
-
-    if sr.status == "arrived":
-        distance_m = 0
-        distance_km = 0.0
-        eta_seconds = 0
-        eta_minutes = 0
-    elif is_terminal or sr.status == "in_progress":
-        distance_m = 0
-        distance_km = 0.0
-        eta_seconds = 0
-        eta_minutes = 0
-    elif eta_minutes is None and tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
-        raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
-        if raw_meters is not None:
-            distance_m = int(round(raw_meters))
-            distance_km = round(distance_m / 1000.0, 1)
-            eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
-            eta_minutes = eta_mins
-            eta_seconds = eta_mins * 60
-
-    # 6. Live Location block
-    live_loc_payload = None
-    if tech_lat is not None and tech_lng is not None and not is_terminal:
-        live_loc_payload = {
-            "available": True,
-            "employee_id": tech_user.id if tech_user else (emp_payload.get("id") if emp_payload else None),
-            "latitude": tech_lat,
-            "longitude": tech_lng,
-            "heading": resolved_heading,
-            "speed": resolved_speed,
-            "accuracy": resolved_accuracy,
-            "freshness": freshness,
-            "updated_at": loc_updated_at,
-            "source": "employee_database_gps",
-        }
-    else:
-        live_loc_payload = {
-            "available": False,
-            "employee_id": tech_user.id if tech_user else None,
-            "latitude": None,
-            "longitude": None,
-            "heading": None,
-            "speed": None,
-            "accuracy": None,
-            "freshness": freshness,
-            "updated_at": loc_updated_at,
-            "source": None,
-        }
-
-    # 7. Vendor details
     vendor_data = None
     if is_accepted:
         comp_name = "Sevo"
@@ -1559,95 +1020,186 @@ def _build_tracking_payload(sr, has_full_access):
             "phone": None,
         }
 
-    # 8. Start OTP: Only exposed if accepted and active
+    technician_data = None
+    technician_loc_data = None
+    distance_m = None
+    distance_km = None
+    eta_seconds = None
+    eta_minutes = None
+    freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
+    tech_name = None
+    tech_phone = None
+    tech_photo = None
+    tech_rating = None
+    tech_jobs = None
+    tech_job_id = None
+
+    if is_accepted:
+        tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
+
+        # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
+        tech_name = None
+        tech_phone = None
+        tech_photo = None
+        tech_rating = None
+        tech_jobs = None
+        tech_job_id = None
+
+        if tech_obj:
+            tech_name = tech_obj.get("name") or tech_obj.get("full_name") or None
+            tech_phone = tech_obj.get("phone") or None
+            tech_photo = tech_obj.get("photo") or None
+            tech_rating = float(tech_obj.get("rating")) if tech_obj.get("rating") is not None else None
+            tech_jobs = tech_obj.get("jobs_completed") or None
+            tech_job_id = tech_obj.get("id") or tech_obj.get("job_id") or None
+
+        if not tech_name and hasattr(sr, "assignments"):
+            assignment = sr.assignments.filter(
+                status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+            ).order_by("-id").first()
+            if assignment:
+                tech_name = assignment.technician_name or None
+                tech_phone = assignment.technician_phone or tech_phone or None
+                tech_photo = assignment.technician_photo or tech_photo or None
+                tech_rating = float(assignment.technician_rating) if assignment.technician_rating is not None else tech_rating
+                tech_job_id = assignment.workforce_job_id or assignment.assignment_id or tech_job_id
+
+        if not tech_name:
+            tech_name = sr.technician_name or None
+            tech_phone = sr.technician_phone or tech_phone or None
+            tech_photo = sr.technician_photo or tech_photo or None
+            tech_rating = float(sr.technician_rating) if sr.technician_rating is not None else tech_rating
+            tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_jobs
+            tech_job_id = sr.workforce_job_id or sr.external_assignment_id or tech_job_id
+
+        if not tech_name and getattr(sr, "assigned_employee", None):
+            emp = sr.assigned_employee
+            tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
+            tech_phone = getattr(emp, "phone", None) or tech_phone
+            tech_photo = getattr(emp, "photo", None) or tech_photo
+            tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
+            tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
+
+        # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
+        loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
+        if is_terminal:
+            tech_lat = None
+            tech_lng = None
+        else:
+            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude") is not None) else None)
+            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude") is not None) else None)
+
+        current_loc_name = sr.technician_location_name or loc.get("location_name") or None
+
+        # Heading & speed
+        resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if (loc and loc.get("heading") is not None) else 0.0)
+        resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if (loc and loc.get("speed") is not None) else 0.0)
+
+        # 3. GPS Freshness calculation strictly based on real coordinates availability
+        if is_terminal:
+            freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
+        elif tech_lat is not None and tech_lng is not None:
+            freshness = "LIVE"
+        else:
+            freshness = "UNAVAILABLE"
+
+        # 4. Real Distance and ETA Calculation — only computed when real GPS exists
+        if sr.status == "arrived":
+            distance_m = 0
+            distance_km = 0.0
+            eta_seconds = 0
+            eta_minutes = 0
+        elif is_terminal or sr.status == "in_progress":
+            distance_m = 0
+            distance_km = 0.0
+            eta_seconds = 0
+            eta_minutes = 0
+        elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
+            raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
+            if raw_meters is not None:
+                distance_m = int(round(raw_meters))
+                distance_km = round(distance_m / 1000.0, 1)
+                eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
+                eta_minutes = eta_mins
+                eta_seconds = eta_mins * 60
+        else:
+            distance_m = None
+            distance_km = None
+            eta_seconds = None
+            eta_minutes = None
+
+        if tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None:
+            eta_minutes = tracking.get("eta_minutes")
+        if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
+            distance_km = tracking.get("distance_km")
+
+        technician_data = {
+            "id": tech_job_id,
+            "job_id": tech_job_id,
+            "name": tech_name,
+            "phone": tech_phone if has_full_access else None,
+            "rating": tech_rating,
+            "photo": tech_photo,
+            "latitude": tech_lat,
+            "longitude": tech_lng,
+            "heading": resolved_heading if tech_lat is not None else 0.0,
+            "speed": resolved_speed if tech_lat is not None else 0.0,
+            "status": sr.status,
+            "eta_minutes": eta_minutes,
+            "distance_km": distance_km,
+            "jobs_completed": tech_jobs,
+            "current_location_name": current_loc_name,
+            "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
+        }
+
+        if tech_lat is not None and tech_lng is not None and not is_terminal:
+            technician_loc_data = {
+                "latitude": tech_lat,
+                "longitude": tech_lng,
+                "heading": resolved_heading,
+                "speed": resolved_speed,
+                "accuracy": db_accuracy,
+                "freshness": freshness,
+            }
+
+    # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
     start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
 
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
-    created_at_str = created_at_raw.isoformat() if created_at_raw and hasattr(created_at_raw, 'isoformat') else (str(created_at_raw) if created_at_raw else None)
+    if created_at_raw and hasattr(created_at_raw, 'isoformat'):
+        created_at_str = created_at_raw.isoformat()
+    elif created_at_raw:
+        created_at_str = str(created_at_raw)
+    else:
+        created_at_str = None
 
     try:
         total_amt = float(sr.total_amount) if sr.total_amount is not None else 0.0
     except (ValueError, TypeError):
         total_amt = 0.0
 
-    from .models import PaintingQuote, Payment, ServiceRequest
-    from .serializers import PaintingQuoteSerializer
-
-    local_quote = PaintingQuote.objects.filter(service_request=sr).order_by("-quote_version").first()
-    if not local_quote and sr.parent_request:
-        local_quote = PaintingQuote.objects.filter(service_request=sr.parent_request).order_by("-quote_version").first()
-
-    quote_data = None
-    if local_quote:
-        quote_data = PaintingQuoteSerializer(local_quote).data
-    elif (sr.service_category in ["painting", "masonry", "carpentry", "waterproofing", "renovation"] or getattr(sr, "request_kind", "") == "quoted_work"):
-        quote_res = WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id)
-        if quote_res.get("success"):
-            quote_data = quote_res.get("quote")
-
-    child_booking_data = None
-    child_sr = ServiceRequest.objects.filter(parent_request=sr, request_kind="quoted_work").order_by("-id").first()
-    if child_sr:
-        child_booking_data = {
-            "id": child_sr.id,
-            "request_id": child_sr.request_id,
-            "status": child_sr.status,
-            "payment_status": child_sr.payment_status,
-            "total_amount": float(child_sr.total_amount) if child_sr.total_amount else 0.0,
-            "payment_method": child_sr.payment_method,
-            "invoice_id": child_sr.invoice_id,
-            "tracking_token": str(child_sr.tracking_token) if child_sr.tracking_token else None,
-            "service_category": child_sr.service_category,
+    # HS-D-07: "no job timeline the customer can see after the fact" --
+    # BookingStatusEvent is already populated on every real transition
+    # (see state_machine.py record_transition(), called from apply_transition()
+    # across ~20 call sites) but nothing ever exposed it to the customer;
+    # the tracking payload only ever carried current-state fields. This is a
+    # read-only addition -- no new writes, just serializing what already exists.
+    status_history = [
+        {
+            "from_status": ev.from_status,
+            "to_status": ev.to_status,
+            "actor_persona": ev.actor_persona,
+            "reason_note": ev.reason_note,
+            "occurred_at": ev.occurred_at.isoformat() if ev.occurred_at else None,
         }
-
-    target_pay_sr = child_sr if child_sr else (sr if sr.request_kind == "quoted_work" else None)
-    
-    quote_grand_total = 0.0
-    quote_advance_amount = 0.0
-    quote_balance_amount = 0.0
-    quote_paid_amount = 0.0
-    quote_remaining_amount = 0.0
-    advance_paid = False
-    balance_paid = False
-
-    if local_quote:
-        quote_grand_total = float(local_quote.grand_total)
-        quote_advance_amount = float(local_quote.advance_amount)
-        quote_balance_amount = float(local_quote.balance_amount)
-
-        if target_pay_sr:
-            payments = Payment.objects.filter(service_request=target_pay_sr, status=ServiceRequest.PaymentStatus.PAID)
-            quote_paid_amount = float(sum(p.amount for p in payments))
-            quote_remaining_amount = max(0.0, quote_grand_total - quote_paid_amount)
-            advance_paid = bool(quote_paid_amount >= quote_advance_amount)
-            balance_paid = bool(quote_paid_amount >= quote_grand_total)
-
-    service_title = (
-        getattr(sr, "service_name", None)
-        or (sr.service.name if getattr(sr, "service", None) else None)
-        or (sr.package.name if getattr(sr, "package", None) else None)
-        or sr.issue_title
-        or sr.service_category
-        or "Service"
-    )
+        for ev in sr.status_events.all().order_by("occurred_at")
+    ] if hasattr(sr, "status_events") else []
 
     return {
         "booking_id": sr.id,
+        "status_history": status_history,
         "request_id": sr.request_id,
         "job_id": sr.id,
-        "booking": {
-            "id": sr.id,
-            "request_id": sr.request_id,
-            "booking_number": sr.request_id,
-            "status": sr.status,
-            "service_name": service_title,
-            "service_category": sr.service_category or "",
-            "issue_title": sr.issue_title or "",
-            "customer_location": cust_loc,
-        },
-        "assigned_employee": emp_payload,
-        "customer_location": cust_loc,
-        "live_location": live_loc_payload,
         "status": sr.status,
         "is_accepted": is_accepted,
         "tracking_available": tracking_available,
@@ -1657,7 +1209,7 @@ def _build_tracking_payload(sr, has_full_access):
         "issue_title": sr.issue_title or "",
         "description": sr.description or "",
         "customer_name": sr.customer_name or "",
-        "phone": sr.phone if has_full_access else "",
+        "phone": sr.phone or "",
         "created_at": created_at_str,
         "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
         "preferred_time": sr.preferred_time or "",
@@ -1666,27 +1218,22 @@ def _build_tracking_payload(sr, has_full_access):
         "payment_status": sr.payment_status or "pending",
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
-        "service_location": cust_loc,
-        "destination": cust_loc,
-        "assigned_employee": emp_payload,
-        "live_location": live_loc_payload,
-        "technician": {
-            **(emp_payload or {}),
-            "latitude": tech_lat,
-            "longitude": tech_lng,
-            "heading": resolved_heading,
-            "speed": resolved_speed,
-            "status": sr.status,
-            "eta_minutes": eta_minutes,
-            "distance_km": distance_km,
-            "freshness": freshness,
-            "updated_at": loc_updated_at,
-        } if is_accepted else None,
-        "technician_name": emp_payload["name"] if (is_accepted and emp_payload) else "",
-        "technician_phone": emp_payload["phone"] if (is_accepted and emp_payload and has_full_access) else "",
-        "technician_photo": emp_payload["photo"] if (is_accepted and emp_payload) else "",
-        "technician_rating": emp_payload["rating"] if (is_accepted and emp_payload) else None,
-        "technician_location": live_loc_payload if (live_loc_payload and live_loc_payload.get("available")) else None,
+        "service_location": {
+            "address": sr.address or "",
+            "latitude": dest_lat,
+            "longitude": dest_lng,
+        },
+        "destination": {
+            "address": sr.address or "",
+            "latitude": dest_lat,
+            "longitude": dest_lng,
+        },
+        "technician": technician_data,
+        "technician_name": tech_name if is_accepted else "",
+        "technician_phone": tech_phone if (is_accepted and has_full_access) else "",
+        "technician_photo": tech_photo if is_accepted else "",
+        "technician_rating": tech_rating if is_accepted else None,
+        "technician_location": technician_loc_data,
         "freshness": freshness,
         "distance_m": distance_m,
         "distance_km": distance_km,
@@ -1694,15 +1241,7 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
-        "quote": quote_data,
-        "child_booking": child_booking_data,
-        "quote_grand_total": quote_grand_total,
-        "quote_advance_amount": quote_advance_amount,
-        "quote_balance_amount": quote_balance_amount,
-        "quote_paid_amount": quote_paid_amount,
-        "quote_remaining_amount": quote_remaining_amount,
-        "advance_paid": advance_paid,
-        "balance_paid": balance_paid,
+        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
     }
 
 
@@ -1718,6 +1257,11 @@ class CustomerBookingLiveLocationView(APIView):
     - If no token is provided and user is unauthenticated -> 401 Unauthorized.
     """
     permission_classes = [permissions.AllowAny]
+    # Fixes EC-06: scoped separately from the blanket anon/user rate so a
+    # live-tracking poll loop has room to work without opening the endpoint
+    # up to unbounded scraping.
+    throttle_classes  = [ScopedRateThrottle]
+    throttle_scope    = "tracking_lookup"
 
     def get(self, request, pk=None, identifier=None):
         sr_id = pk or identifier
@@ -1733,7 +1277,8 @@ class CustomerBookingLiveLocationView(APIView):
         token_matches = bool(
             provided_token and
             sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+            not _tracking_token_is_expired(sr)  # Fixes EC-08
         )
         is_admin_user = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
         is_owner = bool(request.user and request.user.is_authenticated and sr.customer_id and sr.customer_id == request.user.id)
@@ -1761,6 +1306,8 @@ class CustomerPublicTrackingView(APIView):
     tracking data. The token is the bearer authorization credential.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "tracking_lookup"
 
     def get(self, request, tracking_token):
         import uuid as _uuid
@@ -1772,6 +1319,9 @@ class CustomerPublicTrackingView(APIView):
         try:
             sr = ServiceRequest.objects.get(tracking_token=token_uuid)
         except ServiceRequest.DoesNotExist:
+            return _error("Tracking link not found or expired.", 404)
+
+        if _tracking_token_is_expired(sr):  # Fixes EC-08
             return _error("Tracking link not found or expired.", 404)
 
         payload = _build_tracking_payload(sr, has_full_access=True)
@@ -1786,13 +1336,6 @@ class CustomerQuoteDetailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, token):
-        # Check CalServices DB first
-        quote = PaintingQuote.objects.filter(customer_decision_token=token).first()
-        if quote:
-            serializer = PaintingQuoteSerializer(quote)
-            return _success(data=serializer.data)
-
-        # Fallback to workforce service
         res = WorkforceIntegrationService.get_quote_by_token(token)
         if res.get("success"):
             return _success(data=res.get("quote"))
@@ -1801,6 +1344,8 @@ class CustomerQuoteDetailView(APIView):
 
 class FeedbackTokenView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "feedback"
 
     def get(self, request, token):
         try:
@@ -1847,11 +1392,36 @@ class FeedbackTokenView(APIView):
         return _success(message="Thank you! Your feedback has been recorded.")
 
 
+def _public_display_name(full_name):
+    """
+    HS-E-03: PublicFeedbackListView exposed the full customer name (first +
+    last) to anyone, unauthenticated, alongside their free-text comment --
+    identifying real customers on a public review widget with no consent or
+    moderation step. This mirrors the display convention used by most public
+    review platforms: first name plus the last name's initial (e.g.
+    "Priya S."), which still reads as a real testimonial without publishing
+    a full name to anonymous visitors.
+    """
+    name = (full_name or "").strip()
+    if not name:
+        return "Customer"
+    parts = name.split()
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
+
 class PublicFeedbackListView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         category = request.query_params.get("category")
+        # NOTE (HS-E-03): ideally this would also filter on an explicit
+        # publish-consent flag, but ServiceFeedback has no such field yet and
+        # the feedback flow never asks for that consent -- adding one needs a
+        # migration plus a frontend consent checkbox, which is a real product
+        # decision, not a safe drive-by fix. Left as a follow-up; this pass
+        # only removes the full-name exposure (see _public_display_name).
         feedbacks = ServiceFeedback.objects.filter(is_submitted=True).select_related("service_request")
         if category:
             feedbacks = feedbacks.filter(
@@ -1862,8 +1432,8 @@ class PublicFeedbackListView(APIView):
         data = [
             {
                 "id": f.id,
-                "name": getattr(f.service_request, "customer_name", "Customer"),
-                "customer_name": getattr(f.service_request, "customer_name", "Customer"),
+                "name": _public_display_name(getattr(f.service_request, "customer_name", "")),
+                "customer_name": _public_display_name(getattr(f.service_request, "customer_name", "")),
                 "category": getattr(f.service_request, "service_category", ""),
                 "service_category": getattr(f.service_request, "service_category", ""),
                 "rating": f.rating or 5,
@@ -1915,15 +1485,7 @@ class AdminSRListView(APIView):
             )
 
         paginator = PageNumberPagination()
-        page_size_param = request.query_params.get("page_size")
-        if page_size_param:
-            try:
-                paginator.page_size = min(int(page_size_param), 1000)
-            except Exception:
-                paginator.page_size = 100
-        else:
-            paginator.page_size = 100
-
+        paginator.page_size = 20
         paginated_qs = paginator.paginate_queryset(qs, request, view=self)
         serializer = ServiceRequestListSerializer(paginated_qs, many=True, context={"request": request})
         return _success(data={
@@ -2000,25 +1562,6 @@ class AdminSRAssignView(APIView):
             apply_transition(sr, ServiceRequest.Status.ASSIGNED, actor=request.user)
 
             # Persist technician details passed by admin
-            if request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id"):
-                tech_val = request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id")
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                t_user = User.objects.filter(pk=tech_val).first() if str(tech_val).isdigit() else User.objects.filter(username=str(tech_val)).first()
-                if t_user:
-                    sr.technician = t_user
-                    if not sr.technician_name:
-                        sr.technician_name = t_user.get_full_name() or t_user.username
-                    if not sr.technician_phone:
-                        sr.technician_phone = getattr(t_user, "phone", "") or getattr(t_user, "mobile_number", "")
-                    if not sr.technician_photo and getattr(t_user, "avatar", None) and bool(t_user.avatar):
-                        try:
-                            sr.technician_photo = t_user.avatar.url
-                        except Exception:
-                            pass
-                    if sr.technician_rating is None and getattr(t_user, "rating", None) is not None:
-                        sr.technician_rating = t_user.rating
-
             if request.data.get("technician_name") or request.data.get("employee_name"):
                 sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")
             if request.data.get("technician_phone") or request.data.get("employee_phone"):
@@ -2085,26 +1628,6 @@ class AdminSRUpdateTechnicianLocationView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
 
-        if "technician_id" in request.data or "technician" in request.data or "employee_id" in request.data:
-            tech_val = request.data.get("technician_id") or request.data.get("technician") or request.data.get("employee_id")
-            if tech_val:
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                t_user = User.objects.filter(pk=tech_val).first() if str(tech_val).isdigit() else User.objects.filter(username=str(tech_val)).first()
-                if t_user:
-                    sr.technician = t_user
-                    if not sr.technician_name:
-                        sr.technician_name = t_user.get_full_name() or t_user.username
-                    if not sr.technician_phone:
-                        sr.technician_phone = getattr(t_user, "phone", "") or getattr(t_user, "mobile_number", "")
-                    if not sr.technician_photo and getattr(t_user, "avatar", None) and bool(t_user.avatar):
-                        try:
-                            sr.technician_photo = t_user.avatar.url
-                        except Exception:
-                            pass
-                    if sr.technician_rating is None and getattr(t_user, "rating", None) is not None:
-                        sr.technician_rating = t_user.rating
-
         if "technician_name" in request.data or "employee_name" in request.data:
             sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")
         if "technician_phone" in request.data or "employee_phone" in request.data:
@@ -2161,6 +1684,8 @@ class AdminSRVerifyView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
+        from service_requests.models import BookingAssignment
+
         try:
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
@@ -2169,11 +1694,53 @@ class AdminSRVerifyView(APIView):
         with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.VERIFIED, actor=request.user)
             sr.save(update_fields=["status", "updated_at"])
-            ServiceFeedback.objects.get_or_create(service_request=sr)
+            fb, _fb_created = ServiceFeedback.objects.get_or_create(service_request=sr)
+
+            # Fixes HS-E-01: snapshot which technician this feedback is about
+            # at the moment feedback becomes requestable (verification), not
+            # read lazily later off whatever the booking's *current*
+            # assignment happens to be -- a reassignment after this point must
+            # not retroactively change who an already-issued rating is about.
+            # Prefer a COMPLETED assignment (the one who actually did the
+            # work); fall back to the most recent ACCEPTED one if the
+            # completion event hasn't landed a BookingAssignment update yet.
+            if not fb.technician_id:
+                assignment = (
+                    BookingAssignment.objects.filter(
+                        booking=sr,
+                        status__in=[BookingAssignment.Status.COMPLETED, BookingAssignment.Status.ACCEPTED],
+                    )
+                    .order_by("-id")
+                    .first()
+                )
+                tech_id = (assignment.technician_id if assignment else "") or ""
+                tech_name = (assignment.technician_name if assignment else "") or sr.technician_name or ""
+                if tech_id or tech_name:
+                    fb.technician_id = tech_id
+                    fb.technician_name_snapshot = tech_name
+                    fb.save(update_fields=["technician_id", "technician_name_snapshot"])
+
+        # Fixes HS-E-02: this created the feedback token but never actually
+        # sent it anywhere -- send_completion_and_feedback_email() exists
+        # (its own docstring says 'sent automatically when employee marks job
+        # complete') but had no caller anywhere in the codebase, so a
+        # customer's feedback request was silently never delivered even
+        # after admin verification. Fire it from a background thread so
+        # this endpoint's response is never delayed by mail delivery.
+        try:
+            import threading
+            from .notifications import send_completion_and_feedback_email
+            threading.Thread(
+                target=send_completion_and_feedback_email,
+                args=(sr, str(fb.feedback_token)),
+                daemon=True,
+            ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start feedback-link notification for booking {sr.id}: {notify_err}")
 
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            message="Service request verified. Feedback link generated.",
+            message="Service request verified. Feedback link generated and sent to customer.",
         )
 
 
@@ -2204,7 +1771,23 @@ class AdminSRResendFeedbackView(APIView):
             return _error("Not found.", 404)
 
         fb, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
-        return _success(data={"feedback_token": str(fb.feedback_token)}, message="Feedback link retrieved.")
+
+        # Fixes HS-E-02: this endpoint is literally named 'resend feedback'
+        # but never called send_feedback_link() -- it only returned the
+        # token in the API response for whatever called this endpoint,
+        # never actually resent anything to the customer.
+        try:
+            import threading
+            from .notifications import send_feedback_link
+            threading.Thread(
+                target=send_feedback_link,
+                args=(sr, str(fb.feedback_token)),
+                daemon=True,
+            ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start feedback-link resend for booking {sr.id}: {notify_err}")
+
+        return _success(data={"feedback_token": str(fb.feedback_token)}, message="Feedback link resent to customer.")
 
 
 class AdminSRCloseView(APIView):
@@ -2661,6 +2244,26 @@ class CustomerRefundRequestCreateView(APIView):
         if not booking:
             return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
 
+        # Fixes: no duplicate-request guard existed at all -- a customer
+        # could submit any number of refund requests for the same booking
+        # while an earlier one was still active, each independently working
+        # its way through admin approval -> finance -> gateway completion.
+        active_statuses = [
+            RefundStatus.PENDING, RefundStatus.INFO_REQUESTED,
+            RefundStatus.APPROVED_FULL, RefundStatus.APPROVED_PARTIAL,
+            RefundStatus.SENT_TO_FINANCE,
+        ]
+        existing_active = RefundRequest.objects.filter(booking=booking, status__in=active_statuses).first()
+        if existing_active:
+            return _standard_response(
+                success=False,
+                error={
+                    "code": "REFUND_ALREADY_ACTIVE",
+                    "message": f"A refund request for this booking is already in progress (status: {existing_active.status}).",
+                },
+                status_code=409,
+            )
+
         amount = Decimal(str(requested_amount)) if requested_amount else booking.total_amount
 
         rr = sr_services.create_refund_request(
@@ -3073,6 +2676,8 @@ class CustomerCouponListView(APIView):
 
 class CustomerCouponValidateView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
+    throttle_scope    = "coupon_validate"
 
     def post(self, request):
         code = str(request.data.get("code", "")).strip().upper()
@@ -3136,17 +2741,263 @@ class AdminRefundListView(AdminRefundRequestListView):
     pass
 
 class AdminRefundActionView(APIView):
+    """
+    POST /api/admin/refunds/<pk>/<action>/
+
+    Was a no-op stub that ignored `action` entirely and forwarded to the
+    detail GET regardless of what action was requested -- meaning a
+    'complete' action here silently did nothing (no refund, no status
+    change) while looking like it succeeded. Now actually handles
+    'complete', which is the one this route exists for -- see
+    HS_C_04_05_REFUND_GATEWAY_NOTE.md. Other actions already have their
+    own dedicated endpoints (AdminRefundApproveView, AdminRefundRejectView,
+    etc.) and are intentionally not duplicated here.
+    """
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
     def post(self, request, pk, action):
-        return AdminRefundRequestDetailView().get(request, pk)
+        if action == "complete":
+            try:
+                rr = sr_services.admin_complete_refund(request.user, pk)
+                return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+            except Exception as e:
+                return _standard_response(success=False, error={"code": "COMPLETE_FAILED", "message": str(e)}, status_code=400)
+        return _standard_response(
+            success=False,
+            error={"code": "UNKNOWN_ACTION", "message": f"Unsupported action '{action}'. Use the dedicated approve/reject/send-to-finance endpoints, or 'complete'."},
+            status_code=400,
+        )
+
+
+class CustomerInsuranceClaimListCreateView(APIView):
+    """
+    GET  /api/insurance-claims/       -- list the logged-in customer's claims
+    POST /api/insurance-claims/       -- file a new claim
+    GT-C-03: the damage-claim path. file_insurance_claim() already enforces
+    booking.insurance_opted_in, ownership, and booking.status == completed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        claims = sr_services.list_insurance_claims(request.user, "CUSTOMER")
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claims, many=True).data)
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        description = request.data.get("description", "")
+        claimed_amount = request.data.get("claimed_amount")
+        if not booking_id or not description or not claimed_amount:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "booking_id, description and claimed_amount are required."}, status_code=400)
+
+        booking = ServiceRequest.objects.filter(Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)).first()
+        if not booking:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+
+        attachment_files = request.FILES.getlist("attachments") if hasattr(request.FILES, "getlist") else []
+
+        try:
+            claim = sr_services.file_insurance_claim(
+                booking=booking, customer=request.user, description=description,
+                claimed_amount=claimed_amount, attachment_files=attachment_files,
+            )
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "CLAIM_FAILED", "message": str(e)}, status_code=400)
+
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data, status_code=201)
+
+
+class AdminInsuranceClaimListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        claims = sr_services.list_insurance_claims(request.user, "ADMIN", filters=request.query_params)
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claims, many=True).data)
+
+
+class AdminInsuranceClaimResolveView(APIView):
+    """POST /api/admin/insurance-claims/<pk>/resolve/  body: {decision, approved_amount?, notes?}"""
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        decision = str(request.data.get("decision", "")).upper()
+        approved_amount = request.data.get("approved_amount")
+        notes = request.data.get("notes", "")
+        try:
+            claim = sr_services.resolve_insurance_claim(request.user, pk, decision, approved_amount, notes)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "RESOLVE_FAILED", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=InsuranceClaimSerializer(claim).data)
+
+
+class AdminNotificationOutboxView(APIView):
+    """
+    GET /api/admin/notifications/outbox/?recipient=<email>&status=<SENT|FAILED>
+    HS-D-04: lets support/admin actually answer "was the customer told?" --
+    read-only view over NotificationOutbox, filterable by recipient and/or
+    status. Capped at 100 rows per request; this is a support lookup tool,
+    not a bulk export.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        from .models import NotificationOutbox
+        qs = NotificationOutbox.objects.all()
+        recipient = request.query_params.get("recipient")
+        if recipient:
+            qs = qs.filter(recipient__iexact=recipient)
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter.upper())
+
+        rows = qs[:100]
+        return _standard_response(success=True, data=[
+            {
+                "id": r.id,
+                "recipient": r.recipient,
+                "subject": r.subject,
+                "status": r.status,
+                "error": r.error,
+                "attempt_count": r.attempt_count,
+                "created_at": r.created_at,
+                "last_attempt_at": r.last_attempt_at,
+            }
+            for r in rows
+        ])
+
+
+class TechnicianProfileView(APIView):
+    """
+    GET /api/technicians/<technician_id>/profile/
+    HS-E-04: "the customer never sees a technician profile" -- the tracking
+    payload already carries name/photo/phone/rating, assembled defensively,
+    but there was no dedicated profile: no jobs completed, no rating with
+    review count, no recent reviews. Built entirely from ServiceFeedback,
+    using the technician_id/technician_name_snapshot fields added for
+    HS-E-01 -- deliberately does NOT reach into the vendor app's Employee
+    model (tenure, verification badges, specialisations) since there's no
+    local FK across the two Django projects; those fields are a reasonable
+    follow-up once there's a cross-app read path for technician metadata,
+    same reasoning as the *_snapshot fields already in this codebase.
+
+    AllowAny: this is a public professional profile (name + aggregate
+    rating), the same trust signal a tracking link already exposes to
+    anyone holding it -- no more sensitive than that.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, technician_id):
+        from django.db.models import Avg, Count
+        feedback_qs = ServiceFeedback.objects.filter(technician_id=technician_id, is_submitted=True)
+        if not feedback_qs.exists():
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "No profile data available for this technician yet."}, status_code=404)
+
+        agg = feedback_qs.aggregate(avg_rating=Avg("rating"), review_count=Count("id"))
+        name = feedback_qs.order_by("-submitted_at").values_list("technician_name_snapshot", flat=True).first()
+        recent_reviews = list(
+            feedback_qs.exclude(comment="").order_by("-submitted_at")[:5]
+            .values("rating", "comment", "submitted_at")
+        )
+
+        return _standard_response(success=True, data={
+            "technician_id": technician_id,
+            "name": name or "Technician",
+            "average_rating": round(agg["avg_rating"], 2) if agg["avg_rating"] is not None else None,
+            "review_count": agg["review_count"],
+            "jobs_completed": feedback_qs.count(),
+            "recent_reviews": recent_reviews,
+        })
+
+
+class CustomerWalletView(APIView):
+    """
+    GET /api/wallet/
+    HS-C-07: read-only balance + recent transaction history for the logged-in
+    customer's wallet.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        wallet = sr_services.get_or_create_wallet(request.user)
+        txs = sr_services.list_wallet_transactions(request.user, limit=50)
+        return _standard_response(success=True, data={
+            "balance": str(wallet.balance),
+            "transactions": [
+                {
+                    "id": tx.id,
+                    "type": tx.tx_type,
+                    "reason": tx.reason,
+                    "amount": str(tx.amount),
+                    "balance_after": str(tx.balance_after),
+                    "note": tx.note,
+                    "created_at": tx.created_at,
+                }
+                for tx in txs
+            ],
+        })
+
+
+class AdminWalletCreditView(APIView):
+    """
+    POST /api/admin/customers/<user_id>/wallet/credit/
+    HS-C-07: lets an admin add a goodwill/manual credit to a customer's
+    wallet with a required reason and note, fully logged in
+    WalletTransaction. Debits are intentionally NOT exposed here -- an admin
+    removing a customer's own money needs a stronger, separate justification
+    flow than this endpoint's scope; this is credit-only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, user_id):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        target_user = User.objects.filter(pk=user_id).first()
+        if not target_user:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Customer not found."}, status_code=404)
+
+        amount = request.data.get("amount")
+        reason = request.data.get("reason", "GOODWILL")
+        note = request.data.get("note", "")
+        if not amount:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "amount is required."}, status_code=400)
+
+        try:
+            tx = sr_services.credit_wallet(
+                user=target_user, amount=amount, reason=reason, note=note, actor=request.user,
+            )
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "CREDIT_FAILED", "message": str(e)}, status_code=400)
+
+        return _standard_response(success=True, data={
+            "balance_after": str(tx.balance_after),
+            "amount": str(tx.amount),
+            "reason": tx.reason,
+        }, status_code=201)
 
 
 class BookingVerifyStartOTPView(APIView):
     """
     POST /api/booking/<identifier>/verify-start-otp/
     Validates the 6-digit customer verification code entered by the technician during arrival.
+
+    Fixes EC-02: this endpoint used to be permissions.AllowAny with no
+    ownership or actor check at all — any unauthenticated POST carrying a
+    guessable booking id and a correct-looking code could flip the booking
+    straight to "in_progress" by writing sr.status directly, bypassing every
+    rule in state_machine.ALLOWED_TRANSITIONS (including the geofence-arrival
+    gate the vendor app enforces on its own equivalent endpoint).
+
+    The live technician-facing flow does NOT call this endpoint — the vendor
+    app's WorkforceJobVerifyOTPView (workforce_api/views.py) is what
+    technicians actually use; it is gated by IsApprovedTechnician plus an
+    explicit job.assigned_employee == request.user.employee_profile check,
+    and it writes to the same shared-database row via PreServiceVerification.
+    This Customer-app copy has no legitimate anonymous caller, so it is now
+    restricted to authenticated admin/staff (e.g. for manual support
+    overrides) and routes the status change through apply_transition() like
+    every other status write in this app.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk=None, identifier=None):
         sr_id = pk or identifier or request.data.get("booking_id")
@@ -3176,12 +3027,19 @@ class BookingVerifyStartOTPView(APIView):
         if str(entered_otp) == str(sr.start_otp):
             sr.otp_verified = True
             sr.otp_verified_at = timezone.now()
-            sr.status = "in_progress"
             try:
+                apply_transition(sr, ServiceRequest.Status.IN_PROGRESS, actor=request.user)
                 sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
+            except ValidationError as ve:
+                logger.warning(f"[OTP Verify] Transition to in_progress rejected for SR {sr.id}: {ve}")
+                sr.save(update_fields=["otp_verified", "otp_verified_at", "updated_at"])
+                return _error(
+                    f"Verification code accepted, but this booking cannot move to in-progress from its current "
+                    f"status ('{sr.status}'). Please review the booking status.", 409,
+                )
             except Exception as save_err:
                 logger.error(f"[OTP Verify] Error saving SR: {save_err}", exc_info=True)
-                sr.save()
+                return _error("Could not save verification. Please try again.", 500)
 
             try:
                 from .notifications import broadcast_tracking_event
@@ -3205,20 +3063,361 @@ class BookingVerifyStartOTPView(APIView):
             return _error("Invalid verification code. Please check the code displayed on customer screen.", 400)
 
 
-# ─── Painting Rate Card and Quotes API views ──────────────────────────────────
-from django.db import transaction
-from .models import (
-    PaintingRateCard, PaintingRateCardSlab,
-    PaintingQuote, PaintingQuoteItem,
-    PaintingMeasurement, PaintingMaterial, QuotePhoto
+class CustomerBookingTripStopsView(APIView):
+    """
+    GT-D-02: extra stops on a multi-stop goods-transport/packers & movers
+    booking. GET lists the current stops; PUT replaces the whole ordered
+    list (see set_trip_stops -- always a full replace, never a partial
+    patch, so ordering/sequence can never drift into a partially-updated
+    state).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_booking(self, pk, identifier):
+        sr_id = pk or identifier
+        try:
+            if str(sr_id).isdigit():
+                return ServiceRequest.objects.get(pk=int(sr_id))
+            return ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return None
+
+    def get(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if sr.customer_id != request.user.id and getattr(request.user, "role", "").upper() != "ADMIN":
+            return _error("You do not have permission to view this booking's stops.", 403)
+        return _standard_response(success=True, data=TripStopSerializer(sr_services.list_trip_stops(sr), many=True).data)
+
+    def put(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        stops = request.data.get("stops")
+        if not isinstance(stops, list):
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "\'stops\' must be a list."}, status_code=400)
+        try:
+            created = sr_services.set_trip_stops(sr, request.user, stops)
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=TripStopSerializer(created, many=True).data)
+
+
+class CustomerBookingMessagesView(APIView):
+    """
+    X-09: in-app chat between customer and technician for a booking.
+    GET  /api/bookings/<pk>/messages/  -- list the thread, marks unread
+         technician messages as read by the customer
+    POST /api/bookings/<pk>/messages/  -- send a message as the customer
+
+    Deliberately polling-based, not push -- the frontend re-fetches this
+    on an interval, same pattern as the tracking page. See BookingMessage's
+    docstring for why this doesn't attempt push/websockets or phone-number
+    masking (X-09's other half).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_booking(self, pk, identifier):
+        sr_id = pk or identifier
+        try:
+            if str(sr_id).isdigit():
+                return ServiceRequest.objects.get(pk=int(sr_id))
+            return ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return None
+
+    def _check_owner(self, sr, request):
+        return sr.customer_id == request.user.id or getattr(request.user, "role", "").upper() == "ADMIN"
+
+    def get(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not self._check_owner(sr, request):
+            return _error("You do not have permission to view this booking's messages.", 403)
+        messages = sr.chat_messages.all()
+        unread_ids = [m.id for m in messages if m.sender_persona != BookingMessage.SenderPersona.CUSTOMER and m.read_at_customer is None]
+        if unread_ids:
+            from django.utils import timezone
+            BookingMessage.objects.filter(id__in=unread_ids).update(read_at_customer=timezone.now())
+            messages = sr.chat_messages.all()
+        return _standard_response(success=True, data=BookingMessageSerializer(messages, many=True).data)
+
+    def post(self, request, pk=None, identifier=None):
+        sr = self._get_booking(pk, identifier)
+        if not sr:
+            return _error("Booking not found.", 404)
+        if not self._check_owner(sr, request):
+            return _error("You do not have permission to message on this booking.", 403)
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message cannot be empty."}, status_code=400)
+        if len(body) > 2000:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message is too long (max 2000 characters)."}, status_code=400)
+        msg = BookingMessage.objects.create(
+            booking=sr,
+            sender_persona=BookingMessage.SenderPersona.CUSTOMER,
+            sender_name=sr.customer_name or request.user.get_full_name() or "Customer",
+            sender_user=request.user,
+            body=body,
+        )
+        return _standard_response(success=True, data=BookingMessageSerializer(msg).data, status_code=201)
+
+
+class CustomerBookingSeriesListCreateView(APIView):
+    """
+    GET  /api/booking-series/  -- list the logged-in customer's AMC series
+    POST /api/booking-series/  -- create a new one
+    HS-B-07: recurring bookings. create_booking_series() already validates
+    required fields and snapshots customer_name/phone/email.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        series = sr_services.list_booking_series(request.user)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series, many=True).data)
+
+    def post(self, request):
+        try:
+            series = sr_services.create_booking_series(request.user, request.data)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series).data, status_code=201)
+
+
+class CustomerBookingSeriesStatusView(APIView):
+    """PATCH /api/booking-series/<int:pk>/status/ -- pause/resume/cancel.
+    {"status": "PAUSED" | "ACTIVE" | "CANCELLED"}"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        series = BookingSeries.objects.filter(pk=pk).first()
+        if not series:
+            return _error("AMC series not found.", 404)
+        new_status = request.data.get("status")
+        try:
+            series = sr_services.set_booking_series_status(series, request.user, new_status)
+        except PermissionError as e:
+            return _error(str(e), 403)
+        except ValueError as e:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": str(e)}, status_code=400)
+        return _standard_response(success=True, data=BookingSeriesSerializer(series).data)
+
+
+from service_requests.models import (
+    VegetableRecipe,
+    RecipeIngredient,
+    VegetableRecommendation,
+    PaintingRateCard,
+    PaintingRateCardSlab,
+    PaintingQuote,
+    PaintingQuoteItem,
+    PaintingMeasurement,
+    PaintingMaterial,
+    QuotePhoto,
 )
-from .serializers import (
-    PaintingRateCardSerializer, PaintingRateCardSlabSerializer,
-    PaintingQuoteSerializer, PaintingQuoteItemSerializer,
-    PaintingMeasurementSerializer, PaintingMaterialSerializer,
-    QuotePhotoSerializer
+from service_requests.serializers import (
+    VegetableRecipeListSerializer,
+    VegetableRecipeDetailSerializer,
+    VegetableRecommendationSerializer,
+    PaintingRateCardSerializer,
+    PaintingRateCardSlabSerializer,
+    PaintingQuoteSerializer,
+    PaintingQuoteItemSerializer,
+    PaintingMeasurementSerializer,
+    PaintingMaterialSerializer,
 )
-from .notifications import send_quote_notification
+
+
+class VegetableRecipeListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/
+    Supports filtering by:
+    - package_id / product_id / vegetable_name
+    - search
+    - difficulty (Easy, Medium, Hard)
+    - tag (quick, easy, low_calorie, high_fiber, popular)
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeListSerializer
+
+        package_id = request.GET.get("package_id") or request.GET.get("product_id")
+        veg_query = request.GET.get("vegetable") or ""
+        search = request.GET.get("search") or ""
+        difficulty = request.GET.get("difficulty") or ""
+        tag = request.GET.get("tag") or ""
+        is_popular = request.GET.get("popular")
+
+        qs = VegetableRecipe.objects.filter(is_active=True).select_related("package")
+
+        if package_id:
+            # Check if any recipes have this vegetable as the primary featured package
+            primary_matches = qs.filter(package_id=package_id)
+            if primary_matches.exists():
+                qs = primary_matches
+            else:
+                qs = qs.filter(
+                    Q(package_id=package_id) | Q(ingredients__package_id=package_id)
+                ).distinct()
+        elif veg_query:
+            primary_name_matches = qs.filter(package__name__icontains=veg_query)
+            if primary_name_matches.exists():
+                qs = primary_name_matches
+            else:
+                qs = qs.filter(
+                    Q(package__name__icontains=veg_query) |
+                    Q(ingredients__name__icontains=veg_query) |
+                    Q(ingredients__package__name__icontains=veg_query)
+                ).distinct()
+
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search) |
+                Q(short_description__icontains=search) |
+                Q(ingredients__name__icontains=search)
+            ).distinct()
+
+        if difficulty:
+            qs = qs.filter(difficulty__iexact=difficulty)
+
+        if is_popular and is_popular.lower() in ("true", "1", "yes"):
+            qs = qs.filter(is_popular=True)
+
+        if tag:
+            # Matches against tags JSON field or preset filters
+            tag_clean = tag.lower().replace("-", " ").replace("_", " ")
+            if "quick" in tag_clean:
+                qs = qs.filter(total_time_minutes__lte=20)
+            elif "easy" in tag_clean:
+                qs = qs.filter(difficulty="Easy")
+            elif "low calorie" in tag_clean or "low_calorie" in tag:
+                qs = qs.filter(calories__lte=150)
+            elif "high fiber" in tag_clean or "high_fiber" in tag:
+                qs = qs.filter(fiber__icontains="g")
+            else:
+                qs = qs.filter(tags__icontains=tag)
+
+        data = VegetableRecipeListSerializer(qs.order_by("sort_order", "id"), many=True).data
+        return Response({"success": True, "data": data, "count": len(data)})
+
+
+class VegetableRecipeDetailView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/recipes/<id_or_slug>/
+    Returns full recipe details, nutrition, health tips, numbered cooking steps,
+    and separated ingredients (Calservices vegetable catalog products vs pantry items).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        from .models import VegetableRecipe
+        from .serializers import VegetableRecipeDetailSerializer
+
+        recipe = None
+        if str(pk).isdigit():
+            recipe = VegetableRecipe.objects.filter(id=int(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+        if not recipe:
+            recipe = VegetableRecipe.objects.filter(slug=str(pk), is_active=True).select_related("package").prefetch_related("ingredients__package").first()
+
+        if not recipe:
+            return Response({"success": False, "message": "Recipe not found"}, status=404)
+
+        data = VegetableRecipeDetailSerializer(recipe).data
+        return Response({"success": True, "data": data})
+
+
+class VegetableRecommendationListView(APIView):
+    """
+    Public endpoint: GET /api/catalog/vegetables/<product_id>/recommendations/
+    Returns database-configured and recipe-derived recommendations for a vegetable product.
+    Only returns active Calservices vegetable products.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, product_id):
+        from .models import Package, VegetableRecommendation, VegetableRecipe, RecipeIngredient
+        from .serializers import VegetableRecommendationSerializer
+
+        # 1. Fetch direct DB-configured recommendations
+        db_recs = VegetableRecommendation.objects.filter(
+            source_product_id=product_id,
+            is_active=True,
+            recommended_product__status="ACTIVE"
+        ).select_related("source_product", "recommended_product").order_by("-priority", "display_order")
+
+        rec_data = list(VegetableRecommendationSerializer(db_recs, many=True).data)
+        seen_recommended_ids = {r["recommended_product"] for r in rec_data}
+        seen_recommended_ids.add(int(product_id))
+
+        # 2. If fewer than 6, derive recipe-based co-occurring vegetables from DB
+        if len(rec_data) < 8:
+            co_occurring_pkg_ids = RecipeIngredient.objects.filter(
+                recipe__in=VegetableRecipe.objects.filter(
+                    Q(package_id=product_id) | Q(ingredients__package_id=product_id),
+                    is_active=True
+                ),
+                package__isnull=False,
+                package__status="ACTIVE"
+            ).exclude(
+                package_id__in=seen_recommended_ids
+            ).values_list("package_id", flat=True).distinct()[:8]
+
+            for pkg_id in co_occurring_pkg_ids:
+                pkg = Package.objects.filter(id=pkg_id, status="ACTIVE").first()
+                if pkg:
+                    seen_recommended_ids.add(pkg.id)
+                    rec_data.append({
+                        "id": None,
+                        "source_product": int(product_id),
+                        "source_name": "",
+                        "recommended_product": pkg.id,
+                        "recommended_name": pkg.name,
+                        "recommended_price": str(pkg.base_price),
+                        "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                        "recommended_unit": pkg.duration or "1 unit",
+                        "recommended_image": pkg.image or "",
+                        "recommended_status": pkg.status,
+                        "recommendation_type": "RECIPE_BASED",
+                        "priority": 5,
+                        "display_order": len(rec_data) + 1,
+                        "is_active": True,
+                    })
+
+        # 3. If still fewer, fill with active popular vegetables
+        if len(rec_data) < 4:
+            fallback_pkgs = Package.objects.filter(
+                service__slug="vegetables",
+                status="ACTIVE"
+            ).exclude(
+                id__in=seen_recommended_ids
+            ).order_by("-popular", "sort_order")[: (4 - len(rec_data))]
+
+            for pkg in fallback_pkgs:
+                rec_data.append({
+                    "id": None,
+                    "source_product": int(product_id),
+                    "source_name": "",
+                    "recommended_product": pkg.id,
+                    "recommended_name": pkg.name,
+                    "recommended_price": str(pkg.base_price),
+                    "recommended_offer_price": str(pkg.offer_price) if pkg.offer_price else None,
+                    "recommended_unit": pkg.duration or "1 unit",
+                    "recommended_image": pkg.image or "",
+                    "recommended_status": pkg.status,
+                    "recommendation_type": "YOU_MAY_ALSO_LIKE",
+                    "priority": 1,
+                    "display_order": len(rec_data) + 1,
+                    "is_active": True,
+                })
+
+        return Response({"success": True, "data": rec_data, "count": len(rec_data)})
+
 
 
 class CustomerQuoteDecideView(APIView):
@@ -3412,6 +3611,18 @@ class AdminPaintingRateCardDetailView(APIView):
             return _error("Rate card item not found.", 404)
         rate.delete()
         return _success(message="Rate card item deleted successfully.")
+
+
+def send_quote_notification(quote):
+    """Notify customer of submitted/approved quotation via SMS/log."""
+    try:
+        from .notifications import send_customer_sms_notification
+        phone = quote.booking.phone if (hasattr(quote, "booking") and quote.booking) else None
+        if phone:
+            msg = f"Your service quote #{quote.quote_number} is ready. Total: Rs.{quote.grand_total}. Please review and approve."
+            send_customer_sms_notification(phone, msg)
+    except Exception as e:
+        logger.warning(f"Failed to send quote notification: {e}")
 
 
 class AdminQuoteCreateView(APIView):
@@ -3700,14 +3911,6 @@ class CustomerQuotePDFView(APIView):
             p.drawString(100, y, f"Payment Split: 50% Advance (Rs. {quote.advance_amount}) + 50% Balance (Rs. {quote.balance_amount})")
 
         p.showPage()
-        p.save()
-
-        buffer.seek(0)
-        response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="Quote-{quote.quote_number}.pdf"'
-        return response
-
-
         p.save()
 
         buffer.seek(0)

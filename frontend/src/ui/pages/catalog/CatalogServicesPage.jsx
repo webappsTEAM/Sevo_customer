@@ -253,18 +253,26 @@ export function CatalogServicesPage() {
     }
   }
 
-  const handleDelete = async (svc) => {
-    if (!window.confirm(`Delete sub-service "${svc.name}"? This action will remove it from the catalog.`)) return
+  const handleDelete = async (svc, cascade = false) => {
+    if (!cascade && !window.confirm(`Delete sub-service "${svc.name}"? This action will remove it from the catalog.`)) return
     try {
-      const res = await apiRequest(`/settings/catalog/v2/services/${svc.id}/`, { method: "DELETE" })
+      const qs = cascade ? "?cascade=true" : ""
+      const res = await apiRequest(`/settings/catalog/v2/services/${svc.id}/${qs}`, { method: "DELETE" })
       if (res.success) {
-        showToast("Service deleted")
+        showToast(cascade ? "Service and all its packages deleted" : "Service deleted")
         loadServices()
       } else {
         showToast(res.message || "Delete blocked", "error")
       }
-    } catch {
-      showToast("Delete failed", "error")
+    } catch (err) {
+      const reason = err?.body?.errors?.detail || err?.body?.message || err?.body?.error
+      if (reason && /still has packages/i.test(reason)) {
+        if (window.confirm(`${reason}\n\nDelete "${svc.name}" AND every package inside it? This cannot be undone.`)) {
+          return handleDelete(svc, true)
+        }
+        return
+      }
+      showToast(reason || "Delete failed", "error")
     }
   }
 

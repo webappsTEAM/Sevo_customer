@@ -12,7 +12,8 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench,
+  Gift, Repeat, PauseCircle, PlayCircle, XCircle, Eye, EyeOff
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, extractAuthError,
@@ -37,28 +38,13 @@ import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js";
-import { estimationRepository } from "../../services/estimation/estimationRepository.js";
-import {
-  ESTIMATION_FEE,
-  ESTIMATION_DURATION,
-  ESTIMATION_TITLE,
-  ESTIMATION_SUBTITLE,
-  ESTIMATION_DESCRIPTION,
-  INSPECTION_CARD_INCLUDES,
-  WHAT_IS_INCLUDED,
-  WHAT_TECHNICIAN_CHECKS,
-  HOW_ESTIMATION_WORKS_STEPS,
-  WHAT_IS_NOT_INCLUDED,
-} from "../../services/estimation/estimationConfig.js";
-import { ACDetailsForm } from "../components/estimation/ACDetailsForm.jsx";
-import { EstimationTimeline } from "../components/estimation/EstimationTimeline.jsx";
-import { ACInspectionSummaryModal } from "../components/estimation/ACInspectionSummaryModal.jsx";
 import acServiceImg from "../../assets/ac service.png";
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png";
 import imgFoamWin from "../../assets/Foam & Power Jet AC Service — Window.png";
@@ -163,63 +149,59 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
   if (!nameOrIdOrSlug) return null;
   const str = String(nameOrIdOrSlug).toLowerCase().trim();
 
-  // 1. AC Service & Cleaning
-  if (str.includes("foam & power jet") || str.includes("foam and power jet") || str.includes("hvac-fj-split") || (str.includes("foam") && str.includes("split"))) return imgFoamSplit;
-  if (str.includes("anti-rust") || str.includes("anti rust") || str.includes("hvac-ar-3") || str.includes("hvac-deep-clean") || str.includes("deep clean ac service")) return imgAntiRust;
-  if (str.includes("power jet ac service") || str.includes("hvac-pj-service") || str.includes("power jet")) return imgPowerSplit;
-  if (str.includes("general ac service") || str.includes("basic ac service") || str.includes("general-ac-service") || str.includes("hvac-basic-service")) return imgPowerWin;
+  // Cleaning & Jet Services
+  if (str.includes("2-in-1") || str.includes("2 in 1") || str.includes("combo")) return imgCombo2in1;
+  if (str.includes("3-in-1") || str.includes("3 in 1") || str.includes("mega")) return imgMega3in1;
+  if (str.includes("airflow") || str.includes("filter deep") || (str.includes("sanitization") && str.includes("air"))) return imgAirflowSanitization;
+  if (str.includes("anti-rust") || str.includes("anti rust") || str.includes("hvac-ar-3")) return imgAntiRust;
+  if (str.includes("foam") && (str.includes("split") || str.includes("hvac-fj-split"))) return str.includes("(") ? imgFoamSplitParen : imgFoamSplit;
+  if (str.includes("foam") && (str.includes("win") || str.includes("hvac-fj-win"))) return imgFoamWin;
+  if (str.includes("power") && str.includes("jet") && (str.includes("split") || str.includes("hvac-pj-split"))) return imgPowerSplit;
+  if (str.includes("power") && str.includes("jet") && (str.includes("win") || str.includes("hvac-pj-win"))) return imgPowerWin;
 
-  // 2. Repair & Diagnostics
-  if (str.includes("repair & diagnosis") || str.includes("repair and diagnosis") || str.includes("hvac-repair-diagnosis")) return imgAcRepairSplitWin;
-  if (str.includes("not cooling") || str.includes("hvac-not-cooling")) return imgLessNoCooling;
-  if (str.includes("water leakage") || str.includes("hvac-water-leakage")) return imgWaterLeakage;
-  if (str.includes("noise issue") || str.includes("hvac-noise-issue")) return imgUnwantedNoiseSmell;
-  if (str.includes("power issue") || str.includes("hvac-power-issue")) return imgPowerIssue;
+  // Diagnostics & Specific Repairs
+  if (str.includes("fan motor") || (str.includes("motor") && str.includes("fan")) || str.includes("hvac-rep-fan")) return imgAcFanMotor;
+  if (str.includes("noise & vibration") || str.includes("noise and vibration") || str.includes("vibration diagnostics") || str.includes("hvac-rep-diag-noise")) return imgAcNoiseVibrationDiag;
+  if (str.includes("on / off") || str.includes("on off") || str.includes("remote sensor") || str.includes("sensor repair") || str.includes("hvac-rep-sensor")) return imgAcOnOffSensor;
+  if (str.includes("water leakage & drain") || str.includes("water leakage and drain") || (str.includes("drain") && str.includes("leakage")) || str.includes("hvac-rep-drain")) return imgAcWaterLeakageDrain;
+  if (str.includes("inverter ac error") || str.includes("error code diagnostics") || str.includes("error code") || str.includes("hvac-rep-inverter")) return imgInverterAcErrorCode;
+  if (str.includes("less / no cooling diagnostics") || str.includes("less no cooling diagnostics") || (str.includes("cooling") && str.includes("diagnostics")) || str.includes("hvac-rep-diag-cool")) return imgAcLessNoCoolingDiag;
 
-  // 3. Gas & Refrigerant
-  if (str.includes("gas refill") || str.includes("hvac-gas-refill")) return imgGasCharging;
-  if (str.includes("gas leak detection") || str.includes("hvac-gas-leak-detect")) return imgNitrogenLeakTest;
-  if (str.includes("refrigerant leakage repair") || str.includes("hvac-refrigerant-leak-repair")) return imgCopperCoilBrazing;
+  // General Repair Categories
+  if ((str.includes("ac repair") || str.includes("hvac-rep-1")) && (str.includes("split") || str.includes("window"))) return imgAcRepairSplitWin;
+  if (str.includes("less/no cooling") || str.includes("less no cooling") || str.includes("no cooling") || str.includes("hvac-rep-2")) return imgLessNoCooling;
+  if (str.includes("power issue") || str.includes("power not turning on") || str.includes("power problem") || str.includes("hvac-rep-3")) return imgPowerIssue;
+  if (str.includes("water leakage") || str.includes("water dripping") || str.includes("drain pipe unclogging") || str.includes("hvac-rep-4")) return imgWaterLeakage;
+  if (str.includes("noise") || str.includes("smell") || str.includes("odor") || str.includes("hvac-rep-5")) return imgUnwantedNoiseSmell;
 
-  // 4. Installation & Uninstallation
-  if (str.includes("split ac installation") || str.includes("hvac-split-install")) return imgSplitAcInstall;
-  if (str.includes("window ac installation") || str.includes("hvac-window-install")) return imgWindowAcInstall;
-  if (str.includes("split ac uninstallation") || str.includes("hvac-split-uninstall")) return imgAcUninstall;
-  if (str.includes("window ac uninstallation") || str.includes("hvac-window-uninstall")) return imgWindowAcInstall;
-  if (str.includes("ac relocation") || str.includes("relocation") || str.includes("hvac-relocation")) return imgSplitAcDismountReinstallCombo;
+  // Gas & Refrigerant Services
+  if (str.includes("gas leak fix") || (str.includes("gas") && str.includes("leak") && str.includes("refill")) || str.includes("hvac-gas-1")) return imgGasLeakFixRefill;
+  if (str.includes("complete ac gas charging") || str.includes("r32") || str.includes("r410a") || str.includes("r22") || str.includes("hvac-gas-complete")) return imgCompleteAcGasCharging;
+  if (str.includes("gas top-up") || str.includes("gas top up") || str.includes("pressure balancing") || str.includes("hvac-gas-topup")) return imgAcGasTopUp;
+  if (str.includes("gas charging") || str.includes("hvac-gas-2")) return imgGasCharging;
+  if (str.includes("service valve") || str.includes("valve replacement") || str.includes("hvac-gas-3")) return imgServiceValveReplace;
+  if (str.includes("cooling coil") || str.includes("condenser coil") || str.includes("coil repair") || str.includes("hvac-gas-4")) return imgCoolingCoilCondenserRepair;
+  if (str.includes("copper coil") || str.includes("pinhole brazing") || str.includes("brazing & welding") || str.includes("hvac-gas-copper")) return imgCopperCoilBrazing;
+  if (str.includes("nitrogen leak") || str.includes("nitrogen") || str.includes("hvac-gas-nitrogen")) return imgNitrogenLeakTest;
 
-  // 5. PCB & Electrical
-  if (str.includes("pcb diagnosis") || str.includes("hvac-pcb-diag")) return imgInverterAcErrorCode;
-  if (str.includes("pcb repair") || str.includes("hvac-pcb-repair")) return imgInverterPcbRepair;
-  if (str.includes("pcb replacement") || str.includes("hvac-pcb-replace")) return imgNonInverterPcbRepair;
-  if (str.includes("capacitor replacement") || str.includes("hvac-capacitor-replace")) return imgMotorStartCapacitor;
-  if (str.includes("wiring repair") || str.includes("hvac-wiring-repair")) return imgContactorReplacement;
+  // Installation & Uninstallation Services
+  if (str.includes("dismount & re-installation") || str.includes("dismount and re-installation") || str.includes("dismount & reinstallation") || str.includes("re-installation combo") || str.includes("hvac-inst-combo")) return imgSplitAcDismountReinstallCombo;
+  if (str.includes("split ac complete") || str.includes("complete installation") || str.includes("hvac-inst-complete")) return imgSplitAcCompleteInstall;
+  if (str.includes("safe uninstallation") || str.includes("safe removal") || str.includes("hvac-inst-safe-uninst")) return imgSplitAcSafeUninstall;
+  if (str.includes("wall stand") || str.includes("heavy-duty outdoor") || str.includes("heavy duty outdoor") || str.includes("hvac-inst-wallstand")) return imgHeavyDutyWallStand;
+  if (str.includes("indoor unit reinstallation") || str.includes("indoor reinstallation") || str.includes("hvac-reinst-ind")) return imgIndoorUnitReinstall;
+  if (str.includes("outdoor unit reinstallation") || str.includes("outdoor reinstallation") || str.includes("hvac-reinst-out")) return imgOutdoorUnitReinstall;
+  if (str.includes("window ac installation") || str.includes("window installation") || str.includes("hvac-inst-win")) return imgWindowAcInstall;
+  if (str.includes("split ac installation") || str.includes("split installation") || str.includes("hvac-inst-split")) return imgSplitAcInstall;
+  if (str.includes("uninstallation") || str.includes("hvac-uninst-1")) return imgAcUninstall;
 
-  // 6. Parts & Accessories
-  if (str.includes("outdoor unit stand") || str.includes("hvac-outdoor-stand")) return imgHeavyDutyWallStand;
-  if (str.includes("stabilizer installation") || str.includes("hvac-stabilizer-install")) return acServiceImg;
-  if (str.includes("drain pipe replacement") || str.includes("hvac-drain-pipe-replace")) return "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop";
-  if (str.includes("copper pipe work") || str.includes("hvac-copper-pipe-work")) return "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop";
-  if (str.includes("remote replacement") || str.includes("hvac-remote-replace")) return acServiceImg;
-
-  // Fallback matchers
-  if (str.includes("foam") && str.includes("split")) return imgFoamSplit;
-  if (str.includes("foam") && str.includes("win")) return imgFoamWin;
-  if (str.includes("power") && str.includes("jet")) return imgPowerSplit;
-  if (str.includes("anti-rust")) return imgAntiRust;
-  if (str.includes("less") || str.includes("cooling")) return imgLessNoCooling;
-  if (str.includes("leakage")) return imgWaterLeakage;
-  if (str.includes("noise") || str.includes("smell")) return imgUnwantedNoiseSmell;
-  if (str.includes("power")) return imgPowerIssue;
-  if (str.includes("gas")) return imgGasCharging;
-  if (str.includes("nitrogen")) return imgNitrogenLeakTest;
-  if (str.includes("brazing") || str.includes("copper coil")) return imgCopperCoilBrazing;
-  if (str.includes("install")) return imgSplitAcInstall;
-  if (str.includes("uninstall")) return imgAcUninstall;
-  if (str.includes("pcb")) return imgInverterPcbRepair;
-  if (str.includes("capacitor")) return imgMotorStartCapacitor;
-  if (str.includes("wiring") || str.includes("contactor")) return imgContactorReplacement;
-  if (str.includes("stand")) return imgHeavyDutyWallStand;
+  // PCB & Electrical Services
+  if (str.includes("inverter pcb") || str.includes("hvac-pcb-inv")) return imgInverterPcbRepair;
+  if (str.includes("non-inverter pcb") || str.includes("non inverter pcb") || str.includes("hvac-pcb-non")) return imgNonInverterPcbRepair;
+  if (str.includes("capacitor") || str.includes("motor start capacitor") || str.includes("hvac-cap-1")) return imgMotorStartCapacitor;
+  if (str.includes("contactor") || str.includes("hvac-cnt-1")) return imgContactorReplacement;
+  if (str.includes("sensor replacement") || (str.includes("sensor") && str.includes("replace")) || str.includes("hvac-sns-1")) return imgSensorReplacement;
+  if (str.includes("lvt") || str.includes("hvac-lvt-1")) return imgLvtReplacement;
 
   return null;
 };
@@ -227,99 +209,6 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
 const extractTextList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => typeof i === "string" ? i : (typeof i === "object" && i !== null ? (i.text || i.title || "") : "")).filter(Boolean) : [];
-
-const getServiceEstimateNote = (pkg, catKey = "") => {
-  if (!pkg) return null;
-  const slug = String(pkg.slug || pkg.id || "").toLowerCase();
-  const name = String(pkg.name || "").toLowerCase();
-
-  // 1. Installation & Uninstallation
-  if (
-    slug.includes("install") ||
-    slug.includes("uninstall") ||
-    slug.includes("relocation") ||
-    slug.includes("mounting") ||
-    name.includes("installation") ||
-    name.includes("uninstallation") ||
-    name.includes("relocation") ||
-    name.includes("mounting")
-  ) {
-    return "Standard labor included. Extra copper piping, outdoor wall bracket, electrical wiring, drain pipes & core hole cutting charged as per transparent rate card estimate on site.";
-  }
-
-  // 2. Diagnostics & Repairs
-  if (
-    slug.includes("repair") ||
-    slug.includes("diagnos") ||
-    slug.includes("inspect") ||
-    slug.includes("not-cooling") ||
-    slug.includes("leakage") ||
-    slug.includes("noise") ||
-    slug.includes("power-issue") ||
-    slug.includes("pcb") ||
-    slug.includes("capacitor") ||
-    slug.includes("wiring") ||
-    slug.includes("short-circuit") ||
-    slug.includes("fault") ||
-    name.includes("repair") ||
-    name.includes("diagnos") ||
-    name.includes("inspection") ||
-    name.includes("not cooling") ||
-    name.includes("water leakage") ||
-    name.includes("noise") ||
-    name.includes("power") ||
-    name.includes("pcb") ||
-    name.includes("capacitor") ||
-    name.includes("wiring") ||
-    name.includes("tripping") ||
-    name.includes("leak fix")
-  ) {
-    return "Inspection & diagnostic charge. Detailed repair quotation & replacement spare parts estimate shared upfront before starting any work.";
-  }
-
-  // 3. Gas Refill & Refrigerant
-  if (
-    slug.includes("gas") ||
-    slug.includes("refrigerant") ||
-    slug.includes("nitrogen") ||
-    slug.includes("brazing") ||
-    name.includes("gas refill") ||
-    name.includes("gas charging") ||
-    name.includes("gas leak") ||
-    name.includes("refrigerant")
-  ) {
-    return "Standard refrigerant top-up charge. Pinhole brazing, condenser coil repairs, or valve replacements are quoted as per on-site inspection estimate.";
-  }
-
-  // 4. Parts & Accessories
-  if (
-    slug.includes("stand") ||
-    slug.includes("stabilizer") ||
-    slug.includes("copper-pipe") ||
-    slug.includes("drain-pipe") ||
-    name.includes("stand") ||
-    name.includes("stabilizer") ||
-    name.includes("copper pipe") ||
-    name.includes("drain pipe")
-  ) {
-    return "Component cost & standard fitting labor. Additional fitting materials or electrical line extensions quoted transparently on site.";
-  }
-
-  // 5. Electrician, Plumbing & Carpentry minor services
-  if (
-    catKey === "electrician" ||
-    catKey === "plumbing" ||
-    catKey === "carpentry" ||
-    slug.startsWith("switch-") ||
-    slug.startsWith("tap-") ||
-    slug.startsWith("door-") ||
-    slug.startsWith("drill-")
-  ) {
-    return "Standard service & labor charge. Any extra replacement hardware, fittings, or spare parts charged as per actuals / rate card.";
-  }
-
-  return null;
-};
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    DATA
@@ -473,15 +362,48 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
+// Booking rules are evaluated in the business timezone, never the browser's.
+// The old cut-off logic read the device clock, so a customer whose machine was
+// set to another timezone (or simply wrong) got a different answer than the
+// server would -- and since there was no server-side time check at all, that
+// answer was final. The server now enforces the same window in
+// service_requests/booking_window.py; everything here is the matching
+// convenience filter, and the two deliberately use the same numbers.
+const BOOKING_TIMEZONE = 'Asia/Kolkata'
+const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
+const SAME_DAY_MIN_LEAD_MINUTES = 60
+
+function businessNowParts() {
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: BOOKING_TIMEZONE,
+        hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      }).formatToParts(new Date()).map(part => [part.type, part.value])
+    )
+    return {
+      dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+      hour: Number(parts.hour) % 24,
+      minute: Number(parts.minute),
+    }
+  } catch (_) {
+    // Intl unavailable: fall back to device time rather than blocking booking.
+    const d = new Date()
+    return {
+      dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+    }
+  }
+}
+
 function isSlotInPast(dateStr, slotStr) {
   if (!dateStr || !slotStr) return false
-  const now = new Date()
 
-  // Format today's date in local YYYY-MM-DD
-  const todayYear = now.getFullYear()
-  const todayMonth = String(now.getMonth() + 1).padStart(2, '0')
-  const todayDay = String(now.getDate()).padStart(2, '0')
-  const todayStr = `${todayYear}-${todayMonth}-${todayDay}`
+  const business = businessNowParts()
+  const todayStr = business.dateStr
 
   // Normalize dateStr
   const cleanDateStr = String(dateStr).split('T')[0].trim()
@@ -490,6 +412,10 @@ function isSlotInPast(dateStr, slotStr) {
   if (cleanDateStr < todayStr) return true
   // If date is strictly in the future, slot is available
   if (cleanDateStr > todayStr) return false
+
+  // Same-day bookings close at the daily cut-off: past it, every remaining
+  // slot today is unbookable and the customer is moved on to the next day.
+  if (business.hour >= SAME_DAY_CUTOFF_HOUR) return true
 
   // If date is today, parse the slot time
   let hours = 0
@@ -511,8 +437,11 @@ function isSlotInPast(dateStr, slotStr) {
     minutes = parseInt(parts[1], 10) || 0
   }
 
-  const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0)
-  return slotDate <= now
+  // Compare in business-timezone minutes, and keep the same minimum lead time
+  // the server applies, so a slot starting in a few minutes is not offered.
+  const slotMinutes = hours * 60 + minutes
+  const nowMinutes = business.hour * 60 + business.minute
+  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -2455,13 +2384,7 @@ export function RunningServiceManRadar() {
    ───────────────────────────────────────────────────────────────────────────── */
 
 function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
-  const rid = successData?.request_id || (successData?.id ? (String(successData.id).startsWith("LOCAL-EST") || String(successData.id).startsWith("SR-") ? String(successData.id) : `SR-${successData.id}`) : "")
-  const isEstimation = Boolean(
-    successData?.jobType === "ESTIMATION" ||
-    successData?.job_type === "ESTIMATION" ||
-    successData?.id?.toString().includes("LOCAL-EST") ||
-    rid?.includes("LOCAL-EST")
-  )
+  const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
   const [liveData, setLiveData] = useState(null)
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -2477,14 +2400,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const handleManualRefresh = async () => {
     if (isRefreshing || !rid) return
     setIsRefreshing(true)
-    if (isEstimation || rid?.startsWith("LOCAL-EST")) {
-      const est = estimationRepository.getActiveEstimationSync()
-      if (est) {
-        setLiveData(est)
-      }
-      setTimeout(() => setIsRefreshing(false), 400)
-      return
-    }
     try {
       const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
       const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
@@ -2537,34 +2452,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   // Real-Time Auto-Refresh & WebSocket Status Synchronization
   useEffect(() => {
     if (!rid) return
-    if (isEstimation || rid?.startsWith("LOCAL-EST")) {
-      const allEsts = estimationRepository.getMyEstimationsSync()
-      const foundEst = allEsts.find(x => x.id === rid || x.request_id === rid || x.requestId === rid)
-      if (foundEst) {
-        setLiveData(foundEst)
-      } else {
-        const est = estimationRepository.getActiveEstimationSync()
-        if (est) setLiveData(est)
-      }
-      if (!rid.startsWith("LOCAL-EST")) {
-        estimationRepository.getEstimationBooking(rid)
-          .then((estDetail) => {
-            if (estDetail) {
-              setLiveData((prev) => ({
-                ...(prev || {}),
-                ...estDetail,
-                status: (estDetail.booking_status || estDetail.status || prev?.status || "").toLowerCase(),
-              }))
-            }
-          })
-          .catch(() => {})
-      }
-      const unsub = estimationRepository.subscribeToEstimations((list) => {
-        const found = list.find(x => x.id === rid || x.request_id === rid || x.requestId === rid)
-        if (found) setLiveData(found)
-      })
-      return () => unsub()
-    }
     let pollTimer = null
     let ws = null
     let isMounted = true
@@ -2765,26 +2652,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     )
   )
 
-  const currentStatusClean = (
-    liveData?.status ||
-    successData?.status ||
-    liveData?.booking_status ||
-    successData?.booking_status ||
-    liveData?.estimation?.status ||
-    successData?.estimation?.status ||
-    ""
-  ).toLowerCase()
-  const isCancelled = currentStatusClean === "cancelled" || (rid && estimationRepository.getMyEstimationsSync().find(x => (x.id === rid || x.request_id === rid || x.requestId === rid))?.status?.toLowerCase() === "cancelled")
-  const cancellationReason = (
-    liveData?.cancellation_reason ||
-    successData?.cancellation_reason ||
-    liveData?.cancellation_note ||
-    successData?.cancellation_note ||
-    (liveData?.description && liveData.description.includes("[Cancellation Reason]:")
-      ? liveData.description.split("[Cancellation Reason]:")[1].trim()
-      : "") ||
-    "Cancelled by customer"
-  )
+  const isCancelled = liveData?.status === "cancelled"
+  const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
   const canCancel = !isCancelled && !isCompleted && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
 
@@ -2919,18 +2788,16 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           )}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: "1.25rem" }}>
             <button
-              id="btn-book-new-service"
               onClick={() => {
-                try {
-                  sessionStorage.removeItem("calservice_active_tracking_id");
-                  sessionStorage.removeItem("calservice_last_booking");
-                  sessionStorage.removeItem("calservices_customer_cart");
-                  localStorage.removeItem("calservices_customer_cart");
-                  if (isEstimation || rid?.includes("LOCAL-EST")) {
-                    estimationRepository.cancelEstimationBookingSync(rid, cancellationReason || "Cancelled by customer");
-                  }
-                } catch (_) {}
-                window.location.href = "/?category=hvac";
+                sessionStorage.removeItem("calservice_active_tracking_id");
+                sessionStorage.removeItem("calservice_last_booking");
+                sessionStorage.removeItem("calservices_customer_cart");
+                localStorage.removeItem("calservices_customer_cart");
+                if (typeof onBookAgain === "function") {
+                  onBookAgain();
+                } else {
+                  window.location.href = "/";
+                }
               }}
               style={{
                 padding: "0.85rem 1.75rem",
@@ -2949,17 +2816,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <Sparkles size={16} /> Book a New Service
             </button>
             <button
-              id="btn-return-to-home"
               onClick={() => {
-                try {
-                  sessionStorage.removeItem("calservice_active_tracking_id");
-                  sessionStorage.removeItem("calservice_last_booking");
-                  sessionStorage.removeItem("calservices_customer_cart");
-                  localStorage.removeItem("calservices_customer_cart");
-                  if (isEstimation || rid?.includes("LOCAL-EST")) {
-                    estimationRepository.cancelEstimationBookingSync(rid, cancellationReason || "Cancelled by customer");
-                  }
-                } catch (_) {}
+                sessionStorage.removeItem("calservice_active_tracking_id");
+                sessionStorage.removeItem("calservice_last_booking");
+                sessionStorage.removeItem("calservices_customer_cart");
+                localStorage.removeItem("calservices_customer_cart");
                 window.location.href = "/";
               }}
               style={{
@@ -2991,66 +2852,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       style={{ maxWidth: 620, margin: '0 auto', padding: '1.5rem 1rem' }}
     >
       {/* ─────────────────── HEADLINE STATUS BANNER ─────────────────── */}
-      {isEstimation ? (
-        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #4f46e5, #4338ca)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 0.75rem',
-              boxShadow: '0 6px 20px rgba(79, 70, 229, 0.35)',
-            }}
-          >
-            <CheckCircle2 size={38} color="white" />
-          </motion.div>
-          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            AC Inspection Booked! 🔍
-          </h2>
-          <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
-            Technician visit scheduled. After inspection, you will receive a diagnostic report &amp; quotation.
-          </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: 99, padding: '4px 14px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase' }}>Booking Ref</span>
-            <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#1e1b4b', fontFamily: 'monospace' }}>#{rid}</span>
-            <span style={{ color: '#a5b4fc' }}>•</span>
-            <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#4338ca' }}>Estimation Mode</span>
-          </div>
-
-          {/* Anytime Cancellation Button (Pre-Acceptance) */}
-          <div style={{ marginTop: '1rem' }}>
-            <button
-              onClick={() => setShowCancelModal(true)}
-              style={{
-                padding: '0.55rem 1.1rem',
-                background: 'white',
-                color: '#dc2626',
-                border: '1.5px solid #fecaca',
-                borderRadius: 12,
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
-              }}
-            >
-              <Ban size={14} /> Cancel Booking
-            </button>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 5 }}>
-              ⚡ Free cancellation available anytime before technician arrives
-            </div>
-          </div>
-        </div>
-      ) : isAccepted ? (
+      {isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
           <motion.div
             initial={{ scale: 0 }}
@@ -3457,7 +3259,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <Clock size={14} color={canCancel ? '#d97706' : '#94a3b8'} />
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: canCancel ? '#92400e' : '#64748b' }}>
                 {canCancel
-                  ? `Free cancellation available: ${formatGraceTime(graceSecs)}`
+                  ? `Cancellation available: ${formatGraceTime(graceSecs)}`
                   : '5-minute free cancellation window expired'}
               </span>
             </div>
@@ -3538,8 +3340,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             marginBottom: '1rem',
             boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
             border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
               }`,
           }}
         >
@@ -3589,7 +3391,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
                   liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
               border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
+                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
                 }`,
               color:
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
@@ -3649,7 +3451,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* PDF Download link */}
           <div style={{ marginBottom: 16 }}>
             <a
-              href={`http://localhost:8001/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
+              href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
@@ -3686,7 +3488,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                             {isExpanded ? "Hide Details" : "View Details"}
                           </button>
                           <a
-                            href={`http://localhost:8001/customer/quote-token/${prevQuote.decision_token}/pdf/`}
+                            href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
@@ -3965,21 +3767,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </div>
 
         {/* Itemized Service Breakdown */}
-        {isEstimation ? (
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 0.9rem', background: '#fafafa', marginBottom: '0.9rem' }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
-              Service Fee Breakdown
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-              <div style={{ color: '#334155', fontWeight: 700 }}>AC Comprehensive Inspection &amp; Diagnosis</div>
-              <div style={{ fontWeight: 800, color: '#0f172a' }}>₹{ESTIMATION_FEE}</div>
-            </div>
-            <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '0.6rem', paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 900 }}>
-              <span style={{ color: '#0f172a' }}>Total Amount</span>
-              <span style={{ color: '#4338ca' }}>₹{ESTIMATION_FEE}</span>
-            </div>
-          </div>
-        ) : displayCart.length > 0 && (
+        {displayCart.length > 0 && (
           <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 0.9rem', background: '#fafafa', marginBottom: '0.9rem' }}>
             <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
               Services Included ({displayCart.length})
@@ -4391,17 +4179,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             onClose={() => setShowCancelModal(false)}
             onCancelled={(data) => {
               sessionStorage.removeItem("calservice_active_tracking_id")
-              const reasonText = data?.cancellation_reason || "Cancelled by customer"
-              const cancelledObj = {
-                ...(liveData || successData || {}),
+              sessionStorage.removeItem("calservice_last_booking")
+              setLiveData((prev) => ({
+                ...(prev || {}),
                 status: "cancelled",
-                booking_status: "cancelled",
-                status_display: "Cancelled",
-                cancellation_reason: reasonText,
-              }
-              sessionStorage.setItem("calservice_last_booking", JSON.stringify(cancelledObj))
-              setLiveData(cancelledObj)
-              setShowCancelModal(false)
+                cancellation_reason: data?.cancellation_reason,
+              }))
             }}
           />
         )}
@@ -4615,13 +4398,6 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
 
 export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
   const { user, logout, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
-  const effectiveUser = user || (estimationRepository.getMyEstimationsSync().length > 0 ? {
-    id: 999,
-    fullName: "CalServices Customer",
-    username: "Customer",
-    phone: "9876543210",
-    email: "customer@calservices.in"
-  } : null)
   const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
   const activeTab = propActiveTab || internalTab
   const setActiveTab = (tab) => {
@@ -4668,10 +4444,44 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
+  // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
+  // each fetches only when its tab is activated, matching the existing
+  // My Bookings fetch-on-activate pattern immediately above.
+  const [walletData, setWalletData] = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [referralData, setReferralData] = useState(null)
+  const [referralLoading, setReferralLoading] = useState(false)
+  const [amcSeries, setAmcSeries] = useState([])
+  const [amcLoading, setAmcLoading] = useState(false)
+  const [amcActionError, setAmcActionError] = useState("")
+  // GT-C-03: Insurance Claims tab.
+  const [insuranceClaims, setInsuranceClaims] = useState([])
+  const [claimsLoading, setClaimsLoading] = useState(false)
+  const [claimBookingId, setClaimBookingId] = useState("")
+  const [claimDescription, setClaimDescription] = useState("")
+  const [claimAmount, setClaimAmount] = useState("")
+  const [claimSubmitting, setClaimSubmitting] = useState(false)
+  const [claimError, setClaimError] = useState("")
+  // GT-D-02: per-booking multi-stop trip editor, inline in the My
+  // Bookings card rather than a separate tab -- a stop list only makes
+  // sense in the context of one specific booking.
+  const LOGISTICS_STOP_CATEGORIES = ['goods_transport_truck', 'goods_transport_two_wheeler', 'goods_transport', 'packers_movers']
+  const [stopsEditorBookingId, setStopsEditorBookingId] = useState(null)
+  const [stopsDraft, setStopsDraft] = useState([])
+  const [stopsLoading, setStopsLoading] = useState(false)
+  const [stopsSaving, setStopsSaving] = useState(false)
+  const [stopsError, setStopsError] = useState('')
+  const [stopsSavedMsg, setStopsSavedMsg] = useState('')
+  // HS-D-05: Notification Preferences tab.
+  const [notifPrefs, setNotifPrefs] = useState(null)
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifSaving, setNotifSaving] = useState(false)
 
   const [profileName, setProfileName] = useState('')
+  const [initialProfileName, setInitialProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [initialProfileEmail, setInitialProfileEmail] = useState('')
   const [profileCustomerId, setProfileCustomerId] = useState(user?.customer_id || user?.customerId || '')
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
@@ -4679,12 +4489,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileSuccess, setProfileSuccess] = useState('')
   const avatarInputRef = useRef(null)
 
+  const hasProfileChanges = Boolean(
+    (profileName.trim() !== initialProfileName.trim()) ||
+    (profileEmail.trim() !== initialProfileEmail.trim())
+  )
+
   useEffect(() => {
     if (user) {
       const uFullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '')
-      setProfileName(uFullName && uFullName !== 'Customer' ? uFullName : (user?.username && user.username !== 'Customer' ? user.username : ''))
+      const initName = uFullName && uFullName !== 'Customer' ? uFullName : (user?.username && user.username !== 'Customer' ? user.username : '')
+      const initEmail = user?.email || ''
+      setProfileName(initName)
+      setInitialProfileName(initName)
       setProfilePhone(user?.phone || '')
-      setProfileEmail(user?.email || '')
+      setProfileEmail(initEmail)
+      setInitialProfileEmail(initEmail)
       setProfileCustomerId(user?.customer_id || user?.customerId || '')
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
@@ -4699,8 +4518,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           if (data?.first_name || data?.name || data?.full_name) {
             const fetchedName = data.full_name || data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
             if (fetchedName && fetchedName !== 'Customer') {
-              setProfileName(prev => prev || fetchedName)
+              setProfileName(fetchedName)
+              setInitialProfileName(fetchedName)
             }
+          }
+          if (data?.email) {
+            setProfileEmail(data.email)
+            setInitialProfileEmail(data.email)
           }
         })
         .catch(() => {
@@ -4792,6 +4616,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       }
 
       if (res?.success || res?.id || res?.data) {
+        setInitialProfileName(trimmedName)
+        setInitialProfileEmail(trimmedEmail)
         if (refreshMe) await refreshMe()
         setProfileSuccess("Changes saved successfully!")
         setTimeout(() => setProfileSuccess(''), 4000)
@@ -4807,27 +4633,184 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
   useEffect(() => {
-    if (activeTab === "My Bookings") {
-      const mockEstBookings = estimationRepository.getMyEstimationsSync();
-      if (!user) {
-        setRealBookings(mockEstBookings);
-        setBookingsLoading(false);
-        return;
-      }
+    if (activeTab === "My Bookings" && user) {
       if (!realBookings || realBookings.length === 0) {
-        setBookingsLoading(true);
+        setBookingsLoading(true)
       }
       apiFetchCustomerBookings()
         .then(res => {
-          const backendBookings = res?.data || [];
-          setRealBookings([...mockEstBookings, ...backendBookings]);
+          if (res?.data) setRealBookings(res.data)
         })
-        .catch(() => {
-          setRealBookings(mockEstBookings);
-        })
-        .finally(() => setBookingsLoading(false));
+        .catch(console.error)
+        .finally(() => setBookingsLoading(false))
     }
-  }, [activeTab, user]);
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Wallet" && user) {
+      setWalletLoading(true)
+      apiRequest("/wallet/", { method: "GET" })
+        .then(res => { if (res?.data) setWalletData(res.data) })
+        .catch(console.error)
+        .finally(() => setWalletLoading(false))
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "Referral Code" && user) {
+      setReferralLoading(true)
+      apiRequest("/referral-code/", { method: "GET" })
+        .then(res => { if (res?.data) setReferralData(res.data) })
+        .catch(console.error)
+        .finally(() => setReferralLoading(false))
+    }
+  }, [activeTab, user])
+
+  const loadAmcSeries = () => {
+    setAmcLoading(true)
+    apiRequest("/booking-series/", { method: "GET" })
+      .then(res => { if (res?.data) setAmcSeries(res.data) })
+      .catch(console.error)
+      .finally(() => setAmcLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "AMC Bookings" && user) {
+      loadAmcSeries()
+    }
+  }, [activeTab, user])
+
+  const handleAmcStatusChange = (seriesId, newStatus) => {
+    setAmcActionError("")
+    apiRequest(`/booking-series/${seriesId}/status/`, { method: "PATCH", json: { status: newStatus } })
+      .then(res => {
+        if (res?.success === false) {
+          setAmcActionError(res?.error?.message || "Could not update this AMC series.")
+          return
+        }
+        loadAmcSeries()
+      })
+      .catch(() => setAmcActionError("Could not update this AMC series."))
+  }
+
+  const loadInsuranceClaims = () => {
+    setClaimsLoading(true)
+    apiRequest("/insurance-claims/", { method: "GET" })
+      .then(res => { if (res?.data) setInsuranceClaims(res.data) })
+      .catch(console.error)
+      .finally(() => setClaimsLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === "Insurance Claims" && user) {
+      loadInsuranceClaims()
+    }
+  }, [activeTab, user])
+
+  const eligibleInsuranceBookings = (realBookings || []).filter(b => b.insurance_opted_in && b.status === "completed")
+
+  const handleFileInsuranceClaim = async (e) => {
+    e.preventDefault()
+    setClaimError("")
+    if (!claimBookingId || !claimDescription.trim() || !claimAmount) {
+      setClaimError("Please choose a booking, describe the damage, and enter a claimed amount.")
+      return
+    }
+    setClaimSubmitting(true)
+    try {
+      const form = new FormData()
+      form.append("booking_id", claimBookingId)
+      form.append("description", claimDescription)
+      form.append("claimed_amount", claimAmount)
+      const res = await apiRequest("/insurance-claims/", { method: "POST", body: form })
+      if (res?.success === false) {
+        setClaimError(res?.error?.message || "Could not file this claim.")
+        return
+      }
+      setClaimBookingId(""); setClaimDescription(""); setClaimAmount("")
+      loadInsuranceClaims()
+    } catch (err) {
+      setClaimError(err?.body?.error?.message || "Could not file this claim.")
+    } finally {
+      setClaimSubmitting(false)
+    }
+  }
+
+  const toggleStopsEditor = (b) => {
+    setStopsError(''); setStopsSavedMsg('')
+    if (stopsEditorBookingId === b.id) {
+      setStopsEditorBookingId(null)
+      return
+    }
+    setStopsEditorBookingId(b.id)
+    setStopsLoading(true)
+    apiRequest(`/booking/${b.id}/stops/`, { method: 'GET' })
+      .then(res => {
+        const stops = (res?.data || []).map(s => ({
+          stop_type: s.stop_type || 'WAYPOINT',
+          address: s.address || '',
+          contact_name: s.contact_name || '',
+          contact_phone: s.contact_phone || '',
+          notes: s.notes || '',
+        }))
+        setStopsDraft(stops)
+      })
+      .catch(() => setStopsError('Could not load existing stops.'))
+      .finally(() => setStopsLoading(false))
+  }
+
+  const addStopRow = () => {
+    setStopsDraft(prev => [...prev, { stop_type: 'WAYPOINT', address: '', contact_name: '', contact_phone: '', notes: '' }])
+  }
+
+  const removeStopRow = (idx) => {
+    setStopsDraft(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const updateStopRow = (idx, field, value) => {
+    setStopsDraft(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  }
+
+  const saveStops = async (bookingId) => {
+    setStopsError(''); setStopsSavedMsg('')
+    if (stopsDraft.some(s => !s.address.trim())) {
+      setStopsError('Every stop needs an address.')
+      return
+    }
+    setStopsSaving(true)
+    try {
+      const res = await apiRequest(`/booking/${bookingId}/stops/`, { method: 'PUT', json: { stops: stopsDraft } })
+      if (res?.success === false) {
+        setStopsError(res?.error?.message || 'Could not save stops.')
+        return
+      }
+      setStopsSavedMsg('Stops saved.')
+    } catch (err) {
+      setStopsError(err?.body?.error?.message || 'Could not save stops.')
+    } finally {
+      setStopsSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "Notification Settings" && user) {
+      setNotifLoading(true)
+      apiRequest("/notification-preferences/", { method: "GET" })
+        .then(res => { if (res?.data) setNotifPrefs(res.data) })
+        .catch(console.error)
+        .finally(() => setNotifLoading(false))
+    }
+  }, [activeTab, user])
+
+  const toggleNotifPref = (field) => {
+    if (!notifPrefs) return
+    const next = { ...notifPrefs, [field]: !notifPrefs[field] }
+    setNotifPrefs(next)
+    setNotifSaving(true)
+    apiRequest("/notification-preferences/", { method: "PATCH", json: { [field]: next[field] } })
+      .catch(console.error)
+      .finally(() => setNotifSaving(false))
+  }
 
   // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
   // ── Reschedule State ────────────────────────────────────────────────────────
@@ -5356,10 +5339,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
 
-  const initialFullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '') || ''
-  const initialEmail = user?.email || ''
-  const hasProfileChanges = Boolean(profileName.trim() && (profileName.trim() !== initialFullName.trim() || (profileEmail || '').trim() !== initialEmail.trim()))
-
   const userFullName = (profileName && profileName.trim()) || user?.fullName || (user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : '') || (user?.first_name ? `${user.first_name} ${user?.last_name || ''}`.trim() : '') || (user?.name || '') || (user?.email ? user.email.split('@')[0] : 'Customer')
   const userEmail = profileEmail || user?.email || ''
   const userPhone = profilePhone || user?.phone || ''
@@ -5404,6 +5383,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "My Profile", icon: User },
     { id: "Saved Addresses", icon: MapPin },
     { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
+    { id: "Wallet", icon: Wallet },
+    { id: "Referral Code", icon: Gift },
+    { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
+    { id: "Insurance Claims", icon: ShieldCheck },
+    { id: "Notification Settings", icon: Settings },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -5679,40 +5663,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>
-                              {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? "AC Inspection" : (b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}
-                            </span>
-                            {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? (
-                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>
-                                  Estimation
-                                </span>
-                                {(b.status === "CANCELLED" || b.status === "cancelled") && (
-                                  <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
-                                    Cancelled
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
-                                {b.status_display || b.status}
-                              </span>
-                            )}
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
+                            <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
                           </div>
-                          {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") && b.acDetails && (
-                            <div style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 700, marginBottom: 4 }}>
-                              {b.acDetails.brand || "AC"} {b.acDetails.type || "Split"} AC • {b.acDetails.capacity || "1.5 Ton"} • Qty: {b.acDetails.quantity || 1}
-                            </div>
-                          )}
-                          {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") && b.customerReportedIssue && (
-                            <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600, marginBottom: 4 }}>
-                              Customer reported: <strong>{b.customerReportedIssue}</strong>
-                            </div>
-                          )}
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
                           {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
-                          {isRescheduleEligible && !(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") && (
+                          {isRescheduleEligible && (
                             <div style={{ marginTop: 6 }}>
                               <button
                                 onClick={() => {
@@ -5731,15 +5688,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: (b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? 4 : 12, fontSize: '1.05rem' }}>
-                            {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? `₹${b.total_amount || 199}` : (b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending'))}
+                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
+                            {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
                           </div>
-                          {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") && (
-                            <div style={{ fontSize: '0.72rem', color: (b.status === "CANCELLED" || b.status === "cancelled") ? '#dc2626' : '#64748b', fontWeight: 700, marginBottom: 8 }}>
-                              {(b.status === "CANCELLED" || b.status === "cancelled") ? "Cancelled" : (b.status_display || "Estimation Requested")}
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                             {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
                               <button
                                 onClick={(e) => {
@@ -5753,23 +5705,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <MapPin size={14} /> Track Live
                               </button>
                             )}
-                            {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") && b.status !== "CANCELLED" && b.status !== "cancelled" && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm("Are you sure you want to cancel this AC Inspection request?")) {
-                                    estimationRepository.cancelEstimationBookingSync(b.id, "Cancelled by customer");
-                                    setRealBookings(estimationRepository.getMyEstimationsSync());
-                                  }
-                                }}
-                                style={{ fontSize: '0.82rem', padding: '7px 14px', borderRadius: 8, border: '1px solid #fca5a5', background: '#fef2f2', fontWeight: 700, cursor: 'pointer', color: '#b91c1c', transition: 'all 0.15s' }}
-                                onMouseOver={e => e.currentTarget.style.background = '#fee2e2'}
-                                onMouseOut={e => e.currentTarget.style.background = '#fef2f2'}
-                              >
-                                Cancel Request
-                              </button>
-                            )}
                             <button
                               onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
                               style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
@@ -5777,12 +5712,65 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                            </button>
-                          </div>
+                          </button>
                         </div>
-                      </div>
 
-                      {b.child_requests && b.child_requests.length > 0 && (
+                        {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
+                        {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
+                          <div style={{ marginTop: 8 }}>
+                            <button
+                              onClick={() => toggleStopsEditor(b)}
+                              style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                              <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
+                            </button>
+                            {stopsEditorBookingId === b.id && (
+                              <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                {stopsError && (
+                                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
+                                )}
+                                {stopsSavedMsg && (
+                                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
+                                )}
+                                {stopsLoading ? (
+                                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
+                                ) : (
+                                  <>
+                                    {stopsDraft.length === 0 && (
+                                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
+                                    )}
+                                    {stopsDraft.map((s, idx) => (
+                                      <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                                        <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                                          <option value="PICKUP">Pickup</option>
+                                          <option value="WAYPOINT">Stop</option>
+                                          <option value="DROP">Drop</option>
+                                        </select>
+                                        <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                        <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                        <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                      <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                                        + Add Stop
+                                      </button>
+                                      <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
+                                        {stopsSaving ? 'Saving...' : 'Save Stops'}
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -5814,53 +5802,69 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     {selectedMockBooking?.id === b.id && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 16px 16px', padding: '1.5rem', marginTop: '-16px', position: 'relative', zIndex: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
-                          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>
-                            {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? "🔍 AC Inspection & Estimation Overview" : "📋 Full Booking Overview"}
-                          </div>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: (b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? '#4338ca' : '#059669', background: (b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? '#e0e7ff' : '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
+                          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>📋 Full Booking Overview</div>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
-                        {(b.jobType === "ESTIMATION" || b.job_type === "ESTIMATION") ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                            <div style={{ background: 'white', borderRadius: 14, padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                              <div style={{ fontSize: '0.72rem', fontWeight: 900, color: '#4338ca', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.05em' }}>
-                                AC Inspection Specifications
+                        {/* Cash Collection Confirmation OTP Box */}
+                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+                            border: '1.5px solid #10b981',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            marginBottom: 16,
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.12)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                                <KeyRound size={22} />
                               </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, fontSize: '0.82rem' }}>
-                                <div><span style={{ color: '#64748b' }}>Appliance:</span> <strong style={{ color: '#0f172a' }}>{b.acDetails?.brand || "AC"} {b.acDetails?.type || "Split"} AC</strong></div>
-                                <div><span style={{ color: '#64748b' }}>Capacity:</span> <strong style={{ color: '#0f172a' }}>{b.acDetails?.capacity || "1.5 Ton"}</strong></div>
-                                <div><span style={{ color: '#64748b' }}>Quantity:</span> <strong style={{ color: '#0f172a' }}>{b.acDetails?.quantity || 1} Unit</strong></div>
-                                <div><span style={{ color: '#64748b' }}>Inspection Fee:</span> <strong style={{ color: '#4338ca', fontSize: '0.92rem' }}>₹{b.total_amount || 199}</strong></div>
+                              <div>
+                                <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  💰 Cash Payment Confirmation OTP
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#065f46', marginTop: 2, fontWeight: 500 }}>
+                                  Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job.
+                                </div>
                               </div>
-                              {b.customerReportedIssue && (
-                                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', fontSize: '0.82rem', color: '#1e1b4b' }}>
-                                  <span style={{ color: '#64748b' }}>Customer Reported Issue:</span> <strong style={{ color: '#4338ca' }}>{b.customerReportedIssue}</strong>
-                                </div>
-                              )}
-                              {(b.status === "CANCELLED" || b.status === "cancelled") && (
-                                <div style={{ marginTop: 10, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, color: '#b91c1c', fontSize: '0.82rem' }}>
-                                  <strong>⚠️ Booking Cancelled</strong>
-                                  {b.cancellation_reason && <span> — Reason: {b.cancellation_reason}</span>}
-                                </div>
-                              )}
-                              {b.notes && (
-                                <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#334155' }}>
-                                  <span style={{ color: '#64748b' }}>Customer Notes:</span> {b.notes}
-                                </div>
-                              )}
-                              {b.address && (
-                                <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#334155' }}>
-                                  <span style={{ color: '#64748b' }}>Service Location:</span> {b.address}
-                                </div>
+                            </div>
+                            <div style={{
+                              fontFamily: 'monospace',
+                              fontSize: '1.5rem',
+                              fontWeight: 900,
+                              color: '#047857',
+                              letterSpacing: 4,
+                              background: 'white',
+                              padding: '8px 18px',
+                              borderRadius: 10,
+                              border: '1.5px solid #a7f3d0',
+                              boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {/* Bug found: this used to fall back to a hardcoded
+                                  '405863' whenever the real OTP wasn't resolved yet
+                                  (this box can render on payment_status === 'cash_pending'
+                                  alone, before payment_confirmation_otp exists) --
+                                  showing a fixed, meaningless code the customer could
+                                  hand to a technician as if it were real, breaking the
+                                  cash-confirmation flow. Show an honest pending state
+                                  instead of fabricating a code. */}
+                              {b.payment_confirmation_otp || (
+                                <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
+                                  Generating OTP...
+                                </span>
                               )}
                             </div>
-
-                            <EstimationTimeline currentStatus={b.status || "ESTIMATION_REQUESTED"} isCustomerView={true} />
                           </div>
-                        ) : (
-                          <>
+                        )}
+
                         {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) && (
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -5954,7 +5958,18 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 const tipAmount = Number(b.tip_amount || 0);
                                 const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                                 const rawStored = Number(b.total_amount || 0);
-                                const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                                // Bug found: this heuristic used to override a correctly-
+                                // discounted rawStored (b.total_amount) with a higher,
+                                // discount-blind computedGrand estimate whenever
+                                // rawStored < computedGrand -- which is exactly what
+                                // happens on every coupon booking, since computedGrand
+                                // never subtracted a discount (discount was always 0
+                                // before b.discount_amount existed in the API). Now that
+                                // the backend total_amount is authoritative end-to-end
+                                // (coupon-persistence + serializer fixes), trust it
+                                // directly; only fall back to the local estimate when
+                                // the API sent no usable total at all.
+                                const finalTot = rawStored > 0 ? rawStored : computedGrand;
                                 return Number(finalTot).toLocaleString('en-IN');
                               })()}
                             </div>
@@ -5999,7 +6014,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             const tipAmount = Number(b.tip_amount || 0);
                             const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
                             const rawStored = Number(b.total_amount || 0);
-                            const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                            // See the matching comment in the list-total block above --
+                            // trust the now-authoritative rawStored (b.total_amount)
+                            // directly instead of this discount-blind override heuristic.
+                            const finalTot = rawStored > 0 ? rawStored : computedGrand;
 
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
@@ -6151,8 +6169,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             })}
                           </div>
                         </div>
-                          </>
-                        )}
                       </motion.div>
                     )}
                   </React.Fragment>
@@ -6234,6 +6250,326 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 </div>
               </div>
             </div>
+          </motion.div>
+        )
+      case "Wallet":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {walletLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading wallet...</div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Wallet Balance</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: 6 }}>
+                    {BOOKING_CURRENCY_SYMBOL}{Number(walletData?.balance || 0).toFixed(2)}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Transaction History</div>
+                {!walletData?.transactions || walletData.transactions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                    <Wallet size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                    <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No wallet transactions yet.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {walletData.transactions.map((tx) => (
+                      <div key={tx.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{tx.reason}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>{tx.note || ''}</div>
+                        </div>
+                        <div style={{ fontWeight: 800, color: tx.tx_type === 'CREDIT' ? '#16a34a' : '#dc2626', fontSize: '0.95rem' }}>
+                          {tx.tx_type === 'CREDIT' ? '+' : '-'}{BOOKING_CURRENCY_SYMBOL}{Number(tx.amount).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
+        )
+      case "Referral Code":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {referralLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading referral code...</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', textAlign: 'center' }}>
+                <Gift size={32} style={{ color: '#5d5fef', marginBottom: 10 }} />
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Share your code, earn rewards</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.1em', margin: '10px 0' }}>
+                  {referralData?.code || '—'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+                  {referralData?.total_referrals ?? referralData?.referral_count ?? 0} friend(s) referred so far
+                </div>
+                <button
+                  onClick={() => { if (referralData?.code) navigator.clipboard?.writeText(referralData.code) }}
+                  style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Copy size={16} /> Copy Code
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      case "AMC Bookings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {amcActionError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                {amcActionError}
+              </div>
+            )}
+            {amcLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading recurring bookings...</div>
+            ) : !amcSeries || amcSeries.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <Repeat size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No recurring (AMC) bookings set up yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {amcSeries.map((s) => (
+                  <div key={s.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{s.issue_title}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 4 }}>{s.address}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          {s.frequency} · Next: {s.next_run_date} · {s.occurrences_generated} generated
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: s.status === 'ACTIVE' ? '#dcfce7' : s.status === 'PAUSED' ? '#fef9c3' : '#fee2e2',
+                        color: s.status === 'ACTIVE' ? '#16a34a' : s.status === 'PAUSED' ? '#a16207' : '#dc2626',
+                      }}>
+                        {s.status}
+                      </span>
+                    </div>
+                    {s.status !== 'CANCELLED' && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        {s.status === 'ACTIVE' ? (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'PAUSED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PauseCircle size={14} /> Pause
+                          </button>
+                        ) : (
+                          <button onClick={() => handleAmcStatusChange(s.id, 'ACTIVE')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                            <PlayCircle size={14} /> Resume
+                          </button>
+                        )}
+                        <button onClick={() => handleAmcStatusChange(s.id, 'CANCELLED')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>
+                          <XCircle size={14} /> Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Insurance Claims":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white', marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>File a New Claim</div>
+              {eligibleInsuranceBookings.length === 0 ? (
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                  No completed, insurance-opted-in bookings are eligible for a claim right now.
+                </div>
+              ) : (
+                <form onSubmit={handleFileInsuranceClaim}>
+                  {claimError && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>
+                      {claimError}
+                    </div>
+                  )}
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Booking</label>
+                  <select value={claimBookingId} onChange={e => setClaimBookingId(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }}>
+                    <option value="">Select a booking...</option>
+                    {eligibleInsuranceBookings.map(b => (
+                      <option key={b.id} value={b.id}>{b.request_id || b.id} — {b.issue_title}</option>
+                    ))}
+                  </select>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>What happened?</label>
+                  <textarea value={claimDescription} onChange={e => setClaimDescription(e.target.value)} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="Describe the damage or loss..." />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginTop: 14 }}>Claimed Amount ({BOOKING_CURRENCY_SYMBOL})</label>
+                  <input type="number" min="0" step="0.01" value={claimAmount} onChange={e => setClaimAmount(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: '0.85rem', marginTop: 6, boxSizing: 'border-box' }} placeholder="0.00" />
+                  <button type="submit" disabled={claimSubmitting} style={{ marginTop: 16, background: '#5d5fef', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: claimSubmitting ? 'not-allowed' : 'pointer', opacity: claimSubmitting ? 0.6 : 1 }}>
+                    {claimSubmitting ? 'Submitting...' : 'File Claim'}
+                  </button>
+                </form>
+              )}
+            </div>
+            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 10 }}>Your Claims</div>
+            {claimsLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading claims...</div>
+            ) : !insuranceClaims || insuranceClaims.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <ShieldCheck size={32} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>No claims filed yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {insuranceClaims.map(c => (
+                  <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{c.description}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                          Claimed {BOOKING_CURRENCY_SYMBOL}{Number(c.claimed_amount).toFixed(2)}
+                          {c.approved_amount != null ? ` · Approved ${BOOKING_CURRENCY_SYMBOL}${Number(c.approved_amount).toFixed(2)}` : ''}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                        background: c.status === 'PAID' ? '#dcfce7' : c.status === 'REJECTED' ? '#fee2e2' : '#e0e7ff',
+                        color: c.status === 'PAID' ? '#16a34a' : c.status === 'REJECTED' ? '#dc2626' : '#4338ca',
+                      }}>
+                        {c.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )
+      case "Notification Settings":
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            {notifLoading || !notifPrefs ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>{notifLoading ? 'Loading preferences...' : 'No preferences found.'}</div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', background: 'white' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 4 }}>Notification Preferences</div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 12 }}>Choose which updates you want to receive.{notifSaving ? ' Saving...' : ''}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Booking Confirmations</span>
+                  <button
+                    onClick={() => toggleNotifPref("booking_confirmations")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.booking_confirmations ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.booking_confirmations ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Reschedule Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("reschedule_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.reschedule_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.reschedule_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Technician Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("technician_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.technician_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.technician_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Completion & Feedback</span>
+                  <button
+                    onClick={() => toggleNotifPref("completion_feedback")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.completion_feedback ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.completion_feedback ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Payment Receipts</span>
+                  <button
+                    onClick={() => toggleNotifPref("payment_receipts")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.payment_receipts ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.payment_receipts ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Refund Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("refund_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.refund_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.refund_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Complaint Updates</span>
+                  <button
+                    onClick={() => toggleNotifPref("complaint_updates")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.complaint_updates ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.complaint_updates ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>Promotional Offers</span>
+                  <button
+                    onClick={() => toggleNotifPref("promotional_offers")}
+                    style={{
+                      width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', position: 'relative',
+                      background: notifPrefs.promotional_offers ? '#5d5fef' : '#e2e8f0', transition: 'background 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3, left: notifPrefs.promotional_offers ? 23 : 3, width: 18, height: 18, borderRadius: '50%',
+                      background: 'white', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )
       case "Help & Support":
@@ -7649,7 +7985,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   // visitor to sign in should open CustomerEntryFlowModal instead (the one
   // canonical customer login flow); this modal simply renders nothing until
   // `user` exists.
-  if (!effectiveUser) {
+  if (!user) {
     return null
   }
 
@@ -7665,20 +8001,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         <div style={{ width: 280, background: 'var(--sevo-surface-raised, #f8fafc)', borderRight: '1px solid var(--sevo-border, #e2e8f0)', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--sevo-surface, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--sevo-border, #e2e8f0)', flexShrink: 0, overflow: 'hidden' }}>
-              {avatarPreview || effectiveUser?.avatar_url || effectiveUser?.avatar ? (
-                <img src={avatarPreview || effectiveUser?.avatar_url || effectiveUser?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {avatarPreview || user?.avatar_url || user?.avatar ? (
+                <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <User size={22} color="var(--sevo-text-muted, #94a3b8)" />
               )}
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileName || effectiveUser?.fullName || effectiveUser?.username || 'Customer'}</div>
+              <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileName || user?.fullName || user?.username || 'Customer'}</div>
               <div style={{ fontSize: '0.78rem', color: 'var(--sevo-text-secondary, #64748b)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {profilePhone || effectiveUser?.phone ? `+91 ${profilePhone || effectiveUser?.phone}` : (profileEmail || effectiveUser?.email || '')}
+                {profilePhone || user?.phone ? `+91 ${profilePhone || user?.phone}` : (profileEmail || user?.email || '')}
               </div>
-              {(profileCustomerId || effectiveUser?.customer_id || effectiveUser?.customerId) && (
+              {(profileCustomerId || user?.customer_id || user?.customerId) && (
                 <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--sevo-primary-light, #eff6ff)', color: 'var(--sevo-primary, #1d4ed8)', border: '1px solid var(--sevo-border, #bfdbfe)', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'monospace' }}>
-                  ID: {profileCustomerId || effectiveUser?.customer_id || effectiveUser?.customerId}
+                  ID: {profileCustomerId || user?.customer_id || user?.customerId}
                 </div>
               )}
             </div>
@@ -7736,7 +8072,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         </div>
 
         {/* Content Area */}
-        <div id="customer-account-content-pane" style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'var(--sevo-surface, white)', color: 'var(--sevo-text-primary, #0B172A)' }}>
+        <div style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'var(--sevo-surface, white)', color: 'var(--sevo-text-primary, #0B172A)' }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
             <div onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--sevo-surface-raised, #f1f5f9)', border: '1px solid var(--sevo-border, #e2e8f0)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--sevo-text-primary, #475569)', transition: 'all 0.2s' }}>
               <X size={18} />
@@ -8093,7 +8429,7 @@ function QuickCommerceCartCheckout({
       })
       try {
         localStorage.setItem("calservice_veg_food_cart", JSON.stringify(nextFoodCart))
-      } catch { }
+      } catch {}
 
       if (nextCart.length === 0) {
         setTimeout(() => {
@@ -8132,13 +8468,24 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
+    // Bug found: this used to fall back to a hardcoded "9876543210" and
+    // submit it as the real ServiceRequest.phone whenever a logged-in user
+    // had no phone on file (e.g. email/Google-only signup) -- a fake,
+    // non-functional number would be persisted as the delivery contact, so
+    // whoever fulfills the order would be calling a number that isn't the
+    // customer's. Require a real phone before checkout instead of
+    // fabricating one.
+    if (!user?.phone) {
+      setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
+      return
+    }
     setIsSubmitting(true)
     setErrorMsg("")
     try {
       const deliveryDate = vegTiming.deliveryDateStr
       const payload = {
         customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
-        phone: user?.phone || "9876543210",
+        phone: user.phone,
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
         description: `Quick Commerce Vegetable Order
@@ -8613,7 +8960,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 if (user?.id) {
                   setCustomerSelectedAddress(user.id, locObj)
                 }
-              } catch (e) { }
+              } catch (e) {}
               window.dispatchEvent(new Event("calservice_address_changed"))
             }
           }}
@@ -8643,21 +8990,12 @@ function StepWorkflowCheckout({
   error,
   onBack,
   setFormData,
-  setLocation,
-  estimationAcDetails,
-  onChangeEstimationAcDetails,
-  estimationSymptom,
-  onChangeEstimationSymptom,
-  estimationNotes,
-  onChangeEstimationNotes,
-  photoFile,
-  photoPreview,
-  onPhotoChange,
+  setLocation
 }) {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const routerLocation = useLocation()
-  const isEstimation = (cart && cart.some(c => c.jobType === "ESTIMATION" || c.id === "ac-inspection")) || routerLocation.state?.jobType === "ESTIMATION" || category?.jobType === "ESTIMATION";
-  const { user } = useAuth()
+  const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
   const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
   const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
   const [avoidCalling, setAvoidCalling] = useState(true)
@@ -8668,8 +9006,6 @@ function StepWorkflowCheckout({
   const [typedCouponCode, setTypedCouponCode] = useState("")
   const [couponError, setCouponError] = useState("")
   const [dbCoupons, setDbCoupons] = useState([])
-  const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
-  const [showInspectionSummaryModal, setShowInspectionSummaryModal] = useState(false)
 
   useEffect(() => {
     const handleAddressSync = () => {
@@ -8787,15 +9123,15 @@ function StepWorkflowCheckout({
         ? Math.min(itemTotal, appliedCoupon.discountValue)
         : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
-  const totalGst = (isFreeCategory || isEstimation) ? 0 : items.reduce((sum, item) => {
+  const totalGst = isFreeCategory ? 0 : items.reduce((sum, item) => {
     const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18
     return sum + (item.price * item.quantity * (rate / 100))
   }, 0)
   const roundedGst = Math.round(totalGst)
   const gstRate = items.length > 0 && items[0].gst_rate !== undefined ? Number(items[0].gst_rate) : 18
-  const platformFee = (itemTotal === 0 || isFreeCategory || isEstimation) ? 0 : Math.max(29, ...items.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
+  const platformFee = itemTotal === 0 || isFreeCategory ? 0 : Math.max(29, ...items.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
   const tipAmount = tip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
-  const grandTotal = isEstimation ? ESTIMATION_FEE : Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
+  const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
   const relatedServicesCatalog = {
     ac: [
@@ -8980,8 +9316,8 @@ function StepWorkflowCheckout({
               if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
-                } catch { }
-                navigate(routes?.landing || "/home", {
+                } catch {}
+                navigate(routes.landing || "/home", {
                   replace: true,
                   state: {
                     openFoodHealthModal: true,
@@ -8990,10 +9326,8 @@ function StepWorkflowCheckout({
                     foodCart: {},
                   }
                 })
-              } else if (typeof onBack === "function") {
-                onBack()
               } else {
-                navigate(routes?.landing || "/home")
+                onBack()
               }
             }}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95 border-none"
@@ -9006,7 +9340,7 @@ function StepWorkflowCheckout({
   }
 
   return (
-    <div className={`w-full ${isEstimation ? "max-w-3xl" : "max-w-6xl"} mx-auto px-4 py-6 font-sans text-slate-800`}>
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
 
       {/* Top Header Bar with Back to Services Button */}
       <div className="mb-6 flex items-center justify-between">
@@ -9018,35 +9352,12 @@ function StepWorkflowCheckout({
           <ChevronLeft size={16} />
           <span>Back to Services</span>
         </button>
-
-        {isEstimation && (
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-black text-xs uppercase tracking-wider">
-              AC Inspection Booking
-            </span>
-          </div>
-        )}
       </div>
 
-      <div className={isEstimation ? "space-y-6" : "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"}>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-        {/* MAIN / LEFT COLUMN: Steps / Workflow Accordion */}
-        <div className={isEstimation ? "space-y-6" : "lg:col-span-7 space-y-6"}>
-
-          {/* If Estimation: Step 1 AC Details Form */}
-          {isEstimation && (
-            <ACDetailsForm
-              acDetails={estimationAcDetails}
-              onChangeAcDetails={onChangeEstimationAcDetails}
-              customerReportedIssue={estimationSymptom}
-              onChangeSymptom={onChangeEstimationSymptom}
-              notes={estimationNotes}
-              onChangeNotes={onChangeEstimationNotes}
-              photoFile={photoFile}
-              photoPreview={photoPreview}
-              onPhotoChange={onPhotoChange}
-            />
-          )}
+        {/* LEFT COLUMN: Steps / Workflow Accordion */}
+        <div className="lg:col-span-7 space-y-6">
 
           {/* Main Accordion Card */}
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
@@ -9062,7 +9373,7 @@ function StepWorkflowCheckout({
                   <span className="text-sm font-extrabold text-slate-900">
                     {formData.phone ? `+91 ${formData.phone}` : "Not Provided"}
                   </span>
-                  <button onClick={() => setEditingPhone(!editingPhone)} className="text-xs font-bold text-emerald-700 hover:underline">
+                  <button onClick={() => setEditingPhone(!editingPhone)} className="text-xs font-bold text-indigo-600 hover:underline">
                     {editingPhone ? "Save" : "Change"}
                   </button>
                 </div>
@@ -9073,7 +9384,7 @@ function StepWorkflowCheckout({
                     value={formData.phone}
                     onChange={onChange}
                     placeholder="Enter phone number"
-                    className="mt-2 text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-full outline-none focus:border-emerald-500"
+                    className="mt-2 text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-full outline-none focus:border-indigo-500"
                   />
                 )}
               </div>
@@ -9089,14 +9400,15 @@ function StepWorkflowCheckout({
 
                 return (
                   <>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${!hasAddress
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${
+                      !hasAddress
                         ? "bg-slate-100 text-slate-500"
                         : isHome
-                          ? "bg-amber-100 text-amber-700 border border-amber-200"
-                          : isWork
-                            ? "bg-blue-100 text-blue-700 border border-blue-200"
-                            : "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                      }`}>
+                        ? "bg-amber-100 text-amber-700 border border-amber-200"
+                        : isWork
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                        : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    }`}>
                       {isHome ? <Home size={18} /> : isWork ? <Briefcase size={18} /> : <MapPin size={18} />}
                     </div>
 
@@ -9114,7 +9426,7 @@ function StepWorkflowCheckout({
                           <button
                             type="button"
                             onClick={() => setShowAddressDrawer(true)}
-                            className="border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95"
+                            className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95"
                           >
                             Change
                           </button>
@@ -9173,178 +9485,183 @@ function StepWorkflowCheckout({
                 <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
                   <Clock size={18} />
                 </div>
-                <div className="flex-1 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-500 block">Service Slot</span>
-                      <span className="text-[11px] text-slate-400">Select date &amp; time for technician visit</span>
-                    </div>
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
 
-                    {isSlotSelected && (
-                      <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
-                        <CheckCircle2 size={13} className="text-emerald-600" />
-                        <span>{selectedDate} • {selectedTime}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Date Pills */}
-                  <div>
-                    <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
-                      1. Select Date
-                    </label>
-                    <div className="flex flex-wrap gap-2 pb-1">
-                      {availableDates.map(item => {
-                        const isSel = selectedDate === item.dateStr
-                        return (
-                          <button
-                            type="button"
-                            key={item.dateStr}
-                            onClick={() => {
-                              onDateChange(item.dateStr)
-                              if (selectedTime && isSlotInPast(item.dateStr, selectedTime)) {
-                                onTimeChange("")
-                              }
-                            }}
-                            className={`flex flex-col items-center justify-center min-w-[72px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSel
-                              ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                              : "bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-slate-50"
-                              }`}
-                          >
-                            <span className="text-[10px] font-bold opacity-80 uppercase">{item.dayName}</span>
-                            <span className="text-sm font-black mt-0.5">{item.dayNum}</span>
-                          </button>
-                        )
-                      })}
+                  {/* Select button or current slot */}
+                  {isSlotSelected && !showSlotPicker ? (
+                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                      <div>
+                        <span className="text-xs font-black text-indigo-950 block">
+                          {selectedDate}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-700">
+                          {selectedTime}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                          if (!hasAddr) {
+                            setShowAddressDrawer(true);
+                            setSlotRevalidateNotice("Please select your service address first to check availability.");
+                            return;
+                          }
+                          setShowSlotPicker(true);
+                        }}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        Change slot
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Time Slot Grid */}
-                  <div>
-                    <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
-                      2. Select Time Slot {selectedTime ? <span className="text-emerald-600 font-black">({selectedTime})</span> : <span className="text-amber-600 font-semibold normal-case">— click a slot below</span>}
-                    </label>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {timeSlots.map(t => {
-                        const isSel = selectedTime === t
-                        const isPast = isSlotInPast(selectedDate, t)
-                        return (
-                          <button
-                            type="button"
-                            key={t}
-                            disabled={isPast}
-                            onClick={() => {
-                              if (isPast) return
-                              onTimeChange(t)
-                            }}
-                            className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
-                              ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
-                              : isSel
-                                ? "bg-emerald-600 text-white border-emerald-600 shadow-sm font-black ring-2 ring-emerald-600/30 cursor-pointer"
-                                : "bg-slate-50 text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-white cursor-pointer"
-                              }`}
-                          >
-                            {t}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                        if (!hasAddr) {
+                          setShowAddressDrawer(true);
+                          setSlotRevalidateNotice("Please select your service address first to check availability.");
+                          return;
+                        }
+                        setShowSlotPicker(true);
+                      }}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
+                    >
+                      Select time & date
+                    </button>
+                  )}
 
                   {slotRevalidateNotice && (
-                    <div className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-xl flex items-center gap-1.5">
+                    <div className="mt-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-xl flex items-center gap-1.5">
                       <AlertCircle size={14} className="shrink-0 text-amber-600" />
                       <span>{slotRevalidateNotice}</span>
+                    </div>
+                  )}
+
+                  {/* Inline Slot Picker Panel */}
+                  {showSlotPicker && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+
+                      {/* Date Pills */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Date
+                        </label>
+                        <div className="flex flex-wrap gap-2 pb-1">
+                          {availableDates.map(item => {
+                            const isSel = selectedDate === item.dateStr
+                            return (
+                              <button
+                                key={item.dateStr}
+                                onClick={() => {
+                                  onDateChange(item.dateStr)
+                                  if (selectedTime && isSlotInPast(item.dateStr, selectedTime)) {
+                                    onTimeChange("")
+                                  }
+                                }}
+                                className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                  : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                                  }`}
+                              >
+                                <span className="text-[10px] font-bold opacity-80 uppercase">{item.dayName}</span>
+                                <span className="text-sm font-black mt-0.5">{item.dayNum}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Time Slot Grid */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Time Slot
+                        </label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {timeSlots.map(t => {
+                            const isSel = selectedTime === t
+                            const isPast = isSlotInPast(selectedDate, t)
+                            return (
+                              <button
+                                key={t}
+                                disabled={isPast}
+                                onClick={() => {
+                                  if (isPast) return
+                                  onTimeChange(t)
+                                  if (selectedDate) setShowSlotPicker(false)
+                                }}
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  : isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
+                                  }`}
+                              >
+                                {t}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {isSlotSelected && (
+                        <div className="pt-2 text-right">
+                          <button
+                            onClick={() => setShowSlotPicker(false)}
+                            className="bg-indigo-600 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-xs hover:bg-indigo-700 transition-all"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Step 4: Price Details & Payment Method */}
+            {/* Step 4: Payment Method */}
             <div className={`p-5 flex items-start gap-4 ${!isSlotSelected ? "opacity-50" : ""}`}>
               <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
                 <CreditCard size={18} />
               </div>
-              <div className="flex-1 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-500 block">
-                    {isEstimation ? "Price Details & Payment" : "Payment Method"}
-                  </span>
-                  {isEstimation && (
-                    <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
-                      Estimation
-                    </span>
-                  )}
-                </div>
-
-                {isEstimation && (
-                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3 text-left">
-                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                      <div className="font-extrabold text-slate-900 text-xs">
-                        {estimationAcDetails?.brand || "LG"} {estimationAcDetails?.type || "Split"} AC
-                      </div>
-                      <div className="text-slate-500 font-semibold text-[11px] flex items-center gap-2">
-                        <span>{estimationAcDetails?.capacity || "1.5 Ton"}</span>
-                        <span>•</span>
-                        <span>{estimationAcDetails?.quantity || 1} Unit{Number(estimationAcDetails?.quantity) > 1 ? "s" : ""}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between text-slate-600">
-                        <span>Inspection &amp; Diagnosis Fee</span>
-                        <span className="font-bold text-slate-900">₹{ESTIMATION_FEE}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span>Taxes and Convenience Fee</span>
-                        <span className="font-bold text-emerald-600">FREE</span>
-                      </div>
-                      <div className="border-t border-slate-200/70 pt-2 flex justify-between items-baseline font-black text-slate-900 text-sm">
-                        <div>
-                          <div>Total Amount to Pay</div>
-                          <div className="text-[10px] text-slate-400 font-normal">Pay after technician inspection</div>
-                        </div>
-                        <span className="text-base text-emerald-700 font-black">₹{ESTIMATION_FEE}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-500 block mb-2">Payment Method</span>
 
                 {isSlotSelected ? (
                   <div className="space-y-3">
                     <div
                       onClick={() => setPayMethod("online")}
                       className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
-                        ? "border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-600"
+                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
                         : "border-slate-200 hover:border-slate-300"
                         }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">💳</div>
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
                         <div>
                           <span className="text-xs font-black text-slate-900 block">Pay Online</span>
                           <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
                         </div>
                       </div>
-                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
                     </div>
 
                     <div
                       onClick={() => setPayMethod("cash")}
                       className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "cash"
-                        ? "border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-600"
+                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
                         : "border-slate-200 hover:border-slate-300"
                         }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">💵</div>
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💵</div>
                         <div>
                           <span className="text-xs font-black text-slate-900 block">Pay After Service</span>
                           <span className="text-[10px] text-slate-500 font-medium">Pay cash or UPI to expert</span>
                         </div>
                       </div>
-                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">CASH</span>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">CASH</span>
                     </div>
 
                     {error && (
@@ -9354,27 +9671,9 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      id="btn-confirm-booking-main"
-                      onClick={() => {
-                        if (isEstimation) {
-                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
-                          if (!hasAddr) {
-                            setShowAddressDrawer(true);
-                            setSlotRevalidateNotice("Please select your service address before proceeding.");
-                            return;
-                          }
-                          if (!isSlotSelected) {
-                            setShowSlotPicker(true);
-                            setSlotRevalidateNotice("Please select your preferred date and time slot.");
-                            return;
-                          }
-                          setShowInspectionSummaryModal(true);
-                          return;
-                        }
-                        onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon);
-                      }}
+                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon)}
                       disabled={loading}
-                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300 cursor-pointer"
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
                     >
                       {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
                     </button>
@@ -9400,11 +9699,11 @@ function StepWorkflowCheckout({
 
         </div>
 
-        {/* RIGHT COLUMN: Cart Items & Payment Summary (Only rendered for standard multi-item catalog booking) */}
-        {!isEstimation && (
-          <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
-            {/* Items Card */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+        {/* RIGHT COLUMN: Cart Items & Payment Summary */}
+        <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
+
+          {/* Items Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
             <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
               {displayCategoryTitle}
             </h4>
@@ -9646,8 +9945,8 @@ function StepWorkflowCheckout({
 
           {/* Urban Company "People also take" Slider Component */}
           <PeopleAlsoTake category={category} cart={cart} setCart={setCart} />
-          </div>
-        )}
+
+        </div>
 
       </div>
 
@@ -9911,28 +10210,6 @@ function StepWorkflowCheckout({
           </div>
         </div>
       )}
-
-      {/* AC Inspection Summary Confirmation Popup Modal */}
-      {isEstimation && (
-        <ACInspectionSummaryModal
-          isOpen={showInspectionSummaryModal}
-          onClose={() => setShowInspectionSummaryModal(false)}
-          onConfirm={() => {
-            setShowInspectionSummaryModal(false);
-            onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon);
-          }}
-          isSubmitting={loading}
-          estimationAcDetails={estimationAcDetails}
-          estimationSymptom={estimationSymptom}
-          estimationNotes={estimationNotes}
-          photoPreview={photoPreview}
-          formData={formData}
-          selectedDate={selectedDate}
-          selectedTime={selectedTime}
-          fee={ESTIMATION_FEE}
-          payMethod={payMethod}
-        />
-      )}
     </div>
   );
 }
@@ -10009,7 +10286,7 @@ export function BookingPage() {
       const saved = sessionStorage.getItem("calservice_last_booking")
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed && (parsed.status || "").toLowerCase() !== "cancelled") return parsed
+        if (parsed && parsed.status !== "cancelled") return parsed
       }
     } catch (e) { }
     return null
@@ -10117,29 +10394,17 @@ export function BookingPage() {
       }
     }
   }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
-  const [selDate, setSelDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  })
+  const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [estimationAcDetails, setEstimationAcDetails] = useState({
-    type: "Split",
-    brand: "LG",
-    capacity: "1.5 Ton",
-    quantity: 1,
-  })
-  const [estimationSymptom, setEstimationSymptom] = useState("Not cooling")
-  const [estimationNotes, setEstimationNotes] = useState("")
   const [formData, setFormData] = useState(() => {
     let initAddress = ""
-    let initLat = "12.7409"
-    let initLng = "77.8253"
-    let initFlat = "Flat 302"
-    let initLandmark = "Near Reliance Digital"
-    let initSavedAddrId = "addr_test_1"
+    let initLat = ""
+    let initLng = ""
+    let initFlat = ""
+    let initLandmark = ""
+    let initSavedAddrId = null
     let initTag = "Home"
 
     if (routerLocation.state?.address) {
@@ -10152,31 +10417,23 @@ export function BookingPage() {
       if (routerLocation.state?.address_type) initTag = routerLocation.state.address_type
     } else {
       try {
-        const parsed = getCustomerSelectedAddress(user?.id) || getCustomerSelectedAddress(999)
+        const parsed = getCustomerSelectedAddress(user?.id)
         if (parsed && (parsed.formatted_address || parsed.address)) {
           initAddress = parsed.formatted_address || parsed.address
-          initLat = parsed.latitude ? String(parsed.latitude) : "12.7409"
-          initLng = parsed.longitude ? String(parsed.longitude) : "77.8253"
-          initFlat = parsed.flat_house_no || parsed.house_number || "Flat 302"
-          initLandmark = parsed.landmark || "Near Reliance Digital"
-          initSavedAddrId = parsed.id || parsed.saved_address_id || "addr_test_1"
+          initLat = parsed.latitude ? String(parsed.latitude) : ""
+          initLng = parsed.longitude ? String(parsed.longitude) : ""
+          initFlat = parsed.flat_house_no || parsed.house_number || ""
+          initLandmark = parsed.landmark || ""
+          initSavedAddrId = parsed.id || parsed.saved_address_id || null
           initTag = parsed.address_type || parsed.tag || "Home"
-        } else {
-          initAddress = "Plot 42, 3rd Cross, Rayakottai Road, Hosur, Tamil Nadu 635109"
         }
-      } catch (e) {
-        initAddress = "Plot 42, 3rd Cross, Rayakottai Road, Hosur, Tamil Nadu 635109"
-      }
-    }
-
-    if (!initAddress) {
-      initAddress = "Plot 42, 3rd Cross, Rayakottai Road, Hosur, Tamil Nadu 635109"
+      } catch (e) { }
     }
 
     return {
-      customer_name: user?.fullName || user?.username || "CalServices Customer",
-      phone: user?.phone || "9876543210",
-      email: user?.email || "customer@calservices.in",
+      customer_name: "",
+      phone: "",
+      email: "",
       issue_title: "",
       description: "",
       address: initAddress,
@@ -10338,8 +10595,14 @@ export function BookingPage() {
   useEffect(() => {
     async function loadCatalog() {
       try {
-        const catRes = await apiRequest("/catalog/categories/")
-        const svcRes = await apiRequest("/catalog/services/")
+        // NOTE: "/catalog/categories/" and "/catalog/services/" were dead
+        // routes (no matching backend URL) -- this silently always fell
+        // through to the hardcoded CATEGORIES/PACKAGES bootstrap below, so
+        // admin category add/update/remove never reached the customer UI.
+        // "/settings/catalog/public/categories/" is the real, no-auth,
+        // admin-driven endpoint (mirrors the packages one already used
+        // elsewhere in this file).
+        const catRes = await apiRequest("/settings/catalog/public/categories/")
         if (catRes.success) {
           const cats = catRes.data.map((c, i) => ({
             id: c.id.toString(),
@@ -10351,31 +10614,11 @@ export function BookingPage() {
           }))
           setCategoriesData(cats)
         }
-        if (svcRes.success) {
-          if (svcRes.currency_symbol) {
-            BOOKING_CURRENCY_SYMBOL = svcRes.currency_symbol;
-          }
-          const pkgs = {}
-          svcRes.data.forEach(s => {
-            const cid = s.category.toString()
-            if (!pkgs[cid]) pkgs[cid] = []
-            pkgs[cid].push({
-              ...s,
-              id: s.id.toString(),
-              category: s.category.toString(),
-              price: parseFloat(s.price),
-              priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
-              duration: s.duration || "1 hr",
-              payment_policy: s.payment_policy,
-              image: s.image || "",
-              includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
-              excludes: Array.isArray(s.excludes) ? s.excludes : [],
-              popular: !!s.popular,
-              tag: s.tag || ""
-            })
-          })
-          setPackagesData(pkgs)
-        }
+        // NOTE: the old "/catalog/services/" fetch that used to populate
+        // packagesData here was already dead (404, always caught below) --
+        // packagesData only ever fed the unused legacy StepPackage
+        // component (never rendered anywhere in this file), so it's
+        // intentionally removed rather than pointed at a real endpoint.
       } catch (e) {
         console.error("Failed to load catalog", e)
       }
@@ -10480,9 +10723,7 @@ export function BookingPage() {
   }
 
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
-    const isEstimation = (cart && cart.some(c => c.jobType === "ESTIMATION" || c.id === "ac-inspection")) || routerLocation.state?.jobType === "ESTIMATION" || category?.jobType === "ESTIMATION";
-
-    if (!user && !isEstimation) {
+    if (!user) {
       // Save the full booking context before opening auth — it will be restored on success
       savePendingIntent({
         type: "CONFIRM_BOOKING",
@@ -10505,51 +10746,6 @@ export function BookingPage() {
     setLoading(true); setError(null)
     // Map frontend choices to backend enum values
     const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
-
-    if (isEstimation) {
-      try {
-        const res = await estimationRepository.createEstimationBooking({
-          customer_name: formData.customer_name || user?.fullName || user?.username || "Customer",
-          phone: formData.phone || user?.phone || "",
-          email: formData.email || user?.email || "",
-          address: formData.address || "Hosur, Tamil Nadu",
-          address_type: formData.address_type || "Home",
-          latitude: formData.latitude || null,
-          longitude: formData.longitude || null,
-          flat_house_no: formData.flat_house_no || "",
-          landmark: formData.landmark || "",
-          scheduledDate: selDate,
-          scheduledTime: selTime,
-          preferred_date: selDate,
-          preferred_time: selTime,
-          acDetails: estimationAcDetails,
-          customerReportedIssue: estimationSymptom,
-          notes: estimationNotes,
-          photos: photoPreview ? [photoPreview] : [],
-          estimationFee: ESTIMATION_FEE,
-          paymentMethod: backendPaymentMethod,
-        });
-
-        if (res && res.success) {
-          setSuccessData(res.data);
-          try {
-            sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data));
-            localStorage.setItem("calservice_last_booking", JSON.stringify(res.data));
-            localStorage.removeItem("calservices_customer_cart");
-            sessionStorage.removeItem("calservices_customer_cart");
-          } catch (_) {}
-          setCart([]);
-          setStep(0);
-          setLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.error("Error creating estimation booking:", err);
-        setError("Failed to create estimation booking. Please try again.");
-        setLoading(false);
-        return;
-      }
-    }
 
     const data = new FormData()
     data.append("customer_name", formData.customer_name)
@@ -10747,7 +10943,7 @@ export function BookingPage() {
     if (isQuickCommerce && cart.length === 0) {
       try {
         localStorage.setItem("calservice_veg_food_cart", "{}")
-      } catch { }
+      } catch {}
       navigate(routes.landing || "/home", {
         replace: true,
         state: {
@@ -10781,7 +10977,7 @@ export function BookingPage() {
             }
             try {
               localStorage.setItem("calservice_veg_food_cart", JSON.stringify(restoredFoodCart))
-            } catch { }
+            } catch {}
             navigate(routes.landing || "/home", {
               replace: true,
               state: {
@@ -10922,26 +11118,32 @@ export function BookingPage() {
 
           {/* Right Controls: Cart & Profile Button */}
           <div className="flex items-center gap-3">
-            {cart?.length > 0 && (
-              <button
-                onClick={() => setShowCartDrawer(true)}
-                className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
-                title="View Cart"
-              >
-                <ShoppingCart size={18} />
+            {/* Cart button is always visible (even with nothing added yet) so
+                customers always know where to find it; the badge only shows
+                once there's a count. */}
+            <button
+              onClick={() => setShowCartDrawer(true)}
+              className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
+              title={cart?.length > 0 ? "View Cart" : "Cart is empty"}
+            >
+              <ShoppingCart size={18} />
+              {cart?.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
                   {cart.reduce((sum, item) => sum + (item.quantity || 1), 0)}
                 </span>
-              </button>
-            )}
+              )}
+            </button>
 
             {/* Urban Profile Icon Button (Exact Home Page Visual Style) */}
             <button
               type="button"
-              id="customer-account-btn"
               onClick={() => {
-                setActiveAccountTab("My Bookings")
-                setShowAccountPortal(true)
+                if (user) {
+                  setActiveAccountTab(hasNonDraftBookings ? "My Bookings" : "My Profile")
+                  setShowAccountPortal(true)
+                } else {
+                  setShowCustomerEntryModal(true)
+                }
               }}
               className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
             >
@@ -11019,15 +11221,6 @@ export function BookingPage() {
                 }}
                 setFormData={setFormData}
                 setLocation={setLocation}
-                estimationAcDetails={estimationAcDetails}
-                onChangeEstimationAcDetails={setEstimationAcDetails}
-                estimationSymptom={estimationSymptom}
-                onChangeEstimationSymptom={setEstimationSymptom}
-                estimationNotes={estimationNotes}
-                onChangeEstimationNotes={setEstimationNotes}
-                photoFile={photoFile}
-                photoPreview={photoPreview}
-                onPhotoChange={handlePhoto}
               />
             </motion.div>
           )}
@@ -11169,7 +11362,6 @@ export function BookingPage() {
                   setLocation={setLocation}
                   setFormData={setFormData}
                   formData={formData}
-                  dbCatalogPackages={dbCatalogPackages}
                 />
               );
             } else if (isMason) {
@@ -11729,6 +11921,28 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     );
   }, [localCatalogPackages]);
 
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setLocalCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   const PAINTING_CATEGORIES = [
     { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
     { id: "paint-exterior", slug: "exterior-painting", name: "Exterior Painting", image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" },
@@ -11752,6 +11966,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
       return {
         id: pkg.slug || pkg.id.toString(),
+        db_id: pkg.id,
         catId: catId,
         name: pkg.name,
         price: parseFloat(pkg.base_price) || 0,
@@ -11972,7 +12187,12 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
-
+        <EditModeToggleBar
+          visible={canEnterServiceEditMode}
+          active={serviceEditMode}
+          onToggle={() => setServiceEditMode(v => !v)}
+        />
+        <SaveNoticeToast notice={saveNotice} />
 
         {/* Urban Style Header */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
@@ -12216,7 +12436,17 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>
+                                  {serviceEditMode && service.db_id ? (
+                                    <EditableText
+                                      active={true}
+                                      value={service.name}
+                                      onSave={(v) => handleSaveServiceField(service, "name", v)}
+                                    />
+                                  ) : (
+                                    service.name
+                                  )}
+                                </h4>
                                 {service.badge && (
                                   <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                     {service.badge}
@@ -12224,13 +12454,34 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 )}
                               </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
-                                {service.priceStr}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  service.priceStr
+                                )}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
                                 {currentFee > 0 ? "Visit Charge: ₹300 (> 15 km)" : "Visit Charge: FREE (≤ 15 km)"}
                               </div>
-                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    value={service.desc}
+                                    multiline
+                                    onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  />
+                                ) : (
+                                  service.desc
+                                )}
+                              </p>
 
                               {/* Includes Bullet Points */}
                               <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -12291,15 +12542,27 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             {/* Right Image Column */}
                             <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
-                                <img
-                                  src={service.image}
-                                  alt={service.name}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                  onError={e => {
-                                    e.target.onerror = null;
-                                    e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
-                                  }}
-                                />
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableImage
+                                    active={true}
+                                    value={service.image}
+                                    alt={service.name}
+                                    assetType="services"
+                                    className="w-full h-full"
+                                    imgClassName="w-full h-full object-cover"
+                                    onSave={(v) => handleSaveServiceField(service, "image", v)}
+                                  />
+                                ) : (
+                                  <img
+                                    src={service.image}
+                                    alt={service.name}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    onError={e => {
+                                      e.target.onerror = null;
+                                      e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                                    }}
+                                  />
+                                )}
                               </div>
                               {count > 0 && (
                                 <div style={{
@@ -12736,12 +12999,24 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                 {/* Hero Image */}
                 <div style={{ width: '100%', height: 160, position: 'relative', flexShrink: 0 }}>
-                  <img
-                    src={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
-                    alt={activeDetailService.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
-                  />
+                  {serviceEditMode && activeDetailService.db_id ? (
+                    <EditableImage
+                      active={true}
+                      value={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      assetType="services"
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-cover"
+                      onSave={(v) => handleSaveServiceField(activeDetailService, "image", v)}
+                    />
+                  ) : (
+                    <img
+                      src={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                    />
+                  )}
                 </div>
 
                 {/* Content Area */}
@@ -13064,7 +13339,17 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       <div style={{ padding: '1.25rem 1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         {/* Title & Rating */}
                         <div>
-                          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textAlign: 'left' }}>{activeDetailService.name}</h3>
+                          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textAlign: 'left' }}>
+                            {serviceEditMode && activeDetailService.db_id ? (
+                              <EditableText
+                                active={true}
+                                value={activeDetailService.name}
+                                onSave={(v) => handleSaveServiceField(activeDetailService, "name", v)}
+                              />
+                            ) : (
+                              activeDetailService.name
+                            )}
+                          </h3>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginTop: 4 }}>
                             <Star size={12} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
                             <span>{activeDetailService.rating} ({activeDetailService.reviews} ratings)</span>
@@ -14270,6 +14555,28 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     );
   }, [localCatalogPackages]);
 
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setLocalCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   const MASON_CATEGORIES = React.useMemo(() => {
     if (dbPackages && dbPackages.length > 0) {
       const distinct = [];
@@ -14405,6 +14712,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
         return {
           id: pkg.slug || pkg.id.toString(),
+          db_id: pkg.id,
           catId: cId,
           name: pkg.name,
           price: parseFloat(pkg.price || pkg.base_price) || 0,
@@ -14553,6 +14861,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
+        <EditModeToggleBar
+          visible={canEnterServiceEditMode}
+          active={serviceEditMode}
+          onToggle={() => setServiceEditMode(v => !v)}
+        />
+        <SaveNoticeToast notice={saveNotice} />
+
         {/* Urban Style Header */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
@@ -14807,7 +15122,17 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>
+                                  {serviceEditMode && service.db_id ? (
+                                    <EditableText
+                                      active={true}
+                                      value={service.name}
+                                      onSave={(v) => handleSaveServiceField(service, "name", v)}
+                                    />
+                                  ) : (
+                                    service.name
+                                  )}
+                                </h4>
                                 {service.badge && (
                                   <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                     {service.badge}
@@ -14815,13 +15140,34 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 )}
                               </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
-                                {service.priceStr}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  service.priceStr
+                                )}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
                                 Consultation & Visit Charge: {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                               </div>
-                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    value={service.desc}
+                                    multiline
+                                    onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  />
+                                ) : (
+                                  service.desc
+                                )}
+                              </p>
 
                               {/* Includes Bullet Points */}
                               <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -14859,15 +15205,27 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             {/* Right Image/Button Column */}
                             <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
-                                <img
-                                  src={service.image}
-                                  alt={service.name}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                  onError={e => {
-                                    e.target.onerror = null;
-                                    e.target.src = "/premium-emulsion.png";
-                                  }}
-                                />
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableImage
+                                    active={true}
+                                    value={service.image}
+                                    alt={service.name}
+                                    assetType="services"
+                                    className="w-full h-full"
+                                    imgClassName="w-full h-full object-cover"
+                                    onSave={(v) => handleSaveServiceField(service, "image", v)}
+                                  />
+                                ) : (
+                                  <img
+                                    src={service.image}
+                                    alt={service.name}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    onError={e => {
+                                      e.target.onerror = null;
+                                      e.target.src = "/premium-emulsion.png";
+                                    }}
+                                  />
+                                )}
                               </div>
 
                               {/* Cart Controls overlaid on image */}
@@ -15369,12 +15727,24 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                 {/* Hero Image */}
                 <div style={{ width: '100%', height: 180, position: 'relative', flexShrink: 0 }}>
-                  <img
-                    src={activeDetailService.image}
-                    alt={activeDetailService.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
-                  />
+                  {serviceEditMode && activeDetailService.db_id ? (
+                    <EditableImage
+                      active={true}
+                      value={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      assetType="services"
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-cover"
+                      onSave={(v) => handleSaveServiceField(activeDetailService, "image", v)}
+                    />
+                  ) : (
+                    <img
+                      src={activeDetailService.image}
+                      alt={activeDetailService.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                    />
+                  )}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.4))' }} />
                 </div>
 
@@ -15382,7 +15752,17 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                 <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   {/* Title & Rating */}
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', textAlign: 'left', letterSpacing: '-0.02em' }}>{activeDetailService.name}</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', textAlign: 'left', letterSpacing: '-0.02em' }}>
+                      {serviceEditMode && activeDetailService.db_id ? (
+                        <EditableText
+                          active={true}
+                          value={activeDetailService.name}
+                          onSave={(v) => handleSaveServiceField(activeDetailService, "name", v)}
+                        />
+                      ) : (
+                        activeDetailService.name
+                      )}
+                    </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginTop: 6 }}>
                       <Star size={14} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
                       <span style={{ color: '#0f172a', fontWeight: 800 }}>{activeDetailService.rating}</span>
@@ -15921,28 +16301,34 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const currentFee = distanceKm > 15 ? 300 : 0;
 
   const EXTRA_SERVICES_BY_SUBCATEGORY = {
-    "AC Service & Cleaning": [
-      { id: "ext-ac-srv-1", name: "Anti-Rust Protective Coil Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: imgAntiRust, description: "Shields AC outdoor & indoor coils from atmospheric oxidation & gas leaks." },
-      { id: "ext-ac-srv-2", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: imgAirflowSanitization, description: "Anti-bacterial foam wash for AC filters removing 99% allergens." },
-      { id: "ext-ac-srv-3", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: imgWaterLeakage, description: "High pressure water jet flushing to stop water leakage." }
+    "AC Service & Repair": [
+      { id: "ext-ac-srv-1", name: "Anti-Rust Protective Coil Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Shields AC outdoor & indoor coils from atmospheric oxidation & gas leaks." },
+      { id: "ext-ac-srv-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Nitrogen pressure leak audit and Freon gas top-up." },
+      { id: "ext-ac-srv-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Anti-bacterial foam wash for AC filters removing 99% allergens." },
+      { id: "ext-ac-srv-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "High pressure water jet flushing to stop water leakage." }
     ],
-    "AC Repair & Diagnostics": [
-      { id: "ext-ac-rep-1", name: "Comprehensive Electrical Voltage & Amp Check", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: imgPowerIssue, description: "Verifies running amperage, capacitor load & stabilizer output." },
-      { id: "ext-ac-rep-2", name: "Blower Wheel Balance Alignment", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: imgAcFanMotor, description: "Eliminates blower wobbling & fan motor vibration strain." }
+    "AC Installation": [
+      { id: "ext-ac-inst-1", name: "Heavy-Duty Wall Bracket Kit", price: 349, origPrice: 499, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", description: "Rust-resistant powder coated metal brackets for outdoor unit safety." },
+      { id: "ext-ac-inst-2", name: "Copper Pipe Extension (per meter)", price: 299, origPrice: 449, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Insulated 100% pure copper piping extension with brass flare nuts." },
+      { id: "ext-ac-inst-3", name: "Outdoor Unit Anti-Vibration Rubber Pads", price: 149, origPrice: 249, duration: "10 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Dampening rubber pads to eliminate compressor vibration noise." }
     ],
-    "AC Gas & Refrigerant": [
-      { id: "ext-ac-gas-1", name: "Nitrogen High Pressure Leak Test", price: 399, origPrice: 599, duration: "30 mins", rating: "4.9", image: imgNitrogenLeakTest, description: "350 PSI nitrogen holding pressure test to detect micro leaks." },
-      { id: "ext-ac-gas-2", name: "Deep Vacuum Pump Moisture Evacuation", price: 249, origPrice: 399, duration: "20 mins", rating: "4.7", image: imgGasCharging, description: "Two-stage vacuum pump evacuation down to 500 microns." }
+    "AC Cleaning": [
+      { id: "ext-ac-cln-1", name: "Coil Anti-Bacterial Sanitizer Spray", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Kills 99.9% airborne bacteria & viruses in cooling fins." },
+      { id: "ext-ac-cln-2", name: "Heavy Water Jet Outdoor Coil Flush", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", description: "High pressure water jet removal of mud & leaves from outdoor unit." },
+      { id: "ext-ac-cln-3", name: "Drain Pipe Anti-Mold Flushing Gel", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Enzymatic gel flush to prevent slime buildup in drain line." }
     ],
-    "AC Installation & Uninstallation": [
-      { id: "ext-ac-inst-1", name: "Outdoor Unit Anti-Vibration Rubber Pads", price: 149, origPrice: 249, duration: "10 mins", rating: "4.7", image: imgHeavyDutyWallStand, description: "Dampening rubber pads to eliminate compressor vibration noise." },
-      { id: "ext-ac-inst-2", name: "Wall Hole Sealing & Waterproof Putty Pack", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: imgSplitAcInstall, description: "Weatherproof sealant putty for wall core hole gap." }
+    "AC Gas & Cooling": [
+      { id: "ext-ac-gas-1", name: "Nitrogen High Pressure Leak Test", price: 399, origPrice: 599, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "300 PSI nitrogen holding pressure test to detect micro leaks." },
+      { id: "ext-ac-gas-2", name: "Compressor Synthetic Oil Top-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", description: "POE/PAG synthetic oil refill for smooth compressor piston stroke." },
+      { id: "ext-ac-gas-3", name: "Deep Vacuum Pump Moisture Evacuation", price: 249, origPrice: 399, duration: "20 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Two-stage vacuum pump evacuation down to 500 microns." }
     ],
-    "AC PCB & Electrical": [
-      { id: "ext-ac-pcb-1", name: "Main Board Moisture-Proof Conformal Coating", price: 299, origPrice: 449, duration: "15 mins", rating: "4.9", image: imgInverterPcbRepair, description: "Protective insulating spray shielding PCB from humidity & gecko short circuits." }
+    "AC Maintenance": [
+      { id: "ext-ac-mnt-1", name: "Voltage & Current Surge Protection Check", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Verifies safe running amperage & stabilizer voltage output." },
+      { id: "ext-ac-mnt-2", name: "Blower Wheel Balance Alignment", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Eliminates blower wobbling & fan motor strain." }
     ],
-    "AC Parts & Accessories": [
-      { id: "ext-ac-prt-1", name: "Copper Flare Brass Nut Heavy Set", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: imgCopperCoilBrazing, description: "Thick gauge forged brass flare nuts for leak-proof pipe jointing." }
+    "AC Parts & Repair": [
+      { id: "ext-ac-prt-1", name: "Heavy Duty Dual Run Capacitor 45uF", price: 349, origPrice: 499, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "High temperature metalized film capacitor for reliable compressor start." },
+      { id: "ext-ac-prt-2", name: "PCB Relay & Microcontroller Soldering", price: 499, origPrice: 799, duration: "30 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Precision PCB solder repair for display error codes & relay trips." }
     ],
     "Washing Machine Service & Repair": [
       { id: "ext-wm-srv-1", name: "Drum Anti-Limescale Descaling Pack", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Removes tough limescale buildup & restores washing efficiency." },
@@ -16294,17 +16680,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
   const hvacSubtabs = [
     "AC Service & Cleaning",
-    "AC Repair & Diagnostics",
+    "AC Repair",
     "AC Gas & Refrigerant",
     "AC Installation & Uninstallation",
     "AC PCB & Electrical",
     "AC Parts & Accessories",
-    "Repair & Diagnostics",
-    "Gas & Refrigerant",
-    "Installation & Uninstallation",
-    "PCB & Electrical",
-    "Parts & Accessories",
-    "AC Repair",
     "AC Service & Repair",
     "AC Installation",
     "AC Cleaning",
@@ -16319,12 +16699,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
-    if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service" || subtabParam === "AC Service & Cleaning" || subtabParam === "AC Cleaning") return "AC Service & Cleaning";
-    if (subtabParam === "AC Repair" || subtabParam === "AC Repair & Diagnostics" || subtabParam === "Repair & Diagnostics") return "AC Repair & Diagnostics";
-    if (subtabParam === "AC Gas & Refrigerant" || subtabParam === "Gas & Refrigerant" || subtabParam === "AC Gas & Cooling") return "AC Gas & Refrigerant";
-if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Installation & Uninstallation" || subtabParam === "AC Installation") return "AC Installation & Uninstallation";
-    if (subtabParam === "AC PCB & Electrical" || subtabParam === "PCB & Electrical") return "AC PCB & Electrical";
-    if (subtabParam === "AC Parts & Accessories" || subtabParam === "Parts & Accessories" || subtabParam === "AC Parts & Repair") return "AC Parts & Accessories";
+    if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service" || subtabParam === "AC Service & Cleaning") return "AC Service & Cleaning";
     if (subtabParam === "TV & Display" || subtabParam === "TV Service & Repair") return "TV Service & Repair";
     if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair" || subtabParam === "Washing Machine Jet Service") return "Washing Machine Jet Service";
     if (subtabParam === "Refrigerator & Fridge" || subtabParam === "Refrigerator" || subtabParam === "Refrigerator Repair" || subtabParam === "Refrigerator Service & Repair") return "Refrigerator Service & Repair";
@@ -16336,7 +16711,7 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
     if (subtabParam === "Mason" || subtabParam === "mason" || subtabParam === "Brick & Block Work" || subtabParam === "Minor Masonry / Small Construction Work") return "Minor Masonry / Small Construction Work";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
-
+    // No URL param — derive default from normalizedKey / category / cart
     const nk = normalizedKey || (category && (category.id || category.slug)) || "";
     const cn = ((category && category.name) || "").toLowerCase();
     if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
@@ -16476,6 +16851,72 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
+
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setDbCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
+  // ── AC Inspection discovery tile (front of the AC & Appliance sub-tab bar) ──
+  // Fully super-admin editable via the shared HomePageConfig JSON blob (same
+  // backend/model every other homepage/customer-UI edit already uses --
+  // GET /settings/homepage/ is public, PUT is admin-gated server-side
+  // by RequireModuleAccess("cms","edit_sections")). No new backend model or
+  // endpoint needed.
+  const AC_INSPECTION_TILE_DEFAULTS = {
+    visible: true,
+    label: "Not Sure? Book Inspection",
+    badge: "₹199 Inspection",
+    price: 199,
+  };
+  const [acInspectionTile, setAcInspectionTile] = useState(AC_INSPECTION_TILE_DEFAULTS);
+
+  useEffect(() => {
+    apiRequest("/settings/homepage/")
+      .then((res) => {
+        const saved = res?.config?.ac_inspection_tile;
+        if (saved && typeof saved === "object") {
+          setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
+        }
+      })
+      .catch((err) => console.error("Failed to fetch AC inspection tile config:", err));
+  }, []);
+
+  const handleSaveAcInspectionTile = async (field, value) => {
+    const next = { ...acInspectionTile, [field]: value };
+    setAcInspectionTile(next); // optimistic
+    try {
+      const current = await apiRequest("/settings/homepage/");
+      const fullConfig = { ...(current?.config || {}), ac_inspection_tile: next };
+      await apiRequest("/settings/homepage/", {
+        method: "PUT",
+        body: JSON.stringify({ config: fullConfig }),
+      });
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setAcInspectionTile(acInspectionTile); // revert on failure
+      setSaveNotice({ type: "error", text: err?.body?.error || err?.body?.message || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -16720,133 +17161,98 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
         { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: imgWmSubRepair }
       ]
     },
-    hvac: (() => {
-      const acInspectionPlan = {
-        id: "ac-inspection",
-        name: ESTIMATION_TITLE,
-        subtitle: ESTIMATION_SUBTITLE,
-        price: ESTIMATION_FEE,
-        duration: ESTIMATION_DURATION,
-        badge: "Diagnosis & Inspection",
-        badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        description: ESTIMATION_DESCRIPTION,
-        includes: INSPECTION_CARD_INCLUDES,
-        image: imgAcRepairSplitWin,
-        jobType: "ESTIMATION"
-      };
-
-      const acServiceCleaningPlans = [
-        {
-          id: "general-ac-service",
-          name: "General AC Service",
-          price: 349,
-          duration: "30 mins",
-          badge: "Quick Clean",
-          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-          description: "Quick maintenance service for routine AC cleaning and basic performance checking.",
-          includes: [
-            "Air filter cleaning",
-            "Indoor unit surface cleaning",
-            "Cooling fin dust removal",
-            "Basic drain line check",
-            "Basic cooling and airflow check"
-          ],
-          image: imgPowerWin
-        },
-        acInspectionPlan,
-        {
-          id: "foam-power-jet-split",
-          name: "Foam & Power Jet AC Service — Split",
-          price: 599,
-          duration: "45 mins",
-          badge: "Best Seller",
-          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-          description: "Deep foam and power-jet cleaning of the indoor cooling coil and outdoor unit to improve cooling performance.",
-          includes: [
-            "Cooling coil foam cleaning",
-            "Indoor & outdoor power-jet cleaning",
-            "Air filter cleaning",
-            "Drain tray/basic drain cleaning",
-            "Basic cooling performance check"
-          ],
-          image: imgFoamSplit
-        },
-        {
-          id: "anti-rust-deep-clean-ac",
-          name: "Anti-Rust Deep Clean AC Service",
-          price: 799,
-          duration: "60 mins",
-          badge: "Ultimate Care",
-          badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
-          description: "Deep power-jet cleaning with protective anti-rust treatment for selected outdoor-unit components and suitable metal areas. (*Anti-rust treatment is applied only to suitable and accessible metal components. It is not a guarantee against all future corrosion).",
-          includes: [
-            "Complete deep foam & power-jet cleaning",
-            "Enhanced outdoor unit cleaning",
-            "Anti-rust protective treatment*",
-            "Basic cooling performance check",
-            "30-day service warranty"
-          ],
-          image: imgAntiRust
-        }
-      ];
-
-      const acRepairDiagnosticsPlans = [
-        acInspectionPlan,
-        { id: "ac-repair-diagnosis", name: "AC Repair & Diagnosis", price: 399, duration: "45 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Comprehensive 21-point AC inspection, electrical voltage check, compressor health scan, and root cause diagnosis.", includes: ["Full system diagnostic", "Electrical & refrigerant check", "Detailed estimate before repair"], image: imgAcRepairSplitWin },
-        { id: "ac-not-cooling", name: "AC Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Specialized diagnostic for AC blowing warm air or low cooling. Compressor relay, sensor, and refrigerant level check.", includes: ["Cooling delta temp scan", "Compressor relay & capacitor audit", "Refrigerant pressure test"], image: imgLessNoCooling },
-        { id: "ac-water-leakage", name: "AC Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix indoor unit water dripping, drain pipe unclogging, water tray leveling, and anti-clog jet flush.", includes: ["High-pressure drain clearout", "Water tray re-leveling & flush", "Insulation check"], image: imgWaterLeakage },
-        { id: "ac-noise-issue", name: "AC Noise Issue", price: 399, duration: "45 mins", badge: "Acoustic Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnosis & resolution of grinding fan sound, indoor blower squeak, or outdoor compressor vibration noise.", includes: ["Blower wheel balancing", "Motor bearing lubrication", "Vibration dampener adjustment"], image: imgUnwantedNoiseSmell },
-        { id: "ac-power-issue", name: "AC Power Issue", price: 449, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fix AC not turning on, MCB tripping repeatedly, display panel dead, or remote receiver sensor failure.", includes: ["Mains supply continuity test", "Display board & fuse check", "Power relay inspection"], image: imgPowerIssue }
-      ];
-
-      const acGasRefrigerantPlans = [
-        { id: "ac-gas-refill", name: "AC Gas Refill", price: 1499, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete vacuum evacuation, moisture removal, and 100% certified eco-friendly refrigerant gas refill (R32 / R410A / R22).", includes: ["Deep vacuum evacuation", "Precise weight-based gas charging", "Cooling performance demo", "60-day gas warranty"], image: imgGasCharging },
-        { id: "gas-leak-detection", name: "Gas Leak Detection", price: 499, duration: "45 mins", badge: "Nitrogen Test", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure nitrogen pressure testing up to 350 PSI and electronic sniffer scan to identify micro pinhole leaks.", includes: ["350 PSI nitrogen pressure hold", "Electronic gas sniffer scan", "Leak identification report"], image: imgNitrogenLeakTest },
-        { id: "refrigerant-leakage-repair", name: "Refrigerant Leakage Repair", price: 899, duration: "1.5 hrs", badge: "Brazing Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature silver braze welding of damaged copper coils, u-bend pinholes, flare nut repair & sealing.", includes: ["Silver solder braze welding", "Flare joint re-flaring & tight seal", "Post-repair pressure hold test"], image: imgCopperCoilBrazing }
-      ];
-
-      const acInstallationPlans = [
-        { id: "split-ac-installation", name: "Split AC Installation", price: 1299, duration: "2 hrs", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional wall backplate mounting, core hole drilling, outdoor bracket setup, copper pipe flaring & connection.", includes: ["Indoor & outdoor unit mounting", "Wall hole core drilling", "Vacuuming & leak testing", "Cooling demo"], image: imgSplitAcInstall },
-        { id: "window-ac-installation", name: "Window AC Installation", price: 799, duration: "1.5 hrs", badge: "Window Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Window sill / wooden frame alignment, heavy bracket mounting, rubber vibration pad placement & foam insulation sealing.", includes: ["Window frame alignment", "Rubber vibration dampener fit", "Foam gap sealing & demo"], image: imgWindowAcInstall },
-        { id: "split-ac-uninstallation", name: "Split AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe refrigerant pump-down into compressor (zero gas loss), dismounting indoor/outdoor units, and copper pipe capping.", includes: ["Zero gas loss pump-down", "Indoor & outdoor safe dismount", "Copper pipe protective taping"], image: imgAcUninstall },
-        { id: "window-ac-uninstallation", name: "Window AC Uninstallation", price: 499, duration: "45 mins", badge: "Express Removal", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Safe removal of window AC from window frame/grill, bracket dismounting, and frame gap sealing.", includes: ["Safe unit removal", "Bracket dismounting", "Power cord safety pack"], image: imgWindowAcInstall },
-        { id: "ac-relocation", name: "AC Relocation", price: 1799, duration: "3 hrs", badge: "Combo Saver", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete end-to-end relocation: safe gas pump-down, dismounting from old location, and full re-installation at new site.", includes: ["Gas lock pump-down", "Safe dismounting & pack", "New site remounting & flare fit", "Performance demo"], image: imgSplitAcDismountReinstallCombo }
-      ];
-
-      const acPcbElectricalPlans = [
-        { id: "pcb-diagnosis", name: "PCB Diagnosis", price: 399, duration: "45 mins", badge: "PCB Scan", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Multi-meter electronic circuit diagnostic, error code scan, IPM inverter module test, and sensor resistance check.", includes: ["Inverter / non-inverter PCB audit", "Error code interpretation", "Repair estimate report"], image: imgInverterAcErrorCode },
-        { id: "pcb-repair", name: "PCB Repair", price: 899, duration: "1.5 hrs", badge: "Micro Soldering", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Component-level micro soldering repair: IPM module, power IC, relays, micro-controller, and circuit trace repair.", includes: ["Micro solder component swap", "Voltage regulation test", "60-day PCB warranty"], image: imgInverterPcbRepair },
-        { id: "pcb-replacement", name: "PCB Replacement", price: 699, duration: "1 hr", badge: "New Board Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Installing brand new original indoor or outdoor control circuit board / universal PCB with wiring configuration.", includes: ["Old PCB removal", "New PCB harness connection", "Display & sensor sync test"], image: imgNonInverterPcbRepair },
-        { id: "capacitor-replacement", name: "Capacitor Replacement", price: 299, duration: "30 mins", badge: "Quick Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing weak dual-run compressor / blower fan start capacitor with heavy-duty metalized capacitor.", includes: ["Microfarad (uF) capacitance test", "Heavy-duty capacitor installation", "Compressor startup load test"], image: imgMotorStartCapacitor },
-        { id: "wiring-repair", name: "Wiring Repair", price: 349, duration: "30 mins", badge: "Electrical Care", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing burnt terminal wires, loose copper thimbles, indoor-outdoor interconnecting cable, and earthing fix.", includes: ["Burnt wire trimming & re-crimping", "High-temp insulated thimble fit", "Earth voltage safety test"], image: imgContactorReplacement }
-      ];
-
-      const acPartsAccessoriesPlans = [
-        { id: "outdoor-unit-stand", name: "Outdoor Unit Stand", price: 499, duration: "45 mins", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heavy-duty powder-coated outdoor unit wall bracket or floor stand installation with anchor bolts & vibration pads.", includes: ["Heavy gauge stand fit", "Wall anchor bolt hammer drill", "Anti-vibration rubber pads"], image: imgHeavyDutyWallStand },
-        { id: "stabilizer-installation", name: "Stabilizer Installation", price: 249, duration: "30 mins", badge: "Voltage Guard", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall mounting AC voltage stabilizer, connection to power socket, input/output voltage calibration & load test.", includes: ["Stabilizer wall mounting", "Power cord crimping & wiring", "High/low voltage cutoff test"], image: acServiceImg },
-        { id: "drain-pipe-replacement", name: "Drain Pipe Replacement", price: 199, duration: "20 mins", badge: "Drainage", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Replacing cracked, leaking, or blocked AC drain hose with heavy-duty UV-resistant corrugated drain pipe.", includes: ["Old drain hose removal", "UV-resistant corrugated pipe fit", "Water flow gradient test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "copper-pipe-work", name: "Copper Pipe Work", price: 349, duration: "30 mins", badge: "Per Meter", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Insulated pure copper refrigeration pipe laying, nitrile rubber insulation sleeve wrapping, and flaring joint.", includes: ["Pure copper tube flaring", "Nitrile insulation wrapping", "Vibration clip wall clamping"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "remote-replacement", name: "Remote Replacement", price: 399, duration: "15 mins", badge: "Universal Sync", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brand-specific or universal AC remote supply, frequency pairing, mode configuration & test.", includes: ["Compatible remote programming", "Mode & timer sync test", "Fresh battery pair included"], image: acServiceImg }
-      ];
-
-      return {
-        "AC Service & Cleaning": acServiceCleaningPlans,
-        "AC Repair & Diagnostics": acRepairDiagnosticsPlans,
-        "AC Gas & Refrigerant": acGasRefrigerantPlans,
-        "AC Installation & Uninstallation": acInstallationPlans,
-        "AC PCB & Electrical": acPcbElectricalPlans,
-        "AC Parts & Accessories": acPartsAccessoriesPlans,
-        // Aliases for seamless direct routing:
-        "AC Service & Repair": acServiceCleaningPlans,
-        "Air Conditioner": acServiceCleaningPlans,
-        "AC Repair": acRepairDiagnosticsPlans,
-        "Repair & Diagnostics": acRepairDiagnosticsPlans,
-        "Gas & Refrigerant": acGasRefrigerantPlans,
-        "Installation & Uninstallation": acInstallationPlans,
-        "PCB & Electrical": acPcbElectricalPlans,
-        "Parts & Accessories": acPartsAccessoriesPlans
-      };
-    })(),
+    hvac: {
+      "AC Service & Cleaning": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
+      ],
+      "AC Repair": [
+        { id: "hvac-rep-1", name: "AC Repair — Split/Window", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Comprehensive diagnostic and repair for electrical, mechanical, noise or cooling failure.", includes: ["Full system diagnostic", "Faulty component repair", "Safety voltage test"], image: imgAcRepairSplitWin },
+        { id: "hvac-rep-2", name: "Less/No Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic for AC running without cooling. Refrigerant level scan, compressor relay & fan motor check.", includes: ["Refrigerant PSI scan", "Compressor relay audit", "Filter airflow test"], image: imgLessNoCooling },
+        { id: "hvac-rep-3", name: "Power Issue", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix AC not turning on, MCB tripping, display light dead, or remote receiver failure.", includes: ["Mains voltage test", "Display PCB power check", "Fuse replacement"], image: imgPowerIssue },
+        { id: "hvac-rep-4", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix indoor unit water dripping from front or back tray, drain pipe unclogging & tray realignment.", includes: ["Drain pipe jet flush", "Indoor unit tray re-leveling", "Insulation check"], image: imgWaterLeakage },
+        { id: "hvac-rep-5", name: "Unwanted Noise/Smell", price: 399, duration: "45 mins", badge: "Noise & Odor", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Eliminate squeaking fan noise, motor bearing grinding, or foul moldy odor from vents.", includes: ["Blower motor greasing", "Coil anti-bacterial spray", "Vibration dampening"], image: imgUnwantedNoiseSmell },
+        { id: "hvac-rep-fan", name: "AC Fan Motor Replacement / Repair", price: 699, duration: "1 hr", badge: "Motor Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Indoor blower motor or outdoor fan motor bearing repair, capacitor check & replacement.", includes: ["Fan motor RPM check", "Bearing greasing / swap", "Capacitor torque test"], image: imgAcFanMotor },
+        { id: "hvac-rep-diag-cool", name: "AC Less / No Cooling Diagnostics", price: 349, duration: "45 mins", badge: "Diagnostic", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "Dedicated diagnostic scan for cooling delta, thermostat sensor calibration & coil check.", includes: ["Delta temperature check", "Compressor relay audit", "Diagnostic report"], image: imgAcLessNoCoolingDiag },
+        { id: "hvac-rep-diag-noise", name: "AC Noise & Vibration Diagnostics", price: 349, duration: "45 mins", badge: "Acoustic Audit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Vibration isolation check, loose bracket dampening & motor alignment inspection.", includes: ["Vibration dampener fit", "Loose bracket torque test", "Blower alignment test"], image: imgAcNoiseVibrationDiag },
+        { id: "hvac-rep-sensor", name: "AC On / Off & Remote Sensor Repair", price: 399, duration: "30 mins", badge: "Sensor Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Repair display receiver PCB, on/off power relay switch, or room ambient sensor.", includes: ["Sensor probe test", "IR receiver check", "Mainboard relay repair"], image: imgAcOnOffSensor },
+        { id: "hvac-rep-drain", name: "AC Water Leakage & Drain Repair", price: 449, duration: "45 mins", badge: "Drain Master", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure drain clearout, pan realignment, and anti-clog drain tray flush.", includes: ["High-pressure drain flush", "Pan leveling adjustment", "Anti-fungal tray rinse"], image: imgAcWaterLeakageDrain },
+        { id: "hvac-rep-inverter", name: "Inverter AC Error Code Diagnostics", price: 499, duration: "1 hr", badge: "PCB Scan", badgeColor: "bg-violet-50 text-violet-700 border-violet-100", description: "Multi-meter diagnostic for IPM inverter module, DC fan motor error codes & communication line faults.", includes: ["Communication line test", "IPM module scan", "Error code clearout"], image: imgInverterAcErrorCode }
+      ],
+      "AC Gas & Refrigerant": [
+        { id: "hvac-gas-1", name: "Gas Leak Fix & Refill", price: 1799, duration: "2 hrs", badge: "Full Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper brazing solder fix, vacuuming & 100% gas refill.", includes: ["Nitrogen pressure test", "Copper brazing solder fix", "100% Freon / R32 gas refill", "60-day gas warranty"], image: imgGasLeakFixRefill },
+        { id: "hvac-gas-2", name: "Gas Charging", price: 1499, duration: "1.5 hrs", badge: "Top-Up Fill", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Standard R32 / R410a / R22 eco refrigerant gas charging with vacuum evacuation.", includes: ["System vacuum evacuation", "Precise PSI gas charging", "Cooling performance test"], image: imgGasCharging },
+        { id: "hvac-gas-3", name: "Service Valve Replacement", price: 399, duration: "45 mins", badge: "Valve Swap", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing brass outdoor unit service valve flare nut and sealing pin.", includes: ["Brass valve replace", "Copper flare fitting", "Pressure leak test"], image: imgServiceValveReplace },
+        { id: "hvac-gas-4", name: "Cooling Coil / Condenser Coil Repair", price: 899, duration: "1.5 hrs", badge: "Coil Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Aluminum to copper coil braze repair or u-bend pinhole leak soldering.", includes: ["Coil leak pressure scan", "Copper silver brazing", "Anti-corrosion coat"], image: imgCoolingCoilCondenserRepair },
+        { id: "hvac-gas-topup", name: "AC Gas Top-Up & Pressure Balancing", price: 999, duration: "1 hr", badge: "Top-Up", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "Refrigerant pressure calibration and partial gas top-up to optimal PSI specifications.", includes: ["Pressure gauge measurement", "R32/R410A gas top-up", "Cooling delta verification"], image: imgAcGasTopUp },
+        { id: "hvac-gas-complete", name: "Complete AC Gas Charging (R32 / R410A / R22)", price: 1899, duration: "2 hrs", badge: "Complete Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete system vacuum evacuation, moisture removal, and full refrigerant weight-based charging.", includes: ["Full vacuum evacuation", "Weighed refrigerant fill", "Compressor amp load test"], image: imgCompleteAcGasCharging },
+        { id: "hvac-gas-copper", name: "Copper Coil Pinhole Brazing & Welding", price: 799, duration: "1.5 hrs", badge: "Brazing Fix", badgeColor: "bg-orange-50 text-orange-700 border-orange-100", description: "Silver braze welding of indoor/outdoor coil pinholes, u-bend leaks and copper joint reinforcement.", includes: ["Soap bubble & dye test", "High-temp silver brazing", "Pressure hold test"], image: imgCopperCoilBrazing },
+        { id: "hvac-gas-nitrogen", name: "High-Pressure Nitrogen Leak Test", price: 499, duration: "45 mins", badge: "Leak Scan", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "High-pressure nitrogen charging up to 350 PSI to detect micro pinhole leaks across joints and coils.", includes: ["350 PSI nitrogen hold", "Electronic sniffer scan", "Leak identification report"], image: imgNitrogenLeakTest }
+      ],
+      "AC Installation & Uninstallation": [
+        { id: "hvac-inst-split", name: "Split AC Installation", price: 1299, duration: "2 hrs", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional indoor unit plate mounting, core wall drilling, outdoor bracket setup, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Core wall hole drilling", "Vacuuming & leak test"], image: imgSplitAcInstall },
+        { id: "hvac-inst-win", name: "Window AC Installation", price: 799, duration: "1.5 hrs", badge: "Window Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Window frame alignment, wooden/iron bracket mounting, and side foam insulation sealing.", includes: ["Window frame alignment", "Rubber vibration pad fit", "Foam gap seal"], image: imgWindowAcInstall },
+        { id: "hvac-uninst-1", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: imgAcUninstall },
+        { id: "hvac-reinst-ind", name: "Indoor Unit Reinstallation", price: 599, duration: "1 hr", badge: "Indoor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Remounting split AC indoor unit on backplate, drain hose routing & flare jointing.", includes: ["Backplate mounting", "Flare joint tightening", "Drain test"], image: imgIndoorUnitReinstall },
+        { id: "hvac-reinst-out", name: "Outdoor Unit Reinstallation", price: 699, duration: "1 hr", badge: "Outdoor Fit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Remounting heavy outdoor compressor unit on wall stand with anti-vibration rubber pads.", includes: ["Wall stand anchor fit", "Rubber pad placement", "Service valve jointing"], image: imgOutdoorUnitReinstall },
+        { id: "hvac-inst-wallstand", name: "Heavy-Duty Outdoor AC Wall Stand Fit", price: 499, duration: "45 mins", badge: "Heavy Stand", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Heavy-duty powder coated metal bracket fitting with high-torque wall anchor bolts and anti-vibration dampers.", includes: ["Anchor bolt hammer drill", "Spirit level alignment", "Vibration damper fit"], image: imgHeavyDutyWallStand },
+        { id: "hvac-inst-complete", name: "Split AC Complete Installation", price: 1499, duration: "2.5 hrs", badge: "All-Inclusive", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "End-to-end split AC mounting, core cutting, copper pipe flaring, vacuuming, and live temperature delta demo.", includes: ["Indoor & outdoor mounting", "Wall hole core drilling", "Deep vacuum & gas check", "Performance demo"], image: imgSplitAcCompleteInstall },
+        { id: "hvac-inst-combo", name: "Split AC Dismount & Re-Installation Combo", price: 1799, duration: "3 hrs", badge: "Relocation Combo", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete gas pump down, safe dismounting from old location, and full re-installation at new site.", includes: ["Gas lock pump down", "Careful dismounting", "New site remounting", "Copper line re-flare"], image: imgSplitAcDismountReinstallCombo },
+        { id: "hvac-inst-safe-uninst", name: "Split AC Safe Uninstallation", price: 699, duration: "1 hr", badge: "Zero Gas Loss", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Zero refrigerant loss pump down, high-grade flare nut capping, and protective copper pipe taping.", includes: ["Zero gas loss pump down", "Copper pipe cap sealing", "Wall bracket removal"], image: imgSplitAcSafeUninstall }
+      ],
+      "AC PCB & Electrical": [
+        { id: "hvac-pcb-inv", name: "Inverter PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair, IPM module & relay swap.", includes: ["PCB diagnostic test", "IPM module replacement", "60-day PCB warranty"], image: imgInverterPcbRepair },
+        { id: "hvac-pcb-non", name: "Non-Inverter PCB Repair", price: 699, duration: "1 hr", badge: "Standard PCB", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Non-inverter AC mainboard circuit repair, transformer swap, or sensor relay fix.", includes: ["Relay & transformer test", "Component resolder", "30-day warranty"], image: imgNonInverterPcbRepair },
+        { id: "hvac-cap-1", name: "Motor Start Capacitor Replacement", price: 299, duration: "30 mins", badge: "Quick Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing weak dual dual-run compressor/fan capacitor with heavy duty metalized capacitor.", includes: ["Microfarad torque test", "Heavy duty capacitor swap", "Compressor start test"], image: imgMotorStartCapacitor },
+        { id: "hvac-cnt-1", name: "Contactor Replacement", price: 399, duration: "30 mins", badge: "Heavy Switch", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Outdoor unit heavy duty electromagnetic contactor switch replacement.", includes: ["Old contactor dismount", "25A contactor fit", "Coil voltage check"], image: imgContactorReplacement },
+        { id: "hvac-sns-1", name: "Sensor Replacement", price: 299, duration: "30 mins", badge: "Temp Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Room ambient NTC thermistor or copper coil NTC sensor replacement.", includes: ["NTC resistance measurement", "Sensor probe swap", "Temp calibration"], image: imgSensorReplacement },
+        { id: "hvac-lvt-1", name: "LVT Replacement", price: 349, duration: "30 mins", badge: "Transformer", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Low voltage step-down transformer replacement for AC indoor control unit.", includes: ["Step-down voltage test", "Transformer swap", "PCB signal test"], image: imgLvtReplacement }
+      ],
+      "AC Parts & Accessories": [
+        { id: "hvac-prt-cop", name: "Copper Pipe Installation", price: 299, duration: "30 mins", badge: "Per Meter", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High grade insulated copper pipe installation (per meter) with nitrile foam sleeve.", includes: ["Copper flare jointing", "Nitrile insulation wrap", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-drn", name: "Drain Pipe Installation", price: 199, duration: "20 mins", badge: "Drainage", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Corrugated UV-resistant drain pipe extension & wall clamping.", includes: ["Corrugated pipe extension", "Wall clamp fit", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-wst", name: "Split AC Wall Stand", price: 499, duration: "30 mins", badge: "Heavy Stand", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Powder coated heavy gauge metal wall stand bracket installation for outdoor unit.", includes: ["Anchor bolt drilling", "Stand leveling", "Vibration pad fit"], image: acServiceImg },
+        { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: acServiceImg },
+        { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "AC Repair & Service": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
+      ],
+      "AC Service & Repair": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
+      ],
+      "Air Conditioner": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
+      ]
+    },
     refrigerator: {
       "Refrigerator Service & Repair": [
         { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "/mockups/refrigerator/icon_ref_service.jpg" },
@@ -17310,28 +17716,51 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
       // 5. AC/HVAC subtabs
       if (nk === "hvac" || tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
-        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") || pSlug.startsWith("hvac-") || pSlug.startsWith("ac-") || pSlug.startsWith("foam-") || pSlug.startsWith("anti-rust") || pSlug.startsWith("general-ac") || pSlug.startsWith("basic-ac") || pSlug.startsWith("split-ac") || pSlug.startsWith("window-ac") || pSlug.startsWith("gas-leak") || pSlug.startsWith("refrigerant-") || pSlug.startsWith("pcb-") || pSlug.startsWith("capacitor-") || pSlug.startsWith("wiring-") || pSlug.startsWith("outdoor-unit-") || pSlug.startsWith("stabilizer-") || pSlug.startsWith("drain-pipe-") || pSlug.startsWith("copper-pipe-") || pSlug.startsWith("remote-") || pName.includes("ac ") || pName.includes("pcb") || pName.includes("refrigerant") || pName.includes("stabilizer") || pName.includes("drain pipe") || pName.includes("copper pipe") || pName.includes("stand") || pName.includes("remote");
+        // Real admin-managed AC packages always carry an exact service_slug
+        // (one of these four, confirmed against the live catalog). Trust
+        // that authoritative field first -- it's what stops an "AC Repair"
+        // or "AC Gas Refill" package (both legitimately AC, but the wrong
+        // sub-tab) from leaking into "AC Installation & Uninstallation"
+        // just because its package NAME happens to contain a matching
+        // word like "reinstall" or "wall stand". Only fall back to the
+        // old loose name/slug heuristics for legacy rows with no
+        // service_slug at all.
+        const AC_SERVICE_SLUGS = ["ac-installation", "ac-repair", "ac-gas-refill", "ac-service-cleaning"];
+        const hasKnownAcSlug = AC_SERVICE_SLUGS.includes(sSlug);
+        const isAc = hasKnownAcSlug || (!sSlug && (
+          sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") ||
+          pSlug.startsWith("hvac-") || pSlug.startsWith("ac-") || pName.includes("ac ")
+        ));
         if (!isAc) return false;
 
         if (tab.includes("cleaning") || tab.includes("clean")) {
-          return pSlug.startsWith("ac-inspection") || pName.includes("ac inspection") || pSlug.startsWith("hvac-fj-split") || pSlug.startsWith("hvac-ar-3") || pSlug.startsWith("hvac-basic-service") || pSlug.startsWith("hvac-pj-service") || pSlug.startsWith("hvac-deep-clean") || pSlug.startsWith("ac-service-cleaning") || pSlug.startsWith("foam-power-jet") || pSlug.startsWith("anti-rust") || pSlug.startsWith("general-ac") || pSlug.startsWith("basic-ac") || pSlug.startsWith("hvac-fj-") || pSlug.startsWith("hvac-pj-") || pName.includes("general ac service") || pName.includes("foam & power jet") || pName.includes("anti-rust deep clean") || pName.includes("power jet ac service") || pName.includes("deep clean ac service") || pName.includes("basic ac service");
+          if (hasKnownAcSlug) return sSlug === "ac-service-cleaning";
+          return pSlug.startsWith("hvac-fj-") || pSlug.startsWith("hvac-pj-") || pSlug.startsWith("hvac-ar-") || pSlug.startsWith("hvac-2in1") || pSlug.startsWith("hvac-3in1") || pSlug.startsWith("hvac-airflow") || pSlug.startsWith("ac-cln") || pName.includes("foam") || pName.includes("power jet") || pName.includes("jet") || pName.includes("cleaning") || pName.includes("deep clean") || pName.includes("sanitization") || pName.includes("anti-rust") || pName.includes("combo");
         }
         if (tab.includes("gas") || tab.includes("refrigerant")) {
-          return pSlug.startsWith("hvac-gas-refill") || pSlug.startsWith("hvac-gas-leak-detect") || pSlug.startsWith("hvac-refrigerant-leak-repair") || pSlug.startsWith("ac-gas") || pSlug.startsWith("gas-leak") || pSlug.startsWith("refrigerant-leakage") || pName.includes("ac gas refill") || pName.includes("gas leak detection") || pName.includes("refrigerant leakage repair");
+          if (hasKnownAcSlug) return sSlug === "ac-gas-refill";
+          return pSlug.startsWith("hvac-gas-") || pSlug.startsWith("ac-gas") || pName.includes("gas leak") || pName.includes("gas charging") || pName.includes("valve") || pName.includes("coil repair") || pName.includes("top-up") || pName.includes("brazing") || pName.includes("nitrogen");
         }
         if (tab.includes("install")) {
-          return pSlug.startsWith("hvac-split-install") || pSlug.startsWith("hvac-window-install") || pSlug.startsWith("hvac-split-uninstall") || pSlug.startsWith("hvac-window-uninstall") || pSlug.startsWith("hvac-relocation") || pSlug.startsWith("ac-install") || pSlug.startsWith("split-ac-install") || pSlug.startsWith("window-ac-install") || pSlug.startsWith("split-ac-uninstall") || pSlug.startsWith("window-ac-uninstall") || pSlug.startsWith("ac-relocation") || pName.includes("split ac installation") || pName.includes("window ac installation") || pName.includes("split ac uninstallation") || pName.includes("window ac uninstallation") || pName.includes("ac relocation");
+          if (hasKnownAcSlug) return sSlug === "ac-installation";
+          return pSlug.startsWith("hvac-inst-") || pSlug.startsWith("hvac-uninst-") || pSlug.startsWith("hvac-reinst-") || pSlug.startsWith("ac-inst") || pName.includes("split ac install") || pName.includes("window ac install") || pName.includes("uninstall") || pName.includes("reinstall") || pName.includes("wall stand") || pName.includes("dismount");
         }
         if (tab.includes("pcb") || (tab.includes("electrical") && !tab.includes("parts"))) {
-          return pSlug.startsWith("hvac-pcb-") || pSlug.startsWith("hvac-capacitor-") || pSlug.startsWith("hvac-wiring-") || pSlug.startsWith("ac-pcb-") || pSlug.startsWith("pcb-") || pSlug.startsWith("capacitor-") || pSlug.startsWith("wiring-") || pName.includes("pcb diagnosis") || pName.includes("pcb repair") || pName.includes("pcb replacement") || pName.includes("capacitor replacement") || pName.includes("wiring repair");
+          // No dedicated live service for PCB/electrical work yet -- don't
+          // let it silently steal ac-repair's packages into this tab.
+          if (hasKnownAcSlug) return false;
+          return pSlug.startsWith("hvac-pcb-") || pSlug.startsWith("hvac-cap-") || pSlug.startsWith("hvac-cnt-") || pSlug.startsWith("hvac-sns-") || pSlug.startsWith("hvac-lvt-") || pSlug.startsWith("ac-elec") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("contactor") || pName.includes("sensor") || pName.includes("transformer") || pName.includes("lvt");
         }
         if (tab.includes("parts") || tab.includes("accessories")) {
-          return pSlug.startsWith("hvac-outdoor-stand") || pSlug.startsWith("hvac-stabilizer-install") || pSlug.startsWith("hvac-drain-pipe-replace") || pSlug.startsWith("hvac-copper-pipe-work") || pSlug.startsWith("hvac-remote-replace") || pSlug.startsWith("ac-part") || pSlug.startsWith("outdoor-unit-stand") || pSlug.startsWith("stabilizer-install") || pSlug.startsWith("drain-pipe-replace") || pSlug.startsWith("copper-pipe-work") || pSlug.startsWith("remote-replace") || pName.includes("outdoor unit stand") || pName.includes("stabilizer installation") || pName.includes("drain pipe replacement") || pName.includes("copper pipe work") || pName.includes("remote replacement");
+          // Same -- no dedicated live service for spare parts yet.
+          if (hasKnownAcSlug) return false;
+          return pSlug.startsWith("hvac-prt-") || pSlug.startsWith("ac-part") || pName.includes("copper pipe") || pName.includes("drain pipe") || pName.includes("wall stand") || pName.includes("floor stand") || pName.includes("back plate") || pName.includes("fastener");
         }
         if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
-          return pSlug.startsWith("ac-inspection") || pName.includes("ac inspection") || pSlug.startsWith("hvac-repair-diagnosis") || pSlug.startsWith("hvac-not-cooling") || pSlug.startsWith("hvac-water-leakage") || pSlug.startsWith("hvac-noise-issue") || pSlug.startsWith("hvac-power-issue") || pSlug.startsWith("ac-rep") || pSlug.startsWith("ac-not-cooling") || pSlug.startsWith("ac-water-leakage") || pSlug.startsWith("ac-noise-issue") || pSlug.startsWith("ac-power-issue") || pName.includes("ac repair & diagnosis") || pName.includes("ac not cooling") || pName.includes("ac water leakage") || pName.includes("ac noise issue") || pName.includes("ac power issue");
+          if (hasKnownAcSlug) return sSlug === "ac-repair";
+          return pSlug.startsWith("hvac-rep-") || pSlug.startsWith("ac-rep") || pName.includes("repair") || pName.includes("less cooling") || pName.includes("no cooling") || pName.includes("power issue") || pName.includes("water leakage") || pName.includes("noise") || pName.includes("smell") || pName.includes("fan motor") || pName.includes("remote sensor") || pName.includes("drain repair") || pName.includes("error code");
         }
-        return true;
+        return hasKnownAcSlug ? false : true;
       }
 
       // 6. Electrical
@@ -17475,98 +17904,46 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
       return doesPackageMatchTab(p);
     });
 
-    // 1. Map existing catalog items with latest DB values (100% DB-driven)
-    const seenIds = new Set();
-    const mapped = filteredRawPlans.map(plan => {
-      const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
-      // Pass 1: Prioritize exact slug/id matches to prevent cross-matching duplicates
-      let dbMatch = filteredDbPackages.find(p => (p.slug && (p.slug === plan.slug || p.slug === plan.id)) || String(p.id) === String(plan.id));
-
-      // Pass 2: Fallback to name matches
-      if (!dbMatch) {
-        dbMatch = filteredDbPackages.find(p => {
-          const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
-        });
-      }
-
-      if (!dbMatch) return plan;
-      seenIds.add(String(dbMatch.id));
-      if (dbMatch.slug) seenIds.add(dbMatch.slug);
-      const acImageMatch = resolveAcServiceImage(dbMatch.name || dbMatch.slug || plan.name || plan.id);
-      const isDarkUnsplash = typeof dbMatch.image === "string" && dbMatch.image.includes("1621905252507");
-      return {
-        ...plan,
-        ...dbMatch,
-        id: plan.id || dbMatch.id,
-        name: dbMatch.name,
-        price: Math.round(Number(dbMatch.base_price) || plan.price),
-        duration: dbMatch.duration || plan.duration,
-        description: dbMatch.description || plan.description,
-        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? extractTextList(dbMatch.includes) : plan.includes,
-        image: acImageMatch || ((!isDarkUnsplash && dbMatch.image) ? dbMatch.image : plan.image),
-        badge: dbMatch.tag || plan.badge,
-        tools: dbMatch.tools,
-        ready: dbMatch.ready,
-        reviews: dbMatch.reviews,
-        faqs: dbMatch.faqs,
-      };
-    });
-
-    // 2. Append any extra packages created in database for this specific subtab
-    const extraDbPackages = filteredDbPackages.filter(p => {
-      if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
-      return true;
-    }).map(p => {
-      const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
-      return {
-        id: p.slug || p.id,
-        name: p.name,
-        price: Math.round(Number(p.base_price) || 0),
-        duration: p.duration || "30 mins",
-        description: p.description || "",
-        includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
-        image: acExtraImage || ((p.image && !p.image.includes("1621905252507")) ? p.image : (targetDbCategory === "ac_appliance" || normalizedKey === "hvac" ? acServiceImg : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")),
-        badge: p.tag || "Standard",
-        badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-        tools: p.tools,
-        ready: p.ready,
-        reviews: p.reviews,
-        faqs: p.faqs,
-      };
-    });
-
-    // For HVAC, ensure strictly only the exact mapped services are shown without extra unmatched DB packages
-    if (effectiveKey === "hvac" || normalizedKey === "hvac") {
-      const finalPlans = [];
+    // Fully admin-driven: once any real package exists in the database for
+    // this category+subtab, it is the single source of truth -- render
+    // straight from it, so add/edit/remove all just work and nothing
+    // hardcoded lingers behind a deleted or renamed package. The hardcoded
+    // `filteredRawPlans` list is only a bootstrap placeholder for a subtab
+    // nobody has populated in the catalog yet.
+    let finalPlans;
+    if (filteredDbPackages.length > 0) {
+      finalPlans = [];
       const seenNames = new Set();
       const finalSeenIds = new Set();
-      mapped.forEach(plan => {
-        const normName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const planId = String(plan.id);
-        if (!seenNames.has(normName) && !finalSeenIds.has(planId)) {
+      filteredDbPackages.forEach(p => {
+        const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
+        const card = {
+          id: p.slug || p.id,
+          db_id: p.id,
+          name: p.name,
+          price: Math.round(Number(p.base_price) || 0),
+          duration: p.duration || "30 mins",
+          description: p.description || "",
+          includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
+          image: acExtraImage || ((p.image && !p.image.includes("1621905252507")) ? p.image : (targetDbCategory === "ac_appliance" || normalizedKey === "hvac" ? acServiceImg : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")),
+          badge: p.tag || "Standard",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          tools: p.tools,
+          ready: p.ready,
+          reviews: p.reviews,
+          faqs: p.faqs,
+        };
+        const normName = (card.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const cardId = String(card.id);
+        if (!seenNames.has(normName) && !finalSeenIds.has(cardId)) {
           seenNames.add(normName);
-          finalSeenIds.add(planId);
-          finalPlans.push(plan);
+          finalSeenIds.add(cardId);
+          finalPlans.push(card);
         }
       });
-      return finalPlans;
+    } else {
+      finalPlans = filteredRawPlans;
     }
-
-    // Deduplicate to guarantee unique keys and prevent duplicate products rendering in the list
-    const finalPlans = [];
-    const seenNames = new Set();
-    const finalSeenIds = new Set();
-    [...mapped, ...extraDbPackages].forEach(plan => {
-      const normName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const planId = String(plan.id);
-      if (!seenNames.has(normName) && !finalSeenIds.has(planId)) {
-        seenNames.add(normName);
-        finalSeenIds.add(planId);
-        finalPlans.push(plan);
-      }
-    });
     return finalPlans;
   }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
@@ -17629,6 +18006,13 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
       transition={{ duration: 0.25 }}
       onClick={e => e.stopPropagation()}
     >
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode(v => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
+
       <div className="bg-[#FEFCF8] pb-1.5 border-b border-[#E8E3DB]">
         <div className="py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#FEFCF8]">
           <div className="flex items-center gap-3">
@@ -17660,6 +18044,59 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
         {/* Subservice Flex Selector */}
         <div className="flex overflow-x-auto gap-4 pb-2 pt-1 justify-start scrollbar-none">
+          {effectiveKey === "hvac" && (acInspectionTile.visible || serviceEditMode) && (
+            <div
+              className={`relative flex flex-col items-center justify-start p-1.5 text-center w-[85px] sm:w-[90px] shrink-0 group rounded-xl ${acInspectionTile.visible ? "" : "opacity-40"}`}
+            >
+              {serviceEditMode && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSaveAcInspectionTile("visible", !acInspectionTile.visible);
+                  }}
+                  title={acInspectionTile.visible ? "Hide this tile from customers" : "Show this tile to customers"}
+                  className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 cursor-pointer"
+                >
+                  {acInspectionTile.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate("/ac-inspection")}
+                className="flex flex-col items-center justify-start bg-transparent cursor-pointer w-full"
+              >
+                <span className="text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5">
+                  {serviceEditMode ? (
+                    <EditableText
+                      active={true}
+                      value={acInspectionTile.badge}
+                      onSave={(v) => handleSaveAcInspectionTile("badge", v)}
+                      className="text-white"
+                    />
+                  ) : (
+                    acInspectionTile.badge
+                  )}
+                </span>
+                <div className="w-14 h-14 mb-1 flex items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 transition-all">
+                  <Wrench className="w-7 h-7 text-emerald-700" strokeWidth={1.5} />
+                </div>
+                <span className="text-[10px] block leading-tight tracking-tight mt-0.5 font-bold text-emerald-700 group-hover:text-emerald-800">
+                  {serviceEditMode ? (
+                    <EditableText
+                      active={true}
+                      value={acInspectionTile.label}
+                      multiline
+                      onSave={(v) => handleSaveAcInspectionTile("label", v)}
+                    />
+                  ) : (
+                    acInspectionTile.label
+                  )}
+                </span>
+                <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+              </button>
+            </div>
+          )}
           {subCategories.map(tab => {
             const isSelected = activeSubTab === tab.name;
             return (
@@ -17948,7 +18385,6 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                   return (
                     <div
                       key={p.id}
-                      id={`pkg-card-${p.id}`}
                       className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
@@ -17984,26 +18420,52 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                       <div className="flex flex-col md:flex-row justify-between gap-5">
                         <div className="flex-1 space-y-3">
                           <div className="flex items-center gap-2">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base">
+                              {serviceEditMode && p.db_id ? (
+                                <EditableText
+                                  active={true}
+                                  value={p.name}
+                                  onSave={(v) => handleSaveServiceField(p, "name", v)}
+                                />
+                              ) : (
+                                p.name
+                              )}
+                            </h4>
                             {p.badge && (
                               <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                 {p.badge}
                               </span>
                             )}
                           </div>
-                          {p.subtitle && (
-                            <div className="text-[11px] font-bold text-indigo-700 -mt-2">
-                              {p.subtitle}
-                            </div>
-                          )}
 
-                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                            {serviceEditMode && p.db_id ? (
+                              <EditableText
+                                active={true}
+                                value={p.description}
+                                multiline
+                                onSave={(v) => handleSaveServiceField(p, "description", v)}
+                              />
+                            ) : (
+                              p.description
+                            )}
+                          </p>
 
                           {/* Price & Duration */}
                           <div className="flex flex-col gap-1 text-xs pt-1">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-black text-slate-900">
-                                {normalizedKey === "mason" ? `Starts at ₹${p.price.toLocaleString("en-IN")}` : `₹${p.price.toLocaleString("en-IN")}`}
+                                {serviceEditMode && p.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={p.price}
+                                    onSave={(v) => handleSaveServiceField(p, "base_price", v)}
+                                  />
+                                ) : (
+                                  normalizedKey === "mason" ? `Starts at ₹${p.price.toLocaleString("en-IN")}` : `₹${p.price.toLocaleString("en-IN")}`
+                                )}
                               </span>
                               {normalizedKey !== "mason" && (
                                 <>
@@ -18079,23 +18541,6 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                             )
                           )}
 
-                          {/* Estimate / Rate Card Policy Note */}
-                          {(() => {
-                            const estNote = getServiceEstimateNote(p, normalizedKey);
-                            if (!estNote) return null;
-                            return (
-                              <div className="mt-3 flex items-start gap-2 text-[11px] text-amber-900 bg-amber-50/90 border border-amber-200/80 rounded-xl p-2.5">
-                                <span className="shrink-0 text-amber-600 font-bold text-xs mt-0.5">📋</span>
-                                <div className="leading-snug">
-                                  <span className="font-extrabold text-amber-950 uppercase text-[10px] tracking-wider block mb-0.5">
-                                    Estimate & Rate Card Policy
-                                  </span>
-                                  <span className="text-amber-900/90">{estNote}</span>
-                                </div>
-                              </div>
-                            );
-                          })()}
-
                           <div className="flex items-center gap-3 mt-3">
                             <button
                               onClick={() => {
@@ -18133,58 +18578,37 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                         {/* Right side image & floating ADD button */}
                         <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
                           <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50 flex items-center justify-center p-1.5">
-                            <img
-                              src={p.image}
-                              alt={p.name}
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
-                              }}
-                              className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
-                                  ? "object-contain p-1"
-                                  : "object-cover"
+                            {serviceEditMode && p.db_id ? (
+                              <EditableImage
+                                active={true}
+                                value={p.image}
+                                alt={p.name}
+                                assetType="services"
+                                className="w-full h-full"
+                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
+                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                    ? "object-contain p-1"
+                                    : "object-cover"
                                 }`}
-                            />
+                                onSave={(v) => handleSaveServiceField(p, "image", v)}
+                              />
+                            ) : (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                                }}
+                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
+                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                    ? "object-contain p-1"
+                                    : "object-cover"
+                                }`}
+                              />
+                            )}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {
-                                const isAcInspection = p.id === "ac-inspection" || p.jobType === "ESTIMATION";
-                                const hasActiveEst = isAcInspection && estimationRepository.hasActiveEstimationSync();
-
-                                if (isAcInspection) {
-                                  if (hasActiveEst) {
-                                    return (
-                                      <button
-                                        type="button"
-                                        className="w-full text-center text-[10px] font-black text-indigo-700 uppercase tracking-wider py-1 px-1 flex items-center justify-center cursor-pointer hover:underline"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const activeEst = estimationRepository.getActiveEstimationSync();
-                                          if (activeEst) {
-                                            navigate(routes.booking_checkout, { state: { successData: activeEst, isTracking: true, jobType: "ESTIMATION" } });
-                                          } else {
-                                            setActiveAccountTab("My Bookings");
-                                            setShowAccountPortal(true);
-                                          }
-                                        }}
-                                      >
-                                        View My Booking
-                                      </button>
-                                    );
-                                  }
-                                  return (
-                                    <button
-                                      type="button"
-                                      className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
-                                      onClick={() => {
-                                        setSelectedPackageDetail(p);
-                                      }}
-                                    >
-                                      <ShoppingCart size={11} className="shrink-0" />
-                                      <span>Add</span>
-                                    </button>
-                                  );
-                                }
-
                                 const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
                                 const cartItemPrice = normalizedKey === "mason" ? currentFee : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
                                 const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
@@ -18198,14 +18622,7 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                                 ) : (
                                   <button
                                     className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
-                                    onClick={() => {
-                                      addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration);
-                                      if (normalizedKey === "mason") {
-                                        setSelectedMasonDetail(p);
-                                      } else {
-                                        setSelectedPackageDetail(p);
-                                      }
-                                    }}
+                                    onClick={() => addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration)}
                                   >
                                     <ShoppingCart size={11} className="shrink-0" />
                                     <span>Add</span>
@@ -18573,18 +18990,46 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
             {/* Header: simple full-width hero image (removed split promo/offer card) */}
             <div className="w-full h-36 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
-              <img
-                src={selectedMasonDetail.image}
-                alt={selectedMasonDetail.name}
-                className="w-full h-full object-cover"
-              />
+              {serviceEditMode && selectedMasonDetail.db_id ? (
+                <EditableImage
+                  active={true}
+                  value={selectedMasonDetail.image}
+                  alt={selectedMasonDetail.name}
+                  assetType="services"
+                  className="w-full h-full"
+                  imgClassName="w-full h-full object-cover"
+                  onSave={(v) => {
+                    handleSaveServiceField(selectedMasonDetail, "image", v);
+                    setSelectedMasonDetail(prev => (prev ? { ...prev, image: v } : prev));
+                  }}
+                />
+              ) : (
+                <img
+                  src={selectedMasonDetail.image}
+                  alt={selectedMasonDetail.name}
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and add wrap */}
               <div className="border-b border-[#E8E3DB] pb-5">
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedMasonDetail.name}</h3>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">
+                  {serviceEditMode && selectedMasonDetail.db_id ? (
+                    <EditableText
+                      active={true}
+                      value={selectedMasonDetail.name}
+                      onSave={(v) => {
+                        handleSaveServiceField(selectedMasonDetail, "name", v);
+                        setSelectedMasonDetail(prev => (prev ? { ...prev, name: v } : prev));
+                      }}
+                    />
+                  ) : (
+                    selectedMasonDetail.name
+                  )}
+                </h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
                   <Star className="text-amber-500 fill-amber-500" size={12} />
@@ -18599,7 +19044,20 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
                       {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                     </div>
                     <div className="text-[9px] font-semibold text-slate-400">
-                      Starts at ₹{selectedMasonDetail.price}
+                      {serviceEditMode && selectedMasonDetail.db_id ? (
+                        <EditableText
+                          active={true}
+                          type="number"
+                          prefix="Starts at ₹"
+                          value={selectedMasonDetail.price}
+                          onSave={(v) => {
+                            handleSaveServiceField(selectedMasonDetail, "base_price", v);
+                            setSelectedMasonDetail(prev => (prev ? { ...prev, price: v } : prev));
+                          }}
+                        />
+                      ) : (
+                        `Starts at ₹${selectedMasonDetail.price}`
+                      )}
                     </div>
                   </div>
 
@@ -18868,25 +19326,50 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
             {/* Header image */}
             <div className="w-full h-44 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
-              <img
-                src={selectedPackageDetail.image}
-                alt={selectedPackageDetail.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
-                }}
-              />
+              {serviceEditMode && selectedPackageDetail.db_id ? (
+                <EditableImage
+                  active={true}
+                  value={selectedPackageDetail.image}
+                  alt={selectedPackageDetail.name}
+                  assetType="services"
+                  className="w-full h-full"
+                  imgClassName="w-full h-full object-cover"
+                  onSave={(v) => {
+                    handleSaveServiceField(selectedPackageDetail, "image", v);
+                    setSelectedPackageDetail(prev => (prev ? { ...prev, image: v } : prev));
+                  }}
+                />
+              ) : (
+                <img
+                  src={selectedPackageDetail.image}
+                  alt={selectedPackageDetail.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
+                  }}
+                />
+              )}
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and price/add */}
               <div className="border-b border-[#E8E3DB] pb-5">
-                <h3 className="text-lg font-extrabold text-slate-900 mb-0.5">{selectedPackageDetail.name}</h3>
-                {selectedPackageDetail.subtitle && (
-                  <div className="text-xs font-bold text-indigo-700 mb-2">{selectedPackageDetail.subtitle}</div>
-                )}
+                <h3 className="text-lg font-extrabold text-slate-900 mb-1">
+                  {serviceEditMode && selectedPackageDetail.db_id ? (
+                    <EditableText
+                      active={true}
+                      value={selectedPackageDetail.name}
+                      onSave={(v) => {
+                        handleSaveServiceField(selectedPackageDetail, "name", v);
+                        setSelectedPackageDetail(prev => (prev ? { ...prev, name: v } : prev));
+                      }}
+                    />
+                  ) : (
+                    selectedPackageDetail.name
+                  )}
+                </h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
                   <Star className="text-purple-600 fill-purple-600" size={13} />
@@ -18896,338 +19379,55 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
                 <div className="flex items-center justify-between bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4">
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      {selectedPackageDetail.id === "ac-inspection" ? "INSPECTION FEE" : "PRICE"}
-                    </div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PRICE</div>
                     <div className="text-lg font-black text-slate-900 mt-0.5">
-                      ₹{typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price.toLocaleString("en-IN") : selectedPackageDetail.price}
+                      {serviceEditMode && selectedPackageDetail.db_id ? (
+                        <EditableText
+                          active={true}
+                          type="number"
+                          prefix="₹"
+                          value={selectedPackageDetail.price}
+                          onSave={(v) => {
+                            handleSaveServiceField(selectedPackageDetail, "base_price", v);
+                            setSelectedPackageDetail(prev => (prev ? { ...prev, price: v } : prev));
+                          }}
+                        />
+                      ) : (
+                        <>₹{typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price.toLocaleString("en-IN") : selectedPackageDetail.price}</>
+                      )}
                       {selectedPackageDetail.duration && (
                         <span className="text-slate-400 text-xs font-semibold ml-2">• {selectedPackageDetail.duration}</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Add / Action button inside details modal */}
-                  <div className={selectedPackageDetail.id === "ac-inspection" ? "shrink-0" : "w-24"}>
-                    {selectedPackageDetail.id === "ac-inspection" ? (
-                      estimationRepository.hasActiveEstimationSync() ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedPackageDetail(null);
-                            const activeEst = estimationRepository.getActiveEstimationSync();
-                            if (activeEst) {
-                              navigate(routes.booking_checkout, { state: { successData: activeEst, isTracking: true, jobType: "ESTIMATION" } });
-                            } else {
-                              setActiveAccountTab("My Bookings");
-                              setShowAccountPortal(true);
-                            }
-                          }}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl shadow-md uppercase tracking-wider cursor-pointer"
-                        >
-                          View My Booking
-                        </button>
+                  {/* Add button inside details modal */}
+                  <div className="w-24">
+                    {(() => {
+                      const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
+                      const pkgCount = getCartItemCount(pkgCartId);
+                      const pkgName = selectedPackageDetail.name;
+                      const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
+                      const pkgDuration = selectedPackageDetail.duration || "";
+
+                      return pkgCount > 0 ? (
+                        <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                          <button onClick={() => removeItemFromCart(pkgCartId)} className="hover:text-emerald-900 cursor-pointer">-</button>
+                          <span>{pkgCount}</span>
+                          <button onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)} className="hover:text-emerald-900 cursor-pointer">+</button>
+                        </div>
                       ) : (
                         <button
-                          type="button"
-                          onClick={() => {
-                            const estCartItem = {
-                              id: "ac-inspection",
-                              name: ESTIMATION_TITLE,
-                              price: ESTIMATION_FEE,
-                              quantity: 1,
-                              duration: ESTIMATION_DURATION,
-                              jobType: "ESTIMATION",
-                              gst_rate: 0,
-                              platform_fee: 0,
-                              categoryName: "AC & Heating"
-                            };
-                            setSelectedPackageDetail(null);
-                            if (typeof onCheckout === "function") {
-                              onCheckout([estCartItem]);
-                            } else {
-                              navigate(routes.booking_checkout, {
-                                state: {
-                                  category: { id: "hvac", name: "AC & Heating", slug: "hvac", jobType: "ESTIMATION" },
-                                  cart: [estCartItem],
-                                  jobType: "ESTIMATION"
-                                }
-                              });
-                            }
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl shadow-md uppercase tracking-wider cursor-pointer"
+                          onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)}
+                          className="w-full bg-white border border-[#E8E3DB] text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-[#F5F0E6]/40 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
                         >
-                          Book Estimation
+                          <ShoppingCart size={13} /> Add
                         </button>
-                      )
-                    ) : (
-                      (() => {
-                        const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
-                        const pkgCount = getCartItemCount(pkgCartId);
-                        const pkgName = selectedPackageDetail.name;
-                        const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
-                        const pkgDuration = selectedPackageDetail.duration || "";
-
-                        return pkgCount > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(pkgCartId)} className="hover:text-emerald-900 cursor-pointer">-</button>
-                            <span>{pkgCount}</span>
-                            <button onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)} className="hover:text-emerald-900 cursor-pointer">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)}
-                            className="w-full bg-white border border-[#E8E3DB] text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-[#F5F0E6]/40 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
-                          >
-                            <ShoppingCart size={13} /> Add
-                          </button>
-                        );
-                      })()
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
-
-              {/* OPTIONAL ADD-ONS or AC INSPECTION DETAILS */}
-              {selectedPackageDetail.id === "ac-inspection" ? (
-                <div className="space-y-6 text-left">
-                  {/* WHAT'S INCLUDED */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
-                      <span className="text-emerald-600 font-black text-sm">✓</span>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">What's Included</h4>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700">
-                      {WHAT_IS_INCLUDED.map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-2">
-                          <Check size={14} className="text-emerald-600 shrink-0 mt-0.5" strokeWidth={2.5} />
-                          <span className="leading-snug">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* WHAT DOES THE TECHNICIAN CHECK? */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
-                      <span className="text-indigo-600 font-black text-sm">🔍</span>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">What Does the Technician Check?</h4>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {WHAT_TECHNICIAN_CHECKS.map((check, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 shadow-2xs flex items-center gap-2"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                          <span className="truncate">{check}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* HOW ESTIMATION WORKS */}
-                  <div className="space-y-3 bg-slate-50/80 border border-slate-200 rounded-2xl p-4">
-                    <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
-                      <span className="text-base">📋</span>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">How Estimation Works</h4>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      {HOW_ESTIMATION_WORKS_STEPS.map((step, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5">
-                          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                          <span className="text-slate-700 font-medium leading-snug">{step}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* IMPORTANT NOTICE */}
-                  <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3 text-xs text-amber-950">
-                    <AlertCircle size={17} className="text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="block font-black uppercase tracking-wide text-amber-900 mb-1">
-                        Important
-                      </strong>
-                      <p className="leading-relaxed">
-                        The customer does not need to know the technical AC problem before booking. The technician diagnoses the actual problem.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* WHAT IS NOT INCLUDED */}
-                  <div className="space-y-3 border-t border-slate-200/80 pt-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-rose-600 font-black text-sm">✗</span>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">What is Not Included?</h4>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      These may be quoted separately after inspection:
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
-                      {WHAT_IS_NOT_INCLUDED.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* OPTIONAL ADD-ONS */
-                (() => {
-                const pkgId = selectedPackageDetail.id || "";
-                const pkgName = (selectedPackageDetail.name || "").toLowerCase();
-                const isFoamSplit = pkgId === "foam-power-jet-split" || pkgId === "hvac-fj-split" || (pkgName.includes("foam & power jet") && pkgName.includes("split"));
-                const isAntiRust = pkgId === "anti-rust-deep-clean-ac" || pkgId === "hvac-ar-3" || pkgName.includes("anti-rust");
-                const isBasicAc = pkgId === "general-ac-service" || pkgId === "basic-ac-service" || pkgId === "hvac-basic" || (pkgName.includes("general") && pkgName.includes("ac")) || (pkgName.includes("basic") && pkgName.includes("ac"));
-
-                const detail = SERVICE_DETAIL_DATA[pkgId] || {};
-                let addOnsList = (Array.isArray(selectedPackageDetail.add_ons) && selectedPackageDetail.add_ons.length > 0)
-                  ? selectedPackageDetail.add_ons
-                  : (Array.isArray(selectedPackageDetail.addons) && selectedPackageDetail.addons.length > 0)
-                    ? selectedPackageDetail.addons
-                    : (Array.isArray(detail.addons) && detail.addons.length > 0)
-                      ? detail.addons
-                      : [];
-
-                if (addOnsList.length === 0 && isFoamSplit) {
-                  addOnsList = [
-                    { id: "deep-cleaning-upgrade", name: "Deep Cleaning Upgrade", price: 199, duration: "15 mins", description: "Intensive 2x foam soak & deep antimicrobial sanitization" },
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "High-pressure chemical drain line de-clog & flush" },
-                    { id: "anti-rust-protection", name: "Anti-Rust Protection", price: 199, duration: "15 mins", description: "Protective anti-corrosion spray coat on condenser U-bends" }
-                  ];
-                } else if (addOnsList.length === 0 && isAntiRust) {
-                  addOnsList = [
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "Deep cleaning for improved water flow" },
-                    { id: "extended-anti-rust-protection", name: "Extended Anti-Rust Protection", price: 249, duration: "15 mins", description: "Additional protective treatment for suitable accessible outdoor metal areas" },
-                    { id: "drain-pipe-replacement", name: "Drain Pipe Replacement", price: 199, duration: "15 mins", description: "Replacement of damaged or leaking drain pipe with high-grade flexible pipe" }
-                  ];
-                } else if (addOnsList.length === 0 && isBasicAc) {
-                  addOnsList = [
-                    { id: "power-jet-cleaning-upgrade", name: "Power Jet Cleaning Upgrade", price: 250, duration: "15 mins", description: "Deep foam & power-jet cleaning" },
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "For enhanced drainage cleaning" }
-                  ];
-                }
-
-                if (addOnsList.length === 0) return null;
-
-                return (
-                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                        <span className="text-emerald-600 font-extrabold text-sm">+</span>
-                        OPTIONAL ADD-ONS
-                      </h4>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customise service</span>
-                    </div>
-                    <div className="space-y-2">
-                      {addOnsList.map((addon) => {
-                        const addonIdSlug = String(addon.id || addon.slug || addon.name).toLowerCase().replace(/[^a-z0-9]/g, "-");
-                        const addonCartId = `serv-addon-${addonIdSlug}`;
-                        const addonCount = getCartItemCount(addonCartId);
-                        const addonPrice = Number(addon.price) || 0;
-                        const addonDuration = addon.duration || "15 mins";
-                        const addonName = addon.name;
-
-                        return (
-                          <div
-                            key={addon.id || addon.name}
-                            className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all ${
-                              addonCount > 0
-                                ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
-                                : "border-[#E8E3DB] bg-white hover:border-slate-300"
-                            }`}
-                          >
-                            <div className="flex-1 pr-3">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-slate-900">+ {addon.name}</span>
-                              </div>
-                              {addon.description && (
-                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{addon.description}</p>
-                              )}
-                              <div className="text-xs font-black text-slate-900 mt-1">
-                                ₹{addonPrice}
-                              </div>
-                            </div>
-
-                            <div className="w-20 shrink-0 flex justify-end">
-                              {addonCount > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-xs w-full">
-                                  <button
-                                    onClick={() => removeItemFromCart(addonCartId)}
-                                    className="hover:text-emerald-900 cursor-pointer text-xs font-black"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="text-xs font-black">{addonCount}</span>
-                                  <button
-                                    onClick={() => addItemToCart(addonCartId, addonName, addonPrice, addonDuration)}
-                                    className="hover:text-emerald-900 cursor-pointer text-xs font-black"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => addItemToCart(addonCartId, addonName, addonPrice, addonDuration)}
-                                  className="bg-white border border-slate-300 hover:border-emerald-500 text-emerald-600 font-extrabold text-xs py-1.5 px-3.5 rounded-lg hover:bg-emerald-50 transition-all shadow-xs uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                                >
-                                  ADD
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })())}
-
-              {/* ESTIMATE & RATE CARD POLICY */}
-              {(() => {
-                const estNote = getServiceEstimateNote(selectedPackageDetail, normalizedKey);
-                if (!estNote) return null;
-                return (
-                  <div className="space-y-2 border-t border-[#E8E3DB] pt-4 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="text-amber-600 font-bold">📋</span> ESTIMATE & RATE CARD POLICY
-                    </h4>
-                    <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl text-xs text-amber-900 space-y-1.5">
-                      <p className="font-bold text-amber-950 flex items-center gap-1">
-                        <span>✓</span> 100% Upfront Transparent Quotation
-                      </p>
-                      <p className="text-[11px] text-amber-900 leading-relaxed">
-                        {estNote}
-                      </p>
-                      <div className="text-[10px] text-amber-700 font-semibold pt-1 border-t border-amber-200/50">
-                        • No hidden charges • Work starts only after your quote approval • Digital invoice provided
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* WHAT'S INCLUDED */}
-              {Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0 && (
-                <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
-                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                    <span className="text-emerald-600 font-bold">✓</span> What's Included
-                  </h4>
-                  <ul className="text-xs text-slate-600 space-y-2 bg-[#F5F0E6]/60 p-3.5 rounded-2xl border border-[#E2DDD5]">
-                    {selectedPackageDetail.includes.map((inc, i) => (
-                      <li key={i} className="flex items-start gap-2.5">
-                        <span className="text-emerald-600 font-bold mt-0.5 shrink-0">✓</span>
-                        <span className="leading-snug">{typeof inc === 'string' ? inc : (inc?.text || '')}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
 
               {/* TOOLS & PRODUCTS WE USE */}
               <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
@@ -19335,91 +19535,27 @@ if (subtabParam === "AC Installation & Uninstallation" || subtabParam === "Insta
 
             {/* Footer */}
             <div className="p-4 border-t border-[#E8E3DB] bg-[#F5F0E6] flex items-center justify-between">
-              {selectedPackageDetail.id === "ac-inspection" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPackageDetail(null)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-extrabold text-xs hover:bg-slate-100 transition-all uppercase tracking-wider cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  {estimationRepository.hasActiveEstimationSync() ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedPackageDetail(null);
-                        const activeEst = estimationRepository.getActiveEstimationSync();
-                        if (activeEst) {
-                          navigate(routes.booking_checkout, { state: { successData: activeEst, isTracking: true, jobType: "ESTIMATION" } });
-                        } else {
-                          setActiveAccountTab("My Bookings");
-                          setShowAccountPortal(true);
-                        }
-                      }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer"
-                    >
-                      View My Booking
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const estCartItem = {
-                          id: "ac-inspection",
-                          name: ESTIMATION_TITLE,
-                          price: ESTIMATION_FEE,
-                          quantity: 1,
-                          duration: ESTIMATION_DURATION,
-                          jobType: "ESTIMATION",
-                          gst_rate: 0,
-                          platform_fee: 0,
-                          categoryName: "AC & Heating"
-                        };
-                        setSelectedPackageDetail(null);
-                        if (typeof onCheckout === "function") {
-                          onCheckout([estCartItem]);
-                        } else {
-                          navigate(routes.booking_checkout, {
-                            state: {
-                              category: { id: "hvac", name: "AC & Heating", slug: "hvac", jobType: "ESTIMATION" },
-                              cart: [estCartItem],
-                              jobType: "ESTIMATION"
-                            }
-                          });
-                        }
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer"
-                    >
-                      Book Estimation
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    {category?.name || "Service Details"}
-                  </span>
-                  <button
-                    onClick={() => {
-                      const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
-                      if (getCartItemCount(pkgCartId) === 0) {
-                        const pkgName = selectedPackageDetail.name;
-                        const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
-                        const pkgDuration = selectedPackageDetail.duration || "";
-                        addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration);
-                      }
-                      setSelectedPackageDetail(null);
-                      if (typeof onCheckout === "function") {
-                        onCheckout(cart);
-                      }
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer"
-                  >
-                    Proceed
-                  </button>
-                </>
-              )}
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                {category?.name || "Service Details"}
+              </span>
+              <button
+                onClick={() => {
+                  const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
+                  if (getCartItemCount(pkgCartId) === 0) {
+                    const pkgName = selectedPackageDetail.name;
+                    const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
+                    const pkgDuration = selectedPackageDetail.duration || "";
+                    addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration);
+                  }
+                  setSelectedPackageDetail(null);
+                  if (typeof onCheckout === "function") {
+                    onCheckout(cart);
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer"
+              >
+                Proceed
+              </button>
             </div>
           </div>
         </div>,
@@ -22885,22 +23021,22 @@ const KITCHEN_SUB_TABS = [
   {
     id: "packages",
     name: "Full Kitchen Packages",
-    image: "/mockups/icons/kitchen_full_packages.png",
+    image: "/mockups/kitchen_top_new.png",
   },
   {
     id: "appliance",
-    name: "Single Appliance Cleaning",
-    image: "/mockups/icons/kitchen_single_appliance.png",
+    name: "single appliance cleaning",
+    image: "/mockups/appliance_cleaning_hero.png",
   },
   {
     id: "cabinet_tile",
     name: "Cabinet & Tile Care",
-    image: "/mockups/icons/kitchen_cabinet_tile.png",
+    image: "/mockups/kitchen_cleaning_hero.png",
   },
   {
     id: "addons",
     name: "Quick Extra Services",
-    image: "/mockups/icons/kitchen_quick_extra.png",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
   }
 ];
 
@@ -23280,164 +23416,6 @@ const QUICK_EXTRA_SERVICES = [
 ];
 
 const SERVICE_DETAIL_DATA = {
-  "foam-power-jet-split": {
-    tools: [
-      "High-pressure specialized jet pump",
-      "Anti-bacterial coil foaming agent",
-      "Waterproof service catch jacket",
-      "Digital anemometer & airflow gauge"
-    ],
-    ready: [
-      "Ensure continuous water and electricity near the AC unit",
-      "Keep area underneath the indoor unit clear of delicate items"
-    ],
-    reviews: [
-      { name: "Siddharth K.", rating: "5.0", text: '"The power jet wash brought back freezing cold air! Flushed out heavy dust without spilling a single drop."' },
-      { name: "Revathi N.", rating: "4.9", text: '"Punctual technician. Showed before and after airflow readings."' }
-    ],
-    faqs: [
-      { q: "Will water splash on my wall during jet service?", a: "No, our technician mounts a 100% waterproof AC service jacket with an outlet hose draining directly into a bucket." },
-      { q: "Is outdoor condenser cleaning included?", a: "Yes! Both indoor cooling coil power jet wash and outdoor unit condenser flush are included." }
-    ],
-    addons: [
-      { id: "deep-cleaning-upgrade", name: "Deep Cleaning Upgrade", price: 199, description: "Intensive 2x foam soak & deep antimicrobial sanitization", duration: "15 mins" },
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "High-pressure chemical drain line de-clog & flush", duration: "15 mins" },
-      { id: "anti-rust-protection", name: "Anti-Rust Protection", price: 199, description: "Protective anti-corrosion spray coat on condenser U-bends", duration: "15 mins" }
-    ]
-  },
-  "hvac-fj-split": {
-    tools: [
-      "High-pressure specialized jet pump",
-      "Anti-bacterial coil foaming agent",
-      "Waterproof service catch jacket",
-      "Digital anemometer & airflow gauge"
-    ],
-    ready: [
-      "Ensure continuous water and electricity near the AC unit",
-      "Keep area underneath the indoor unit clear of delicate items"
-    ],
-    reviews: [
-      { name: "Siddharth K.", rating: "5.0", text: '"The power jet wash brought back freezing cold air! Flushed out heavy dust without spilling a single drop."' },
-      { name: "Revathi N.", rating: "4.9", text: '"Punctual technician. Showed before and after airflow readings."' }
-    ],
-    faqs: [
-      { q: "Will water splash on my wall during jet service?", a: "No, our technician mounts a 100% waterproof AC service jacket with an outlet hose draining directly into a bucket." },
-      { q: "Is outdoor condenser cleaning included?", a: "Yes! Both indoor cooling coil power jet wash and outdoor unit condenser flush are included." }
-    ],
-    addons: [
-      { id: "deep-cleaning-upgrade", name: "Deep Cleaning Upgrade", price: 199, description: "Intensive 2x foam soak & deep antimicrobial sanitization", duration: "15 mins" },
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "High-pressure chemical drain line de-clog & flush", duration: "15 mins" },
-      { id: "anti-rust-protection", name: "Anti-Rust Protection", price: 199, description: "Protective anti-corrosion spray coat on condenser U-bends", duration: "15 mins" }
-    ]
-  },
-  "anti-rust-deep-clean-ac": {
-    tools: [
-      "Anti-corrosion protective coil coating spray",
-      "High-pressure jet machine",
-      "Dual-action enzymatic foam cleaner",
-      "Fin straightener comb tool",
-      "Electronic leak sniffer"
-    ],
-    ready: [
-      "Safe accessibility to outdoor and indoor units",
-      "Water tap and electrical supply"
-    ],
-    reviews: [
-      { name: "Vikram M.", rating: "5.0", text: '"Super deep cleaning and anti-rust protection. Noticeably quieter compressor operation."' }
-    ],
-    faqs: [
-      { q: "What is the anti-rust treatment?", a: "Anti-rust treatment is applied only to suitable and accessible metal components to shield against moisture and oxidation. It is not a guarantee against all future corrosion." }
-    ],
-    addons: [
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "Deep cleaning for improved water flow", duration: "15 mins" },
-      { id: "extended-anti-rust-protection", name: "Extended Anti-Rust Protection", price: 249, description: "Additional protective treatment for suitable accessible outdoor metal areas", duration: "15 mins" },
-      { id: "drain-pipe-replacement", name: "Drain Pipe Replacement", price: 199, description: "Replacement of damaged or leaking drain pipe with high-grade flexible pipe", duration: "15 mins" }
-    ]
-  },
-  "hvac-ar-3": {
-    tools: [
-      "Anti-corrosion protective coil coating spray",
-      "High-pressure jet machine",
-      "Dual-action enzymatic foam cleaner",
-      "Fin straightener comb tool",
-      "Electronic leak sniffer"
-    ],
-    ready: [
-      "Safe accessibility to outdoor and indoor units",
-      "Water tap and electrical supply"
-    ],
-    reviews: [
-      { name: "Vikram M.", rating: "5.0", text: '"Super deep cleaning and anti-rust protection. Noticeably quieter compressor operation."' }
-    ],
-    faqs: [
-      { q: "What is the anti-rust treatment?", a: "Anti-rust treatment is applied only to suitable and accessible metal components to shield against moisture and oxidation. It is not a guarantee against all future corrosion." }
-    ],
-    addons: [
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "Deep cleaning for improved water flow", duration: "15 mins" },
-      { id: "extended-anti-rust-protection", name: "Extended Anti-Rust Protection", price: 249, description: "Additional protective treatment for suitable accessible outdoor metal areas", duration: "15 mins" },
-      { id: "drain-pipe-replacement", name: "Drain Pipe Replacement", price: 199, description: "Replacement of damaged or leaking drain pipe with high-grade flexible pipe", duration: "15 mins" }
-    ]
-  },
-  "general-ac-service": {
-    tools: [
-      "Soft fin cleaning brush",
-      "Air blower & vacuum",
-      "Digital laser thermometer"
-    ],
-    ready: [
-      "AC remote control available"
-    ],
-    reviews: [
-      { name: "Karthik R.", rating: "4.8", text: '"Quick standard maintenance, great for routine seasonal prep."' }
-    ],
-    faqs: [
-      { q: "How often should general AC service be done?", a: "Every 2-3 months during heavy summer usage to maintain clean airflow." }
-    ],
-    addons: [
-      { id: "power-jet-cleaning-upgrade", name: "Power Jet Cleaning Upgrade", price: 250, description: "Deep foam & power-jet cleaning", duration: "15 mins" },
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "For enhanced drainage cleaning", duration: "15 mins" }
-    ]
-  },
-  "basic-ac-service": {
-    tools: [
-      "Soft fin cleaning brush",
-      "Air blower & vacuum",
-      "Digital laser thermometer"
-    ],
-    ready: [
-      "AC remote control available"
-    ],
-    reviews: [
-      { name: "Karthik R.", rating: "4.8", text: '"Quick standard maintenance, great for routine seasonal prep."' }
-    ],
-    faqs: [
-      { q: "How often should basic AC service be done?", a: "Every 2-3 months during heavy summer usage to maintain clean airflow." }
-    ],
-    addons: [
-      { id: "power-jet-cleaning-upgrade", name: "Power Jet Cleaning Upgrade", price: 250, description: "Deep foam & power-jet cleaning", duration: "15 mins" },
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "For enhanced drainage cleaning", duration: "15 mins" }
-    ]
-  },
-  "hvac-basic": {
-    tools: [
-      "Soft fin cleaning brush",
-      "Air blower & vacuum",
-      "Digital laser thermometer"
-    ],
-    ready: [
-      "AC remote control available"
-    ],
-    reviews: [
-      { name: "Karthik R.", rating: "4.8", text: '"Quick standard maintenance, great for routine seasonal prep."' }
-    ],
-    faqs: [
-      { q: "How often should basic AC service be done?", a: "Every 2-3 months during heavy summer usage to maintain clean airflow." }
-    ],
-    addons: [
-      { id: "power-jet-cleaning-upgrade", name: "Power Jet Cleaning Upgrade", price: 250, description: "Deep foam & power-jet cleaning", duration: "15 mins" },
-      { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, description: "For enhanced drainage cleaning", duration: "15 mins" }
-    ]
-  },
   "empty-kitchen": {
     tools: [
       "Specialized degreasing agents",
@@ -24099,6 +24077,105 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
   const [dbPackages, setDbPackages] = useState([]);
 
+  const [searchParams] = useSearchParams();
+  const editFromUrl = searchParams.get("edit") === "1" || searchParams.get("superAdminEdit") === "1";
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(editFromUrl);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  useEffect(() => {
+    if (editFromUrl && canEnterServiceEditMode) {
+      setServiceEditMode(true);
+    }
+  }, [editFromUrl, canEnterServiceEditMode]);
+
+  const [serviceOverrides, setServiceOverrides] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_kitchen_service_overrides") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const [customBanners, setCustomBanners] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_custom_subtab_banners") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const handleSaveBanner = async (newUrl) => {
+    setCustomBanners(prev => {
+      const next = { ...prev, [activeTab]: newUrl };
+      try {
+        localStorage.setItem("calservice_custom_subtab_banners", JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    setSaveNotice({ type: "success", text: `Updated ${activeTab} banner image!` });
+    setTimeout(() => setSaveNotice(null), 3000);
+
+    if (dbPackages[0]?.id) {
+      try {
+        const existingCustom = dbPackages[0]?.service_customization || {};
+        const subtab_banners = { ...(existingCustom.subtab_banners || {}), [activeTab]: newUrl };
+        await apiRequest(`/settings/catalog/v2/packages/${dbPackages[0].id}/`, {
+          method: "PUT",
+          json: { service_customization: { ...existingCustom, subtab_banners } }
+        });
+      } catch (e) {
+        console.error("Failed to sync banner to backend catalog:", e);
+      }
+    }
+  };
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode) return;
+
+    setServiceOverrides(prev => {
+      const next = {
+        ...prev,
+        [item.id]: {
+          ...(prev[item.id] || {}),
+          [field]: value
+        }
+      };
+      try {
+        localStorage.setItem("calservice_kitchen_service_overrides", JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+
+    if (!item.db_id) {
+      setSaveNotice({ type: "success", text: `Updated "${item.name}" (Live Preview mode).` });
+      setTimeout(() => setSaveNotice(null), 3000);
+      return;
+    }
+
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — catalog updated.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — catalog permissions issue." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {
@@ -24144,58 +24221,61 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
   const customSubTabs = dbPackages[0]?.service_customization?.subtabs;
-  const KITCHEN_ICON_MAP = {
-    packages: "/mockups/icons/kitchen_full_packages.png",
-    appliance: "/mockups/icons/kitchen_single_appliance.png",
-    cabinet_tile: "/mockups/icons/kitchen_cabinet_tile.png",
-    addons: "/mockups/icons/kitchen_quick_extra.png",
-  };
   const activeSubTabsList = (customSubTabs && customSubTabs.length > 0)
-    ? customSubTabs.filter(tab => tab.enabled !== false).map(tab => {
-        if (KITCHEN_ICON_MAP[tab.id]) {
-          return {
-            id: tab.id,
-            name: tab.label,
-            image: KITCHEN_ICON_MAP[tab.id]
-          };
-        }
-        const customB = dbPackages[0]?.service_customization?.subtab_banners?.[tab.id];
-        const defaultIcon = "/mockups/icons/kitchen_cleaning_overview.png";
-        return {
-          id: tab.id,
-          name: tab.label,
-          image: customB ? resolveImageUrl(customB, defaultIcon) : defaultIcon
-        };
-      })
-    : KITCHEN_SUB_TABS;
+    ? customSubTabs.filter(tab => tab.enabled !== false).map(tab => ({ id: tab.id, name: tab.label, image: customBanners[tab.id] || resolveImageUrl(dbPackages[0]?.service_customization?.subtab_banners?.[tab.id], "/mockups/kitchen_top_new.png") }))
+    : KITCHEN_SUB_TABS.map(tab => ({ ...tab, image: customBanners[tab.id] || tab.image }));
 
   const getActiveServices = () => {
+    const isKnownStaticTab = activeTab === "packages" || activeTab === "appliance" || activeTab === "cabinet_tile" || activeTab === "addons";
+    const dbItemsForActiveTab = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
+    const mapDbPkgToCard = (p) => ({
+      id: p.slug || String(p.id),
+      db_id: p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "1 hr",
+      description: p.description || "",
+      image: p.image || "/mockups/kitchen_top_new.png",
+      includes: Array.isArray(p.includes) ? p.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false)) : [],
+      excludes: Array.isArray(p.excludes) ? p.excludes : [],
+      tools: Array.isArray(p.tools) ? p.tools : [],
+      ready: Array.isArray(p.ready) ? p.ready : [],
+      reviews: Array.isArray(p.reviews) ? p.reviews.filter(r => r?.enabled !== false) : [],
+      reviews_list: Array.isArray(p.reviews) ? p.reviews.filter(r => r?.enabled !== false) : [],
+      faqs: Array.isArray(p.faqs) ? p.faqs.filter(f => f?.checked !== false && f?.enabled !== false) : [],
+      tag: p.tag || "",
+      popular: p.popular || false,
+      gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+      platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+    });
+
     let list = [];
-    if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
+    // Fully admin-driven: once ANY package is tagged for a tab, the database
+    // becomes the single source of truth for it -- add, edit AND remove all
+    // just work, with nothing hardcoded lingering behind. The hardcoded
+    // arrays below are only a bootstrap placeholder for a tab nobody has
+    // populated in the catalog yet.
+    if (dbItemsForActiveTab.length > 0) {
+      list = dbItemsForActiveTab.map(mapDbPkgToCard);
+    } else if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
     else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
     else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
     else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
-    else {
-      // Dynamic custom tabs fallback
-      const matchingDbPkgs = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.customization && p.customization.subtab === activeTab));
-      list = matchingDbPkgs.map(p => ({
-        id: p.slug,
-        name: p.name,
-        price: Math.round(Number(p.base_price) || 0),
-        duration: p.duration || "1 hr",
-        description: p.description,
-        image: p.image || "/mockups/icons/kitchen_cleaning_overview.png",
-        includes: Array.isArray(p.includes) ? p.includes : [],
-        gst_rate: p.gst_rate !== undefined ? parseFloat(p.gst_rate) : 18,
-        platform_fee: p.platform_fee !== undefined ? parseFloat(p.platform_fee) : 29
-      }));
-    }
+    // else: an uncustomized dynamic tab with no matching packages -- empty.
 
-    if (dbPackages.length > 0) {
+    const seenDbIds = new Set();
+    const usingHardcodedFallback = isKnownStaticTab && dbItemsForActiveTab.length === 0;
+
+    // Only overlay legacy slug-matched edits onto the hardcoded placeholder
+    // items -- once a tab is genuinely DB-driven (the branch above), `list`
+    // already came straight from the database and needs no further merge.
+    if (usingHardcodedFallback && dbPackages.length > 0) {
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
           if (parentDbMatch) {
+            seenDbIds.add(parentDbMatch.id);
+            item.db_id = parentDbMatch.id;
             item.name = parentDbMatch.name;
             item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
             item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
@@ -24213,9 +24293,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              seenDbIds.add(dbMatch.id);
               const baseIncludes = Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes);
               return {
                 ...subOpt,
+                db_id: dbMatch.id,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
@@ -24248,6 +24330,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id);
           if (dbMatch) {
+            seenDbIds.add(dbMatch.id);
+            item.db_id = dbMatch.id;
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
@@ -24259,9 +24343,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               : item.includes;
             item.tag = dbMatch.tag || "";
             item.popular = dbMatch.popular || false;
-            // Overwrite the image only if it is a valid non-supabase path or resolves cleanly
-            if (dbMatch.image && !dbMatch.image.includes("supabase.co")) {
-              item.image = resolveImageUrl(dbMatch.image, item.image);
+            // Overwrite the image if the database has a customized image path set
+            if (dbMatch.image) {
+              item.image = dbMatch.image;
             }
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
@@ -24274,6 +24358,20 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.gst_rate = item.gst_rate || 18;
             item.platform_fee = item.platform_fee || 29;
           }
+        }
+        return item;
+      });
+    }
+
+    if (serviceOverrides && Object.keys(serviceOverrides).length > 0) {
+      list = list.map(item => {
+        const ov = serviceOverrides[item.id];
+        if (ov) {
+          return {
+            ...item,
+            ...ov,
+            price: ov.base_price !== undefined ? Math.round(Number(ov.base_price) || item.price) : (ov.price !== undefined ? Math.round(Number(ov.price) || item.price) : item.price)
+          };
         }
         return item;
       });
@@ -24301,6 +24399,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   return (
     <div className="w-full text-slate-700 bg-white">
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
@@ -24335,13 +24439,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
               >
                 <img
-                  src={KITCHEN_ICON_MAP[tab.id] || tab.image || "/mockups/icons/kitchen_cleaning_overview.png"}
+                  src={tab.image}
                   alt={tab.name}
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = KITCHEN_ICON_MAP[tab.id] || "/mockups/icons/kitchen_cleaning_overview.png";
-                  }}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md border-2 border-emerald-500" : "opacity-80 hover:opacity-100"
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
                     }`}
                 />
                 <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
@@ -24376,15 +24476,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
-                      <img
-                        src={KITCHEN_ICON_MAP[activeTab] || "/mockups/icons/kitchen_cleaning_overview.png"}
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60 relative">
+                      <EditableImage
+                        active={Boolean(serviceEditMode)}
+                        value={customBanners[activeTab] || activeSubTabsList.find(t => t.id === activeTab)?.image || "/mockups/kitchen_top_new.png"}
+                        onSave={handleSaveBanner}
+                        assetType="banners"
                         alt={service.name}
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = "/mockups/icons/kitchen_cleaning_overview.png";
-                        }}
-                        className="w-full h-full object-cover object-center"
+                        className="w-full h-full"
+                        imgClassName="w-full h-full object-cover object-center"
+                        defaultFallback="/mockups/kitchen_top_new.png"
+                        title={`Edit ${activeSubTabsList.find(t => t.id === activeTab)?.name || activeTab} Banner`}
                       />
                     </div>
                   )}
@@ -24402,7 +24504,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           ★ {service.tag}
                         </span>
                       )}
-                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
 
                       {service.rating && activeTab !== "appliance" && (
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
@@ -24412,16 +24520,40 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       )}
 
-                      {service.description && (
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      {(service.description || serviceEditMode) && (
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                         <span className="text-base font-black text-slate-900">
-                          {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                          {serviceEditMode ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`
+                          )}
                         </span>
                         <span className="text-slate-300">•</span>
-                        <span className="text-slate-500 font-semibold">{service.duration}</span>
+                        <span className="text-slate-500 font-semibold">
+                          <EditableText
+                            active={Boolean(serviceEditMode)}
+                            value={service.duration}
+                            onSave={(v) => handleSaveServiceField(service, "duration", v)}
+                          />
+                        </span>
                       </div>
 
                       {service.includes && service.includes.length > 0 && (
@@ -24495,17 +24627,18 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     </div>
 
                     {/* Image + add button */}
-                    {service.image && (
+                    {(service.image || serviceEditMode) && (
                       <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
                         <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                          <img
-                            src={resolveImageUrl(service.image, KITCHEN_ICON_MAP[activeTab] || "/mockups/icons/kitchen_cleaning_overview.png")}
+                          <EditableImage
+                            active={Boolean(serviceEditMode)}
+                            value={service.image}
+                            onSave={(url) => handleSaveServiceField(service, "image", url)}
+                            assetType="services"
                             alt={service.name}
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = KITCHEN_ICON_MAP[activeTab] || "/mockups/icons/kitchen_cleaning_overview.png";
-                            }}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full"
+                            imgClassName="w-full h-full object-cover"
+                            defaultFallback="/mockups/service_cleaning.png"
                           />
                         </div>
                         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
@@ -24797,11 +24930,25 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       return (
                         <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
-                            <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                            <EditableImage
+                              active={Boolean(serviceEditMode && sub.db_id)}
+                              value={sub.image}
+                              onSave={(url) => handleSaveServiceField(sub, "image", url)}
+                              assetType="services"
+                              alt={sub.name}
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover"
+                            />
                           </div>
                           <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
-                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && sub.db_id)}
+                                  value={sub.name}
+                                  onSave={(v) => handleSaveServiceField(sub, "name", v)}
+                                />
+                              </h5>
                             </div>
                             <div className="w-full mt-auto">
                               <button
@@ -24812,7 +24959,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                               >
                                 View Details
                               </button>
-                              <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
+                              <div className="text-xs font-black text-slate-900 mb-2">
+                                {serviceEditMode && sub.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={sub.price}
+                                    onSave={(v) => handleSaveServiceField(sub, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${sub.price}`
+                                )}
+                              </div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
                                   <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
@@ -24835,141 +24994,6 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   </div>
                 </div>
               )}
-
-              {/* OPTIONAL ADD-ONS */}
-              {(() => {
-                const id = selectedServiceDetails.id || "";
-                const name = (selectedServiceDetails.name || "").toLowerCase();
-                const isFoamSplit = id === "foam-power-jet-split" || id === "hvac-fj-split" || (name.includes("foam & power jet") && name.includes("split"));
-                const isAntiRust = id === "anti-rust-deep-clean-ac" || id === "hvac-ar-3" || name.includes("anti-rust");
-                const isBasicAc = id === "general-ac-service" || id === "basic-ac-service" || id === "hvac-basic" || (name.includes("general") && name.includes("ac")) || (name.includes("basic") && name.includes("ac"));
-
-                const detail = SERVICE_DETAIL_DATA[id] || {};
-                let addOnsList = (Array.isArray(selectedServiceDetails.add_ons) && selectedServiceDetails.add_ons.length > 0)
-                  ? selectedServiceDetails.add_ons
-                  : (Array.isArray(selectedServiceDetails.addons) && selectedServiceDetails.addons.length > 0)
-                    ? selectedServiceDetails.addons
-                    : (Array.isArray(detail.addons) && detail.addons.length > 0)
-                      ? detail.addons
-                      : [];
-
-                if (addOnsList.length === 0 && isFoamSplit) {
-                  addOnsList = [
-                    { id: "deep-cleaning-upgrade", name: "Deep Cleaning Upgrade", price: 199, duration: "15 mins", description: "Intensive 2x foam soak & deep antimicrobial sanitization" },
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "High-pressure chemical drain line de-clog & flush" },
-                    { id: "anti-rust-protection", name: "Anti-Rust Protection", price: 199, duration: "15 mins", description: "Protective anti-corrosion spray coat on condenser U-bends" }
-                  ];
-                } else if (addOnsList.length === 0 && isAntiRust) {
-                  addOnsList = [
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "Deep cleaning for improved water flow" },
-                    { id: "extended-anti-rust-protection", name: "Extended Anti-Rust Protection", price: 249, duration: "15 mins", description: "Additional protective treatment for suitable accessible outdoor metal areas" },
-                    { id: "drain-pipe-replacement", name: "Drain Pipe Replacement", price: 199, duration: "15 mins", description: "Replacement of damaged or leaking drain pipe with high-grade flexible pipe" }
-                  ];
-                } else if (addOnsList.length === 0 && isBasicAc) {
-                  addOnsList = [
-                    { id: "power-jet-cleaning-upgrade", name: "Power Jet Cleaning Upgrade", price: 250, duration: "15 mins", description: "Deep foam & power-jet cleaning" },
-                    { id: "drain-pipe-deep-clean", name: "Drain Pipe Deep Cleaning", price: 149, duration: "15 mins", description: "For enhanced drainage cleaning" }
-                  ];
-                }
-
-                if (addOnsList.length === 0) return null;
-
-                return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                        <span className="text-emerald-600 font-extrabold text-sm">+</span>
-                        OPTIONAL ADD-ONS
-                      </h4>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customise service</span>
-                    </div>
-                    <div className="space-y-2">
-                      {addOnsList.map((addon) => {
-                        const addonIdSlug = String(addon.id || addon.slug || addon.name).toLowerCase().replace(/[^a-z0-9]/g, "-");
-                        const addonCartId = `addon-${addonIdSlug}`;
-                        const addonCount = getCount(addonCartId);
-                        const addonPrice = Number(addon.price) || 0;
-                        const addonDuration = addon.duration || "15 mins";
-                        const addonName = addon.name;
-
-                        return (
-                          <div
-                            key={addon.id || addon.name}
-                            className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all ${
-                              addonCount > 0
-                                ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
-                                : "border-slate-100 bg-slate-50/30 hover:border-slate-200"
-                            }`}
-                          >
-                            <div className="flex-1 pr-3">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-slate-900">+ {addon.name}</span>
-                              </div>
-                              {addon.description && (
-                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{addon.description}</p>
-                              )}
-                              <div className="text-xs font-black text-slate-900 mt-1">
-                                ₹{addonPrice}
-                              </div>
-                            </div>
-
-                            <div className="w-20 shrink-0 flex justify-end">
-                              {addonCount > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-xs w-full">
-                                  <button
-                                    onClick={() => removeItemFromCart(addonCartId)}
-                                    className="hover:text-emerald-900 cursor-pointer text-xs font-black"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="text-xs font-black">{addonCount}</span>
-                                  <button
-                                    onClick={() => addItemToCart(addonCartId, addonName, addonPrice, addonDuration)}
-                                    className="hover:text-emerald-900 cursor-pointer text-xs font-black"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => addItemToCart(addonCartId, addonName, addonPrice, addonDuration)}
-                                  className="bg-white border border-slate-200 hover:border-emerald-500 text-emerald-600 font-extrabold text-xs py-1.5 px-3.5 rounded-lg hover:bg-slate-50 transition-all shadow-xs uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                                >
-                                  ADD
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ESTIMATE & RATE CARD POLICY */}
-              {(() => {
-                const estNote = getServiceEstimateNote(selectedServiceDetails, normalizedKey);
-                if (!estNote) return null;
-                return (
-                  <div className="space-y-2 border-t border-slate-100 pt-5 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="text-amber-600 font-bold">📋</span> ESTIMATE & RATE CARD POLICY
-                    </h4>
-                    <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-2xl text-xs text-amber-900 space-y-1.5">
-                      <p className="font-bold text-amber-950 flex items-center gap-1">
-                        <span>✓</span> 100% Upfront Transparent Quotation
-                      </p>
-                      <p className="text-[11px] text-amber-900 leading-relaxed">
-                        {estNote}
-                      </p>
-                      <div className="text-[10px] text-amber-700 font-semibold pt-1 border-t border-amber-200/60">
-                        • No hidden charges • Work starts only after your approval • Digital invoice provided
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* Tools & Products We Use */}
               {(() => {

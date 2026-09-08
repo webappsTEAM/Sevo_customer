@@ -3,15 +3,19 @@ import { useNavigate, useLocation, Link } from "react-router-dom"
 import {
   ChevronLeft, Search, ShoppingCart, Clock, X,
   MapPin, Sparkles, Filter, CheckCircle2, ChevronRight,
-  ArrowRight, ShieldCheck, HeartPulse
+  ArrowRight, ShieldCheck, HeartPulse, ShieldAlert, Pencil
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { apiRequest } from "../../api/client.js"
+import { useCanEditCustomerUI } from "../components/SuperAdminEditControls.jsx"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { VegetableProductCard } from "../components/vegetables/VegetableProductCard.jsx"
 import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
+import { VegetableProductDetailPage } from "../components/vegetables/VegetableProductDetailPage.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
+
+import { getVegetableProducePhoto } from "../../utils/vegetablePhotoMap.js"
 
 // Quick categories mapping
 const VEG_CATEGORY_FILTERS = [
@@ -28,10 +32,31 @@ export function VegetableFullScreenPage() {
   const location = useLocation()
   const vegTiming = getVegetableTimingInfo()
 
+  // ── Super Admin Customer UI Edit Mode ──────────────────────────────────
+  // Entry point: PlatformDashboardPage's "View Customer App" link deep-links
+  // here with ?admin_edit=1. `canEnterEditMode` is the authorization check —
+  // it is frontend UX only; the actual save PUTs through the same admin
+  // catalog endpoint the existing Catalog admin panel uses
+  // (settings_hub AdminPackageDetailView), which is backend-permission-gated
+  // independently (accounts.permissions.RequireModuleAccess("catalog","edit")).
+  // A normal customer never sees this bar because canEnterEditMode is false.
+  const canEnterEditMode = useCanEditCustomerUI()
+  const [editMode, setEditMode] = useState(() => {
+    try {
+      return canEnterEditMode && new URLSearchParams(location.search).get("admin_edit") === "1"
+    } catch {
+      return false
+    }
+  })
+  const [saveNotice, setSaveNotice] = useState(null)
+
   const [vegetables, setVegetables] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
+
+  // Selected product for full-page detail view
+  const [selectedProduct, setSelectedProduct] = useState(null)
 
   // Cart state persisted to localStorage
   const [foodCart, setFoodCart] = useState(() => {
@@ -78,7 +103,8 @@ export function VegetableFullScreenPage() {
               discount: discount,
               delivery: "8 MINS",
               category: getCategoryFromName(pkg.name),
-              image: pkg.image || getProducePhotoFallback(pkg.name),
+              image: getVegetableProducePhoto(pkg.name),
+              description: pkg.description || "",
             }
           })
           setVegetables(items)
@@ -150,11 +176,51 @@ export function VegetableFullScreenPage() {
     })
   }
 
+  // Super Admin Edit Mode save: PATCHes the real Package row through the
+  // existing admin catalog endpoint, then updates local state from the
+  // server's response so the price shown here matches the database (no
+  // client-side value is ever treated as the source of truth).
+  const handleSaveField = async (item, field, value) => {
+    if (!canEnterEditMode) return
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      })
+      if (res && res.success && res.data) {
+        const pkg = res.data
+        const price = Math.round(Number(pkg.base_price) || 0)
+        const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
+        setVegetables((prev) =>
+          prev.map((v) => (v.id === item.id ? { ...v, name: pkg.name, price, mrp, image: pkg.image || v.image } : v))
+        )
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` })
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." })
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." })
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000)
+    }
+  }
+
   const totalCartCount = Object.values(foodCart).reduce((a, b) => a + b, 0)
-  const totalCartValue = Object.entries(foodCart).reduce((sum, [name, qty]) => {
-    const matched = vegetables.find((v) => v.name === name)
-    const price = matched ? matched.price : 30
-    return sum + price * qty
+  const totalCartValue = Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+    let itemPrice = 30
+    // Check if it's a 2x saver pack
+    if (nameWithUnit.includes(" (2 x ")) {
+      const matched = vegetables.find((v) => nameWithUnit.startsWith(v.name))
+      if (matched) {
+        itemPrice = Math.round(matched.price * 1.9)
+      }
+    } else {
+      const matched = vegetables.find((v) => v.name === nameWithUnit)
+      if (matched) {
+        itemPrice = matched.price
+      }
+    }
+    return sum + itemPrice * qty
   }, 0)
 
   // Filtered produce list
@@ -179,11 +245,19 @@ export function VegetableFullScreenPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate(routes.landing)}
+              onClick={() => {
+                if (selectedProduct) {
+                  setSelectedProduct(null)
+                } else {
+                  navigate(routes.landing)
+                }
+              }}
               className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5 text-xs font-black cursor-pointer"
             >
               <ChevronLeft className="w-5 h-5 text-slate-700" />
-              <span className="hidden sm:inline">Back to Home</span>
+              <span className="hidden sm:inline">
+                {selectedProduct ? "Back to All Vegetables" : "Back to Home"}
+              </span>
             </button>
 
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
@@ -230,128 +304,157 @@ export function VegetableFullScreenPage() {
         </div>
       </header>
 
-      {/* ── Main Full-Screen Body ── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        {/* Banner Hero */}
-        <div className="rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="z-10 max-w-xl text-center md:text-left">
-            <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 inline-block mb-3">
-              ⚡ Farm-to-Kitchen Direct Express
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
-              100% Crisp, Fresh Harvested Vegetables
-            </h2>
-            <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-2 leading-relaxed opacity-90">
-              Pick your daily produce and tap <strong className="text-amber-300">"🍳 What Can I Make?"</strong> on any vegetable to discover healthy homestyle recipes and required vegetables in 1 click!
-            </p>
-          </div>
-
-          <div className="z-10 flex flex-wrap items-center justify-center gap-3">
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3.5 text-center min-w-[120px]">
-              <div className="text-xl font-black text-amber-300">68+</div>
-              <div className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">Farm Veggies</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3.5 text-center min-w-[120px]">
-              <div className="text-xl font-black text-emerald-200">8 Mins</div>
-              <div className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">Delivery Slot</div>
-            </div>
-          </div>
+      {/* ── Super Admin Customer UI Edit Mode toggle — never rendered for a
+          normal customer; canEnterEditMode is false unless useCanEditCustomerUI()
+          resolves the current user as Super Admin ── */}
+      {canEnterEditMode && (
+        <div className={`sticky top-[57px] z-30 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs font-bold ${editMode ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+          <span className="flex items-center gap-2">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Super Admin viewing the live Customer App{editMode ? " — Edit Mode ON" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditMode((v) => !v)}
+            className={`px-3 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer ${editMode ? "bg-white text-indigo-700" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
+          >
+            <Pencil className="w-3 h-3" />
+            {editMode ? "Exit Edit Mode" : "Enable Edit Mode"}
+          </button>
         </div>
-
-        {/* Timing Notice if placed after cutoff */}
-        {vegTiming.afterTwelveNotice && (
-          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-            <div className="p-1 rounded-lg bg-amber-500 text-white font-black text-xs shrink-0 mt-0.5">
-              ⏰
-            </div>
-            <p className="text-xs font-semibold text-amber-900 leading-relaxed">
-              Same-day vegetable booking is open from <strong>6:00 AM to 12:00 PM</strong>. Orders placed now will be freshly harvested and delivered tomorrow between <strong>6:00 PM and 8:00 PM</strong>.
-            </p>
-          </div>
-        )}
-
-        {/* ── Search & Filter Tabs ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search vegetables (e.g. Cucumber, Tomato, Carrot, Palak)..."
-              className="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Category Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
-            {VEG_CATEGORY_FILTERS.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategoryFilter(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
-                  categoryFilter === cat
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      )}
+      {saveNotice && (
+        <div className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-xl text-xs font-bold shadow-lg ${saveNotice.type === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+          {saveNotice.text}
         </div>
+      )}
 
-        {/* ── Vegetables Produce Grid ── */}
-        {loading ? (
-          <div className="py-24 text-center">
-            <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm font-bold text-slate-600">Loading farm produce catalog…</p>
+      {/* ── Conditional Full-Screen Body ── */}
+      {selectedProduct ? (
+        <VegetableProductDetailPage
+          vegetable={selectedProduct}
+          allVegetables={vegetables}
+          foodCart={foodCart}
+          setFoodCart={setFoodCart}
+          onBack={() => setSelectedProduct(null)}
+          onUpdateCartQty={handleUpdateQty}
+          onSelectProduct={(veg) => setSelectedProduct(veg)}
+          deliveryBadge={vegTiming.cardDeliveryBadge}
+        />
+      ) : (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+          {/* Banner Hero */}
+          <div className="rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="z-10 max-w-xl text-center md:text-left">
+              <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 inline-block mb-3">
+                ⚡ Farm-to-Kitchen Direct Express
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+                100% Crisp, Fresh Harvested Vegetables
+              </h2>
+              <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-2 leading-relaxed opacity-90">
+                Pick your daily produce and tap <strong className="text-amber-300">"🍳 What Can I Make?"</strong> on any vegetable to discover healthy homestyle recipes and required vegetables in 1 click!
+              </p>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-3 shrink-0">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[120px]">
+                <div className="text-2xl font-black text-amber-300">68+</div>
+                <div className="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider mt-0.5">Farm Veggies</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[120px]">
+                <div className="text-2xl font-black text-white">8 Mins</div>
+                <div className="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider mt-0.5">Express Speed</div>
+              </div>
+            </div>
           </div>
-        ) : filteredVegetables.length === 0 ? (
-          <div className="py-20 text-center bg-white rounded-3xl border border-slate-200">
-            <span className="text-4xl">🥬</span>
-            <h3 className="text-base font-bold text-slate-800 mt-2">No vegetables found matching "{searchQuery}"</h3>
-            <p className="text-xs text-slate-500 mt-1">Try another search term or clear the category filters.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("")
-                setCategoryFilter("All")
-              }}
-              className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
-            >
-              Reset Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
-            {filteredVegetables.map((item) => (
-              <VegetableProductCard
-                key={item.id}
-                item={item}
-                cartCount={foodCart[item.name] || 0}
-                onUpdateQty={handleUpdateQty}
-                onDiscoverRecipes={(veg) => {
-                  setSelectedRecipeVegetable(veg)
-                  setIsRecipeModalOpen(true)
-                }}
-                deliveryBadge={vegTiming.cardDeliveryBadge}
+
+          {/* Search & Category Tabs */}
+          <div className="space-y-4">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search fresh vegetables (e.g. Tomato, Onion, Potato, Spinach, Drumstick)..."
+                className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:border-emerald-500 shadow-xs"
               />
-            ))}
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {VEG_CATEGORY_FILTERS.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
+                    categoryFilter === cat
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </main>
+
+          {/* ── Vegetables Produce Grid ── */}
+          {loading ? (
+            <div className="py-24 text-center">
+              <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm font-bold text-slate-600">Loading farm produce catalog…</p>
+            </div>
+          ) : filteredVegetables.length === 0 ? (
+            <div className="py-20 text-center bg-white rounded-3xl border border-slate-200">
+              <span className="text-4xl">🥬</span>
+              <h3 className="text-base font-bold text-slate-800 mt-2">No vegetables found matching "{searchQuery}"</h3>
+              <p className="text-xs text-slate-500 mt-1">Try another search term or clear the category filters.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("")
+                  setCategoryFilter("All")
+                }}
+                className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+              {filteredVegetables.map((item) => (
+                <VegetableProductCard
+                  key={item.id}
+                  item={item}
+                  cartCount={foodCart[item.name] || 0}
+                  onUpdateQty={handleUpdateQty}
+                  onSelectProduct={(veg) => setSelectedProduct(veg)}
+                  onDiscoverRecipes={(veg) => {
+                    setSelectedRecipeVegetable(veg)
+                    setIsRecipeModalOpen(true)
+                  }}
+                  deliveryBadge={vegTiming.cardDeliveryBadge}
+                  editable={canEnterEditMode && editMode}
+                  onSaveField={handleSaveField}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      )}
 
       {/* ── Recipe Discovery & What Can I Make Modal ── */}
       <VegetableRecipeModal
