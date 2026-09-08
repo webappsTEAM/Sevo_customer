@@ -33,6 +33,10 @@ export const routes = {
   admin_service_requests: "/admin/service-requests",
   admin_feedback: "/admin/feedback",
   customer_work_extension: "/customer/work-extensions/:token",
+  // Public quotation decision — the token in the path is the credential, so
+  // the link works on a device that has never signed in.
+  customer_quotation: "/customer/quote/:token",
+  booking_quotation: "/booking/quote/:token",
   truck_booking_hosur: "/trucks/hosur",
   two_wheeler_booking_hosur: "/two-wheelers/hosur",
   two_wheeler_booking: "/two-wheelers",

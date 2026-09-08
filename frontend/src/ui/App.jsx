@@ -137,6 +137,9 @@ const FeedbackPage = lazy(() =>
 const CustomerDecisionPage = lazy(() =>
   import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage || m.default }))
 )
+const QuotationDecisionPage = lazy(() =>
+  import("./pages/QuotationDecisionPage.jsx").then(m => ({ default: m.QuotationDecisionPage || m.default }))
+)
 
 const LiveTrackingPage = lazy(() =>
   import("./pages/LiveTrackingPage.jsx").then(m => ({ default: m.LiveTrackingPage || m.default }))
@@ -359,6 +362,8 @@ export function App() {
           <Route path={routes.feedback} element={<FeedbackPage />} />
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
+          <Route path={routes.customer_quotation} element={<QuotationDecisionPage />} />
+          <Route path={routes.booking_quotation} element={<QuotationDecisionPage />} />
 
           {/* ── Public Customer Live Tracking — secured by tracking_token query param or auth ── */}
           <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
