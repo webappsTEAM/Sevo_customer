@@ -1050,7 +1050,6 @@ const VEGETABLE_ITEMS = [
   { name: "Disco Pumpkin", unit: "500 g", price: 48, mrp: 58, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Brinjal - Bharta", unit: "500 g", price: 26, mrp: 31, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
-  { name: "Assorted Capsicum (R/Y/G)", unit: "3 pcs", price: 59, mrp: 70, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
 ]
 
 const GROCERY_ITEMS = [

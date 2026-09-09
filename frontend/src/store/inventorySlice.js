@@ -1,6 +1,19 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiRequest } from '../api/client.js';
 
+function formatErrMsg(err) {
+  if (!err) return "An unexpected error occurred.";
+  if (typeof err === "string") return err;
+  if (err.message) return err.message;
+  if (err.body) {
+    if (typeof err.body === "string") return err.body;
+    if (err.body.message) return err.body.message;
+    if (err.body.detail) return err.body.detail;
+    return JSON.stringify(err.body);
+  }
+  return String(err);
+}
+
 export const fetchInventoryItems = createAsyncThunk(
   'inventory/fetchItems',
   async (_, { rejectWithValue }) => {
@@ -9,7 +22,7 @@ export const fetchInventoryItems = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return data.data;
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -22,7 +35,7 @@ export const fetchAlerts = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return data.data;
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -35,7 +48,7 @@ export const fetchVegetableStock = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return data.data;
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -51,7 +64,7 @@ export const restockVegetable = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return { productId, ...data.data };
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -67,7 +80,7 @@ export const adjustVegetableStock = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return { productId, ...data.data };
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -83,7 +96,7 @@ export const setDefaultDailyStock = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return { productId, ...data.data };
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -99,7 +112,23 @@ export const fetchVegetableStockHistory = createAsyncThunk(
       if (!data.success) throw new Error(data.message);
       return { productId, history: data.data };
     } catch (err) {
-      return rejectWithValue(err.message || err);
+      return rejectWithValue(formatErrMsg(err));
+    }
+  }
+);
+
+export const updateVegetableDetails = createAsyncThunk(
+  'inventory/updateVegetableDetails',
+  async ({ productId, data }, { rejectWithValue }) => {
+    try {
+      const res = await apiRequest(`/inventory/vegetable-stock/${productId}/update-details/`, {
+        method: 'PATCH',
+        json: data,
+      });
+      if (!res.success) throw new Error(res.message);
+      return { productId, ...res.data };
+    } catch (err) {
+      return rejectWithValue(formatErrMsg(err));
     }
   }
 );
@@ -191,6 +220,13 @@ const inventorySlice = createSlice({
           if (unit) veg.unit = unit;
         }
       })
+      .addCase(updateVegetableDetails.fulfilled, (state, action) => {
+        const payload = action.payload;
+        const veg = state.vegetables.find(v => v.product_id === payload.productId);
+        if (veg) {
+          Object.assign(veg, payload);
+        }
+      })
       .addCase(fetchVegetableStockHistory.fulfilled, (state, action) => {
         const { productId, history } = action.payload;
         state.historyByProduct[productId] = history;
@@ -200,4 +236,5 @@ const inventorySlice = createSlice({
 
 export const { clearInventoryState } = inventorySlice.actions;
 export default inventorySlice.reducer;
+
 
