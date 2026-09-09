@@ -17,6 +17,8 @@ from .models import (
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
     DeliveryProof,
+    Estimation, EstimationFee, Inspection, InspectionFinding, InspectionPhoto,
+    EstimationQuotation, EstimationQuotationItem,
     BookingSeries,
     BookingMessage,
     _generate_secure_start_otp,
@@ -186,6 +188,12 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
     longitude = CoordinateField()
     drop_latitude = CoordinateField()
     drop_longitude = CoordinateField()
+    ac_type = serializers.CharField(required=False, allow_blank=True, default="")
+    ac_brand = serializers.CharField(required=False, allow_blank=True, default="")
+    ac_capacity = serializers.CharField(required=False, allow_blank=True, default="")
+    ac_quantity = serializers.IntegerField(required=False, default=1)
+    customer_symptom = serializers.CharField(required=False, allow_blank=True, default="")
+    customer_notes = serializers.CharField(required=False, allow_blank=True, default="")
 
     class Meta:
         model = ServiceRequest
@@ -196,6 +204,9 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "preferred_date", "preferred_time", "photo",
             "payment_method", "total_amount", "cart_data",
             "drop_address", "drop_latitude", "drop_longitude", "logistics_tier", "logistics_lane",
+            "job_type", "idempotency_key",
+            "ac_type", "ac_brand", "ac_capacity", "ac_quantity",
+            "customer_symptom", "customer_notes",
             # Fixes GT-D-03: accept the recipient's contact info if the
             # frontend sends it. Deliberately NOT required yet -- the
             # booking wizard doesn't collect these fields today, so
@@ -213,6 +224,15 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "insurance_opted_in",
         )
         extra_kwargs = {
+            "issue_title":         {"required": False, "allow_blank": True},
+            "job_type":            {"required": False, "default": "SERVICE"},
+            "idempotency_key":     {"required": False, "allow_null": True, "allow_blank": True},
+            "ac_type":             {"required": False, "allow_blank": True},
+            "ac_brand":            {"required": False, "allow_blank": True},
+            "ac_capacity":         {"required": False, "allow_blank": True},
+            "ac_quantity":         {"required": False},
+            "customer_symptom":    {"required": False, "allow_blank": True},
+            "customer_notes":      {"required": False, "allow_blank": True},
             "description":         {"required": False, "allow_blank": True},
             "email":               {"required": False, "allow_blank": True, "allow_null": True},
             "latitude":            {"required": False, "allow_null": True},
@@ -270,9 +290,9 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # {name, price, quantity} with no package_id/addon_id back-reference
         # to the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md for the full
         # writeup and the schema change that would close this properly).
-        # This at least stops the crude cases: negative submitted amounts
-        # and unreasonably large ones. Zero amounts are allowed for site
-        # consultations/inspections (e.g. Painting/Masonry) and free promotions.
+        # This at least stops the crude cases: negative/zero submitted
+        # amounts and unreasonably large ones.
+        # Zero amounts are allowed for site consultations/inspections (e.g. Painting/Masonry) and free promotions.
         try:
             amt = float(value)
         except (TypeError, ValueError):
@@ -364,7 +384,28 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             max_liability = Decimal(str(getattr(_dj_settings, "INSURANCE_MAX_LIABILITY", "500000")))
             attrs["insurance_premium"] = (Decimal(str(declared_value)) * rate).quantize(Decimal("0.01"))
             attrs["insurance_liability_cap"] = min(Decimal(str(declared_value)), max_liability)
+
+        # AC Inspection / Estimation validation
+        job_type = attrs.get("job_type") or "SERVICE"
+        if str(job_type).upper() == "ESTIMATION":
+            ac_type = str(attrs.get("ac_type") or "").strip().upper()
+            if not ac_type:
+                raise serializers.ValidationError({"ac_type": "AC type is required for estimation bookings."})
+            if ac_type not in {"SPLIT", "WINDOW", "CASSETTE", "TOWER", "OTHER"}:
+                raise serializers.ValidationError({"ac_type": f"Unsupported AC type: '{ac_type}'."})
+            attrs["service_category"] = "appliances"
+            if not attrs.get("issue_title"):
+                attrs["issue_title"] = f"AC Estimation / Inspection - {ac_type.capitalize()}"
+            if not attrs.get("description"):
+                attrs["description"] = attrs.get("customer_symptom") or "AC Inspection requested"
+
         return attrs
+
+    def create(self, validated_data):
+        # Strip transient AC estimation fields that belong to Estimation, not ServiceRequest
+        for key in ("ac_type", "ac_brand", "ac_capacity", "ac_quantity", "customer_symptom", "customer_notes"):
+            validated_data.pop(key, None)
+        return super().create(validated_data)
 
 
 class FeedbackTokenSummarySerializer(serializers.ModelSerializer):
@@ -816,7 +857,12 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
             phone = getattr(emp, "phone", "") or phone
             photo = getattr(emp, "photo", "") or photo
-            rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else rating
+            emp_rating = getattr(emp, "rating", None)
+            if emp_rating is not None:
+                try:
+                    rating = float(emp_rating)
+                except (ValueError, TypeError):
+                    pass
 
         if not name and hasattr(obj, "assignments"):
             assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
@@ -1473,3 +1519,108 @@ class VegetableRecommendationSerializer(serializers.ModelSerializer):
         ]
 
 
+# ==============================================================================
+# AC INSPECTION / ESTIMATION SERIALIZERS (PHASE 2)
+# ==============================================================================
+
+class EstimationFeeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EstimationFee
+        fields = (
+            "id", "amount", "currency", "status",
+            "payment_reference", "payment_method",
+            "collected_at", "waived_at", "waived_reason",
+            "created_at", "updated_at",
+        )
+
+
+class InspectionPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InspectionPhoto
+        fields = ("id", "photo", "caption", "uploaded_by", "uploaded_at", "finding")
+
+
+class InspectionFindingSerializer(serializers.ModelSerializer):
+    service_id = serializers.IntegerField(source="service.id", read_only=True)
+    service_name = serializers.CharField(source="service.name", read_only=True)
+
+    class Meta:
+        model = InspectionFinding
+        fields = (
+            "id", "finding_type", "title", "diagnosis", "severity",
+            "description", "recommended_action", "quantity", "unit",
+            "service_id", "service_name", "created_at", "updated_at",
+        )
+
+
+class InspectionSerializer(serializers.ModelSerializer):
+    findings = InspectionFindingSerializer(many=True, read_only=True)
+    photos = InspectionPhotoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Inspection
+        fields = (
+            "id", "status", "diagnosis", "notes",
+            "technician_name", "technician_phone",
+            "started_at", "completed_at", "created_at", "updated_at",
+            "findings", "photos",
+        )
+
+
+class EstimationQuotationItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EstimationQuotationItem
+        fields = (
+            "id", "catalog_service_id", "service_name", "description",
+            "quantity", "unit", "unit_price", "tax_rate",
+            "tax_amount", "discount_amount", "line_total", "sort_order",
+        )
+
+
+class EstimationQuotationSerializer(serializers.ModelSerializer):
+    items = EstimationQuotationItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = EstimationQuotation
+        fields = (
+            "id", "version", "quote_ref", "status",
+            "subtotal", "tax_amount", "discount_amount", "total_amount",
+            "currency", "notes", "valid_until",
+            "customer_approved_at", "customer_rejected_at",
+            "rejection_reason", "rejection_note",
+            "created_at", "updated_at", "items",
+        )
+
+
+class EstimationSerializer(serializers.ModelSerializer):
+    fee = EstimationFeeSerializer(read_only=True)
+    inspection = InspectionSerializer(read_only=True)
+    active_quotation = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Estimation
+        fields = (
+            "id", "ac_type", "ac_brand", "ac_capacity", "ac_quantity",
+            "customer_symptom", "customer_notes", "status",
+            "created_at", "updated_at",
+            "fee", "inspection", "active_quotation",
+        )
+
+    def get_active_quotation(self, obj):
+        latest = obj.quotations.order_by("-version").first()
+        if latest:
+            return EstimationQuotationSerializer(latest, context=self.context).data
+        return None
+
+
+class EstimationSummarySerializer(serializers.ModelSerializer):
+    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
+    fee_status = serializers.CharField(source="fee.status", read_only=True)
+
+    class Meta:
+        model = Estimation
+        fields = (
+            "id", "ac_type", "ac_brand", "ac_capacity", "ac_quantity",
+            "customer_symptom", "status", "fee_amount", "fee_status",
+            "created_at",
+        )

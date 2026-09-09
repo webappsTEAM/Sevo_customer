@@ -42,16 +42,19 @@ class UserSerializer(serializers.ModelSerializer):
         return is_super_admin(obj)
 
     def get_permissions(self, obj):
-        from accounts.permissions import is_super_admin, get_global_rbac_permissions, GLOBAL_MODULES
+        from accounts.permissions import is_super_admin, GLOBAL_MODULES, get_effective_module_actions
         if is_super_admin(obj):
             all_actions = ["view", "create", "edit", "delete", "export", "approve", "assign", "reassign", "reschedule", "cancel", "refund", "override", "suspend", "reactivate", "vip", "flag", "blacklist", "merge", "unmerge", "add_note", "manage_addresses", "book_on_behalf", "publish", "modify_price", "reply", "escalate", "resolve", "adjust", "manage_invoices", "record_offline_payment", "adjust_stock", "transfer", "export_financials", "export_operational", "schedule", "edit_banners", "edit_sections", "publish_live", "send_broadcast", "configure_templates", "force_logout", "revoke_tokens", "configure_mfa", "export_logs", "edit_rbac", "modify", "toggle_flags"]
             return {mod: all_actions for mod in GLOBAL_MODULES}
 
-        matrix = get_global_rbac_permissions()
-        role = str(getattr(obj, "role", "customer")).lower()
+        # Routed through the same get_effective_module_actions() the backend
+        # actually enforces with in accounts.permissions.can(), so a Super
+        # Admin's per-user custom_permissions overrides show up here too —
+        # this is what /api/auth/me/ returns and what the frontend's
+        # auth/authorization.js can()/hasModule() reads.
         user_perms = {}
-        for mod, role_dict in matrix.items():
-            actions = role_dict.get(role, [])
+        for mod in GLOBAL_MODULES:
+            actions = get_effective_module_actions(obj, mod)
             if actions:
                 user_perms[mod] = actions
         return user_perms

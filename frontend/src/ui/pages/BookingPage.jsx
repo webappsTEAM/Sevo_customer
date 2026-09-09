@@ -13,7 +13,7 @@ import {
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
   ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench,
-  Gift, Repeat, PauseCircle, PlayCircle, XCircle
+  Gift, Repeat, PauseCircle, PlayCircle, XCircle, Eye, EyeOff
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, extractAuthError,
@@ -31,6 +31,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { ACInspectionFormModal } from "../components/estimation/ACInspectionFormModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -38,6 +39,7 @@ import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
@@ -205,55 +207,9 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
   return null;
 };
 
+let BOOKING_CURRENCY_SYMBOL = "₹";
+
 const extractTextList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => typeof i === "string" ? i : (typeof i === "object" && i !== null ? (i.text || i.title || "") : "")).filter(Boolean) : [];
-
-export function getAuthoritativeItemPrice(item, booking) {
-  if (!item) return 0;
-  if (typeof item.price === 'number' && !isNaN(item.price)) {
-    return item.price;
-  }
-  let raw = item.price;
-  if (raw == null || raw === '') {
-    raw = item.estimated_price || item.unit_price;
-  }
-  let parsed = NaN;
-  if (typeof raw === 'string') {
-    const cleanStr = raw.replace(/[^\d.-]/g, '').trim();
-    parsed = parseFloat(cleanStr);
-  } else if (typeof raw === 'number') {
-    parsed = raw;
-  }
-
-  const isLogistics = ['goods_transport_truck', 'goods_transport_two_wheeler', 'packers_movers'].includes(booking?.service_category);
-  const bookingTotal = Number(booking?.total_amount || 0);
-  const breakdownSubtotal = parseFloat(booking?.fare_breakdown?.subtotal || booking?.fare_breakdown?.total || 0);
-
-  if (isLogistics) {
-    // For Packers & Movers: fare_breakdown.subtotal is the pre-GST transport-only
-    // component (e.g. Rs 2900.50), NOT the full package price which also includes
-    // packing, labor, dismantling charges, and GST (e.g. Rs 3422.59).
-    // total_amount is the authoritative full-package price captured at booking creation.
-    if (booking?.service_category === 'packers_movers') {
-      if (bookingTotal > 0) return bookingTotal;
-      if (breakdownSubtotal > 0) return breakdownSubtotal;
-    } else {
-      // Truck / Two-Wheeler: fare_breakdown.subtotal IS the complete vehicle fare.
-      // Prefer it over the cart string which may be an indicative 'starting from'
-      // price (e.g. the vehicle card shows '₹205' but the quoted fare is Rs 315.86).
-      if (breakdownSubtotal > 0) return breakdownSubtotal;
-      if (bookingTotal > 0) return bookingTotal;
-    }
-  }
-
-  if (!isNaN(parsed) && parsed > 0) {
-    return parsed;
-  }
-
-  if (breakdownSubtotal > 0) return breakdownSubtotal;
-  if (bookingTotal > 0) return bookingTotal;
-
-  return 0;
-}
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    DATA
@@ -2624,8 +2580,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   }, [liveData?.cart_data, successData?.cart_data, cart])
 
   const itemTotal = useMemo(() => {
-    return displayCart.reduce((a, c) => a + (getAuthoritativeItemPrice(c, liveData || successData) * (Number(c.quantity) || 1)), 0)
-  }, [displayCart, liveData, successData])
+    return displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0)
+  }, [displayCart])
 
   const totalGst = useMemo(() => {
     if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
@@ -3496,7 +3452,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* PDF Download link */}
           <div style={{ marginBottom: 16 }}>
             <a
-              href={`${import.meta.env.VITE_WORKFORCE_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
+              href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
@@ -3533,7 +3489,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                             {isExpanded ? "Hide Details" : "View Details"}
                           </button>
                           <a
-                            href={`${import.meta.env.VITE_WORKFORCE_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
+                            href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
@@ -4679,29 +4635,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   useEffect(() => {
     if (activeTab === "My Bookings" && user) {
-      const fetchBookings = (showLoading = false) => {
-        if (showLoading && (!realBookings || realBookings.length === 0)) {
-          setBookingsLoading(true)
-        }
-        apiFetchCustomerBookings()
-          .then(res => {
-            if (res?.data) setRealBookings(res.data)
-          })
-          .catch(console.error)
-          .finally(() => {
-            if (showLoading) setBookingsLoading(false)
-          })
+      if (!realBookings || realBookings.length === 0) {
+        setBookingsLoading(true)
       }
-
-      fetchBookings(true)
-      const interval = setInterval(() => fetchBookings(false), 5000)
-      const onFocus = () => fetchBookings(false)
-      window.addEventListener("focus", onFocus)
-
-      return () => {
-        clearInterval(interval)
-        window.removeEventListener("focus", onFocus)
-      }
+      apiFetchCustomerBookings()
+        .then(res => {
+          if (res?.data) setRealBookings(res.data)
+        })
+        .catch(console.error)
+        .finally(() => setBookingsLoading(false))
     }
   }, [activeTab, user])
 
@@ -5474,7 +5416,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 {item.categoryName ? <span style={{ color: '#64748b', fontWeight: 400 }}> ({item.categoryName})</span> : ''}
               </span>
               <span style={{ fontWeight: 700, color: '#059669' }}>
-                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
+                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
               </span>
             </div>
           ))}
@@ -6006,7 +5948,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 } else if (Array.isArray(b.cart_data)) {
                                   parsedCart = b.cart_data;
                                 }
-                                const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
+                                const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
                                 const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                                   ? Number(b.gst_amount)
                                   : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6062,7 +6004,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
-                            const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
+                            const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
                             const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                               ? Number(b.gst_amount)
                               : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6104,7 +6046,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                             {item.quantity || 1}
                                           </td>
                                           <td style={{ padding: '10px 12px', textAlign: 'right', color: '#059669', fontWeight: 800 }}>
-                                            ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                            ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
                                           </td>
                                         </tr>
                                       ))}
@@ -8425,20 +8367,7 @@ function QuickCommerceCartCheckout({
   }, [])
 
   const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
-  const [savedAddresses, setSavedAddresses] = useState([
-    {
-      id: "addr_home",
-      type: "Home",
-      address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
-      icon: "home"
-    },
-    {
-      id: "addr_work",
-      type: "Work",
-      address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
-      icon: "work"
-    }
-  ])
+  const [savedAddresses, setSavedAddresses] = useState([""])
   const [selectedAddressId, setSelectedAddressId] = useState("addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
   const [selectedTip, setSelectedTip] = useState(null)
@@ -9133,8 +9062,7 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
-  const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
+  const [payMethod, setPayMethod] = useState("online")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
   const [showAddSearchModal, setShowAddSearchModal] = useState(false)
@@ -9373,7 +9301,7 @@ function StepWorkflowCheckout({
           <button
             type="button"
             onClick={() => {
-              if (category?.isQuickCommerce || incomingCategory?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
+              if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
                 } catch {}
@@ -9690,24 +9618,22 @@ function StepWorkflowCheckout({
 
                 {isSlotSelected ? (
                   <div className="space-y-3">
-                    {isOnlinePaymentAvailable && (
-                      <div
-                        onClick={() => setPayMethod("online")}
-                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
-                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
-                          : "border-slate-200 hover:border-slate-300"
-                          }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
-                          <div>
-                            <span className="text-xs font-black text-slate-900 block">Pay Online</span>
-                            <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
-                          </div>
+                    <div
+                      onClick={() => setPayMethod("online")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
+                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                        : "border-slate-200 hover:border-slate-300"
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block">Pay Online</span>
+                          <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
                         </div>
-                        <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
                       </div>
-                    )}
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
+                    </div>
 
                     <div
                       onClick={() => setPayMethod("cash")}
@@ -9808,6 +9734,31 @@ function StepWorkflowCheckout({
                         )}
                       </div>
                     </div>
+                    {item.description && (
+                      <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, paddingLeft: '2px', marginTop: '2px', textAlign: 'left' }}>
+                        {item.description}
+                      </div>
+                    )}
+                    {item.ac_notes && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', paddingLeft: '2px', marginTop: '1px', textAlign: 'left' }}>
+                        Note: {item.ac_notes}
+                      </div>
+                    )}
+                    {item.ac_images && item.ac_images.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingLeft: '2px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Photos:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {item.ac_images.map((img, imgIdx) => (
+                            <img
+                              key={imgIdx}
+                              src={img}
+                              alt={`AC Photo ${imgIdx + 1}`}
+                              style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
                       <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
                         Areas: {item.selectedSubOptions.join(", ")}
@@ -10332,6 +10283,24 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
   return { id: "carpentry", name: "Carpentry", slug: "carpentry" };
 }
 
+// Sitewide DB-first catalog resolver -- single mapping from a category's
+// internal UI key (hvac, electrical, plumbing, ...) to its real DB category
+// slug. Used both to decide which live DB packages/services belong on a
+// category page and to grow that category's sub-tab bar automatically as
+// the catalog admin adds new services, instead of each category page
+// keeping its own private copy of this mapping.
+function getDbCategorySlugForKey(nk) {
+  if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
+    return "ac_appliance";
+  }
+  if (nk === "cleaning") return "deep-cleaning";
+  if (nk === "mason") return "mason";
+  if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
+    return "electrician_plumbing_carpentry";
+  }
+  return nk;
+}
+
 export function BookingPage() {
   const { user, refreshMe } = useAuth()
   const [searchParams] = useSearchParams()
@@ -10605,7 +10574,7 @@ export function BookingPage() {
               setDbCatalogPackages(res.data);
             }
           })
-          .catch((err) => console.error("Failed to fetch public catalog packages in BookingPage:", err));
+          .catch((err) => console.warn("Public catalog packages in BookingPage unavailable, using local catalog fallback:", err?.message || err));
       }
     }
   }, [showPackageModal, category]);
@@ -10657,8 +10626,14 @@ export function BookingPage() {
   useEffect(() => {
     async function loadCatalog() {
       try {
-        const catRes = await apiRequest("/catalog/categories/")
-        const svcRes = await apiRequest("/catalog/services/")
+        // NOTE: "/catalog/categories/" and "/catalog/services/" were dead
+        // routes (no matching backend URL) -- this silently always fell
+        // through to the hardcoded CATEGORIES/PACKAGES bootstrap below, so
+        // admin category add/update/remove never reached the customer UI.
+        // "/settings/catalog/public/categories/" is the real, no-auth,
+        // admin-driven endpoint (mirrors the packages one already used
+        // elsewhere in this file).
+        const catRes = await apiRequest("/settings/catalog/public/categories/")
         if (catRes.success) {
           const cats = catRes.data.map((c, i) => ({
             id: c.id.toString(),
@@ -10670,31 +10645,11 @@ export function BookingPage() {
           }))
           setCategoriesData(cats)
         }
-        if (svcRes.success) {
-          if (svcRes.currency_symbol) {
-            BOOKING_CURRENCY_SYMBOL = svcRes.currency_symbol;
-          }
-          const pkgs = {}
-          svcRes.data.forEach(s => {
-            const cid = s.category.toString()
-            if (!pkgs[cid]) pkgs[cid] = []
-            pkgs[cid].push({
-              ...s,
-              id: s.id.toString(),
-              category: s.category.toString(),
-              price: parseFloat(s.price),
-              priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
-              duration: s.duration || "1 hr",
-              payment_policy: s.payment_policy,
-              image: s.image || "",
-              includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
-              excludes: Array.isArray(s.excludes) ? s.excludes : [],
-              popular: !!s.popular,
-              tag: s.tag || ""
-            })
-          })
-          setPackagesData(pkgs)
-        }
+        // NOTE: the old "/catalog/services/" fetch that used to populate
+        // packagesData here was already dead (404, always caught below) --
+        // packagesData only ever fed the unused legacy StepPackage
+        // component (never rendered anywhere in this file), so it's
+        // intentionally removed rather than pointed at a real endpoint.
       } catch (e) {
         console.error("Failed to load catalog", e)
       }
@@ -10927,7 +10882,11 @@ export function BookingPage() {
       categoryName: c.categoryName || category?.name || "",
       selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
       selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
-      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice
+      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice,
+      ac_brand: c.ac_brand || "",
+      ac_type: c.ac_type || "",
+      ac_quantity: c.ac_quantity || c.quantity || 1,
+      ac_notes: c.ac_notes || ""
     }))))
     data.append("payment_method", backendPaymentMethod)
     if (couponCode) {
@@ -11194,18 +11153,21 @@ export function BookingPage() {
 
           {/* Right Controls: Cart & Profile Button */}
           <div className="flex items-center gap-3">
-            {cart?.length > 0 && (
-              <button
-                onClick={() => setShowCartDrawer(true)}
-                className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
-                title="View Cart"
-              >
-                <ShoppingCart size={18} />
+            {/* Cart button is always visible (even with nothing added yet) so
+                customers always know where to find it; the badge only shows
+                once there's a count. */}
+            <button
+              onClick={() => setShowCartDrawer(true)}
+              className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
+              title={cart?.length > 0 ? "View Cart" : "Cart is empty"}
+            >
+              <ShoppingCart size={18} />
+              {cart?.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
                   {cart.reduce((sum, item) => sum + (item.quantity || 1), 0)}
                 </span>
-              </button>
-            )}
+              )}
+            </button>
 
             {/* Urban Profile Icon Button (Exact Home Page Visual Style) */}
             <button
@@ -11231,7 +11193,7 @@ export function BookingPage() {
 
             {/* Vendor Platform Link */}
             <a
-              href={import.meta.env.VITE_VENDOR_PLATFORM_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/workforce/` : "") : "http://localhost:5176/")}
+              href={import.meta.env.VITE_VENDOR_PLATFORM_URL || "http://localhost:5176/"}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
@@ -11435,7 +11397,6 @@ export function BookingPage() {
                   setLocation={setLocation}
                   setFormData={setFormData}
                   formData={formData}
-                  dbCatalogPackages={dbCatalogPackages}
                 />
               );
             } else if (isMason) {
@@ -11468,7 +11429,15 @@ export function BookingPage() {
                     setShowPackageModal(false);
                     navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
-                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onCheckout={(newCart) => {
+                    if (newCart && Array.isArray(newCart)) setCart(newCart);
+                    setShowPackageModal(false);
+                    setStep(3);
+                  }}
+                  setFormData={setFormData}
+                  formData={formData}
+                  setPhotoFile={setPhotoFile}
+                  setPhotoPreview={setPhotoPreview}
                 />
               );
             }
@@ -11976,7 +11945,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             setLocalCatalogPackages(res.data);
           }
         })
-        .catch((err) => console.error("Failed to fetch public catalog packages in modal:", err));
+        .catch((err) => console.warn("Public catalog packages in modal unavailable, using local catalog fallback:", err?.message || err));
     }
   }, []);
 
@@ -11994,6 +11963,28 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
       p.service_slug === "texture-decor"
     );
   }, [localCatalogPackages]);
+
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setLocalCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
 
   const PAINTING_CATEGORIES = [
     { id: "paint-interior", slug: "interior-painting", name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -12018,6 +12009,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
       return {
         id: pkg.slug || pkg.id.toString(),
+        db_id: pkg.id,
         catId: catId,
         name: pkg.name,
         price: parseFloat(pkg.base_price) || 0,
@@ -12238,7 +12230,12 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
-
+        <EditModeToggleBar
+          visible={canEnterServiceEditMode}
+          active={serviceEditMode}
+          onToggle={() => setServiceEditMode(v => !v)}
+        />
+        <SaveNoticeToast notice={saveNotice} />
 
         {/* Urban Style Header */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
@@ -12482,7 +12479,17 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>
+                                  {serviceEditMode && service.db_id ? (
+                                    <EditableText
+                                      active={true}
+                                      value={service.name}
+                                      onSave={(v) => handleSaveServiceField(service, "name", v)}
+                                    />
+                                  ) : (
+                                    service.name
+                                  )}
+                                </h4>
                                 {service.badge && (
                                   <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                     {service.badge}
@@ -12490,13 +12497,34 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 )}
                               </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
-                                {service.priceStr}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  service.priceStr
+                                )}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
                                 {currentFee > 0 ? "Visit Charge: ₹300 (> 15 km)" : "Visit Charge: FREE (≤ 15 km)"}
                               </div>
-                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    value={service.desc}
+                                    multiline
+                                    onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  />
+                                ) : (
+                                  service.desc
+                                )}
+                              </p>
 
                               {/* Includes Bullet Points */}
                               <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -12557,15 +12585,27 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             {/* Right Image Column */}
                             <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
-                                <img
-                                  src={service.image}
-                                  alt={service.name}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                  onError={e => {
-                                    e.target.onerror = null;
-                                    e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
-                                  }}
-                                />
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableImage
+                                    active={true}
+                                    value={service.image}
+                                    alt={service.name}
+                                    assetType="services"
+                                    className="w-full h-full"
+                                    imgClassName="w-full h-full object-cover"
+                                    onSave={(v) => handleSaveServiceField(service, "image", v)}
+                                  />
+                                ) : (
+                                  <img
+                                    src={service.image}
+                                    alt={service.name}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    onError={e => {
+                                      e.target.onerror = null;
+                                      e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                                    }}
+                                  />
+                                )}
                               </div>
                               {count > 0 && (
                                 <div style={{
@@ -13002,12 +13042,24 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                 {/* Hero Image */}
                 <div style={{ width: '100%', height: 160, position: 'relative', flexShrink: 0 }}>
-                  <img
-                    src={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
-                    alt={activeDetailService.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
-                  />
+                  {serviceEditMode && activeDetailService.db_id ? (
+                    <EditableImage
+                      active={true}
+                      value={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      assetType="services"
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-cover"
+                      onSave={(v) => handleSaveServiceField(activeDetailService, "image", v)}
+                    />
+                  ) : (
+                    <img
+                      src={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                    />
+                  )}
                 </div>
 
                 {/* Content Area */}
@@ -13330,7 +13382,17 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       <div style={{ padding: '1.25rem 1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         {/* Title & Rating */}
                         <div>
-                          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textAlign: 'left' }}>{activeDetailService.name}</h3>
+                          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textAlign: 'left' }}>
+                            {serviceEditMode && activeDetailService.db_id ? (
+                              <EditableText
+                                active={true}
+                                value={activeDetailService.name}
+                                onSave={(v) => handleSaveServiceField(activeDetailService, "name", v)}
+                              />
+                            ) : (
+                              activeDetailService.name
+                            )}
+                          </h3>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginTop: 4 }}>
                             <Star size={12} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
                             <span>{activeDetailService.rating} ({activeDetailService.reviews} ratings)</span>
@@ -14515,7 +14577,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             setLocalCatalogPackages(res.data);
           }
         })
-        .catch((err) => console.error("Failed to fetch public catalog packages in mason modal:", err));
+        .catch((err) => console.warn("Public catalog packages in mason modal unavailable, using local catalog fallback:", err?.message || err));
     }
   }, []);
 
@@ -14535,6 +14597,28 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       String(p.service_slug || "").startsWith("mason-")
     );
   }, [localCatalogPackages]);
+
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setLocalCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
 
   const MASON_CATEGORIES = React.useMemo(() => {
     if (dbPackages && dbPackages.length > 0) {
@@ -14671,6 +14755,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
         return {
           id: pkg.slug || pkg.id.toString(),
+          db_id: pkg.id,
           catId: cId,
           name: pkg.name,
           price: parseFloat(pkg.price || pkg.base_price) || 0,
@@ -14819,6 +14904,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
+        <EditModeToggleBar
+          visible={canEnterServiceEditMode}
+          active={serviceEditMode}
+          onToggle={() => setServiceEditMode(v => !v)}
+        />
+        <SaveNoticeToast notice={saveNotice} />
+
         {/* Urban Style Header */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
@@ -15073,7 +15165,17 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>
+                                  {serviceEditMode && service.db_id ? (
+                                    <EditableText
+                                      active={true}
+                                      value={service.name}
+                                      onSave={(v) => handleSaveServiceField(service, "name", v)}
+                                    />
+                                  ) : (
+                                    service.name
+                                  )}
+                                </h4>
                                 {service.badge && (
                                   <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                     {service.badge}
@@ -15081,13 +15183,34 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 )}
                               </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
-                                {service.priceStr}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  service.priceStr
+                                )}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
                                 Consultation & Visit Charge: {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                               </div>
-                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    value={service.desc}
+                                    multiline
+                                    onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  />
+                                ) : (
+                                  service.desc
+                                )}
+                              </p>
 
                               {/* Includes Bullet Points */}
                               <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -15125,15 +15248,27 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             {/* Right Image/Button Column */}
                             <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
-                                <img
-                                  src={service.image}
-                                  alt={service.name}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                  onError={e => {
-                                    e.target.onerror = null;
-                                    e.target.src = "/premium-emulsion.png";
-                                  }}
-                                />
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableImage
+                                    active={true}
+                                    value={service.image}
+                                    alt={service.name}
+                                    assetType="services"
+                                    className="w-full h-full"
+                                    imgClassName="w-full h-full object-cover"
+                                    onSave={(v) => handleSaveServiceField(service, "image", v)}
+                                  />
+                                ) : (
+                                  <img
+                                    src={service.image}
+                                    alt={service.name}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    onError={e => {
+                                      e.target.onerror = null;
+                                      e.target.src = "/premium-emulsion.png";
+                                    }}
+                                  />
+                                )}
                               </div>
 
                               {/* Cart Controls overlaid on image */}
@@ -15635,12 +15770,24 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                 {/* Hero Image */}
                 <div style={{ width: '100%', height: 180, position: 'relative', flexShrink: 0 }}>
-                  <img
-                    src={activeDetailService.image}
-                    alt={activeDetailService.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
-                  />
+                  {serviceEditMode && activeDetailService.db_id ? (
+                    <EditableImage
+                      active={true}
+                      value={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
+                      alt={activeDetailService.name}
+                      assetType="services"
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-cover"
+                      onSave={(v) => handleSaveServiceField(activeDetailService, "image", v)}
+                    />
+                  ) : (
+                    <img
+                      src={activeDetailService.image}
+                      alt={activeDetailService.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                    />
+                  )}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.4))' }} />
                 </div>
 
@@ -15648,7 +15795,17 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                 <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   {/* Title & Rating */}
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', textAlign: 'left', letterSpacing: '-0.02em' }}>{activeDetailService.name}</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', textAlign: 'left', letterSpacing: '-0.02em' }}>
+                      {serviceEditMode && activeDetailService.db_id ? (
+                        <EditableText
+                          active={true}
+                          value={activeDetailService.name}
+                          onSave={(v) => handleSaveServiceField(activeDetailService, "name", v)}
+                        />
+                      ) : (
+                        activeDetailService.name
+                      )}
+                    </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginTop: 6 }}>
                       <Star size={14} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
                       <span style={{ color: '#0f172a', fontWeight: 800 }}>{activeDetailService.rating}</span>
@@ -16144,7 +16301,19 @@ function getCategoryFaqsAndReviews(pkg) {
   };
 }
 
-export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, packagesData, isFullPage = false }) {
+export function CustomCleaningPackageModal({
+  category,
+  cart,
+  setCart,
+  onClose,
+  onCheckout,
+  packagesData,
+  isFullPage = false,
+  setFormData,
+  formData,
+  setPhotoFile,
+  setPhotoPreview
+}) {
   const rawCatKey = (category?.id || category?.slug || category?.name || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
   if (["washing_machine", "washing", "washer", "wm"].some(k => rawCatKey.includes(k))) normalizedKey = "washing_machine";
@@ -16565,8 +16734,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   ];
   const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
   const hvacSubtabs = [
+    "AC Inspection",
+    "Not Sure? Book Inspection",
     "AC Service & Cleaning",
     "AC Repair",
+    "AC Repair & Diagnostics",
     "AC Gas & Refrigerant",
     "AC Installation & Uninstallation",
     "AC PCB & Electrical",
@@ -16585,6 +16757,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (subtabParam === "AC Inspection" || subtabParam === "ac-inspection" || subtabParam === "Inspection" || subtabParam === "Not Sure? Book Inspection") return "AC Inspection";
     if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service" || subtabParam === "AC Service & Cleaning") return "AC Service & Cleaning";
     if (subtabParam === "TV & Display" || subtabParam === "TV Service & Repair") return "TV Service & Repair";
     if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair" || subtabParam === "Washing Machine Jet Service") return "Washing Machine Jet Service";
@@ -16680,7 +16853,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           setDbCatalogPackages(res.data);
         }
       })
-      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+      .catch((err) => console.warn("Public catalog packages unavailable, using local catalog fallback:", err?.message || err));
 
     apiRequest("/catalog/services/")
       .then((res) => {
@@ -16688,21 +16861,40 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           setDbServicesList(res.data);
         }
       })
-      .catch((err) => console.error("Failed to fetch catalog services:", err));
+      .catch((err) => console.warn("Catalog services unavailable, using local services fallback:", err?.message || err));
   }, []);
 
   const subCategories = React.useMemo(() => {
     const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
 
-    if (CATEGORY_SUBCATEGORIES[effectiveKey]) {
-      return staticList;
-    }
+    const baseList = CATEGORY_SUBCATEGORIES[effectiveKey]
+      ? staticList
+      : staticList.map(tab => ({ ...tab, image: resolveImageUrl(tab.image, tab.image) }));
 
-    return staticList.map(tab => ({
-      ...tab,
-      image: resolveImageUrl(tab.image, tab.image)
-    }));
-  }, [effectiveKey]);
+    // Sitewide DB-first: grow this sub-tab bar automatically as the catalog
+    // admin adds new services under this category, instead of requiring a
+    // code change to CATEGORY_SUBCATEGORIES above. The hardcoded list stays
+    // as the bootstrap/default set for categories/tabs nobody has (re)built
+    // in the catalog yet; anything new that shows up in the DB is appended
+    // here so it reaches customers on their next page load.
+    if (!Array.isArray(dbCatalogPackages) || dbCatalogPackages.length === 0) {
+      return baseList;
+    }
+    const targetDbCategory = getDbCategorySlugForKey(effectiveKey);
+    const existingNames = new Set(baseList.map(t => (t.name || "").toLowerCase().trim()));
+    const seen = new Set();
+    const dynamicExtras = [];
+    dbCatalogPackages.forEach(p => {
+      const pCatSlug = (p.category_slug || "").toLowerCase();
+      if (pCatSlug !== targetDbCategory) return;
+      const sName = (p.service_name || "").trim();
+      const key = sName.toLowerCase();
+      if (!sName || existingNames.has(key) || seen.has(key)) return;
+      seen.add(key);
+      dynamicExtras.push({ name: sName, image: resolveImageUrl(p.service_image, baseList[0]?.image || "") });
+    });
+    return dynamicExtras.length > 0 ? [...baseList, ...dynamicExtras] : baseList;
+  }, [effectiveKey, dbCatalogPackages]);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -16737,6 +16929,134 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
+
+  const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
+  const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+
+  const handleAcInspectionSubmit = (inspectionData) => {
+    setShowAcInspectionModal(false);
+    setSelectedPackageDetail(null);
+
+    const inspectionCartId = "serv-hvac-ac-inspection";
+    const unitPrice = Number(inspectionData.price) || 199;
+    const qty = Math.max(1, Number(inspectionData.quantity) || 1);
+
+    const remainingCart = cart.filter(c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection");
+
+    const itemDesc = `${inspectionData.type} (${inspectionData.brand}) • ${qty} Unit${qty > 1 ? 's' : ''}`;
+
+    const inspectionCartItem = {
+      id: inspectionCartId,
+      name: "AC Inspection",
+      price: unitPrice,
+      quantity: qty,
+      duration: "45 mins",
+      ac_brand: inspectionData.brand,
+      ac_type: inspectionData.type,
+      ac_quantity: qty,
+      ac_images: inspectionData.images || [],
+      ac_notes: inspectionData.notes || "",
+      description: itemDesc,
+      categoryName: "AC & Heating",
+      category_id: "hvac"
+    };
+
+    const updatedCart = [...remainingCart, inspectionCartItem];
+    setCart(updatedCart);
+
+    if (inspectionData.primaryFile && typeof setPhotoFile === "function") {
+      setPhotoFile(inspectionData.primaryFile);
+    }
+    if (inspectionData.primaryPreview && typeof setPhotoPreview === "function") {
+      setPhotoPreview(inspectionData.primaryPreview);
+    }
+
+    if (typeof setFormData === "function") {
+      setFormData(prev => ({
+        ...prev,
+        issue_title: `AC Inspection (${inspectionData.type} - ${inspectionData.brand})`,
+        description: [
+          prev?.description || "",
+          `[AC Inspection: ${inspectionData.type} - ${inspectionData.brand} (${qty} Unit${qty > 1 ? 's' : ''})]`,
+          inspectionData.notes ? `[Notes: ${inspectionData.notes}]` : ""
+        ].filter(Boolean).join("\n"),
+        ac_brand: inspectionData.brand,
+        ac_type: inspectionData.type,
+        ac_quantity: qty,
+        ac_notes: inspectionData.notes || ""
+      }));
+    }
+
+    if (typeof onCheckout === "function") {
+      onCheckout(updatedCart);
+    }
+  };
+
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!item?.db_id) return;
+    try {
+      await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setDbCatalogPackages(prev =>
+        Array.isArray(prev) ? prev.map(p => (p.id === item.db_id ? { ...p, [field]: value } : p)) : prev
+      );
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || err?.body?.error || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
+  // ── AC Inspection discovery tile (front of the AC & Appliance sub-tab bar) ──
+  // Fully super-admin editable via the shared HomePageConfig JSON blob (same
+  // backend/model every other homepage/customer-UI edit already uses --
+  // GET /settings/homepage/ is public, PUT is admin-gated server-side
+  // by RequireModuleAccess("cms","edit_sections")). No new backend model or
+  // endpoint needed.
+  const AC_INSPECTION_TILE_DEFAULTS = {
+    visible: true,
+    label: "Not Sure? Book Inspection",
+    badge: "₹199 Inspection",
+    price: 199,
+  };
+  const [acInspectionTile, setAcInspectionTile] = useState(AC_INSPECTION_TILE_DEFAULTS);
+
+  useEffect(() => {
+    apiRequest("/settings/homepage/")
+      .then((res) => {
+        const saved = res?.config?.ac_inspection_tile;
+        if (saved && typeof saved === "object") {
+          setAcInspectionTile({ ...AC_INSPECTION_TILE_DEFAULTS, ...saved });
+        }
+      })
+      .catch((err) => console.warn("AC inspection tile config unavailable, using default tile config:", err?.message || err));
+  }, []);
+
+  const handleSaveAcInspectionTile = async (field, value) => {
+    const next = { ...acInspectionTile, [field]: value };
+    setAcInspectionTile(next); // optimistic
+    try {
+      const current = await apiRequest("/settings/homepage/");
+      const fullConfig = { ...(current?.config || {}), ac_inspection_tile: next };
+      await apiRequest("/settings/homepage/", {
+        method: "PUT",
+        body: JSON.stringify({ config: fullConfig }),
+      });
+      setSaveNotice({ type: "success", text: "Saved." });
+    } catch (err) {
+      setAcInspectionTile(acInspectionTile); // revert on failure
+      setSaveNotice({ type: "error", text: err?.body?.error || err?.body?.message || "Save failed." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -16982,6 +17302,90 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     hvac: {
+      "AC Inspection": [
+        {
+          id: "hvac-ac-inspection",
+          name: "AC Inspection",
+          price: 199,
+          duration: "45 mins",
+          badge: "Certified Inspection",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
+          includes: [
+            "Indoor cooling coil & filter inspection",
+            "Outdoor condenser & compressor health scan",
+            "Cooling performance & airflow delta test",
+            "Electrical voltage, wiring & amp check",
+            "Gas / refrigerant pressure & leak check",
+            "Drain pipe & tray water leakage inspection",
+            "Noise, vibration & motor bearing check",
+            "Detailed digital inspection report with upfront repair quote"
+          ],
+          image: "/mockups/service_inspection.png",
+          tools: [
+            "HVAC manifold pressure gauge",
+            "Digital clamp multimeter",
+            "Infrared laser thermometer",
+            "Electronic refrigerant sniffer"
+          ],
+          ready: [
+            "Keep AC remote control accessible",
+            "Ensure continuous power supply to the AC unit",
+            "Describe observed fault symptoms to technician"
+          ],
+          notes: "Inspection fee is fully adjusted into your final repair quote if service is availed during the visit.",
+          reviews: [
+            { name: "Suresh K.", rating: "5.0", text: "Identified a low refrigerant issue in under 15 minutes. Very professional and transparent." },
+            { name: "Pooja V.", rating: "4.9", text: "Accurate electrical fault diagnosis. Upfront pricing before doing any repair." }
+          ],
+          faqs: [
+            { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
+            { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
+          ]
+        }
+      ],
+      "Not Sure? Book Inspection": [
+        {
+          id: "hvac-ac-inspection",
+          name: "AC Inspection",
+          price: 199,
+          duration: "45 mins",
+          badge: "Certified Inspection",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
+          includes: [
+            "Indoor cooling coil & filter inspection",
+            "Outdoor condenser & compressor health scan",
+            "Cooling performance & airflow delta test",
+            "Electrical voltage, wiring & amp check",
+            "Gas / refrigerant pressure & leak check",
+            "Drain pipe & tray water leakage inspection",
+            "Noise, vibration & motor bearing check",
+            "Detailed digital inspection report with upfront repair quote"
+          ],
+          image: "/mockups/service_inspection.png",
+          tools: [
+            "HVAC manifold pressure gauge",
+            "Digital clamp multimeter",
+            "Infrared laser thermometer",
+            "Electronic refrigerant sniffer"
+          ],
+          ready: [
+            "Keep AC remote control accessible",
+            "Ensure continuous power supply to the AC unit",
+            "Describe observed fault symptoms to technician"
+          ],
+          notes: "Inspection fee is fully adjusted into your final repair quote if service is availed during the visit.",
+          reviews: [
+            { name: "Suresh K.", rating: "5.0", text: "Identified a low refrigerant issue in under 15 minutes. Very professional and transparent." },
+            { name: "Pooja V.", rating: "4.9", text: "Accurate electrical fault diagnosis. Upfront pricing before doing any repair." }
+          ],
+          faqs: [
+            { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
+            { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
+          ]
+        }
+      ],
       "AC Service & Cleaning": [
         { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
         { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
@@ -17412,6 +17816,23 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const tab = (activeSubTab || "").toLowerCase();
       const nk = (effectiveKey || normalizedKey || "").toLowerCase();
 
+      // Sitewide DB-first shortcuts -- checked before any of the per-category
+      // keyword heuristics below, so they take priority everywhere:
+      // 1. Exact Service-name match. Every dynamically-added sub-tab (see
+      //    subCategories above) IS a live Service name, so this alone makes
+      //    a brand-new tab work correctly with zero keyword guessing.
+      // 2. An explicit admin tag (service.customization.subtab), the same
+      //    mechanism the Kitchen category already uses -- lets a Super Admin
+      //    pin a package to an exact sub-tab from the catalog admin when the
+      //    tab label and the service name legitimately differ.
+      if (sName && tab && sName === tab) {
+        return true;
+      }
+      const explicitSubtab = (p.service_customization && p.service_customization.subtab) || p.subtab;
+      if (explicitSubtab && activeSubTab && explicitSubtab === activeSubTab) {
+        return true;
+      }
+
       if (normalizedKey === "mason") {
         if (tab.includes("minor") || tab.includes("masonry") || tab.includes("construction")) {
           return sSlug.includes("minor-masonry") || sName.includes("minor") || sName.includes("masonry") || pName.includes("minor") || pName.includes("masonry");
@@ -17536,28 +17957,54 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
       // 5. AC/HVAC subtabs
       if (nk === "hvac" || tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
-        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") || pSlug.startsWith("hvac-") || pSlug.startsWith("ac-") || pName.includes("ac ");
+        // Real admin-managed AC packages always carry an exact service_slug
+        // (one of these four, confirmed against the live catalog). Trust
+        // that authoritative field first -- it's what stops an "AC Repair"
+        // or "AC Gas Refill" package (both legitimately AC, but the wrong
+        // sub-tab) from leaking into "AC Installation & Uninstallation"
+        // just because its package NAME happens to contain a matching
+        // word like "reinstall" or "wall stand". Only fall back to the
+        // old loose name/slug heuristics for legacy rows with no
+        // service_slug at all.
+        const AC_SERVICE_SLUGS = ["ac-installation", "ac-repair", "ac-gas-refill", "ac-service-cleaning", "ac-inspection"];
+        const hasKnownAcSlug = AC_SERVICE_SLUGS.includes(sSlug);
+        const isAc = hasKnownAcSlug || (!sSlug && (
+          sName.includes("ac") || sName.includes("hvac") || sName.includes("heating") ||
+          pSlug.startsWith("hvac-") || pSlug.startsWith("ac-") || pName.includes("ac ")
+        ));
         if (!isAc) return false;
 
+        if (tab.includes("inspect")) {
+          return pSlug.startsWith("hvac-insp-") || pSlug.includes("inspect") || pSlug.includes("diag") || pName.includes("inspect") || pName.includes("diagnosis");
+        }
         if (tab.includes("cleaning") || tab.includes("clean")) {
+          if (hasKnownAcSlug) return sSlug === "ac-service-cleaning";
           return pSlug.startsWith("hvac-fj-") || pSlug.startsWith("hvac-pj-") || pSlug.startsWith("hvac-ar-") || pSlug.startsWith("hvac-2in1") || pSlug.startsWith("hvac-3in1") || pSlug.startsWith("hvac-airflow") || pSlug.startsWith("ac-cln") || pName.includes("foam") || pName.includes("power jet") || pName.includes("jet") || pName.includes("cleaning") || pName.includes("deep clean") || pName.includes("sanitization") || pName.includes("anti-rust") || pName.includes("combo");
         }
         if (tab.includes("gas") || tab.includes("refrigerant")) {
+          if (hasKnownAcSlug) return sSlug === "ac-gas-refill";
           return pSlug.startsWith("hvac-gas-") || pSlug.startsWith("ac-gas") || pName.includes("gas leak") || pName.includes("gas charging") || pName.includes("valve") || pName.includes("coil repair") || pName.includes("top-up") || pName.includes("brazing") || pName.includes("nitrogen");
         }
         if (tab.includes("install")) {
+          if (hasKnownAcSlug) return sSlug === "ac-installation";
           return pSlug.startsWith("hvac-inst-") || pSlug.startsWith("hvac-uninst-") || pSlug.startsWith("hvac-reinst-") || pSlug.startsWith("ac-inst") || pName.includes("split ac install") || pName.includes("window ac install") || pName.includes("uninstall") || pName.includes("reinstall") || pName.includes("wall stand") || pName.includes("dismount");
         }
         if (tab.includes("pcb") || (tab.includes("electrical") && !tab.includes("parts"))) {
+          // No dedicated live service for PCB/electrical work yet -- don't
+          // let it silently steal ac-repair's packages into this tab.
+          if (hasKnownAcSlug) return false;
           return pSlug.startsWith("hvac-pcb-") || pSlug.startsWith("hvac-cap-") || pSlug.startsWith("hvac-cnt-") || pSlug.startsWith("hvac-sns-") || pSlug.startsWith("hvac-lvt-") || pSlug.startsWith("ac-elec") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("contactor") || pName.includes("sensor") || pName.includes("transformer") || pName.includes("lvt");
         }
         if (tab.includes("parts") || tab.includes("accessories")) {
+          // Same -- no dedicated live service for spare parts yet.
+          if (hasKnownAcSlug) return false;
           return pSlug.startsWith("hvac-prt-") || pSlug.startsWith("ac-part") || pName.includes("copper pipe") || pName.includes("drain pipe") || pName.includes("wall stand") || pName.includes("floor stand") || pName.includes("back plate") || pName.includes("fastener");
         }
         if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
+          if (hasKnownAcSlug) return sSlug === "ac-repair";
           return pSlug.startsWith("hvac-rep-") || pSlug.startsWith("ac-rep") || pName.includes("repair") || pName.includes("less cooling") || pName.includes("no cooling") || pName.includes("power issue") || pName.includes("water leakage") || pName.includes("noise") || pName.includes("smell") || pName.includes("fan motor") || pName.includes("remote sensor") || pName.includes("drain repair") || pName.includes("error code");
         }
-        return true;
+        return hasKnownAcSlug ? false : true;
       }
 
       // 6. Electrical
@@ -17675,19 +18122,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       return normSName.includes(normTab) || normTab.includes(normSName) || pName.includes(normTab) || normTab.includes(pName);
     };
 
-    const getDbCategorySlug = (nk) => {
-      if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
-        return "ac_appliance";
-      }
-      if (nk === "cleaning") return "deep-cleaning";
-      if (nk === "mason") return "mason";
-      if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
-        return "electrician_plumbing_carpentry";
-      }
-      return nk;
-    };
-
-    const targetDbCategory = getDbCategorySlug(normalizedKey);
+    const targetDbCategory = getDbCategorySlugForKey(normalizedKey);
     // Filter database packages to only include those matching the target category and subtab
     const filteredDbPackages = dbCatalogPackages.filter(p => {
       const pCatSlug = (p.category_slug || "").toLowerCase();
@@ -17701,81 +18136,72 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       return doesPackageMatchTab(p);
     });
 
-    // 1. Map existing catalog items with latest DB values (100% DB-driven)
-    const seenIds = new Set();
-    const mapped = filteredRawPlans.map(plan => {
-      const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Fully admin-driven: once any real package exists in the database for
+    // this category+subtab, it is the single source of truth -- render
+    // straight from it, so add/edit/remove all just work and nothing
+    // hardcoded lingers behind a deleted or renamed package. The hardcoded
+    // `filteredRawPlans` list is only a bootstrap placeholder for a subtab
+    // nobody has populated in the catalog yet.
+    let finalPlans;
+    if (filteredDbPackages.length > 0) {
+      finalPlans = [];
+      const seenNames = new Set();
+      const finalSeenIds = new Set();
+      filteredDbPackages.forEach(p => {
+        const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
+        const card = {
+          id: p.slug || p.id,
+          db_id: p.id,
+          name: p.name,
+          price: Math.round(Number(p.base_price) || 0),
+          duration: p.duration || "30 mins",
+          description: p.description || "",
+          includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
+          image: acExtraImage || ((p.image && !p.image.includes("1621905252507")) ? p.image : (targetDbCategory === "ac_appliance" || normalizedKey === "hvac" ? acServiceImg : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")),
+          badge: p.tag || "Standard",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          tools: p.tools,
+          ready: p.ready,
+          reviews: p.reviews,
+          faqs: p.faqs,
+        };
+        const normName = (card.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const cardId = String(card.id);
+        if (!seenNames.has(normName) && !finalSeenIds.has(cardId)) {
+          seenNames.add(normName);
+          finalSeenIds.add(cardId);
+          finalPlans.push(card);
+        }
+      });
+    } else {
+      finalPlans = filteredRawPlans;
+    }
 
-      // Pass 1: Prioritize exact slug/id matches to prevent cross-matching duplicates
-      let dbMatch = filteredDbPackages.find(p => (p.slug && (p.slug === plan.slug || p.slug === plan.id)) || String(p.id) === String(plan.id));
-
-      // Pass 2: Fallback to name matches
-      if (!dbMatch) {
-        dbMatch = filteredDbPackages.find(p => {
-          const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
-        });
-      }
-
-      if (!dbMatch) return plan;
-      seenIds.add(String(dbMatch.id));
-      if (dbMatch.slug) seenIds.add(dbMatch.slug);
-      const acImageMatch = resolveAcServiceImage(dbMatch.name || dbMatch.slug || plan.name || plan.id);
-      const isDarkUnsplash = typeof dbMatch.image === "string" && dbMatch.image.includes("1621905252507");
-      return {
-        ...plan,
-        ...dbMatch,
-        id: plan.id || dbMatch.id,
-        name: dbMatch.name,
-        price: Math.round(Number(dbMatch.base_price) || plan.price),
-        duration: dbMatch.duration || plan.duration,
-        description: dbMatch.description || plan.description,
-        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? extractTextList(dbMatch.includes) : plan.includes,
-        image: acImageMatch || ((!isDarkUnsplash && dbMatch.image) ? dbMatch.image : plan.image),
-        badge: dbMatch.tag || plan.badge,
-        tools: dbMatch.tools,
-        ready: dbMatch.ready,
-        reviews: dbMatch.reviews,
-        faqs: dbMatch.faqs,
-      };
-    });
-
-    // 2. Append any extra packages created in database for this specific subtab
-    const extraDbPackages = filteredDbPackages.filter(p => {
-      if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
-      return true;
-    }).map(p => {
-      const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
-      return {
-        id: p.slug || p.id,
-        name: p.name,
-        price: Math.round(Number(p.base_price) || 0),
-        duration: p.duration || "30 mins",
-        description: p.description || "",
-        includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
-        image: acExtraImage || ((p.image && !p.image.includes("1621905252507")) ? p.image : (targetDbCategory === "ac_appliance" || normalizedKey === "hvac" ? acServiceImg : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")),
-        badge: p.tag || "Standard",
+    // Guarantee that AC Inspection tab always displays ONLY ONE single service card
+    if (activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection") {
+      const baseInspection = OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {
+        id: "hvac-ac-inspection",
+        name: "AC Inspection",
+        price: 199,
+        duration: "45 mins",
+        badge: "Certified Inspection",
         badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-        tools: p.tools,
-        ready: p.ready,
-        reviews: p.reviews,
-        faqs: p.faqs,
+        description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
+        includes: [
+          "Indoor cooling coil & filter inspection",
+          "Outdoor condenser & compressor health scan",
+          "Cooling performance & airflow delta test",
+          "Electrical voltage, wiring & amp check",
+          "Gas / refrigerant pressure & leak check",
+          "Drain pipe & tray water leakage inspection",
+          "Noise, vibration & motor bearing check",
+          "Detailed digital inspection report with upfront repair quote"
+        ],
+        image: "/mockups/service_inspection.png"
       };
-    });
+      return [baseInspection];
+    }
 
-    // Deduplicate to guarantee unique keys and prevent duplicate products rendering in the list
-    const finalPlans = [];
-    const seenNames = new Set();
-    const finalSeenIds = new Set();
-    [...mapped, ...extraDbPackages].forEach(plan => {
-      const normName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const planId = String(plan.id);
-      if (!seenNames.has(normName) && !finalSeenIds.has(planId)) {
-        seenNames.add(normName);
-        finalSeenIds.add(planId);
-        finalPlans.push(plan);
-      }
-    });
     return finalPlans;
   }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
@@ -17838,6 +18264,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       transition={{ duration: 0.25 }}
       onClick={e => e.stopPropagation()}
     >
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode(v => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
+
       <div className="bg-[#FEFCF8] pb-1.5 border-b border-[#E8E3DB]">
         <div className="py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#FEFCF8]">
           <div className="flex items-center gap-3">
@@ -17869,6 +18302,84 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
         {/* Subservice Flex Selector */}
         <div className="flex overflow-x-auto gap-4 pb-2 pt-1 justify-start scrollbar-none">
+          {effectiveKey === "hvac" && (acInspectionTile.visible || serviceEditMode) && (
+            <div
+              className={`relative flex flex-col items-center justify-start p-1.5 text-center w-[85px] sm:w-[90px] shrink-0 group rounded-xl ${acInspectionTile.visible ? "" : "opacity-40"}`}
+            >
+              {serviceEditMode && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSaveAcInspectionTile("visible", !acInspectionTile.visible);
+                  }}
+                  title={acInspectionTile.visible ? "Hide this tile from customers" : "Show this tile to customers"}
+                  className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 cursor-pointer"
+                >
+                  {acInspectionTile.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                </button>
+              )}
+              {(() => {
+                const isInspectionSelected = activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection";
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSubTab("AC Inspection");
+                      setSearchQuery("");
+                      const params = new URLSearchParams(window.location.search);
+                      params.set("category", "hvac");
+                      params.set("subtab", "AC Inspection");
+                      params.set("subTab", "AC Inspection");
+                      navigate(`?${params.toString()}`, { replace: true });
+                    }}
+                    className="flex flex-col items-center justify-start bg-transparent cursor-pointer w-full transition-all"
+                  >
+                    <span className="text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5">
+                      {serviceEditMode ? (
+                        <EditableText
+                          active={true}
+                          value={acInspectionTile.badge}
+                          onSave={(v) => handleSaveAcInspectionTile("badge", v)}
+                          className="text-white"
+                        />
+                      ) : (
+                        acInspectionTile.badge
+                      )}
+                    </span>
+                    <div className={`w-14 h-14 mb-1 flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                      isInspectionSelected
+                        ? "bg-emerald-100 border-2 border-emerald-600 scale-110 drop-shadow-md shadow-xs"
+                        : "bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 group-hover:scale-105"
+                    }`}>
+                      <Wrench className="w-7 h-7 text-emerald-700" strokeWidth={1.5} />
+                    </div>
+                    <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                      isInspectionSelected
+                        ? "text-emerald-700 font-extrabold"
+                        : "text-emerald-700 font-bold group-hover:text-emerald-800"
+                    }`}>
+                      {serviceEditMode ? (
+                        <EditableText
+                          active={true}
+                          value={acInspectionTile.label}
+                          multiline
+                          onSave={(v) => handleSaveAcInspectionTile("label", v)}
+                        />
+                      ) : (
+                        acInspectionTile.label
+                      )}
+                    </span>
+                    {isInspectionSelected ? (
+                      <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                    ) : (
+                      <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                    )}
+                  </button>
+                );
+              })()}
+            </div>
+          )}
           {subCategories.map(tab => {
             const isSelected = activeSubTab === tab.name;
             return (
@@ -18153,13 +18664,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   const cartId = `serv-${normalizedKey}-${p.id}`;
                   const count = getCartItemCount(cartId);
                   const isFirst = idx === 0 && !searchQuery;
+                  const isAcInspection = (p.id === "hvac-ac-inspection" || p.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
 
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
+                      onClick={() => {
+                        if (isAcInspection) {
+                          setActiveAcInspectionItem(p);
+                          setShowAcInspectionModal(true);
+                        }
+                      }}
+                      className={`bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative ${isAcInspection ? "cursor-pointer" : ""}`}
                     >
-                      {isFirst && (
+                      {isFirst && !isAcInspection && (
                         <div className="w-full aspect-[16/6] sm:aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
                             src={
@@ -18192,7 +18710,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <div className="flex flex-col md:flex-row justify-between gap-5">
                         <div className="flex-1 space-y-3">
                           <div className="flex items-center gap-2">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base">
+                              {serviceEditMode && p.db_id ? (
+                                <EditableText
+                                  active={true}
+                                  value={p.name}
+                                  onSave={(v) => handleSaveServiceField(p, "name", v)}
+                                />
+                              ) : (
+                                p.name
+                              )}
+                            </h4>
                             {p.badge && (
                               <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
                                 {p.badge}
@@ -18200,13 +18728,34 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             )}
                           </div>
 
-                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                            {serviceEditMode && p.db_id ? (
+                              <EditableText
+                                active={true}
+                                value={p.description}
+                                multiline
+                                onSave={(v) => handleSaveServiceField(p, "description", v)}
+                              />
+                            ) : (
+                              p.description
+                            )}
+                          </p>
 
                           {/* Price & Duration */}
                           <div className="flex flex-col gap-1 text-xs pt-1">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-black text-slate-900">
-                                {normalizedKey === "mason" ? `Starts at ₹${p.price.toLocaleString("en-IN")}` : `₹${p.price.toLocaleString("en-IN")}`}
+                                {serviceEditMode && p.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={p.price}
+                                    onSave={(v) => handleSaveServiceField(p, "base_price", v)}
+                                  />
+                                ) : (
+                                  normalizedKey === "mason" ? `Starts at ₹${p.price.toLocaleString("en-IN")}` : `₹${p.price.toLocaleString("en-IN")}`
+                                )}
                               </span>
                               {normalizedKey !== "mason" && (
                                 <>
@@ -18284,7 +18833,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                           <div className="flex items-center gap-3 mt-3">
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (normalizedKey === "mason") {
                                   setSelectedMasonDetail(p);
                                 } else {
@@ -18319,21 +18869,54 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         {/* Right side image & floating ADD button */}
                         <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
                           <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50 flex items-center justify-center p-1.5">
-                            <img
-                              src={p.image}
-                              alt={p.name}
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
-                              }}
-                              className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
-                                normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
-                                  ? "object-contain p-1"
-                                  : "object-cover"
-                              }`}
-                            />
+                            {serviceEditMode && p.db_id ? (
+                              <EditableImage
+                                active={true}
+                                value={p.image}
+                                alt={p.name}
+                                assetType="services"
+                                className="w-full h-full"
+                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
+                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                    ? "object-contain p-1"
+                                    : "object-cover"
+                                }`}
+                                onSave={(v) => handleSaveServiceField(p, "image", v)}
+                              />
+                            ) : (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                                }}
+                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
+                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                    ? "object-contain p-1"
+                                    : "object-cover"
+                                }`}
+                              />
+                            )}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {
+                                if (isAcInspection) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer hover:text-emerald-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveAcInspectionItem(p);
+                                        setShowAcInspectionModal(true);
+                                      }}
+                                    >
+                                      <ShoppingCart size={11} className="shrink-0" />
+                                      <span>Add</span>
+                                    </button>
+                                  );
+                                }
+
                                 const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
                                 const cartItemPrice = normalizedKey === "mason" ? currentFee : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
                                 const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
@@ -18715,18 +19298,46 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
             {/* Header: simple full-width hero image (removed split promo/offer card) */}
             <div className="w-full h-36 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
-              <img
-                src={selectedMasonDetail.image}
-                alt={selectedMasonDetail.name}
-                className="w-full h-full object-cover"
-              />
+              {serviceEditMode && selectedMasonDetail.db_id ? (
+                <EditableImage
+                  active={true}
+                  value={selectedMasonDetail.image}
+                  alt={selectedMasonDetail.name}
+                  assetType="services"
+                  className="w-full h-full"
+                  imgClassName="w-full h-full object-cover"
+                  onSave={(v) => {
+                    handleSaveServiceField(selectedMasonDetail, "image", v);
+                    setSelectedMasonDetail(prev => (prev ? { ...prev, image: v } : prev));
+                  }}
+                />
+              ) : (
+                <img
+                  src={selectedMasonDetail.image}
+                  alt={selectedMasonDetail.name}
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and add wrap */}
               <div className="border-b border-[#E8E3DB] pb-5">
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedMasonDetail.name}</h3>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">
+                  {serviceEditMode && selectedMasonDetail.db_id ? (
+                    <EditableText
+                      active={true}
+                      value={selectedMasonDetail.name}
+                      onSave={(v) => {
+                        handleSaveServiceField(selectedMasonDetail, "name", v);
+                        setSelectedMasonDetail(prev => (prev ? { ...prev, name: v } : prev));
+                      }}
+                    />
+                  ) : (
+                    selectedMasonDetail.name
+                  )}
+                </h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
                   <Star className="text-amber-500 fill-amber-500" size={12} />
@@ -18741,7 +19352,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       {currentFee > 0 ? `₹${currentFee} (> 15 km)` : "FREE (≤ 15 km)"}
                     </div>
                     <div className="text-[9px] font-semibold text-slate-400">
-                      Starts at ₹{selectedMasonDetail.price}
+                      {serviceEditMode && selectedMasonDetail.db_id ? (
+                        <EditableText
+                          active={true}
+                          type="number"
+                          prefix="Starts at ₹"
+                          value={selectedMasonDetail.price}
+                          onSave={(v) => {
+                            handleSaveServiceField(selectedMasonDetail, "base_price", v);
+                            setSelectedMasonDetail(prev => (prev ? { ...prev, price: v } : prev));
+                          }}
+                        />
+                      ) : (
+                        `Starts at ₹${selectedMasonDetail.price}`
+                      )}
                     </div>
                   </div>
 
@@ -19010,34 +19634,93 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
             {/* Header image */}
             <div className="w-full h-44 border-b border-[#E8E3DB] shrink-0 bg-[#F5F0E6]">
-              <img
-                src={selectedPackageDetail.image}
-                alt={selectedPackageDetail.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
-                }}
-              />
+              {serviceEditMode && selectedPackageDetail.db_id ? (
+                <EditableImage
+                  active={true}
+                  value={selectedPackageDetail.image}
+                  alt={selectedPackageDetail.name}
+                  assetType="services"
+                  className="w-full h-full"
+                  imgClassName="w-full h-full object-cover"
+                  onSave={(v) => {
+                    handleSaveServiceField(selectedPackageDetail, "image", v);
+                    setSelectedPackageDetail(prev => (prev ? { ...prev, image: v } : prev));
+                  }}
+                />
+              ) : (
+                <img
+                  src={selectedPackageDetail.image}
+                  alt={selectedPackageDetail.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
+                  }}
+                />
+              )}
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
               {/* Title, rating and price/add */}
               <div className="border-b border-[#E8E3DB] pb-5">
-                <h3 className="text-lg font-extrabold text-slate-900 mb-1">{selectedPackageDetail.name}</h3>
+                <h3 className="text-lg font-extrabold text-slate-900 mb-1">
+                  {serviceEditMode && selectedPackageDetail.db_id ? (
+                    <EditableText
+                      active={true}
+                      value={selectedPackageDetail.name}
+                      onSave={(v) => {
+                        handleSaveServiceField(selectedPackageDetail, "name", v);
+                        setSelectedPackageDetail(prev => (prev ? { ...prev, name: v } : prev));
+                      }}
+                    />
+                  ) : (
+                    selectedPackageDetail.name
+                  )}
+                </h3>
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-3">
                   <Star className="text-purple-600 fill-purple-600" size={13} />
                   <span className="text-slate-800 font-bold">4.82</span>
                   <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
                 </div>
 
+                {selectedPackageDetail.description && (
+                  <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                    {serviceEditMode && selectedPackageDetail.db_id ? (
+                      <EditableText
+                        active={true}
+                        value={selectedPackageDetail.description}
+                        multiline
+                        onSave={(v) => {
+                          handleSaveServiceField(selectedPackageDetail, "description", v);
+                          setSelectedPackageDetail(prev => (prev ? { ...prev, description: v } : prev));
+                        }}
+                      />
+                    ) : (
+                      selectedPackageDetail.description
+                    )}
+                  </p>
+                )}
+
                 <div className="flex items-center justify-between bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4">
                   <div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PRICE</div>
                     <div className="text-lg font-black text-slate-900 mt-0.5">
-                      ₹{typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price.toLocaleString("en-IN") : selectedPackageDetail.price}
+                      {serviceEditMode && selectedPackageDetail.db_id ? (
+                        <EditableText
+                          active={true}
+                          type="number"
+                          prefix="₹"
+                          value={selectedPackageDetail.price}
+                          onSave={(v) => {
+                            handleSaveServiceField(selectedPackageDetail, "base_price", v);
+                            setSelectedPackageDetail(prev => (prev ? { ...prev, price: v } : prev));
+                          }}
+                        />
+                      ) : (
+                        <>₹{typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price.toLocaleString("en-IN") : selectedPackageDetail.price}</>
+                      )}
                       {selectedPackageDetail.duration && (
                         <span className="text-slate-400 text-xs font-semibold ml-2">• {selectedPackageDetail.duration}</span>
                       )}
@@ -19047,6 +19730,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   {/* Add button inside details modal */}
                   <div className="w-24">
                     {(() => {
+                      const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
+                      if (isDetailAcInspection) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveAcInspectionItem(selectedPackageDetail);
+                              setShowAcInspectionModal(true);
+                            }}
+                            className="w-full bg-white border border-[#E8E3DB] text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-[#F5F0E6]/40 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <ShoppingCart size={13} /> Add
+                          </button>
+                        );
+                      }
+
                       const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
                       const pkgCount = getCartItemCount(pkgCartId);
                       const pkgName = selectedPackageDetail.name;
@@ -19072,21 +19771,53 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 </div>
               </div>
 
+              {/* WHAT IS INCLUDED / INSPECTION INCLUSIONS */}
+              {Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0 && (
+                <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                      {selectedPackageDetail.includesTitle ||
+                        ((normalizedKey === "hvac" || isHvacTab) && (selectedPackageDetail.name?.toLowerCase().includes("inspect") || activeSubTab?.toLowerCase().includes("inspect"))
+                          ? "Inspection Checkpoints & Inclusions"
+                          : "What is Included")}
+                    </h4>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                      {selectedPackageDetail.includes.length} Checks Included
+                    </span>
+                  </div>
+                  <div className="space-y-2 bg-[#F5F0E6]/60 p-3.5 rounded-xl border border-[#E2DDD5]">
+                    {selectedPackageDetail.includes.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2.5 text-xs text-slate-700">
+                        <span className="text-emerald-600 font-bold mt-0.5 shrink-0">✓</span>
+                        <span className="leading-relaxed font-medium">{typeof item === "string" ? item : (item?.text || "")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* APPLICABLE SERVICE NOTES */}
+              {selectedPackageDetail.notes && (
+                <div className="space-y-1.5 border-t border-[#E8E3DB] pt-4 text-left">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Notes</h4>
+                  <p className="text-xs text-amber-900 bg-amber-50/70 border border-amber-200/70 p-3 rounded-xl leading-relaxed">
+                    {selectedPackageDetail.notes}
+                  </p>
+                </div>
+              )}
+
               {/* TOOLS & PRODUCTS WE USE */}
               <div className="space-y-2.5 border-t border-[#E8E3DB] pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
                   {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
                     ? selectedPackageDetail.tools
-                    : (Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0
-                      ? selectedPackageDetail.includes
-                      : [
-                        "Professional grade safety & service tools",
-                        "Microfiber cloths & non-abrasive scrubbers",
-                        "High performance diagnostic equipment",
-                        "Safety gear & protective floor covers"
-                      ]
-                    )
+                    : [
+                      "Professional grade safety & service tools",
+                      "Microfiber cloths & non-abrasive scrubbers",
+                      "High performance diagnostic equipment",
+                      "Safety gear & protective floor covers"
+                    ]
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
@@ -19183,6 +19914,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </span>
               <button
                 onClick={() => {
+                  const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
+                  if (isDetailAcInspection) {
+                    setActiveAcInspectionItem(selectedPackageDetail);
+                    setShowAcInspectionModal(true);
+                    return;
+                  }
+
                   const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
                   if (getCartItemCount(pkgCartId) === 0) {
                     const pkgName = selectedPackageDetail.name;
@@ -19204,6 +19942,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         </div>,
         document.body
       )}
+
+      {/* AC Inspection Form Modal */}
+      <ACInspectionFormModal
+        isOpen={showAcInspectionModal}
+        onClose={() => setShowAcInspectionModal(false)}
+        onSubmit={handleAcInspectionSubmit}
+        initialData={{
+          brand: formData?.ac_brand || "Daikin",
+          type: formData?.ac_type || "Split AC",
+          quantity: formData?.ac_quantity || 1,
+          notes: formData?.ac_notes || ""
+        }}
+        basePrice={activeAcInspectionItem?.price || 199}
+      />
     </div>
   );
 }
@@ -23720,6 +24472,105 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
   const [dbPackages, setDbPackages] = useState([]);
 
+  const [searchParams] = useSearchParams();
+  const editFromUrl = searchParams.get("edit") === "1" || searchParams.get("superAdminEdit") === "1";
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(editFromUrl);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  useEffect(() => {
+    if (editFromUrl && canEnterServiceEditMode) {
+      setServiceEditMode(true);
+    }
+  }, [editFromUrl, canEnterServiceEditMode]);
+
+  const [serviceOverrides, setServiceOverrides] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_kitchen_service_overrides") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const [customBanners, setCustomBanners] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_custom_subtab_banners") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const handleSaveBanner = async (newUrl) => {
+    setCustomBanners(prev => {
+      const next = { ...prev, [activeTab]: newUrl };
+      try {
+        localStorage.setItem("calservice_custom_subtab_banners", JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    setSaveNotice({ type: "success", text: `Updated ${activeTab} banner image!` });
+    setTimeout(() => setSaveNotice(null), 3000);
+
+    if (dbPackages[0]?.id) {
+      try {
+        const existingCustom = dbPackages[0]?.service_customization || {};
+        const subtab_banners = { ...(existingCustom.subtab_banners || {}), [activeTab]: newUrl };
+        await apiRequest(`/settings/catalog/v2/packages/${dbPackages[0].id}/`, {
+          method: "PUT",
+          json: { service_customization: { ...existingCustom, subtab_banners } }
+        });
+      } catch (e) {
+        console.error("Failed to sync banner to backend catalog:", e);
+      }
+    }
+  };
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode) return;
+
+    setServiceOverrides(prev => {
+      const next = {
+        ...prev,
+        [item.id]: {
+          ...(prev[item.id] || {}),
+          [field]: value
+        }
+      };
+      try {
+        localStorage.setItem("calservice_kitchen_service_overrides", JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+
+    if (!item.db_id) {
+      setSaveNotice({ type: "success", text: `Updated "${item.name}" (Live Preview mode).` });
+      setTimeout(() => setSaveNotice(null), 3000);
+      return;
+    }
+
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — catalog updated.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — catalog permissions issue." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {
@@ -23766,36 +24617,60 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const customSubTabs = dbPackages[0]?.service_customization?.subtabs;
   const activeSubTabsList = (customSubTabs && customSubTabs.length > 0)
-    ? customSubTabs.filter(tab => tab.enabled !== false).map(tab => ({ id: tab.id, name: tab.label, image: resolveImageUrl(dbPackages[0]?.service_customization?.subtab_banners?.[tab.id], "/mockups/kitchen_top_new.png") }))
-    : KITCHEN_SUB_TABS;
+    ? customSubTabs.filter(tab => tab.enabled !== false).map(tab => ({ id: tab.id, name: tab.label, image: customBanners[tab.id] || resolveImageUrl(dbPackages[0]?.service_customization?.subtab_banners?.[tab.id], "/mockups/kitchen_top_new.png") }))
+    : KITCHEN_SUB_TABS.map(tab => ({ ...tab, image: customBanners[tab.id] || tab.image }));
 
   const getActiveServices = () => {
+    const isKnownStaticTab = activeTab === "packages" || activeTab === "appliance" || activeTab === "cabinet_tile" || activeTab === "addons";
+    const dbItemsForActiveTab = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
+    const mapDbPkgToCard = (p) => ({
+      id: p.slug || String(p.id),
+      db_id: p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "1 hr",
+      description: p.description || "",
+      image: p.image || "/mockups/kitchen_top_new.png",
+      includes: Array.isArray(p.includes) ? p.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false)) : [],
+      excludes: Array.isArray(p.excludes) ? p.excludes : [],
+      tools: Array.isArray(p.tools) ? p.tools : [],
+      ready: Array.isArray(p.ready) ? p.ready : [],
+      reviews: Array.isArray(p.reviews) ? p.reviews.filter(r => r?.enabled !== false) : [],
+      reviews_list: Array.isArray(p.reviews) ? p.reviews.filter(r => r?.enabled !== false) : [],
+      faqs: Array.isArray(p.faqs) ? p.faqs.filter(f => f?.checked !== false && f?.enabled !== false) : [],
+      tag: p.tag || "",
+      popular: p.popular || false,
+      gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+      platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+    });
+
     let list = [];
-    if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
+    // Fully admin-driven: once ANY package is tagged for a tab, the database
+    // becomes the single source of truth for it -- add, edit AND remove all
+    // just work, with nothing hardcoded lingering behind. The hardcoded
+    // arrays below are only a bootstrap placeholder for a tab nobody has
+    // populated in the catalog yet.
+    if (dbItemsForActiveTab.length > 0) {
+      list = dbItemsForActiveTab.map(mapDbPkgToCard);
+    } else if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
     else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
     else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
     else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
-    else {
-      // Dynamic custom tabs fallback
-      const matchingDbPkgs = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.customization && p.customization.subtab === activeTab));
-      list = matchingDbPkgs.map(p => ({
-        id: p.slug,
-        name: p.name,
-        price: Math.round(Number(p.base_price) || 0),
-        duration: p.duration || "1 hr",
-        description: p.description,
-        image: p.image || "/mockups/kitchen_top_new.png",
-        includes: Array.isArray(p.includes) ? p.includes : [],
-        gst_rate: p.gst_rate !== undefined ? parseFloat(p.gst_rate) : 18,
-        platform_fee: p.platform_fee !== undefined ? parseFloat(p.platform_fee) : 29
-      }));
-    }
+    // else: an uncustomized dynamic tab with no matching packages -- empty.
 
-    if (dbPackages.length > 0) {
+    const seenDbIds = new Set();
+    const usingHardcodedFallback = isKnownStaticTab && dbItemsForActiveTab.length === 0;
+
+    // Only overlay legacy slug-matched edits onto the hardcoded placeholder
+    // items -- once a tab is genuinely DB-driven (the branch above), `list`
+    // already came straight from the database and needs no further merge.
+    if (usingHardcodedFallback && dbPackages.length > 0) {
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
           if (parentDbMatch) {
+            seenDbIds.add(parentDbMatch.id);
+            item.db_id = parentDbMatch.id;
             item.name = parentDbMatch.name;
             item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
             item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
@@ -23813,9 +24688,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              seenDbIds.add(dbMatch.id);
               const baseIncludes = Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes);
               return {
                 ...subOpt,
+                db_id: dbMatch.id,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
@@ -23848,6 +24725,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id);
           if (dbMatch) {
+            seenDbIds.add(dbMatch.id);
+            item.db_id = dbMatch.id;
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
@@ -23879,6 +24758,20 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       });
     }
 
+    if (serviceOverrides && Object.keys(serviceOverrides).length > 0) {
+      list = list.map(item => {
+        const ov = serviceOverrides[item.id];
+        if (ov) {
+          return {
+            ...item,
+            ...ov,
+            price: ov.base_price !== undefined ? Math.round(Number(ov.base_price) || item.price) : (ov.price !== undefined ? Math.round(Number(ov.price) || item.price) : item.price)
+          };
+        }
+        return item;
+      });
+    }
+
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
   };
@@ -23901,6 +24794,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   return (
     <div className="w-full text-slate-700 bg-white">
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
@@ -23972,11 +24871,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
-                      <img
-                        src={resolveImageUrl(activeSubTabsList.find(t => t.id === activeTab)?.image, "/mockups/kitchen_top_new.png")}
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60 relative">
+                      <EditableImage
+                        active={Boolean(serviceEditMode)}
+                        value={customBanners[activeTab] || activeSubTabsList.find(t => t.id === activeTab)?.image || "/mockups/kitchen_top_new.png"}
+                        onSave={handleSaveBanner}
+                        assetType="banners"
                         alt={service.name}
-                        className="w-full h-full object-cover object-center"
+                        className="w-full h-full"
+                        imgClassName="w-full h-full object-cover object-center"
+                        defaultFallback="/mockups/kitchen_top_new.png"
+                        title={`Edit ${activeSubTabsList.find(t => t.id === activeTab)?.name || activeTab} Banner`}
                       />
                     </div>
                   )}
@@ -23994,7 +24899,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           ★ {service.tag}
                         </span>
                       )}
-                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
 
                       {service.rating && activeTab !== "appliance" && (
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
@@ -24004,16 +24915,40 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       )}
 
-                      {service.description && (
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      {(service.description || serviceEditMode) && (
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                         <span className="text-base font-black text-slate-900">
-                          {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                          {serviceEditMode ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`
+                          )}
                         </span>
                         <span className="text-slate-300">•</span>
-                        <span className="text-slate-500 font-semibold">{service.duration}</span>
+                        <span className="text-slate-500 font-semibold">
+                          <EditableText
+                            active={Boolean(serviceEditMode)}
+                            value={service.duration}
+                            onSave={(v) => handleSaveServiceField(service, "duration", v)}
+                          />
+                        </span>
                       </div>
 
                       {service.includes && service.includes.length > 0 && (
@@ -24087,10 +25022,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     </div>
 
                     {/* Image + add button */}
-                    {service.image && (
+                    {(service.image || serviceEditMode) && (
                       <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
                         <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                          <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                          <EditableImage
+                            active={Boolean(serviceEditMode)}
+                            value={service.image}
+                            onSave={(url) => handleSaveServiceField(service, "image", url)}
+                            assetType="services"
+                            alt={service.name}
+                            className="w-full h-full"
+                            imgClassName="w-full h-full object-cover"
+                            defaultFallback="/mockups/service_cleaning.png"
+                          />
                         </div>
                         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
                           {count > 0 ? (
@@ -24381,11 +25325,25 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       return (
                         <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
-                            <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                            <EditableImage
+                              active={Boolean(serviceEditMode && sub.db_id)}
+                              value={sub.image}
+                              onSave={(url) => handleSaveServiceField(sub, "image", url)}
+                              assetType="services"
+                              alt={sub.name}
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover"
+                            />
                           </div>
                           <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
-                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && sub.db_id)}
+                                  value={sub.name}
+                                  onSave={(v) => handleSaveServiceField(sub, "name", v)}
+                                />
+                              </h5>
                             </div>
                             <div className="w-full mt-auto">
                               <button
@@ -24396,7 +25354,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                               >
                                 View Details
                               </button>
-                              <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
+                              <div className="text-xs font-black text-slate-900 mb-2">
+                                {serviceEditMode && sub.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={sub.price}
+                                    onSave={(v) => handleSaveServiceField(sub, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${sub.price}`
+                                )}
+                              </div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
                                   <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
@@ -24585,7 +25555,18 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 }
 
 
-export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+export function PackageModal({
+  category,
+  cart,
+  setCart,
+  onClose,
+  onCheckout,
+  packagesData,
+  setFormData,
+  formData,
+  setPhotoFile,
+  setPhotoPreview
+}) {
   return (
     <CustomCleaningPackageModal
       category={category}
@@ -24593,6 +25574,11 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       setCart={setCart}
       onClose={onClose}
       onCheckout={onCheckout}
+      packagesData={packagesData}
+      setFormData={setFormData}
+      formData={formData}
+      setPhotoFile={setPhotoFile}
+      setPhotoPreview={setPhotoPreview}
     />
   );
 }

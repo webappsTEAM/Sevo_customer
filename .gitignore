@@ -71,3 +71,7 @@ scratch/
 /src/
 start_db_tunnel.ps1
 tunnel_daemon.py
+
+# Local keys and AI agent outputs
+.ssh/
+Claude outputs/

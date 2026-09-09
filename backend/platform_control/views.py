@@ -17,11 +17,51 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.models import User, SavedAddress
 from accounts.permissions import is_super_admin, can, IsSuperAdmin, get_global_rbac_permissions, set_global_rbac_permissions, GLOBAL_MODULES
+from companies.models import Company
 from accounts.audit_service import record_platform_audit
 from customer_analytics.models import PlatformAuditEvent, CustomerIdentity, CustomerLoginEvent
 from service_requests.models import ServiceRequest
 from customer_care.models import CustomerCareTicket
 from settings_hub.models import TeamInvite
+
+
+def _resolve_invite_company(actor):
+    """
+    TeamInvite.company is a required FK, but CalTrack's Super Admin /
+    platform staff accounts are not themselves company-scoped (User.company
+    is nullable, and the catalog app's own comments note this is "one
+    CalServices platform", not a multi-tenant marketplace) — so
+    `actor.company` is normally None for the Super Admin doing the
+    inviting. Bug found (gap): PlatformUserInviteView.post previously called
+    TeamInvite.objects.create(...) with no `company` at all, which would
+    raise an IntegrityError on every single invite. Fixed by falling back
+    to the actor's own company, then the only/first Company row.
+    """
+    company = getattr(actor, "company", None)
+    if company:
+        return company
+    return Company.objects.order_by("id").first()
+
+
+def _validate_permissions_payload(payload):
+    """
+    Validates a {"<module>": ["<action>", ...]} custom-permissions payload
+    against the real module list (GLOBAL_MODULES) already defined in
+    accounts.permissions — never invents new module names. Returns
+    (cleaned_dict, error_message_or_None).
+    """
+    if payload is None:
+        return None, None
+    if not isinstance(payload, dict):
+        return None, "permissions must be an object of {module: [actions]}."
+    cleaned = {}
+    for module, actions in payload.items():
+        if module not in GLOBAL_MODULES:
+            return None, f"Unknown module '{module}'."
+        if not isinstance(actions, list) or not all(isinstance(a, str) for a in actions):
+            return None, f"Actions for module '{module}' must be a list of strings."
+        cleaned[module] = sorted(set(actions))
+    return cleaned, None
 
 
 # ── 1. GLOBAL PLATFORM DASHBOARD ─────────────────────────────────────────────
@@ -105,8 +145,20 @@ class PlatformRBACMatrixView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not is_super_admin(request.user) and not can(request.user, "rbac", "view"):
-            raise PermissionDenied("Only Super Admin or RBAC managers can view the permission matrix.")
+        # Bug found (verification pass): this used to also allow through
+        # anyone whose role happened to grant "rbac":"view" in the Global
+        # RBAC matrix itself (the default matrix grants that to the plain
+        # "admin" role) -- meaning a normal Admin, with zero Super-Admin
+        # privilege, could read the entire permission matrix that governs
+        # every module in the app via this endpoint, even though the
+        # frontend never exposes this screen to anyone but a Super Admin
+        # (PlatformRBACPage.jsx sits behind RequireSuperAdmin). That
+        # directly contradicts "normal Admins must not access Super Admin
+        # functionality" -- the Platform Control Center's RBAC matrix is
+        # Super-Admin-exclusive, full stop, not just role-gated like an
+        # ordinary business module.
+        if not is_super_admin(request.user):
+            raise PermissionDenied("Only Super Admin can view the permission matrix.")
         matrix = get_global_rbac_permissions()
         STAFF_ROLES = ["admin", "manager", "support", "catalog", "finance"]
         return Response({
@@ -156,7 +208,17 @@ class PlatformUsersListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not is_super_admin(request.user) and not can(request.user, "users", "view"):
+        # Bug found (verification pass): the plain "admin" role has
+        # "users":"view" in the default Global RBAC matrix (it's meant for
+        # ordinary business-user visibility), so this fallback let any
+        # normal Admin call this endpoint -- and since the new per-user
+        # custom_permissions feature now returns every listed user's full
+        # module/action grants here, a normal Admin could read every other
+        # admin's individualized permissions. This directory is part of the
+        # Platform Control Center (frontend: RequireSuperAdmin-gated,
+        # PlatformUsersPage.jsx), not an ordinary role-gated module, so it
+        # must be Super-Admin-exclusive on the backend too.
+        if not is_super_admin(request.user):
             raise PermissionDenied("You do not have permission to view the staff directory.")
 
         users = User.objects.exclude(
@@ -201,6 +263,7 @@ class PlatformUsersListView(APIView):
                 "two_fa_enabled": u.two_fa_enabled,
                 "date_joined": u.date_joined,
                 "last_login": u.last_login,
+                "custom_permissions": u.custom_permissions,
             })
 
         return Response({
@@ -237,16 +300,32 @@ class PlatformUserInviteView(APIView):
         if role in (User.Role.SUPER_ADMIN, "super_admin", "superadmin") and not is_super_admin(request.user):
             raise PermissionDenied("Only Super Admins can provision a Super Admin account.")
 
+        # Per-module permission customization (beyond the base role) is a
+        # Super Admin-only capability — a plain admin inviting staff via
+        # `users:create` still works exactly as before, they just can't
+        # attach custom module permissions to the invite.
+        custom_permissions, perm_error = _validate_permissions_payload(request.data.get("permissions"))
+        if perm_error:
+            return Response({"detail": perm_error}, status=400)
+        if custom_permissions and not is_super_admin(request.user):
+            raise PermissionDenied("Only Super Admins can customize module permissions.")
+
         if User.objects.filter(email__iexact=email).exists():
             return Response({"detail": "A user with this email address already exists."}, status=400)
 
+        company = _resolve_invite_company(request.user)
+        if not company:
+            return Response({"detail": "No company record exists to attach this invite to. Contact your platform operator."}, status=400)
+
         # Create or update pending invite
         invite = TeamInvite.objects.create(
+            company=company,
             email=email,
             role=role,
             status="pending",
             token=uuid.uuid4(),
             invited_by=request.user,
+            custom_permissions=custom_permissions or {},
         )
 
         invite_link = f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')}/accept-invite?token={invite.token}"
@@ -269,7 +348,7 @@ class PlatformUserInviteView(APIView):
             module="users",
             object_type="TeamInvite",
             object_id=str(invite.id),
-            after_state={"email": email, "role": role, "require_mfa": require_mfa},
+            after_state={"email": email, "role": role, "require_mfa": require_mfa, "custom_permissions": custom_permissions or {}},
             reason=f"Invited staff user {email} with role {role}",
             request=request,
             severity="INFO"
@@ -285,6 +364,7 @@ class PlatformUserInviteView(APIView):
                 "invite_link": invite_link,
                 "status": invite.status,
                 "created_at": invite.created_at,
+                "custom_permissions": invite.custom_permissions,
             }
         }, status=201)
 
@@ -306,6 +386,7 @@ class PlatformUserDetailView(APIView):
             "role": target_user.role,
             "is_active": target_user.is_active,
             "is_superuser": target_user.is_superuser,
+            "custom_permissions": target_user.custom_permissions,
         }
 
         # ── PRIVILEGE ESCALATION PROTECTION ──
@@ -349,12 +430,24 @@ class PlatformUserDetailView(APIView):
 
         # Status toggle (Active / Suspended)
         if "is_active" in request.data:
+            # Bug found (verification pass): this block had NO permission
+            # check at all beyond being authenticated -- unlike the role
+            # change above (which requires can(actor,"users","edit")), any
+            # logged-in admin/staff account, including one with
+            # custom_permissions locking them out of every module, could
+            # suspend or reactivate any other non-Super-Admin account.
+            # Gated the same way role changes already are, using the
+            # matrix's own "suspend"/"reactivate" actions on "users".
+            new_is_active = bool(request.data["is_active"])
+            required_action = "reactivate" if new_is_active else "suspend"
+            if not is_super_admin(actor) and not can(actor, "users", required_action):
+                raise PermissionDenied("You do not have permission to change this account's status.")
             if is_super_admin(target_user) and not is_super_admin(actor):
                 raise PermissionDenied("Only Super Admins can deactivate another Super Admin account.")
             if target_user.id == actor.id and request.data["is_active"] is False:
                 raise ValidationError("You cannot deactivate your own account.")
 
-            target_user.is_active = bool(request.data["is_active"])
+            target_user.is_active = new_is_active
             action_name = "USER_REACTIVATED" if target_user.is_active else "USER_SUSPENDED"
             record_platform_audit(
                 actor=actor,
@@ -365,6 +458,37 @@ class PlatformUserDetailView(APIView):
                 before_state=before_state,
                 after_state={"is_active": target_user.is_active},
                 reason=request.data.get("reason", f"Status changed to {'Active' if target_user.is_active else 'Suspended'}"),
+                request=request,
+                severity="WARN"
+            )
+
+        # ── PER-MODULE PERMISSION CUSTOMIZATION ──
+        # Deliberately Super-Admin-only, and NOT reachable via the general
+        # `users:edit` permission a plain Admin might hold — granting or
+        # narrowing another Admin's module access is exactly the kind of
+        # privilege change the requirements call out as Super Admin-only.
+        if "permissions" in request.data:
+            if not is_super_admin(actor):
+                raise PermissionDenied("Only Super Admins can customize another user's module permissions.")
+            if target_user.id == actor.id:
+                raise PermissionDenied("You cannot modify your own permissions.")
+            if is_super_admin(target_user):
+                raise PermissionDenied("Super Admin accounts always have full access and cannot be restricted here.")
+
+            new_permissions, perm_error = _validate_permissions_payload(request.data.get("permissions"))
+            if perm_error:
+                return Response({"detail": perm_error}, status=400)
+
+            target_user.custom_permissions = new_permissions or {}
+            record_platform_audit(
+                actor=actor,
+                action="CUSTOM_PERMISSIONS_CHANGED",
+                module="rbac",
+                object_type="User",
+                object_id=str(target_user.id),
+                before_state={"custom_permissions": before_state["custom_permissions"]},
+                after_state={"custom_permissions": target_user.custom_permissions},
+                reason=request.data.get("reason", f"Module permissions customized for {target_user.username}"),
                 request=request,
                 severity="WARN"
             )
@@ -380,6 +504,7 @@ class PlatformUserDetailView(APIView):
                 "role": target_user.role,
                 "is_active": target_user.is_active,
                 "is_super_admin": is_super_admin(target_user),
+                "custom_permissions": target_user.custom_permissions,
             }
         })
 

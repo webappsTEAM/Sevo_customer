@@ -103,6 +103,18 @@ class User(AbstractBaseUser):
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER)
 
+    # Per-user module permission overrides, layered on top of the role-based
+    # Global RBAC matrix (accounts/permissions.py DEFAULT_GLOBAL_RBAC).
+    # Shape: {"<module>": ["<action>", ...]}. A module key present here
+    # (including as an empty list, meaning "No Access") always wins over
+    # the role's default actions for that module; a module NOT present here
+    # simply falls back to the role default — so most Admin/Staff accounts
+    # need no entry at all. Only a Super Admin may set this (enforced in
+    # platform_control.views.PlatformUserDetailView/PlatformUserInviteView).
+    # See accounts.permissions.get_effective_module_actions() — the single
+    # place both `can()` and UserSerializer.get_permissions() read this from.
+    custom_permissions = models.JSONField(default=dict, blank=True)
+
     # Extended profile fields
     bio = models.TextField(blank=True, default="")
     # null=True so multiple accounts without a phone don't collide under the

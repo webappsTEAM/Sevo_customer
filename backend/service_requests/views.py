@@ -655,6 +655,77 @@ class BookingCreateView(APIView):
             elif request.user and request.user.is_authenticated and request.user.email:
                 final_email = request.user.email
 
+        job_type = str(serializer.validated_data.get("job_type") or request.data.get("job_type") or "SERVICE").upper()
+        if job_type == "ESTIMATION":
+            from service_requests.services.estimation_service import EstimationService
+            idempotency_key = (
+                request.headers.get("Idempotency-Key")
+                or serializer.validated_data.get("idempotency_key")
+                or request.data.get("idempotency_key")
+            )
+            ac_details = {
+                "ac_type": serializer.validated_data.get("ac_type") or request.data.get("ac_type") or request.data.get("type"),
+                "ac_brand": serializer.validated_data.get("ac_brand") or request.data.get("ac_brand") or request.data.get("brand") or "Other",
+                "ac_capacity": serializer.validated_data.get("ac_capacity") or request.data.get("ac_capacity") or request.data.get("capacity"),
+                "ac_quantity": serializer.validated_data.get("ac_quantity") or request.data.get("ac_quantity") or request.data.get("quantity") or 1,
+                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or serializer.validated_data.get("description"),
+                "customer_notes": serializer.validated_data.get("customer_notes") or request.data.get("customer_notes") or request.data.get("notes") or "",
+            }
+            booking_data = {
+                "customer_name": serializer.validated_data.get("customer_name") or (customer_user.get_full_name() if customer_user else ""),
+                "phone": serializer.validated_data.get("phone") or (getattr(customer_user, "phone", "") if customer_user else ""),
+                "email": final_email or (getattr(customer_user, "email", "") if customer_user else ""),
+                "address": serializer.validated_data.get("address", ""),
+                "latitude": serializer.validated_data.get("latitude"),
+                "longitude": serializer.validated_data.get("longitude"),
+                "saved_address_id": request.data.get("saved_address_id"),
+                "service_location_snapshot": request.data.get("service_location_snapshot") or {},
+                "preferred_date": serializer.validated_data.get("preferred_date"),
+                "preferred_time": serializer.validated_data.get("preferred_time", ""),
+                "payment_method": request.data.get("payment_method", "COD"),
+            }
+            try:
+                sr, created = EstimationService.create_estimation_booking(
+                    customer=customer_user,
+                    ac_details=ac_details,
+                    booking_data=booking_data,
+                    idempotency_key=idempotency_key,
+                    company=company,
+                )
+            except Exception as e:
+                if hasattr(e, "detail"):
+                    return Response({"success": False, "errors": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+                raise e
+
+            return _success(
+                data={
+                    "request_id": sr.request_id,
+                    "id": sr.id,
+                    "customer_id": sr.customer.customer_id if (sr.customer and hasattr(sr.customer, "customer_id")) else None,
+                    "job_type": sr.job_type,
+                    "payment_method": sr.payment_method,
+                    "payment_status": sr.payment_status,
+                    "booking_status": sr.status,
+                    "total_amount": float(sr.total_amount),
+                    "start_otp": sr.start_otp,
+                    "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
+                    "estimation": {
+                        "id": sr.estimation.id,
+                        "ac_type": sr.estimation.ac_type,
+                        "ac_brand": sr.estimation.ac_brand,
+                        "ac_capacity": sr.estimation.ac_capacity,
+                        "ac_quantity": sr.estimation.ac_quantity,
+                        "customer_symptom": sr.estimation.customer_symptom,
+                        "status": sr.estimation.status,
+                        "fee_amount": float(sr.estimation.fee.amount),
+                        "fee_status": sr.estimation.fee.status,
+                    } if hasattr(sr, "estimation") else None,
+                },
+                message="Your AC estimation request has been submitted successfully.",
+                status_code=201 if created else 200,
+            )
+
+
         # Ensure cart_data carries clean numeric prices matching authoritative fare
         clean_cart = serializer.validated_data.get("cart_data")
         if clean_cart and isinstance(clean_cart, list):

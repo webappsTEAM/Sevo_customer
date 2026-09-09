@@ -3,10 +3,11 @@ import { useNavigate, useLocation, Link } from "react-router-dom"
 import {
   ChevronLeft, Search, ShoppingCart, Clock, X,
   MapPin, Sparkles, Filter, CheckCircle2, ChevronRight,
-  ArrowRight, ShieldCheck, HeartPulse
+  ArrowRight, ShieldCheck, HeartPulse, ShieldAlert, Pencil
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { apiRequest } from "../../api/client.js"
+import { useCanEditCustomerUI } from "../components/SuperAdminEditControls.jsx"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { VegetableProductCard } from "../components/vegetables/VegetableProductCard.jsx"
@@ -30,6 +31,24 @@ export function VegetableFullScreenPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const vegTiming = getVegetableTimingInfo()
+
+  // ── Super Admin Customer UI Edit Mode ──────────────────────────────────
+  // Entry point: PlatformDashboardPage's "View Customer App" link deep-links
+  // here with ?admin_edit=1. `canEnterEditMode` is the authorization check —
+  // it is frontend UX only; the actual save PUTs through the same admin
+  // catalog endpoint the existing Catalog admin panel uses
+  // (settings_hub AdminPackageDetailView), which is backend-permission-gated
+  // independently (accounts.permissions.RequireModuleAccess("catalog","edit")).
+  // A normal customer never sees this bar because canEnterEditMode is false.
+  const canEnterEditMode = useCanEditCustomerUI()
+  const [editMode, setEditMode] = useState(() => {
+    try {
+      return canEnterEditMode && new URLSearchParams(location.search).get("admin_edit") === "1"
+    } catch {
+      return false
+    }
+  })
+  const [saveNotice, setSaveNotice] = useState(null)
 
   const [vegetables, setVegetables] = useState([])
   const [loading, setLoading] = useState(true)
@@ -157,6 +176,35 @@ export function VegetableFullScreenPage() {
     })
   }
 
+  // Super Admin Edit Mode save: PATCHes the real Package row through the
+  // existing admin catalog endpoint, then updates local state from the
+  // server's response so the price shown here matches the database (no
+  // client-side value is ever treated as the source of truth).
+  const handleSaveField = async (item, field, value) => {
+    if (!canEnterEditMode) return
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      })
+      if (res && res.success && res.data) {
+        const pkg = res.data
+        const price = Math.round(Number(pkg.base_price) || 0)
+        const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
+        setVegetables((prev) =>
+          prev.map((v) => (v.id === item.id ? { ...v, name: pkg.name, price, mrp, image: pkg.image || v.image } : v))
+        )
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` })
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." })
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." })
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000)
+    }
+  }
+
   const totalCartCount = Object.values(foodCart).reduce((a, b) => a + b, 0)
   const totalCartValue = Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
     let itemPrice = 30
@@ -255,6 +303,31 @@ export function VegetableFullScreenPage() {
           </div>
         </div>
       </header>
+
+      {/* ── Super Admin Customer UI Edit Mode toggle — never rendered for a
+          normal customer; canEnterEditMode is false unless useCanEditCustomerUI()
+          resolves the current user as Super Admin ── */}
+      {canEnterEditMode && (
+        <div className={`sticky top-[57px] z-30 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs font-bold ${editMode ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+          <span className="flex items-center gap-2">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Super Admin viewing the live Customer App{editMode ? " — Edit Mode ON" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditMode((v) => !v)}
+            className={`px-3 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer ${editMode ? "bg-white text-indigo-700" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
+          >
+            <Pencil className="w-3 h-3" />
+            {editMode ? "Exit Edit Mode" : "Enable Edit Mode"}
+          </button>
+        </div>
+      )}
+      {saveNotice && (
+        <div className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-xl text-xs font-bold shadow-lg ${saveNotice.type === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+          {saveNotice.text}
+        </div>
+      )}
 
       {/* ── Conditional Full-Screen Body ── */}
       {selectedProduct ? (
@@ -374,6 +447,8 @@ export function VegetableFullScreenPage() {
                     setIsRecipeModalOpen(true)
                   }}
                   deliveryBadge={vegTiming.cardDeliveryBadge}
+                  editable={canEnterEditMode && editMode}
+                  onSaveField={handleSaveField}
                 />
               ))}
             </div>

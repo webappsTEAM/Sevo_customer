@@ -1,10 +1,21 @@
 import React from "react"
-import { Clock, Plus, Minus, ChevronDown, Utensils } from "lucide-react"
+import { Clock, ChevronDown, Utensils, Pencil } from "lucide-react"
+import { EditableText, EditableImage } from "../SuperAdminEditControls.jsx"
 
 /**
  * VegetableProductCard
  * Renders individual vegetable produce card with photo, price, delivery badge,
  * Add to Cart counter, and 'What Can I Make?' recipe trigger.
+ *
+ * Super Admin Edit Mode: when `editable` is true (only ever passed as true
+ * for an authorized Super Admin — see VegetableFullScreenPage), name/price/
+ * MRP become inline-editable via the shared EditableText control and the
+ * product image becomes a real file-upload target via the shared
+ * EditableImage control (../SuperAdminEditControls.jsx — the same
+ * components every other Super Admin Edit Mode surface in this app uses),
+ * with `onSaveField(item, field, value)` called on commit. For every normal
+ * customer `editable` is absent/false and the card renders exactly as
+ * before.
  */
 export function VegetableProductCard({
   item,
@@ -15,9 +26,13 @@ export function VegetableProductCard({
   onSelectProduct,
   deliveryBadge = "8 MINS",
   fallbackPhoto = "/mockups/vegetables_realistic.png",
+  editable = false,
+  onSaveField,
 }) {
   const hasOptions = item.options && item.options.length > 0
+
   const handleCardClick = () => {
+    if (editable) return
     if (onSelectProduct) {
       onSelectProduct(item)
     } else if (onDiscoverRecipes) {
@@ -47,18 +62,30 @@ export function VegetableProductCard({
       >
         {/* Product Photographic Image */}
         <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
-          <img
-            src={item.image || fallbackPhoto}
-            alt={item.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={(e) => {
-              e.currentTarget.onerror = null
-              e.currentTarget.src = fallbackPhoto
-            }}
-          />
-          
+          {editable ? (
+            <EditableImage
+              active={true}
+              value={item.image || fallbackPhoto}
+              onSave={(url) => onSaveField && onSaveField(item, "image", url)}
+              assetType="packages"
+              alt={item.name}
+              className="w-full h-full"
+              imgClassName="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <img
+              src={item.image || fallbackPhoto}
+              alt={item.name}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={(e) => {
+                e.currentTarget.onerror = null
+                e.currentTarget.src = fallbackPhoto
+              }}
+            />
+          )}
+
           {/* Delivery speed badge */}
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
             <Clock className="w-2.5 h-2.5 text-emerald-600" />
@@ -71,12 +98,24 @@ export function VegetableProductCard({
               {item.discount}
             </div>
           )}
+
+          {editable && (
+            <div className="absolute bottom-2 right-2 bg-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider flex items-center gap-1 pointer-events-none">
+              <Pencil className="w-2.5 h-2.5" /> Edit mode
+            </div>
+          )}
         </div>
 
         {/* Product Details */}
         <div className="p-3">
           <h5 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 leading-snug min-h-[34px] group-hover:text-emerald-700 transition-colors" title={item.name}>
-            {item.name}
+            <EditableText
+              active={editable}
+              value={item.name}
+              onSave={(v) => onSaveField && onSaveField(item, "name", v)}
+              className="text-xs sm:text-sm"
+              inputClassName="w-24"
+            />
           </h5>
           <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
             {item.unit || "500 g"}
@@ -90,13 +129,37 @@ export function VegetableProductCard({
           <div>
             <div className="flex items-center gap-1">
               <span className="text-sm font-black text-slate-900">
-                ₹{item.price}
+                {editable ? (
+                  <EditableText
+                    active={true}
+                    type="number"
+                    prefix="₹"
+                    value={item.price}
+                    onSave={(v) => onSaveField && onSaveField(item, "base_price", v)}
+                    inputClassName="w-16"
+                  />
+                ) : (
+                  <>₹{item.price}</>
+                )}
               </span>
             </div>
-            {item.mrp && item.mrp > item.price && (
-              <span className="text-[10px] text-slate-400 line-through">
-                ₹{item.mrp}
+            {editable ? (
+              <span className="text-[10px] text-slate-400">
+                MRP: <EditableText
+                  active={true}
+                  type="number"
+                  prefix="₹"
+                  value={item.mrp || 0}
+                  onSave={(v) => onSaveField && onSaveField(item, "offer_price", v)}
+                  inputClassName="w-16"
+                />
               </span>
+            ) : (
+              item.mrp && item.mrp > item.price && (
+                <span className="text-[10px] text-slate-400 line-through">
+                  ₹{item.mrp}
+                </span>
+              )
             )}
           </div>
 

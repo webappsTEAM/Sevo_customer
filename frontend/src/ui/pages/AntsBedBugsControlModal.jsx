@@ -4,12 +4,13 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X, ShieldAlert, Chevron
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const ANTS_BUGS_SUB_TABS = [
-  { id: "bedbugs", name: "Bedbugs Control", image: "/mockups/bedbugs_control.jpg" },
-  { id: "ants", name: "Ants Control", image: "/mockups/ants_control.jpg" }
+  { id: "bedbugs", name: "Bedbugs Control", image: "/mockups/icons/pest_bedbugs_control.png" },
+  { id: "ants", name: "Ants Control", image: "/mockups/icons/pest_ants_control.png" }
 ];
 
 const PEST_SERVICES = {
@@ -197,6 +198,38 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
   // States for options in details view
   const [selectedRateIdx, setSelectedRateIdx] = useState(0);
 
+  // ── Super Admin Customer Web Edit Mode (Services) ───────────────────
+  // Same pattern already shipped for Groceries/Products and Sofa/Mattress/
+  // Carpet Cleaning: reuses the SAME catalog Package model/API
+  // (PUT /settings/catalog/v2/packages/<id>/), gated server-side by
+  // RequireModuleAccess("catalog","edit"). Only items that matched a real
+  // DB package (item.db_id set below) are editable -- a customer never
+  // sees this, canEnterServiceEditMode is false unless isSuperAdmin(user).
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode || !item.db_id) return;
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {
@@ -254,33 +287,67 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
   };
 
   const getDynamicPestServices = () => {
-    let services = JSON.parse(JSON.stringify(PEST_SERVICES));
-    if (dbPackages.length > 0) {
-      Object.keys(services).forEach(key => {
-        services[key] = services[key].map(item => {
-          const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
-          if (dbMatch) {
-            item.name = dbMatch.name;
-            item.price = Math.round(Number(dbMatch.base_price) || item.price);
-            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
-            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
-            item.duration = dbMatch.duration || item.duration;
-            item.description = dbMatch.description || item.description;
-            if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0) {
-              item.includes = dbMatch.includes
-                .filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false))
-                .map(inc => typeof inc === "string" ? inc : (inc.text || ""));
-            }
-            item.image = dbMatch.image || item.image;
-            item.badge = dbMatch.tag || item.badge;
-          } else {
-            item.gst_rate = item.gst_rate || 18;
-            item.platform_fee = item.platform_fee || 29;
+    const hardcoded = PEST_SERVICES;
+    const services = {};
+    const mapDbItem = (p) => ({
+      id: p.slug || String(p.id),
+      db_id: p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "45 mins",
+      description: p.description || "",
+      image: p.image || "",
+      includes: Array.isArray(p.includes) ? p.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : [],
+      badge: p.tag || "",
+      gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+      platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+    });
+
+    Object.keys(hardcoded).forEach(key => {
+      // Fully admin-driven: once any real package exists in the database
+      // tagged for this exact sub-bucket, it is the single source of truth
+      // for that bucket -- render straight from it, so admin add/update/
+      // remove all just work and nothing hardcoded lingers behind a deleted
+      // or renamed package. dbPackages here is already scoped server-side
+      // to ants-bed-bugs-control, so keying off tag/subtab alone can't leak
+      // unrelated services. The hardcoded PEST_SERVICES list is only a
+      // bootstrap placeholder for a bucket nobody has populated yet.
+      const dbItemsForKey = dbPackages.filter(p =>
+        p.tag === key || p.subtab === key || (p.service_customization && p.service_customization.subtab === key)
+      );
+
+      if (dbItemsForKey.length > 0) {
+        services[key] = dbItemsForKey.map(mapDbItem);
+        return;
+      }
+
+      services[key] = JSON.parse(JSON.stringify(hardcoded[key])).map(item => {
+        const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
+        if (dbMatch) {
+          // Real Package row id -- needed so Super Admin Edit Mode can PUT
+          // back to the exact row this card's content came from (item.id
+          // above stays the local UI slug, not the database id).
+          item.db_id = dbMatch.id;
+          item.name = dbMatch.name;
+          item.price = Math.round(Number(dbMatch.base_price) || item.price);
+          item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+          item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
+          item.duration = dbMatch.duration || item.duration;
+          item.description = dbMatch.description || item.description;
+          if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0) {
+            item.includes = dbMatch.includes
+              .filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false))
+              .map(inc => typeof inc === "string" ? inc : (inc.text || ""));
           }
-          return item;
-        });
+          item.image = dbMatch.image || item.image;
+          item.badge = dbMatch.tag || item.badge;
+        } else {
+          item.gst_rate = item.gst_rate || 18;
+          item.platform_fee = item.platform_fee || 29;
+        }
+        return item;
       });
-    }
+    });
     return services;
   };
 
@@ -332,6 +399,16 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
   return (
     <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
+      {/* Super Admin Customer Web Edit Mode toggle -- never rendered for a
+          normal customer; canEnterServiceEditMode is false unless
+          isSuperAdmin(user). Only items matched to a real catalog Package
+          (service.db_id) show edit controls when this is on. */}
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Search */}
       <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md pb-2 border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -413,15 +490,39 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                   <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                     <div className="flex flex-col sm:flex-row gap-5">
                       <div className="flex-1 order-2 sm:order-1">
-                        <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
+                        <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                          <EditableText
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={service.name}
+                            onSave={(v) => handleSaveServiceField(service, "name", v)}
+                          />
+                        </h4>
 
-                        {service.description && (
-                          <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
+                        {(service.description || (serviceEditMode && service.db_id)) && (
+                          <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                            <EditableText
+                              active={Boolean(serviceEditMode && service.db_id)}
+                              value={service.description}
+                              onSave={(v) => handleSaveServiceField(service, "description", v)}
+                              multiline
+                              placeholder="Add a description…"
+                            />
+                          </p>
                         )}
 
                         <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                           <span className="text-base font-black text-[var(--sevo-text-primary)]">
-                            ₹{service.price}
+                            {serviceEditMode && service.db_id ? (
+                              <EditableText
+                                active={true}
+                                type="number"
+                                prefix="₹"
+                                value={service.price}
+                                onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                              />
+                            ) : (
+                              `₹${service.price}`
+                            )}
                           </span>
                           {service.duration && (
                             <>
@@ -466,12 +567,14 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                       <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                         <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
-                          <img
-                            src={resolveImageUrl(service.image, "/mockups/bedbugs_control.jpg")}
+                          <EditableImage
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={resolveImageUrl(service.image, "/mockups/bedbugs_control.jpg")}
+                            onSave={(url) => handleSaveServiceField(service, "image", url)}
+                            assetType="services"
                             alt={service.name}
-                            onError={(e) => { e.currentTarget.src = "/mockups/bedbugs_control.jpg" }}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="w-full h-full"
+                            imgClassName="w-full h-full object-cover"
                           />
                         </div>
                         <div className="w-24 z-10">
@@ -540,15 +643,39 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                              <EditableText
+                                active={Boolean(serviceEditMode && service.db_id)}
+                                value={service.name}
+                                onSave={(v) => handleSaveServiceField(service, "name", v)}
+                              />
+                            </h4>
 
-                            {service.description && (
-                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            {(service.description || (serviceEditMode && service.db_id)) && (
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && service.db_id)}
+                                  value={service.description}
+                                  onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  multiline
+                                  placeholder="Add a description…"
+                                />
+                              </p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                               <span className="text-base font-black text-[var(--sevo-text-primary)]">
-                                ₹{service.price}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${service.price}`
+                                )}
                               </span>
                               <span className="text-[var(--sevo-border)]">•</span>
                               <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
@@ -575,12 +702,14 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                             <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
-                              <img
-                                src={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                              <EditableImage
+                                active={Boolean(serviceEditMode && service.db_id)}
+                                value={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                                onSave={(url) => handleSaveServiceField(service, "image", url)}
+                                assetType="services"
                                 alt={service.name}
-                                onError={(e) => { e.currentTarget.src = "/mockups/ants_control.jpg" }}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
+                                className="w-full h-full"
+                                imgClassName="w-full h-full object-cover"
                               />
                             </div>
                             <div className="w-24 z-10">
@@ -639,15 +768,39 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                              <EditableText
+                                active={Boolean(serviceEditMode && service.db_id)}
+                                value={service.name}
+                                onSave={(v) => handleSaveServiceField(service, "name", v)}
+                              />
+                            </h4>
 
-                            {service.description && (
-                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            {(service.description || (serviceEditMode && service.db_id)) && (
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && service.db_id)}
+                                  value={service.description}
+                                  onSave={(v) => handleSaveServiceField(service, "description", v)}
+                                  multiline
+                                  placeholder="Add a description…"
+                                />
+                              </p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                               <span className="text-base font-black text-[var(--sevo-text-primary)]">
-                                ₹{service.price}
+                                {serviceEditMode && service.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={service.price}
+                                    onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${service.price}`
+                                )}
                               </span>
                               <span className="text-[var(--sevo-border)]">•</span>
                               <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
@@ -674,12 +827,14 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                             <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
-                              <img
-                                src={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                              <EditableImage
+                                active={Boolean(serviceEditMode && service.db_id)}
+                                value={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                                onSave={(url) => handleSaveServiceField(service, "image", url)}
+                                assetType="services"
                                 alt={service.name}
-                                onError={(e) => { e.currentTarget.src = "/mockups/ants_control.jpg" }}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
+                                className="w-full h-full"
+                                imgClassName="w-full h-full object-cover"
                               />
                             </div>
                             <div className="w-24 z-10">

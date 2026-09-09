@@ -34,7 +34,17 @@ export function resolveImageUrl(path, fallback = "") {
     trimmed.startsWith("data:") ||
     trimmed.startsWith("blob:")
   ) {
-    return trimmed
+    // NOTE: this used to blank out (return fallback for) any URL on our
+    // OWN configured Supabase Storage domain (zqghatybqkztzgjmmlpl.supabase.co)
+    // -- i.e. it treated every real, successfully-uploaded image as if it
+    // were broken. Since backend/.env's SUPABASE_URL points at exactly
+    // this project's bucket, that meant any image actually uploaded
+    // through the real upload pipeline (ImageUploadView -> Supabase
+    // Storage) would silently render as the fallback/broken-image
+    // placeholder everywhere this helper is used, even though the upload
+    // itself succeeded. Removed -- a Supabase-hosted URL is resolved the
+    // same as any other fully-qualified URL.
+    return trimmed;
   }
 
   // 2. Vite dev server / bundled assets / mockups / media

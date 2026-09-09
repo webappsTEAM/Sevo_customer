@@ -8,7 +8,7 @@ from .views_catalog_v2 import (
     AdminCatalogChangeLogView,
     AdminRecipeListView, AdminRecipeDetailView,
     AdminRecommendationListView, AdminRecommendationDetailView,
-    PublicPackageListView,
+    PublicPackageListView, PublicCategoryListView,
 )
 from .views import (
     NotificationPreferenceView,
@@ -90,6 +90,7 @@ urlpatterns = [
 
     # Public (no-auth) read-only catalog — used by customer-facing booking UI
     path("catalog/public/packages/", PublicPackageListView.as_view(), name="settings-catalog-public-packages"),
+    path("catalog/public/categories/", PublicCategoryListView.as_view(), name="settings-catalog-public-categories"),
 
     # Data / Privacy
     path("data/export/", DataExportView.as_view(), name="data-export"),

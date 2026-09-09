@@ -154,6 +154,11 @@ class TeamInvite(models.Model):
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(default=timezone.now)
     accepted_at = models.DateTimeField(null=True, blank=True)
+    # Optional per-invite module permission customization, set by a Super
+    # Admin at invite time and copied onto the new User.custom_permissions
+    # when the invite is accepted (AcceptInviteView.post). Same shape as
+    # accounts.models.User.custom_permissions: {"<module>": ["<action>", ...]}.
+    custom_permissions = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

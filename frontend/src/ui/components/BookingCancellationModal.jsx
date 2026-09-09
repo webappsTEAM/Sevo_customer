@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { AlertTriangle, Clock, X, Check, ShieldAlert, Ban, Info } from "lucide-react"
 import { apiRequest } from "../../api/client.js"
+import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 
 const PRESET_REASONS = [
   "Change of plans / Booked by mistake",
@@ -64,6 +65,36 @@ export function BookingCancellationModal({
     setErrorMsg("")
 
     const lookup = requestId || bookingId
+
+    const isEstimation = Boolean(
+      (lookup && String(lookup).includes("LOCAL-EST")) ||
+      estimationRepository.hasActiveEstimationSync()
+    )
+
+    if (isEstimation) {
+      try {
+        await estimationRepository.cancelEstimationBooking(lookup, finalReason)
+        sessionStorage.removeItem("calservice_active_tracking_id")
+        const currentSaved = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
+        const updatedBooking = {
+          ...currentSaved,
+          status: "cancelled",
+          booking_status: "cancelled",
+          status_display: "Cancelled",
+          cancellation_reason: finalReason,
+        }
+        sessionStorage.setItem("calservice_last_booking", JSON.stringify(updatedBooking))
+      } catch (e) {
+        console.warn("Estimation cancellation error:", e)
+      }
+      if (onCancelled) {
+        onCancelled({ status: "cancelled", cancellation_reason: finalReason })
+      }
+      if (onClose) onClose()
+      setIsSubmitting(false)
+      return
+    }
+
     try {
       const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel/`, {
         method: "POST",
@@ -94,6 +125,9 @@ export function BookingCancellationModal({
       try {
         sessionStorage.removeItem("calservice_active_tracking_id")
         sessionStorage.removeItem("calservice_last_booking")
+        if (estimationRepository.hasActiveEstimationSync()) {
+          estimationRepository.cancelEstimationBookingSync(lookup, finalReason)
+        }
       } catch (e) { }
       if (onCancelled) {
         onCancelled({ status: "cancelled", cancellation_reason: finalReason })
@@ -261,6 +295,7 @@ export function BookingCancellationModal({
               return (
                 <div
                   key={reason}
+                  data-testid={`cancel-reason-${reason}`}
                   onClick={() => {
                     if (isGraceExpired) return
                     setSelectedReason(reason)
@@ -412,6 +447,7 @@ export function BookingCancellationModal({
           ) : (
             <button
               type="button"
+              id="btn-confirm-cancellation"
               onClick={handleConfirmCancel}
               disabled={!canSubmit}
               style={{

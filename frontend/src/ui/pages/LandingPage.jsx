@@ -3,19 +3,22 @@ import { createPortal } from "react-dom"
 import { useNavigate, useSearchParams, useLocation, Link } from "react-router-dom"
 import {
   Home, PaintRoller,
-  SprayCan, Building2, AirVent, Hammer, Boxes,
+  SprayCan, Building2, AirVent, Hammer,
   ShieldCheck, BadgeCheck, Clock, Award, Headphones,
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
-  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee, Bug, Utensils
+  Users, Wrench, ThumbsUp, Bell, IndianRupee, Bug, Utensils, Pencil, LayoutGrid, Gift, Quote, Trash2,
+  FileText, CreditCard, MoreHorizontal
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
+import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
@@ -40,10 +43,24 @@ import {
   clearCustomerLocation,
   clearLegacyLocationStorage
 } from "../../utils/customerLocationStorage.js"
-import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
+import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG } from "../../config/homePageConfig.js"
+import { isSuperAdmin } from "../../auth/authorization.js"
+import { EditableImage, ImageEditModal } from "../components/SuperAdminEditControls.jsx"
 import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
 import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
+
+// Icon-name -> component lookup for the admin-editable Trust Guarantees
+// row (homeConfig.trustBadges) -- covers every icon name used by either
+// the shipped defaults or the "Why Choose Us" admin tab's presets.
+const TRUST_BADGE_ICON_MAP = { ShieldCheck, FileText, CreditCard, Clock, Headphones, BadgeCheck, Award }
+const TRUST_BADGE_COLORS = [
+  "bg-emerald-50 text-[#0B8F7A] dark:bg-emerald-950/40",
+  "bg-teal-50 text-teal-600 dark:bg-teal-950/40",
+  "bg-sky-50 text-sky-600 dark:bg-sky-950/40",
+  "bg-blue-50 text-blue-600 dark:bg-blue-950/40",
+  "bg-emerald-50 text-[#0B8F7A] dark:bg-emerald-950/40"
+]
 
 // Social media SVG icons
 function FacebookMark(props) {
@@ -81,6 +98,48 @@ function TwitterMark(props) {
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
       <path d="M18.9 3H22l-7.2 8.23L23 21h-6.6l-5.17-6.42L5.3 21H2.2l7.7-8.8L2 3h6.75l4.67 5.86L18.9 3Zm-1.16 16.2h1.72L7.35 4.7H5.5l12.24 14.5Z" />
     </svg>
+  )
+}
+function LinkedInMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
+    </svg>
+  )
+}
+
+function VisaBadge() {
+  return (
+    <div className="h-7 px-2.5 bg-white rounded-md border border-slate-200 flex items-center justify-center shadow-2xs">
+      <span className="text-[11px] font-black italic tracking-wider text-[#1A1F71]">VISA</span>
+    </div>
+  )
+}
+
+function MastercardBadge() {
+  return (
+    <div className="h-7 px-2 bg-white rounded-md border border-slate-200 flex items-center justify-center gap-0.5 shadow-2xs">
+      <div className="w-3.5 h-3.5 rounded-full bg-[#EB001B] opacity-90 -mr-1" />
+      <div className="w-3.5 h-3.5 rounded-full bg-[#F79E1B] opacity-90" />
+    </div>
+  )
+}
+
+function UpiBadge() {
+  return (
+    <div className="h-7 px-2.5 bg-white rounded-md border border-slate-200 flex items-center justify-center shadow-2xs">
+      <span className="text-[10px] font-black text-[#097939] flex items-center gap-0.5">
+        <span className="text-[#ED7524]">UPI</span>
+      </span>
+    </div>
+  )
+}
+
+function PaytmBadge() {
+  return (
+    <div className="h-7 px-2 bg-white rounded-md border border-slate-200 flex items-center justify-center shadow-2xs">
+      <span className="text-[10px] font-black tracking-tight text-[#002E6E]">Pay<span className="text-[#00BAF2]">tm</span></span>
+    </div>
   )
 }
 
@@ -1237,95 +1296,117 @@ function LocationDropdown({ className = "", activeCity, onCityChange }) {
 const ALL_SEARCHABLE_SERVICES = [
   // ── AC & Cooling Services ──
   {
-    id: "hvac-fj-split",
-    title: "Foam & Power Jet AC Service — Split",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹599",
-    badge: "Best Seller",
-    tags: ["foam", "power jet", "jet service", "ac service", "split ac", "cooling", "air conditioner", "hvac", "ac jet wash"]
-  },
-  {
-    id: "hvac-fj-win",
-    title: "Foam & Power Jet AC Service — Window",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹499",
-    badge: "Window Care",
-    tags: ["foam", "power jet", "window ac", "ac service", "jet cleaning", "cooling", "air conditioner"]
-  },
-  {
-    id: "hvac-pj-split",
-    title: "Power Jet AC Service — Split",
+    id: "hvac-pj-service",
+    title: "Power Jet AC Service",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Service & Cleaning",
     price: "₹499",
     badge: "High Pressure",
-    tags: ["power jet", "split ac", "ac cleaning", "jet wash", "air conditioner"]
+    tags: ["power jet", "jet service", "ac service", "split ac", "window ac", "cooling", "air conditioner", "hvac", "ac jet wash"]
   },
   {
-    id: "hvac-pj-win",
-    title: "Power Jet AC Service — Window",
+    id: "hvac-deep-clean",
+    title: "Deep Clean AC Service",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Service & Cleaning",
+    price: "₹699",
+    badge: "Best Seller",
+    tags: ["deep clean", "foam wash", "anti-bacterial", "ac service", "cooling", "air conditioner"]
+  },
+  {
+    id: "general-ac-service",
+    title: "General AC Service",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹349",
+    badge: "Quick Clean",
+    tags: ["general ac service", "basic ac service", "filter cleaning", "quick ac clean", "ac maintenance"]
+  },
+  {
+    id: "hvac-repair-diagnosis",
+    title: "AC Repair & Diagnosis",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
     price: "₹399",
-    tags: ["power jet", "window ac", "ac cleaning", "jet spray"]
+    badge: "Diagnostic",
+    tags: ["ac repair", "ac diagnosis", "ac inspection", "air conditioner repair"]
   },
   {
-    id: "hvac-ar-3",
-    title: "Anti-Rust Deep Clean AC Service",
+    id: "hvac-not-cooling",
+    title: "AC Not Cooling",
     category: "AC & Appliances",
     categoryId: "hvac",
-    subTab: "AC Service & Cleaning",
-    price: "₹799",
-    badge: "Ultimate Care",
-    tags: ["anti-rust", "rust protection", "ac deep clean", "coil coating"]
-  },
-  {
-    id: "hvac-rep-1",
-    title: "AC Repair — Split/Window",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Repair",
-    price: "₹599",
-    badge: "Expert Fix",
-    tags: ["ac repair", "ac servicing", "cooling breakdown", "split ac repair", "window ac repair"]
-  },
-  {
-    id: "hvac-rep-2",
-    title: "Less / No Cooling AC Diagnostic",
-    category: "AC & Appliances",
-    categoryId: "hvac",
-    subTab: "AC Repair",
+    subTab: "AC Repair & Diagnostics",
     price: "₹499",
     badge: "Cooling Restore",
-    tags: ["no cooling", "less cooling", "ac not cooling", "hot air", "compressor check"]
+    tags: ["not cooling", "no cooling", "less cooling", "ac blowing warm air", "compressor check"]
   },
   {
-    id: "hvac-rep-4",
-    title: "AC Water Leakage Repair",
+    id: "hvac-water-leakage",
+    title: "AC Water Leakage",
     category: "AC & Appliances",
     categoryId: "hvac",
-    subTab: "AC Repair",
+    subTab: "AC Repair & Diagnostics",
     price: "₹399",
+    badge: "Leak Fix",
     tags: ["water dripping", "water leakage", "drain pipe", "ac water leak"]
   },
   {
-    id: "hvac-gas-1",
-    title: "AC Gas Leak Fix & Refill",
+    id: "hvac-noise-issue",
+    title: "AC Noise Issue",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
+    price: "₹399",
+    badge: "Acoustic Fix",
+    tags: ["ac noise", "vibration", "fan squeak", "rattling sound"]
+  },
+  {
+    id: "hvac-power-issue",
+    title: "AC Power Issue",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair & Diagnostics",
+    price: "₹449",
+    badge: "Power Fix",
+    tags: ["power issue", "ac not turning on", "mcb trip", "dead display", "power problem"]
+  },
+  {
+    id: "hvac-gas-refill",
+    title: "AC Gas Refill",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Gas & Refrigerant",
-    price: "₹1,799",
-    badge: "Full Gas Fill",
-    tags: ["gas refill", "gas charging", "gas leak", "freon", "r32", "r410a", "ac gas"]
+    price: "₹1,499",
+    badge: "100% Gas Fill",
+    tags: ["gas refill", "gas charging", "freon", "r32", "r410a", "r22", "ac gas"]
   },
   {
-    id: "hvac-inst-split",
+    id: "hvac-gas-leak-detect",
+    title: "Gas Leak Detection",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Gas & Refrigerant",
+    price: "₹499",
+    badge: "Nitrogen Test",
+    tags: ["gas leak", "nitrogen test", "micro leak", "leak detection"]
+  },
+  {
+    id: "hvac-refrigerant-leak-repair",
+    title: "Refrigerant Leakage Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Gas & Refrigerant",
+    price: "₹899",
+    badge: "Brazing Fix",
+    tags: ["copper brazing", "refrigerant leak repair", "coil welding", "leak repair"]
+  },
+  {
+    id: "hvac-split-install",
     title: "Split AC Installation",
     category: "AC & Appliances",
     categoryId: "hvac",
@@ -1335,13 +1416,144 @@ const ALL_SEARCHABLE_SERVICES = [
     tags: ["split ac installation", "ac fitting", "ac mounting", "core drilling"]
   },
   {
-    id: "hvac-uninst-1",
-    title: "AC Uninstallation",
+    id: "hvac-window-install",
+    title: "Window AC Installation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹799",
+    badge: "Window Fit",
+    tags: ["window ac installation", "window fitting", "ac bracket"]
+  },
+  {
+    id: "hvac-split-uninstall",
+    title: "Split AC Uninstallation",
     category: "AC & Appliances",
     categoryId: "hvac",
     subTab: "AC Installation & Uninstallation",
     price: "₹699",
-    tags: ["ac uninstallation", "dismount", "ac removal", "gas pump down"]
+    badge: "Safe Dismount",
+    tags: ["split ac uninstallation", "dismount", "ac removal", "gas pump down"]
+  },
+  {
+    id: "hvac-window-uninstall",
+    title: "Window AC Uninstallation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹499",
+    badge: "Express Removal",
+    tags: ["window ac uninstallation", "window removal"]
+  },
+  {
+    id: "hvac-relocation",
+    title: "AC Relocation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹1,799",
+    badge: "Combo Saver",
+    tags: ["ac relocation", "shifting", "dismount and install", "reinstallation"]
+  },
+  {
+    id: "hvac-pcb-diag",
+    title: "PCB Diagnosis",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹399",
+    badge: "PCB Scan",
+    tags: ["pcb diagnosis", "error code", "inverter pcb", "circuit check"]
+  },
+  {
+    id: "hvac-pcb-repair",
+    title: "PCB Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹899",
+    badge: "Micro Soldering",
+    tags: ["pcb repair", "circuit repair", "motherboard soldering", "inverter board"]
+  },
+  {
+    id: "hvac-pcb-replace",
+    title: "PCB Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹699",
+    badge: "New Board Fit",
+    tags: ["pcb replacement", "new circuit board", "universal pcb"]
+  },
+  {
+    id: "hvac-capacitor-replace",
+    title: "Capacitor Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹299",
+    badge: "Quick Swap",
+    tags: ["capacitor replacement", "start capacitor", "run capacitor", "compressor capacitor"]
+  },
+  {
+    id: "hvac-wiring-repair",
+    title: "Wiring Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC PCB & Electrical",
+    price: "₹349",
+    badge: "Electrical Care",
+    tags: ["wiring repair", "burnt wire", "copper thimble", "earthing"]
+  },
+  {
+    id: "hvac-outdoor-stand",
+    title: "Outdoor Unit Stand",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹499",
+    badge: "Heavy Duty",
+    tags: ["outdoor stand", "wall bracket", "heavy duty stand", "ac stand"]
+  },
+  {
+    id: "hvac-stabilizer-install",
+    title: "Stabilizer Installation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹249",
+    badge: "Voltage Guard",
+    tags: ["stabilizer installation", "voltage stabilizer", "power guard"]
+  },
+  {
+    id: "hvac-drain-pipe-replace",
+    title: "Drain Pipe Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹199",
+    badge: "Drainage",
+    tags: ["drain pipe", "drain hose", "corrugated pipe", "leak pipe"]
+  },
+  {
+    id: "hvac-copper-pipe-work",
+    title: "Copper Pipe Work",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹349",
+    badge: "Per Meter",
+    tags: ["copper pipe", "copper tubing", "insulation sleeve", "flaring"]
+  },
+  {
+    id: "hvac-remote-replace",
+    title: "Remote Replacement",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Parts & Accessories",
+    price: "₹399",
+    badge: "Universal Sync",
+    tags: ["remote replacement", "ac remote", "universal remote", "control remote"]
   },
 
   // ── Electrical & Fan Services ──
@@ -1798,6 +2010,69 @@ const ALL_SEARCHABLE_SERVICES = [
   }
 ]
 
+/**
+ * Small inline "click pencil to edit" control for Customer Web Edit Mode —
+ * same interaction pattern already shipped on the Grocery/Product cards
+ * (VegetableProductCard's EditableField), reused here for Homepage text so
+ * Super Admin edits content directly on the real customer page instead of
+ * a separate builder screen. Renders as plain text when `active` is false,
+ * so every normal customer sees exactly the original markup.
+ */
+function HomeEditableText({ active, value, onSave, placeholder = "", className = "" }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || "")
+
+  useEffect(() => { setDraft(value || "") }, [value])
+
+  if (!active) {
+    return <span className={className}>{value || placeholder}</span>
+  }
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1.5 bg-white/95 rounded-lg px-1.5 py-1 shadow-md border border-indigo-300" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { setEditing(false); if (draft !== value) onSave(draft) }
+            if (e.key === "Escape") { setDraft(value || ""); setEditing(false) }
+          }}
+          className="border border-slate-200 rounded px-2 py-1 text-sm text-slate-900 min-w-[140px]"
+        />
+        <button
+          type="button"
+          onClick={() => { setEditing(false); if (draft !== value) onSave(draft) }}
+          className="text-emerald-600 hover:text-emerald-800"
+          aria-label="Save"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => { setDraft(value || ""); setEditing(false) }}
+          className="text-slate-400 hover:text-slate-600"
+          aria-label="Cancel"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 group/homeedit cursor-pointer rounded px-1 -mx-1 ring-1 ring-transparent hover:ring-indigo-300 hover:bg-indigo-50/60 align-middle ${className}`}
+      onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+    >
+      <span>{value || placeholder}</span>
+      <Pencil className="w-3 h-3 text-indigo-500 opacity-0 group-hover/homeedit:opacity-100 shrink-0" />
+    </span>
+  )
+}
+
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
   const { save: savePendingIntent, restore: restorePendingIntent } = usePendingIntent()
@@ -1831,6 +2106,270 @@ export function LandingPage() {
   const searchContainerRef = useRef(null)
   const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
   const [testimonialIdx, setTestimonialIdx] = useState(0)
+  const [isAllServicesOpen, setIsAllServicesOpen] = useState(false)
+
+  // ── Flash Sale Countdown Timer (Live Ticking 02:45:18) ──────────────────
+  const [flashSaleTime, setFlashSaleTime] = useState({ hours: 2, minutes: 45, seconds: 18 })
+  useEffect(() => {
+    const t = setInterval(() => {
+      setFlashSaleTime((prev) => {
+        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 }
+        if (prev.minutes > 0) return { ...prev, minutes: 59, seconds: 59 }
+        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 }
+        return { hours: 2, minutes: 45, seconds: 18 }
+      })
+    }, 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // ── "Recommended for You" -- real catalog packages, not hardcoded ───────
+  // Pulls from the same public, AllowAny catalog endpoint the booking flow
+  // itself is driven by (service_requests.views.CatalogServiceListView ->
+  // GET /api/catalog/services/?status=ACTIVE), so the name/price/duration
+  // and — critically — the image shown here are always whatever Ops has
+  // actually configured in Settings > Catalog, never a local/mock asset.
+  const [recommendedPackages, setRecommendedPackages] = useState([])
+  const [recommendedLoading, setRecommendedLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiRequest("/catalog/services/?status=ACTIVE")
+        if (!cancelled && res?.success && Array.isArray(res.data)) {
+          const sorted = [...res.data].sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0))
+          setRecommendedPackages(sorted.slice(0, 5))
+        }
+      } catch {
+        /* leave empty -- section just hides itself, no fake data shown */
+      } finally {
+        if (!cancelled) setRecommendedLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // ── Newsletter Subscription ──────────────────────────────────────────────
+  const [newsletterEmail, setNewsletterEmail] = useState("")
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false)
+  const handleNewsletterSubmit = useCallback((e) => {
+    e.preventDefault()
+    if (newsletterEmail.trim()) {
+      setNewsletterSubscribed(true)
+      setTimeout(() => {
+        setNewsletterEmail("")
+        setNewsletterSubscribed(false)
+      }, 4000)
+    }
+  }, [newsletterEmail])
+
+  // ── Super Admin Customer Web Edit Mode (Homepage) ──────────────────────
+  // Reuses the SAME homepage config model/API this page already reads from
+  // (config/homePageConfig.js -> GET/PUT /api/settings/homepage/, backed by
+  // settings_hub.models.HomePageConfig and gated server-side by
+  // RequireModuleAccess("cms","edit_sections")). No new model, no new API,
+  // no second Customer Web -- this just lets Super Admin edit the SAME
+  const isPreviewParam = searchParams.get("preview") === "true" || searchParams.get("edit") === "true"
+  const canEnterHomeEditMode = isSuperAdmin(user) || isPreviewParam
+  const [homeEditMode, setHomeEditMode] = useState(() => searchParams.get("edit") === "true")
+  const [savingHomeField, setSavingHomeField] = useState(false)
+  const [heroImageModalOpen, setHeroImageModalOpen] = useState(false)
+  const [offerImageModalIdx, setOfferImageModalIdx] = useState(null)
+
+  const saveHomeConfigField = useCallback(async (path, value) => {
+    // path is a dot-path into homeConfig, e.g. "hero.badge" or
+    // "categories.0.title". Applies the edit locally first (instant visual
+    // feedback, same as the Grocery/Product Edit Mode pattern already
+    // shipped), then persists via the existing publish API.
+    setHomeConfig((prev) => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const keys = path.split(".")
+      let node = next
+      for (let i = 0; i < keys.length - 1; i++) {
+        const k = keys[i]
+        if (node[k] === undefined || node[k] === null) node[k] = {}
+        node = node[k]
+      }
+      node[keys[keys.length - 1]] = value
+
+      setSavingHomeField(true)
+      publishHomePageConfig(next)
+        .catch(() => { })
+        .finally(() => setSavingHomeField(false))
+
+      // Also notify parent if in preview iframe
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "HOMEPAGE_CONFIG_CHANGED", config: next }, "*")
+      }
+
+      return next
+    })
+  }, [])
+
+  // ── Hero Banner Carousel ────────────────────────────────────────────────
+  // This is the actual "advertisement" -- a pure image per slide (like a
+  // real ad banner an admin designs and uploads), NOT text composited by
+  // code. The headline/subtitle/CTA to the left of it are the page's
+  // functional header and stay static -- see the plain homeConfig.hero.*
+  // reads in the JSX below, unrelated to slide rotation. Slide #1 is always
+  // the base hero.heroImage; extra slides come from hero.slides (admin-
+  // added via "+ Add Slide"), falling back to a few ready-made service
+  // photos already shipped in /assets so a fresh install still shows a
+  // real rotating banner instead of an empty box.
+  const heroSlides = useMemo(() => {
+    const base = {
+      heroImage: homeConfig.hero?.heroImage || "/assets/hero_illustration.jpg",
+      priceBadge: homeConfig.hero?.priceBadge || "",
+      link: homeConfig.hero?.link || "",
+    }
+    const defaultExtra = [
+      { heroImage: "/assets/hero_pro_cleaning_rect.jpg", priceBadge: "₹999", link: "?category=cleaning" },
+      { heroImage: "/assets/hero_pro_appliance_rect.jpg", priceBadge: "₹399", link: "?category=appliance_repair" },
+      { heroImage: "/assets/hero_pro_plumbing_rect.jpg", priceBadge: "₹299", link: "?category=plumbing" },
+    ]
+    const extra = Array.isArray(homeConfig.hero?.slides) && homeConfig.hero.slides.length > 0 ? homeConfig.hero.slides : defaultExtra
+    return [base, ...extra]
+  }, [homeConfig.hero])
+
+  const [activeHeroSlide, setActiveHeroSlide] = useState(0)
+
+  useEffect(() => {
+    if (activeHeroSlide >= heroSlides.length) setActiveHeroSlide(0)
+  }, [heroSlides.length, activeHeroSlide])
+
+  useEffect(() => {
+    if (heroSlides.length <= 1 || homeEditMode) return
+    const t = setInterval(() => {
+      setActiveHeroSlide((prev) => (prev + 1) % heroSlides.length)
+    }, 4500)
+    return () => clearInterval(t)
+  }, [heroSlides.length, homeEditMode])
+
+  const activeHeroSlideData = heroSlides[activeHeroSlide] || heroSlides[0] || {}
+
+  // Reads/writes route to the base hero.* fields for slide #1 (preserving
+  // existing edit behavior exactly), or hero.slides.<n-1>.<field> for any
+  // additional slide -- same generic dot-path setter, no new save logic.
+  const saveActiveHeroField = useCallback((field, value) => {
+    if (activeHeroSlide === 0) {
+      saveHomeConfigField(`hero.${field}`, value)
+    } else {
+      saveHomeConfigField(`hero.slides.${activeHeroSlide - 1}.${field}`, value)
+    }
+  }, [activeHeroSlide, saveHomeConfigField])
+
+  const addHeroSlide = useCallback(() => {
+    const next = [...(Array.isArray(homeConfig.hero?.slides) ? homeConfig.hero.slides : []), {
+      heroImage: homeConfig.hero?.heroImage || "/assets/hero_illustration.jpg",
+      priceBadge: "",
+      link: "",
+    }]
+    saveHomeConfigField("hero.slides", next)
+    setActiveHeroSlide(next.length) // jump to the newly added slide
+  }, [homeConfig.hero, saveHomeConfigField])
+
+  const removeActiveHeroSlide = useCallback(() => {
+    if (activeHeroSlide === 0) return // base slide can't be removed, only edited
+    const next = (homeConfig.hero?.slides || []).filter((_, i) => i !== activeHeroSlide - 1)
+    saveHomeConfigField("hero.slides", next)
+    setActiveHeroSlide(0)
+  }, [activeHeroSlide, homeConfig.hero, saveHomeConfigField])
+
+  // ── Promotional Offers row (Flash Sale / Festival / Refer & Earn style) ──
+  // Config already existed (homeConfig.offers) and was editable in the
+  // Homepage Builder admin screen, but was never actually rendered on the
+  // live page -- wiring that up here, plus add/remove controls in place.
+  const addOfferItem = useCallback(() => {
+    const items = Array.isArray(homeConfig.offers?.items) ? homeConfig.offers.items : []
+    const next = [...items, {
+      id: `off-${Date.now()}`,
+      image: "",
+      title: "New Offer",
+      link: "",
+      enabled: true,
+    }]
+    saveHomeConfigField("offers.items", next)
+  }, [homeConfig.offers, saveHomeConfigField])
+
+  const removeOfferItem = useCallback((idx) => {
+    const items = Array.isArray(homeConfig.offers?.items) ? homeConfig.offers.items : []
+    saveHomeConfigField("offers.items", items.filter((_, i) => i !== idx))
+  }, [homeConfig.offers, saveHomeConfigField])
+
+  // ── "What do you need help with?" quick-category icon grid ──────────────
+  // Same story as offers: config already existed (homeConfig.categories,
+  // editable in the Homepage Builder), but this section was 100% hardcoded
+  // and never actually read it. Wiring it up here, plus add/remove/edit
+  // controls in place -- a fixed "More" tile (opens the All Services
+  // drawer) is always appended after the configured ones.
+  const [categoryImageModalIdx, setCategoryImageModalIdx] = useState(null)
+  const homeCategories = Array.isArray(homeConfig.categories) && homeConfig.categories.length > 0
+    ? homeConfig.categories
+    : DEFAULT_HOME_PAGE_CONFIG.categories
+  const addCategoryTile = useCallback(() => {
+    const next = [...homeCategories, {
+      id: `cat-${Date.now()}`,
+      name: "New Category",
+      image: "",
+      link: "",
+      enabled: true,
+    }]
+    saveHomeConfigField("categories", next)
+  }, [homeCategories, saveHomeConfigField])
+  const removeCategoryTile = useCallback((idx) => {
+    saveHomeConfigField("categories", homeCategories.filter((_, i) => i !== idx))
+  }, [homeCategories, saveHomeConfigField])
+
+  // ── Customer Reviews / Testimonials row ──────────────────────────────────
+  // Same story as offers: fully built + editable in the Homepage Builder,
+  // never rendered. Wiring it up here.
+  const addTestimonial = useCallback(() => {
+    const reviews = Array.isArray(homeConfig.testimonials?.reviews) ? homeConfig.testimonials.reviews : []
+    const next = [...reviews, {
+      id: `rev-${Date.now()}`,
+      initials: "NC",
+      name: "New Customer",
+      rating: 5,
+      text: "Share what this customer said...",
+      badgeColor: "bg-teal-500",
+    }]
+    saveHomeConfigField("testimonials.reviews", next)
+  }, [homeConfig.testimonials, saveHomeConfigField])
+
+  const removeTestimonial = useCallback((idx) => {
+    const reviews = Array.isArray(homeConfig.testimonials?.reviews) ? homeConfig.testimonials.reviews : []
+    saveHomeConfigField("testimonials.reviews", reviews.filter((_, i) => i !== idx))
+  }, [homeConfig.testimonials, saveHomeConfigField])
+
+  // ── Recommended For You row ──────────────────────────────────────────────
+  // Pulled live from the catalog admin (public packages + categories, same
+  // endpoints BookingPage.jsx and AllServicesDrawer already use) -- popular
+  // packages first, so adding/marking a package "Popular" in the catalog
+  // admin surfaces it here automatically.
+  const [recommendedItems, setRecommendedItems] = useState([])
+  useEffect(() => {
+    Promise.all([
+      apiRequest("/settings/catalog/public/packages/").catch(() => ({ success: false, data: [] })),
+      apiRequest("/settings/catalog/public/categories/").catch(() => ({ success: false, data: [] })),
+    ]).then(([pkgRes, catRes]) => {
+      const pkgs = pkgRes?.success && Array.isArray(pkgRes.data) ? pkgRes.data : []
+      const cats = catRes?.success && Array.isArray(catRes.data) ? catRes.data : []
+      const catBySlug = {}
+      cats.forEach((c) => { catBySlug[c.slug] = c })
+      const sorted = [...pkgs].sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0))
+      setRecommendedItems(sorted.slice(0, 10).map((p) => ({
+        id: p.id,
+        name: p.name,
+        image: p.image || p.service_image,
+        price: p.base_price,
+        offerPrice: p.offer_price,
+        duration: p.duration,
+        categorySlug: p.category_slug,
+        categoryRating: catBySlug[p.category_slug]?.rating,
+        categoryJobs: catBySlug[p.category_slug]?.jobs_count_str,
+        serviceName: p.service_name,
+      })))
+    }).catch((err) => console.error("Failed to load recommended items:", err))
+  }, [])
 
   useEffect(() => {
     fetchPublishedHomePageConfig().then((cfg) => {
@@ -1841,8 +2380,48 @@ export function LandingPage() {
       if (e?.detail) setHomeConfig(e.detail)
     }
     window.addEventListener("calservices:homepage_updated", handleHomepageUpdate)
-    return () => window.removeEventListener("calservices:homepage_updated", handleHomepageUpdate)
-  }, [])
+
+    const handleStorageChange = (e) => {
+      if (e.key === "calservices_home_page_config" && e.newValue) {
+        try {
+          setHomeConfig(JSON.parse(e.newValue))
+        } catch { }
+      }
+    }
+    window.addEventListener("storage", handleStorageChange)
+
+    const handleWindowMessage = (e) => {
+      if (e.data?.type === "TOGGLE_EDIT_MODE") {
+        setHomeEditMode(Boolean(e.data.enabled))
+      } else if (e.data?.type === "HOMEPAGE_CONFIG_UPDATE" && e.data?.config) {
+        setHomeConfig(e.data.config)
+      } else if (e.data?.type === "NAVIGATE_PREVIEW_SCREEN") {
+        const screen = e.data.screen
+        if (screen === "pillars") {
+          setIsHomeServicesCombinedModalOpen(true)
+          setIsHomePestModalOpen(false)
+        } else if (screen === "homepest" || screen === "subcategories") {
+          setIsHomePestModalOpen(true)
+          setIsHomeServicesCombinedModalOpen(false)
+        } else if (screen === "kitchen") {
+          setIsHomeServicesCombinedModalOpen(false)
+          setIsHomePestModalOpen(false)
+          navigate("?category=kitchen_cleaning")
+        } else if (screen === "home") {
+          setIsHomeServicesCombinedModalOpen(false)
+          setIsHomePestModalOpen(false)
+          navigate("/home?preview=true")
+        }
+      }
+    }
+    window.addEventListener("message", handleWindowMessage)
+
+    return () => {
+      window.removeEventListener("calservices:homepage_updated", handleHomepageUpdate)
+      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("message", handleWindowMessage)
+    }
+  }, [navigate])
 
   // Robust multi-token and fuzzy matching across all services + backend packages
   const filteredSearchResults = useMemo(() => {
@@ -1921,37 +2500,47 @@ export function LandingPage() {
       return 0
     }
 
-    // Combine static catalog with any dynamic backend packages
+    // Combine dynamic backend packages with static catalog, prioritizing dynamic DB packages
     const dynamicCatalogItems = []
+    const dynamicIds = new Set()
+    const dynamicTitles = new Set()
     if (packagesData && typeof packagesData === "object") {
       Object.entries(packagesData).forEach(([catId, pkgs]) => {
         if (Array.isArray(pkgs)) {
           pkgs.forEach(pkg => {
             if (pkg && pkg.name) {
-              const exists = ALL_SEARCHABLE_SERVICES.some(s => s.id === pkg.id || normalize(s.title) === normalize(pkg.name))
-              if (!exists) {
-                dynamicCatalogItems.push({
-                  id: pkg.id,
-                  title: pkg.name,
-                  category: BOOKING_CATEGORIES.find(c => c.id === catId)?.name || "Services",
-                  categoryId: catId,
-                  subTab: pkg.subCategory || null,
-                  price: pkg.price ? `₹${pkg.price}` : "Affordable",
-                  badge: pkg.popular ? "Popular" : pkg.tag || null,
-                  tags: [
-                    pkg.name,
-                    pkg.duration,
-                    ...(Array.isArray(pkg.includes) ? pkg.includes.map(inc => typeof inc === "object" ? inc?.name || "" : String(inc || "")) : [])
-                  ]
-                })
-              }
+              const catObj = BOOKING_CATEGORIES.find(c => c.id === catId || c.slug === catId)
+              const pkgId = pkg.slug || pkg.id
+              dynamicCatalogItems.push({
+                id: pkgId,
+                title: pkg.name,
+                category: catObj?.name || "Services",
+                categoryId: catId,
+                subTab: pkg.subCategory || null,
+                price: pkg.price ? `₹${pkg.price}` : (pkg.base_price ? `₹${Math.round(Number(pkg.base_price))}` : "Affordable"),
+                badge: pkg.popular ? "Popular" : pkg.tag || null,
+                tags: [
+                  pkg.name,
+                  pkg.duration,
+                  ...(Array.isArray(pkg.includes) ? pkg.includes.map(inc => typeof inc === "object" ? inc?.name || "" : String(inc || "")) : [])
+                ]
+              })
+              if (pkg.id) dynamicIds.add(String(pkg.id))
+              if (pkg.slug) dynamicIds.add(pkg.slug)
+              dynamicTitles.add(normalize(pkg.name))
             }
           })
         }
       })
     }
 
-    const pool = [...ALL_SEARCHABLE_SERVICES, ...dynamicCatalogItems]
+    const nonDuplicateStatic = ALL_SEARCHABLE_SERVICES.filter(s => {
+      if (dynamicIds.has(String(s.id))) return false
+      if (dynamicTitles.has(normalize(s.title))) return false
+      return true
+    })
+
+    const pool = [...dynamicCatalogItems, ...nonDuplicateStatic]
 
     return pool
       .map(item => ({ item, score: scoreItem(item) }))
@@ -2028,6 +2617,32 @@ export function LandingPage() {
     }
   }
 
+  // Shared click-through for any admin-set banner/offer/category link (hero
+  // slides, promotional offer cards, category tiles). A plain path/query
+  // like "?category=cleaning" is always in-app. A full "https://" URL is
+  // only opened in a new tab when it points at a DIFFERENT site -- if the
+  // admin pastes a full link back to this same site (copied from the
+  // address bar, or including the domain out of habit), it navigates in
+  // place instead of leaving the app in a fresh tab. No link set at all
+  // just falls back to the normal booking flow.
+  const goToBannerLink = (link) => {
+    if (!link) { goToBooking(); return }
+    if (/^https?:\/\//i.test(link)) {
+      try {
+        const url = new URL(link)
+        if (url.origin === window.location.origin) {
+          navigate(url.pathname + url.search + url.hash)
+          return
+        }
+      } catch {
+        // Malformed URL -- fall through and let the browser handle it.
+      }
+      window.open(link, "_blank", "noopener,noreferrer")
+    } else {
+      navigate(link)
+    }
+  }
+
   const [modalCart, setModalCart] = useState(() => {
     const stateCart = location.state?.cart;
     if (stateCart && stateCart.length > 0) {
@@ -2056,11 +2671,24 @@ export function LandingPage() {
   }, [modalCart]);
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
-  const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
-  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+  const [isAcModalOpen, setIsAcModalOpen] = useState(() => location.state?.openAcModal || searchParams.get("openModal") === "ac" || false)
+  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(() => location.state?.openHomePestModal || searchParams.get("openModal") === "homepest" || searchParams.get("openModal") === "subcategories" || false)
   const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
   const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
-  const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(false)
+  const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(() => searchParams.get("openModal") === "pillars" || false)
+
+  useEffect(() => {
+    const modalParam = searchParams.get("openModal")
+    if (modalParam === "pillars") {
+      setIsHomeServicesCombinedModalOpen(true)
+      setIsHomePestModalOpen(false)
+    } else if (modalParam === "homepest" || modalParam === "subcategories") {
+      setIsHomePestModalOpen(true)
+      setIsHomeServicesCombinedModalOpen(false)
+    } else if (modalParam === "ac") {
+      setIsAcModalOpen(true)
+    }
+  }, [searchParams])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
     () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
@@ -2100,7 +2728,7 @@ export function LandingPage() {
         setFoodCart(location.state.foodCart)
         try {
           localStorage.setItem("calservice_veg_food_cart", JSON.stringify(location.state.foodCart || {}))
-        } catch {}
+        } catch { }
       }
       // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
       navigate(".", { replace: true, state: {} })
@@ -2952,6 +3580,20 @@ export function LandingPage() {
                 </AnimatePresence>
               </div>
 
+              {/* My Bookings Button */}
+              <button
+                type="button"
+                id="category-my-bookings-btn"
+                onClick={() => {
+                  setActiveAccountTab("My Bookings");
+                  setShowAccountPortal(true);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-emerald-600 bg-white text-slate-700 hover:text-emerald-700 font-bold text-xs shadow-2xs transition-all cursor-pointer shrink-0"
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-emerald-600" />
+                <span>My Bookings</span>
+              </button>
+
             </div>
           </header>
 
@@ -3089,6 +3731,16 @@ export function LandingPage() {
             }}
           />
         )}
+
+        <AnimatePresence>
+          {showAccountPortal && (
+            <CustomerAccountModal
+              activeTab={activeAccountTab}
+              onChangeTab={setActiveAccountTab}
+              onClose={() => setShowAccountPortal(false)}
+            />
+          )}
+        </AnimatePresence>
       </>
     );
   }
@@ -3096,85 +3748,244 @@ export function LandingPage() {
   return (
     <>
       <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] antialiased font-sans transition-colors duration-200" style={{ animation: "fadeUp 0.4s ease both" }}>
-        {/* ── Header ─────────────────────────────────────────── */}
-        <header className="sticky top-0 z-40 bg-[var(--sevo-surface-glass)] backdrop-blur-md border-b border-[var(--sevo-border)] shadow-[var(--sevo-shadow-xs)] transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4 sm:gap-6">
-            {/* Left: Official SEVO Brand Logo with Proportional Alignment */}
-            <div className="flex items-center gap-2 select-none cursor-pointer shrink-0 group" onClick={() => navigate(routes.landing)}>
-              <img
-                src="/assets/sevo_emblem_transparent.png"
-                alt="SEVO Emblem"
-                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-                style={{ height: '36px', width: 'auto' }}
-              />
-              <img
-                src="/assets/sevo_text_logo.png"
-                alt="SEVO"
-                className="shrink-0 object-contain"
-                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
-              />
-            </div>
-
-            {/* Center: Horizontal Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold">
-              {[
-                { id: "home", label: "Home" },
-                { id: "categories", label: "Services" },
-                { id: "why-choose-us", label: "How It Works" },
-                { id: "professionals", label: "Professionals" },
-                { id: "about-us", label: "About Us" },
-              ].map((item) => {
-                const isActive = activeNav === item.id
-                return (
-                  <a
-                    key={item.id}
-                    href={`#${item.id}`}
-                    onClick={(e) => handleNavClick(e, item.id)}
-                    className={`py-1 transition-all cursor-pointer ${isActive
-                        ? "text-[var(--sevo-primary)] font-bold relative after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--sevo-primary)] after:rounded-full"
-                        : "text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] font-semibold"
-                      }`}
-                  >
-                    {item.label}
-                  </a>
-                )
-              })}
-            </nav>
-
-            {/* Right: Location Pill, ThemeToggle, Notifications & User Profile */}
-            <div className="flex items-center gap-2 sm:gap-3.5">
-              {/* Location Selector Pill */}
+        {/* ── 1. Top Announcement Bar ─────────────────────────── */}
+        {/* <div className="bg-[#F8FAF9] dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 text-xs py-2 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="bg-[#0B8F7A] text-white font-black text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider shrink-0">
+                SUMMER OFFER
+              </span>
+              <span className="text-slate-700 dark:text-slate-300 font-semibold truncate text-[11px] sm:text-xs">
+                Up to 40% OFF on AC Service &amp; Cleaning Services
+              </span>
               <button
                 type="button"
-                onClick={() => setShowLocationPickerModal(true)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-[var(--sevo-border)] hover:border-[var(--sevo-primary)] bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] text-xs font-bold transition-all cursor-pointer shadow-xs max-w-[150px] sm:max-w-[220px] truncate"
-                title="Select Location"
+                onClick={() => {
+                  if (user) {
+                    setActiveAccountTab("Wallet & Offers")
+                    setShowAccountPortal(true)
+                  } else {
+                    navigate(routes.offers || "/marketing/offers")
+                  }
+                }}
+                className="text-[#0B8F7A] hover:text-[#087362] font-black text-[11px] sm:text-xs shrink-0 flex items-center gap-0.5 hover:underline cursor-pointer ml-1"
               >
-                <MapPin className="w-3.5 h-3.5 shrink-0 text-[var(--sevo-primary)]" />
-                <span className="truncate">
-                  {(() => {
-                    if (isLoadingLocation) return "Loading your location..."
-                    if (activeLocationLabel) return activeLocationLabel
-                    const locObj = user?.last_known_location || user?.lastKnownLocation
-                    if (locObj) {
-                      if (typeof locObj === "string" && locObj.trim()) return locObj
-                      if (locObj.label) return locObj.label
-                    }
-                    if (user?.address) return user.address
-                    return "Select your location"
-                  })()}
-                </span>
-                <ChevronDown className="w-3 h-3 text-[var(--sevo-text-muted)] shrink-0 ml-auto" />
+                <span>View Offers</span>
+                <span>→</span>
               </button>
+            </div>
+            <div className="hidden sm:flex items-center gap-4 text-[11px] font-bold text-slate-600 dark:text-slate-400 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("why-choose-us")
+                  if (el) el.scrollIntoView({ behavior: "smooth" })
+                }}
+                className="flex items-center gap-1 hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-[#0B8F7A]" />
+                <span>Download App</span>
+              </button>
+              <span className="text-slate-300 dark:text-slate-700">|</span>
+              <Link
+                to={routes.contact_us || "/contact"}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Partner with Us
+              </Link>
+            </div>
+          </div>
+        </div> */}
 
-              {/* Theme Switcher Toggle (Concept 3 Light <-> Concept 2 Dark) */}
-              <ThemeToggle className="shrink-0" />
+        {/* ── 2. Main Brand Header ─────────────────────────── */}
+        <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3 sm:gap-6">
+            {/* Left: Official SEVO Brand Logo & Location Pill */}
+            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+              <div className="flex items-center gap-2 select-none cursor-pointer group" onClick={() => navigate(routes.landing)}>
+                <img
+                  src="/assets/sevo_emblem_transparent.png"
+                  alt="SEVO Emblem"
+                  className="h-8 sm:h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                />
+                <div className="flex flex-col">
+                  <span className="text-lg sm:text-xl font-black tracking-tight text-[#0f172a] dark:text-white leading-none">
+                    SEVO
+                  </span>
+                  <span className="text-[9px] font-bold tracking-widest text-[#0B8F7A] uppercase leading-none mt-0.5">
+                    Home Services
+                  </span>
+                </div>
+              </div>
+
+              {/* Location Selector Pill with Auto-detected Badge */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowLocationPickerModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-[#0B8F7A] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[140px] sm:max-w-[200px] truncate"
+                  title="Change Location"
+                >
+                  <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0B8F7A]" />
+                  <span className="truncate">
+                    {(() => {
+                      if (isLoadingLocation) return "Loading..."
+                      if (activeLocationLabel) return activeLocationLabel
+                      const locObj = user?.last_known_location || user?.lastKnownLocation
+                      if (locObj) {
+                        if (typeof locObj === "string" && locObj.trim()) return locObj
+                        if (locObj.label) return locObj.label
+                      }
+                      if (user?.address) return user.address
+                      return "Bengaluru, 560001"
+                    })()}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
+                </button>
+                <span className="hidden md:inline-flex items-center bg-emerald-50 dark:bg-emerald-950/40 text-[#0B8F7A] dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800 shrink-0">
+                  Auto-detected
+                </span>
+              </div>
+            </div>
+
+            {/* Center: Search Bar with Live Suggestions and Popular Chips */}
+            <div ref={searchContainerRef} className="hidden md:block flex-1 max-w-lg lg:max-w-xl relative">
+              <form
+                onSubmit={(e) => { e.preventDefault(); goToBooking() }}
+                className={`flex items-center bg-slate-50 dark:bg-slate-800/80 rounded-full border px-3 py-1.5 transition-all ${
+                  isSearchOpen
+                    ? "border-[#0B8F7A] ring-2 ring-[#0B8F7A]/20 bg-white dark:bg-slate-800"
+                    : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    if (!isSearchOpen) setIsSearchOpen(true)
+                  }}
+                  onFocus={() => setIsSearchOpen(true)}
+                  placeholder="Search services (e.g. AC Service, Cleaning...)"
+                  className="flex-1 bg-transparent text-xs sm:text-sm font-medium outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 min-w-0"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full mr-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  aria-label="Search"
+                  className="w-7 h-7 rounded-full bg-[#0B8F7A] hover:bg-[#087362] text-white flex items-center justify-center shrink-0 transition-all shadow-xs cursor-pointer active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+              </form>
+
+              {/* Popular Search Keywords */}
+              {/* <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500 pt-1 px-3">
+                <span className="font-bold text-slate-500 dark:text-slate-400">Popular:</span>
+                {[
+                  { name: "AC Service", action: () => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning") },
+                  { name: "Cleaning", action: () => navigate("?category=cleaning") },
+                  { name: "Plumbing", action: () => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer") },
+                  { name: "Salon", action: () => setIsHomeServicesCombinedModalOpen(true) },
+                  { name: "Pest Control", action: () => setIsHomePestModalOpen(true) },
+                ].map((chip) => (
+                  <button
+                    key={chip.name}
+                    type="button"
+                    onClick={chip.action}
+                    className="hover:text-[#0B8F7A] hover:underline transition-colors cursor-pointer"
+                  >
+                    {chip.name}
+                  </button>
+                ))}
+              </div> */}
+
+              {/* Live Search Suggestion Overlay */}
+              <AnimatePresence>
+                {isSearchOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700 max-h-[380px] overflow-y-auto"
+                  >
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                      <span>{query.trim() ? `Matching Services (${filteredSearchResults.length})` : "Popular Services"}</span>
+                      <span className="text-[10px] text-[#0B8F7A] font-semibold lowercase">Instant Booking</span>
+                    </div>
+                    {filteredSearchResults.length > 0 ? (
+                      <div className="p-1.5 space-y-1">
+                        {filteredSearchResults.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleExecuteSearch(item)}
+                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors text-left group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#0B8F7A] flex items-center justify-center shrink-0">
+                                <Sparkles className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#0B8F7A] truncate">
+                                  {item.title}
+                                </div>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate">
+                                  {item.category} • {item.price}
+                                </span>
+                              </div>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-[#0B8F7A] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-xs text-slate-500">
+                        No matches found.
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Right: Account & Action Badges */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* User Account / Profile */}
+              <button
+                type="button"
+                id="landing-user-profile-btn"
+                onClick={() => {
+                  setActiveAccountTab(estimationRepository.hasActiveEstimationSync() ? "My Bookings" : "My Profile")
+                  setShowAccountPortal(true)
+                }}
+                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-slate-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <div className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {user ? `Hi, ${user?.first_name || user?.full_name?.split(" ")[0] || "there"}` : "Welcome"}
+                  </span>
+                  <span className="text-xs font-black text-slate-900 dark:text-slate-100 flex items-center gap-0.5">
+                    {user ? "My Account" : "Sign In"} <ChevronDown className="w-3 h-3 text-slate-400" />
+                  </span>
+                </div>
+              </button>
 
               {/* Notification Bell with red badge */}
               <button
                 type="button"
-                className="relative p-2 rounded-xl border border-transparent hover:border-[var(--sevo-border)] hover:bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
-                title="Notifications"
                 onClick={() => {
                   if (user) {
                     setActiveAccountTab("My Bookings")
@@ -3183,54 +3994,123 @@ export function LandingPage() {
                     goToLogin()
                   }
                 }}
+                className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                title="Notifications"
               >
-                <Bell className="w-4.5 h-4.5" />
+                <Bell className="w-5 h-5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[var(--sevo-error)] text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-[var(--sevo-surface)] shadow-xs">
+                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
                     {notificationCount}
                   </span>
                 )}
               </button>
 
-              {/* Cart Icon with Numeric Badge if active */}
-              {modalCart && modalCart.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowCartDrawer(true)}
-                  className="relative p-2 rounded-xl border border-[var(--sevo-border)] bg-[var(--sevo-surface-raised)] text-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-light)] transition-all cursor-pointer shrink-0"
-                  title="View Cart"
-                >
-                  <ShoppingCart size={17} />
-                  <span className="absolute -top-1 -right-1 bg-[var(--sevo-primary)] text-white font-black text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-[var(--sevo-surface)] shadow-xs">
-                    {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
-                  </span>
-                </button>
-              )}
-
-              {/* User Profile Avatar with Name */}
+              {/* Cart Drawer with red badge */}
               <button
                 type="button"
-                onClick={() => {
-                  if (user) {
-                    setActiveAccountTab("My Profile")
-                    setShowAccountPortal(true)
-                  } else {
-                    goToLogin()
-                  }
-                }}
-                className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl border border-transparent hover:border-[var(--sevo-border)] hover:bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] transition-colors cursor-pointer group"
+                onClick={() => setShowCartDrawer(true)}
+                className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                title="Cart"
               >
-                <div className="w-8 h-8 rounded-full bg-[var(--sevo-primary-gradient)] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs overflow-hidden border border-[var(--sevo-border)]">
-                  {(user?.full_name || user?.fullName || user?.first_name || "Login").charAt(0).toUpperCase()}
-                </div>
-                <span className="font-bold text-xs text-[var(--sevo-text-primary)] max-w-[100px] truncate hidden sm:inline-block">
-                  {user?.full_name || user?.fullName || user?.first_name || "Login"}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-[var(--sevo-text-muted)] group-hover:text-[var(--sevo-text-primary)] transition-colors shrink-0" />
+                <ShoppingCart className="w-5 h-5" />
+                {modalCart && modalCart.length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+                    {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
+                  </span>
+                )}
               </button>
+
+              {/* Theme Toggle */}
+              <ThemeToggle className="shrink-0 hidden sm:inline-flex" />
             </div>
           </div>
         </header>
+
+        {/* ── 3. Category Sub-Navigation Bar ─────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none">
+            {/* All Services Pill */}
+            <button
+              type="button"
+              onClick={() => setIsAllServicesOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 hover:border-[#0B8F7A] bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-black transition-all shrink-0 cursor-pointer shadow-2xs"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-[#0B8F7A]" />
+              <span>All Services</span>
+            </button>
+
+            {/* Quick Category Links */}
+            <div className="flex items-center gap-6 text-xs font-bold text-slate-600 dark:text-slate-400 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: "smooth" })
+                  setActiveNav("home")
+                }}
+                className={`transition-colors cursor-pointer ${activeNav === "home" ? "text-[#0B8F7A] font-black" : "hover:text-slate-900 dark:hover:text-white"}`}
+              >
+                Home
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("?category=cleaning")}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Cleaning
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAcModalOpen(true)}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Appliance Repair
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                AC Services
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Plumbing
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Electrical
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsHomePestModalOpen(true)}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
+              >
+                Pest Control
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAllServicesOpen(true)}
+                className="hover:text-[#0B8F7A] transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <span>More</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <AllServicesDrawer
+          isOpen={isAllServicesOpen}
+          onClose={() => setIsAllServicesOpen(false)}
+          navigate={navigate}
+          user={user}
+        />
 
         {/* ── Service Area Availability Banner ─────────────────────────────── */}
         {zoneCheckResult && zoneCheckResult.in_zone === false && (
@@ -3260,726 +4140,819 @@ export function LandingPage() {
           </div>
         )}
 
-        {/* ── Hero Section ─────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-8 sm:pb-12 grid lg:grid-cols-12 gap-8 lg:gap-8 items-center scroll-mt-24">
-          {/* Left Column: Headline, Search & Trust Badges */}
-          <div className="lg:col-span-6 xl:col-span-6 space-y-5">
-            {/* Small Trust Badge (🛡️ Sevo Promise) */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] text-[var(--sevo-primary)] text-xs font-black shadow-xs">
-              <ShieldCheck className="w-4 h-4 text-[var(--sevo-primary)] stroke-[2.2]" />
-              <span>Sevo Promise</span>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black leading-[1.12] tracking-tight text-[var(--sevo-text-primary)]">
-              Reliable Home<br />
-              Services.<br />
-              <span className="text-[var(--sevo-primary)]">Right on Time</span>
-            </h1>
-
-            {/* Supporting Subtitle */}
-            <p className="text-[var(--sevo-text-secondary)] text-sm sm:text-base leading-relaxed max-w-lg font-medium">
-              Book trusted experts for AC, Plumbing, Cleaning, Electrical & more – anytime, anywhere.
-            </p>
-
-            {/* Search / Booking Control Bar — Pill Style (matches Concept 3 reference) */}
-            <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
-              <form
-                onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-full border transition-all duration-200 px-2 py-1.5 shadow-[var(--sevo-shadow-md)] ${isSearchOpen ? "border-[var(--sevo-primary)] ring-2 ring-[var(--sevo-primary)]/20" : "border-[#E0DCD4] hover:border-[#C8C4BB]"
-                  }`}
-              >
-                <div className="pl-3 pr-2 text-[var(--sevo-text-muted)]">
-                  <Search className="w-4.5 h-4.5" />
-                </div>
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value)
-                    if (!isSearchOpen) setIsSearchOpen(true)
-                  }}
-                  onFocus={() => setIsSearchOpen(true)}
-                  placeholder={homeConfig.hero?.searchPlaceholder || 'Type service or try "AC service"'}
-                  className="flex-1 bg-transparent px-1 py-2 text-sm font-medium outline-none placeholder:text-[var(--sevo-text-muted)] text-[var(--sevo-text-primary)] min-w-0"
-                />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => setQuery("")}
-                    className="p-1.5 text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] rounded-full hover:bg-[var(--sevo-surface-raised)] transition-colors mr-1 cursor-pointer"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  aria-label="Search services"
-                  className="bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] active:bg-[var(--sevo-primary-active)] text-white rounded-full w-10 h-10 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-sm hover:shadow-md active:scale-95"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-              </form>
-
-              {/* Live Auto-Suggest Search Results Dropdown */}
-              <AnimatePresence>
-                {isSearchOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] shadow-[var(--sevo-shadow-lg)] overflow-hidden z-50 divide-y divide-[var(--sevo-border-subtle)] max-h-[380px] overflow-y-auto"
-                  >
-                    <div className="p-2.5 bg-[var(--sevo-surface-raised)] flex items-center justify-between text-xs font-bold text-[var(--sevo-text-secondary)] uppercase tracking-wider">
-                      <span>{query.trim() ? `Matching Services (${filteredSearchResults.length})` : "Popular & Trending Services"}</span>
-                      <span className="text-[10px] text-[var(--sevo-primary)] font-semibold lowercase">Instant Booking</span>
-                    </div>
-
-                    {filteredSearchResults.length > 0 ? (
-                      <div className="p-1.5 space-y-1">
-                        {filteredSearchResults.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => handleExecuteSearch(item)}
-                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-colors text-left group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-[var(--sevo-surface-raised)] group-hover:bg-[var(--sevo-primary-light)] flex items-center justify-center text-[var(--sevo-text-secondary)] group-hover:text-[var(--sevo-primary)] shrink-0 transition-colors">
-                                {item.category === "Home Cleaning" && <Home className="w-4 h-4" />}
-                                {item.category === "Pest Control" && <SprayCan className="w-4 h-4" />}
-                                {item.category === "AC & Appliances" && <AirVent className="w-4 h-4" />}
-                                {item.category === "Electrical & Plumbing" && <Hammer className="w-4 h-4" />}
-                                {item.category === "Paintings" && <PaintRoller className="w-4 h-4" />}
-                                {item.category === "Goods & Transport" && <Boxes className="w-4 h-4" />}
-                                {item.category === "Food & Health" && <Carrot className="w-4 h-4" />}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-[var(--sevo-text-primary)] group-hover:text-[var(--sevo-primary)] truncate">
-                                    {item.title}
-                                  </span>
-                                  {item.badge && (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--sevo-success-bg)] text-[var(--sevo-success)] border border-[var(--sevo-success-border)] shrink-0">
-                                      {item.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-xs text-[var(--sevo-text-secondary)] block truncate">
-                                  {item.category} • {item.price}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center text-[var(--sevo-primary)] font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
-                              <span>Book</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-6 text-center text-[var(--sevo-text-secondary)]">
-                        <p className="text-sm font-semibold text-[var(--sevo-text-primary)] mb-1">No exact matches for &quot;{query}&quot;</p>
-                        <p className="text-xs text-[var(--sevo-text-muted)] mb-3">Browse all available categories or try a different keyword.</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsSearchOpen(false)
-                            setIsHomeServicesCombinedModalOpen(true)
-                          }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          <span>Explore All Services</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* 6 Trust Badges in a 2x3 Grid (Matching Concept 3 Handover Blueprint) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pt-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-50 text-[var(--sevo-primary)] dark:bg-teal-950/50 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Verified Experts</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Background Checked</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
-                  <Star className="w-4.5 h-4.5 fill-amber-400 text-amber-500 stroke-[1.5]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">4.8+ Rated</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">By 10K+ Customers</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 flex items-center justify-center shrink-0">
-                  <Clock className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">On-Time Service</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">Punctual &amp; Reliable</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[var(--sevo-secondary)] dark:bg-blue-950/50 flex items-center justify-center shrink-0">
-                  <IndianRupee className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Upfront Pricing</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">No Hidden Charges</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/50 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">Easy Booking</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">In Just 2 Minutes</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
-                  <Headphones className="w-4.5 h-4.5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <span className="text-xs font-black text-[var(--sevo-text-primary)] block leading-tight">24/7 Support</span>
-                  <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium">We're Here Anytime</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Concept 3 Hero Illustration */}
-          <div className="lg:col-span-6 xl:col-span-6 flex items-center justify-center relative select-none">
-            <img
-              src="/assets/hero_illustration.jpg"
-              alt="SEVO professional home services"
-              className="w-full max-w-[420px] xl:max-w-[480px] object-contain drop-shadow-none"
-              loading="eager"
-              draggable="false"
-            />
-          </div>
-        </section>
-
-        {/* ── Quick User Action & Navigation Strip (4 Cards Matching Concept 3 Blueprint) ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-2">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {/* My Bookings */}
+        {/* ── Super Admin Customer Web Edit Mode toggle ── */}
+        {canEnterHomeEditMode && (
+          <div className={`sticky top-0 z-40 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs font-bold ${homeEditMode ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Super Admin viewing the live Customer Homepage{homeEditMode ? " — Edit Mode ON" : ""}
+              {savingHomeField && <span className="opacity-80">(saving…)</span>}
+            </span>
             <button
               type="button"
-              onClick={() => {
-                if (user) {
-                  setActiveAccountTab("My Bookings")
-                  setShowAccountPortal(true)
-                } else {
-                  goToLogin()
-                }
-              }}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-[var(--sevo-primary)] shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
+              onClick={() => setHomeEditMode((v) => !v)}
+              className={`px-3 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer ${homeEditMode ? "bg-white text-indigo-700" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
             >
-              <div className="w-10 h-10 rounded-xl bg-[#E8F5F2] text-[#0B8F7A] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <ClipboardList className="w-5 h-5 stroke-[2]" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-[var(--sevo-primary)] transition-colors">
-                  My Bookings
-                </span>
-                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
-                  View &amp; manage bookings
-                </span>
-              </div>
-            </button>
-
-            {/* Wallet & Offers */}
-            <button
-              type="button"
-              onClick={() => {
-                if (user) {
-                  setActiveAccountTab("Wallet & Offers")
-                  setShowAccountPortal(true)
-                } else {
-                  navigate(routes.offers || "/marketing/offers")
-                }
-              }}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-amber-500 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-[#FEF3C7] text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Wallet className="w-5 h-5 stroke-[2]" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-amber-600 transition-colors">
-                  Wallet &amp; Offers
-                </span>
-                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
-                  Pay, save &amp; view offers
-                </span>
-              </div>
-            </button>
-
-            {/* Help & Support */}
-            <button
-              type="button"
-              onClick={() => {
-                if (user) {
-                  setActiveAccountTab("Customer Care")
-                  setShowAccountPortal(true)
-                } else {
-                  navigate(routes.contact_us || "/contact")
-                }
-              }}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-rose-400 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-[#FFE4E8] text-rose-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Headphones className="w-5 h-5 stroke-[2]" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-rose-600 transition-colors">
-                  Help &amp; Support
-                </span>
-                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
-                  Chat with us 24/7
-                </span>
-              </div>
-            </button>
-
-            {/* For Business */}
-            <button
-              type="button"
-              onClick={() => navigate(routes.contact_us || "/contact")}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-purple-400 shadow-[var(--sevo-shadow-xs)] hover:shadow-[var(--sevo-shadow-sm)] hover:-translate-y-0.5 transition-all text-left cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Building2 className="w-5 h-5 stroke-[2]" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] block leading-tight group-hover:text-purple-600 transition-colors">
-                  For Business
-                </span>
-                <span className="text-[10px] text-[var(--sevo-text-muted)] font-medium block truncate">
-                  Manage corporate bookings
-                </span>
-              </div>
-            </button>
-          </div>
-        </section>
-
-        {/* ── KYC Verification Progress Banner ─────────────────────── */}
-        {user && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
-            <button
-              type="button"
-              onClick={() => { setActiveAccountTab("My Profile"); setShowAccountPortal(true) }}
-              className="w-full flex items-center justify-between gap-3 bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] rounded-2xl px-4 sm:px-5 py-2.5 cursor-pointer group hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors text-left"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <CheckCircle2 className="w-4 h-4 text-[var(--sevo-primary)] shrink-0" />
-                <span className="text-xs sm:text-sm font-semibold text-[var(--sevo-text-primary)]">
-                  KYC is in progress.
-                </span>
-              </div>
-              <div className="flex items-center gap-1 text-[var(--sevo-primary)] text-xs sm:text-sm font-extrabold shrink-0 group-hover:underline">
-                <span>Verify Now</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </div>
+              <Pencil className="w-3 h-3" />
+              {homeEditMode ? "Exit Edit Mode" : "Enable Edit Mode"}
             </button>
           </div>
         )}
 
-        {/* ── Browse by Category ─────────────────────────────── */}
-        <section id="categories" className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6 scroll-mt-24">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--sevo-text-primary)]">Browse by Category</h2>
+        {/* ── 4. Hero Banner Carousel ─────────────────────────────────────────── */}
+        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-7 scroll-mt-24">
+          {/* The ENTIRE banner is the advertisement -- a single admin-
+              uploaded image per slide, full width, nothing code-drawn on
+              top of it. Clicking it (outside edit mode) follows the
+              slide's configured redirect link -- an in-app path/query
+              (e.g. "?category=cleaning") or a full external https:// URL,
+              whatever the admin points it at. */}
+          <div className="relative rounded-[28px] overflow-hidden shadow-xs transition-all select-none group/heroimg">
             <button
               type="button"
-              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="text-xs sm:text-sm font-bold text-[var(--sevo-primary)] hover:text-[var(--sevo-primary-hover)] flex items-center gap-1.5 transition-colors cursor-pointer group"
+              onClick={() => !homeEditMode && goToBannerLink(activeHeroSlideData.link)}
+              disabled={homeEditMode}
+              aria-label="Open promotional banner"
+              className={`block w-full ${homeEditMode ? "cursor-default" : "cursor-pointer"}`}
             >
-              <span>View All Categories</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <img
+                src={activeHeroSlideData.heroImage || "/assets/hero_illustration.jpg"}
+                alt="Promotional banner"
+                onError={(e) => {
+                  e.currentTarget.src = "/assets/hero_illustration.jpg"
+                }}
+                className="w-full h-[220px] sm:h-[320px] lg:h-[420px] object-cover transition-transform duration-500 group-hover/heroimg:scale-102"
+                loading="eager"
+              />
             </button>
-          </div>
 
-          {/* Row 1: 4 Discovery Category Cards — Matching Reference Visuals */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 w-full">
-            {[
-              {
-                id: "for_you",
-                title: "For You",
-                subtitle: "Recommended services",
-                image: "/assets/cat_for_you.jpg",
-                onClick: () => setIsForYouModalOpen(true)
-              },
-              {
-                id: "food_health",
-                title: "Food & Health",
-                subtitle: "Essentials & wellness",
-                image: "/assets/cat_food_health.jpg",
-                onClick: () => {
-                  setSelectedFoodSubModuleId(null)
-                  setIsFoodHealthModalOpen(true)
-                }
-              },
-              {
-                id: "home_services",
-                title: "Home & Repair",
-                subtitle: "Maintenance & improvements",
-                image: "/assets/cat_home_repair.jpg",
-                onClick: () => setIsHomeServicesCombinedModalOpen(true)
-              },
-              {
-                id: "goods_transport",
-                title: "Goods & Transport",
-                subtitle: "Moving made easy",
-                image: "/assets/cat_goods_transport.jpg",
-                onClick: () => setIsGoodsModalOpen(true)
-              }
-            ].map((cat) => (
-              <div
-                key={cat.id}
-                onClick={cat.onClick}
-                className="group relative flex flex-col bg-white border border-[#E8E3DB] rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)] hover:border-[var(--sevo-primary)] hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                <div className="h-44 sm:h-52 w-full overflow-hidden relative bg-[#F5F2EB]">
-                  <img
-                    src={cat.image}
-                    alt={cat.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            {/* Prev/Next Circular Navigation Arrows */}
+            {heroSlides.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveHeroSlide((p) => (p - 1 + heroSlides.length) % heroSlides.length)}
+                  aria-label="Previous slide"
+                  className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveHeroSlide((p) => (p + 1) % heroSlides.length)}
+                  aria-label="Next slide"
+                  className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            {/* 4 Bottom Indicator Dots */}
+            {heroSlides.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5">
+                {heroSlides.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveHeroSlide(idx)}
+                    aria-label={`Slide ${idx + 1}`}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                      idx === activeHeroSlide
+                        ? "w-7 bg-white"
+                        : "w-2 bg-white/60 hover:bg-white/90"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Floating Price Tag Badge — optional, hidden for regular
+                visitors when no price is set so it never shows a
+                fabricated price. */}
+            {(activeHeroSlideData.priceBadge || homeEditMode) && (
+              <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs rounded-2xl shadow-xl px-4 py-2.5 flex flex-col items-start border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Starting from
+                </span>
+                <span className="text-xl sm:text-2xl font-black text-[#0B8F7A] leading-tight">
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={activeHeroSlideData.priceBadge}
+                    placeholder="₹499"
+                    onSave={(v) => saveActiveHeroField("priceBadge", v)}
+                  />
+                </span>
+              </div>
+            )}
+
+            {/* Edit-mode admin panel -- redirect link + add/remove slide,
+                hidden for regular visitors entirely. */}
+            {homeEditMode && (
+              <div className="absolute top-3 left-3 z-20 bg-white/95 backdrop-blur-xs rounded-xl px-3 py-2 shadow-lg border border-slate-200/80 w-[min(90%,320px)] space-y-1.5">
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">
+                    Banner Redirect Link
+                  </label>
+                  <input
+                    type="text"
+                    value={activeHeroSlideData.link || ""}
+                    onChange={(e) => saveActiveHeroField("link", e.target.value)}
+                    placeholder="?category=cleaning or https://..."
+                    className="w-full text-xs font-medium text-slate-800 outline-none bg-transparent"
                   />
                 </div>
-                <div className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-white">
-                  <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
-                      {cat.title}
-                    </h3>
-                    <p className="text-xs text-[#64748B] font-medium mt-1 leading-snug">
-                      {cat.subtitle}
-                    </p>
-                  </div>
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#F4F1EA] text-[#475569] group-hover:bg-[var(--sevo-primary)] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-200 shadow-2xs">
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
+                <div className="flex items-center gap-3 pt-1 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={addHeroSlide}
+                    className="text-[11px] font-black text-[#0B8F7A] hover:underline cursor-pointer"
+                  >
+                    + Add Slide
+                  </button>
+                  {activeHeroSlide > 0 && (
+                    <button
+                      type="button"
+                      onClick={removeActiveHeroSlide}
+                      className="text-[11px] font-black text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Remove This Slide
+                    </button>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* Super Admin Edit Affiliate */}
+            {homeEditMode && (
+              <div
+                onClick={() => setHeroImageModalOpen(true)}
+                className="absolute inset-0 bg-slate-950/60 flex flex-col items-center justify-center p-4 gap-2 opacity-0 group-hover/heroimg:opacity-100 transition-opacity cursor-pointer z-10"
+              >
+                <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                  <Pencil className="w-3.5 h-3.5 text-teal-400" /> Banner Image
+                </span>
+                <span className="px-3 py-1.5 bg-[#0B8F7A] text-white text-xs font-black rounded-lg">
+                  Change Image
+                </span>
+              </div>
+            )}
+            <ImageEditModal
+              key={`hero-banner-${activeHeroSlide}`}
+              isOpen={heroImageModalOpen}
+              onClose={() => setHeroImageModalOpen(false)}
+              currentUrl={activeHeroSlideData.heroImage || "/assets/hero_illustration.jpg"}
+              defaultFallback="/assets/hero_illustration.jpg"
+              title={`Edit Banner Image${heroSlides.length > 1 ? ` (Slide ${activeHeroSlide + 1} of ${heroSlides.length})` : ""}`}
+              assetType="homepage"
+              onSave={(url) => saveActiveHeroField("heroImage", url)}
+            />
+          </div>
+        </section>
+
+        {/* ── 5. "What do you need help with?" 10-Service Category Icons Grid ────── */}
+        <section id="categories" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 scroll-mt-24">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              What do you need help with?
+            </h2>
+            <div className="flex items-center gap-3 shrink-0">
+              {homeEditMode && (
+                <button
+                  type="button"
+                  onClick={addCategoryTile}
+                  className="text-[11px] font-black text-[#0B8F7A] hover:underline cursor-pointer"
+                >
+                  + Add Category
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1.5 transition-colors cursor-pointer group"
+              >
+                <span>View All Categories</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5 sm:gap-3.5">
+            {[
+              ...homeCategories.map((cat, idx) => ({
+                ...cat,
+                idx,
+                fallback: MoreHorizontal,
+                color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                onClick: () => !homeEditMode && goToBannerLink(cat.link)
+              })),
+              {
+                idx: -1,
+                name: "More",
+                image: null,
+                fallback: MoreHorizontal,
+                color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                onClick: () => setIsAllServicesOpen(true),
+                fixed: true
+              }
+            ].map((cat) => {
+              const FallbackIcon = cat.fallback
+              return (
+                <div key={cat.id || cat.idx} className="relative group/cattile">
+                <button
+                  type="button"
+                  onClick={cat.onClick}
+                  disabled={homeEditMode && !cat.fixed}
+                  className="w-full group flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 hover:border-[#0B8F7A] shadow-2xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+                >
+                  <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform overflow-hidden relative">
+                    {cat.image ? (
+                      <img
+                        src={cat.image}
+                        alt={cat.name}
+                        loading="lazy"
+                        className="w-full h-full object-contain drop-shadow-2xs rounded-xl"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                          const nextEl = e.currentTarget.nextElementSibling
+                          if (nextEl) nextEl.style.display = 'flex'
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full rounded-2xl ${cat.color} ${cat.image ? 'hidden' : 'flex'} items-center justify-center`}>
+                      <FallbackIcon className="w-6 h-6 stroke-[2]" />
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#0B8F7A] transition-colors leading-tight line-clamp-2">
+                    {cat.name}
+                  </span>
+                </button>
+
+                {homeEditMode && !cat.fixed && (
+                  <div
+                    onClick={() => setCategoryImageModalIdx(cat.idx)}
+                    className="absolute inset-0 bg-slate-950/55 rounded-2xl flex flex-col items-center justify-center gap-1 opacity-0 group-hover/cattile:opacity-100 transition-opacity cursor-pointer z-10"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-white" />
+                    <span className="text-[9px] font-black text-white">Change</span>
+                  </div>
+                )}
+                {homeEditMode && !cat.fixed && (
+                  <button
+                    type="button"
+                    onClick={() => removeCategoryTile(cat.idx)}
+                    className="absolute -top-1.5 -right-1.5 z-20 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xs cursor-pointer"
+                    title="Remove Category"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+                </div>
+              )
+            })}
+          </div>
+
+          {homeEditMode && categoryImageModalIdx !== null && (
+            <div className="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 max-w-sm space-y-2">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                Editing: {homeCategories[categoryImageModalIdx]?.name || "Category"}
+              </label>
+              <input
+                type="text"
+                value={homeCategories[categoryImageModalIdx]?.name || ""}
+                onChange={(e) => saveHomeConfigField(`categories.${categoryImageModalIdx}.name`, e.target.value)}
+                placeholder="Category name"
+                className="w-full text-xs font-semibold text-slate-800 outline-none bg-white border border-slate-200 rounded-lg px-2.5 py-1.5"
+              />
+              <input
+                type="text"
+                value={homeCategories[categoryImageModalIdx]?.link || ""}
+                onChange={(e) => saveHomeConfigField(`categories.${categoryImageModalIdx}.link`, e.target.value)}
+                placeholder="?category=cleaning or https://..."
+                className="w-full text-xs font-medium text-slate-700 outline-none bg-white border border-slate-200 rounded-lg px-2.5 py-1.5"
+              />
+              <button
+                type="button"
+                onClick={() => setCategoryImageModalIdx(null)}
+                className="text-[11px] font-black text-[#0B8F7A] hover:underline cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          )}
+
+          <ImageEditModal
+            key={`category-tile-${categoryImageModalIdx}`}
+            isOpen={categoryImageModalIdx !== null}
+            onClose={() => setCategoryImageModalIdx(null)}
+            currentUrl={categoryImageModalIdx !== null ? (homeCategories[categoryImageModalIdx]?.image || "") : ""}
+            defaultFallback=""
+            title="Edit Category Icon"
+            assetType="homepage"
+            onSave={(url) => {
+              if (categoryImageModalIdx !== null) saveHomeConfigField(`categories.${categoryImageModalIdx}.image`, url)
+            }}
+          />
+        </section>
+
+        {/* ── 6. Promotional Offers Row -- each card is a single admin-
+            uploaded banner image (like a real ad), no code-drawn
+            discount/countdown/coupon text on top of it. Reads/writes
+            homeConfig.offers.items so it's editable from both the live
+            page (Customer Web Edit Mode) and the Homepage Builder preview. ── */}
+        <section id="offers" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 scroll-mt-24">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <Gift className="w-5 h-5 text-[#0B8F7A]" />
+              <HomeEditableText
+                active={homeEditMode}
+                value={homeConfig.offers?.title}
+                placeholder="Limited Time Offers!"
+                onSave={(v) => saveHomeConfigField("offers.title", v)}
+              />
+            </h2>
+            {homeEditMode && (
+              <button
+                type="button"
+                onClick={addOfferItem}
+                className="text-[11px] font-black text-[#0B8F7A] hover:underline cursor-pointer shrink-0"
+              >
+                + Add Offer Card
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+            {(homeConfig.offers?.items || []).filter((o) => o.enabled !== false || homeEditMode).map((offer, idx) => (
+              <div
+                key={offer.id || idx}
+                className="relative rounded-3xl overflow-hidden border border-slate-200/90 dark:border-slate-700 shadow-xs hover:shadow-md transition-all bg-slate-100 dark:bg-slate-800 group/offer"
+              >
+                <button
+                  type="button"
+                  onClick={() => !homeEditMode && goToBannerLink(offer.link)}
+                  disabled={homeEditMode}
+                  aria-label={offer.title || "Promotional offer"}
+                  className={`block w-full aspect-[4/3] ${homeEditMode ? "cursor-default" : "cursor-pointer"}`}
+                >
+                  {offer.image ? (
+                    <img src={offer.image} alt={offer.title || "Offer"} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500">
+                      <Gift className="w-10 h-10 opacity-40" />
+                    </div>
+                  )}
+                </button>
+
+                {homeEditMode && (
+                  <>
+                    <div
+                      onClick={() => setOfferImageModalIdx(idx)}
+                      className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center p-3 gap-1.5 opacity-0 group-hover/offer:opacity-100 transition-opacity cursor-pointer z-10"
+                    >
+                      <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                        <Pencil className="w-3.5 h-3.5 text-teal-400" /> Offer Banner Image
+                      </span>
+                      <span className="px-3 py-1.5 bg-[#0B8F7A] hover:bg-[#087362] text-white text-[11px] font-extrabold rounded-lg shadow-lg transition">
+                        Change Image
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeOfferItem(idx)}
+                      className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-rose-600 cursor-pointer z-20"
+                      title="Remove this offer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                    <div className="p-2 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">
+                        Click-Through Link
+                      </label>
+                      <input
+                        type="text"
+                        value={offer.link || ""}
+                        onChange={(e) => saveHomeConfigField(`offers.items.${idx}.link`, e.target.value)}
+                        placeholder="?category=cleaning or https://..."
+                        className="w-full text-xs font-medium text-slate-800 dark:text-slate-200 outline-none bg-transparent"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
 
-          {/* Row 2: 7 Compact Quick-Action Cards with Realistic 3D Icons */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3.5 pt-2">
-            {[
-              {
-                name: "AC Service",
-                image: "/assets/icon_3d_ac.jpg",
-                fallbackIcon: AirVent,
-                color: "bg-[#E6F6F3] text-[#0B8F7A]",
-                onClick: () => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")
-              },
-              {
-                name: "Plumbing",
-                image: "/assets/icon_3d_plumbing.jpg",
-                fallbackIcon: Droplet,
-                color: "bg-[#EBF4FC] text-[#0F5FBF]",
-                onClick: () => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")
-              },
-              {
-                name: "Electrical",
-                image: "/assets/icon_3d_electrical.jpg",
-                fallbackIcon: Zap,
-                color: "bg-[#FEF9C3] text-[#CA8A04]",
-                onClick: () => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")
-              },
-              {
-                name: "Cleaning",
-                image: "/assets/icon_3d_cleaning.jpg",
-                fallbackIcon: Sparkles,
-                color: "bg-[#FEF3C7] text-[#D97706]",
-                onClick: () => navigate("?category=cleaning")
-              },
-              {
-                name: "Painting",
-                image: "/mockups/category_home_repair_3d.jpg",
-                fallbackIcon: PaintRoller,
-                color: "bg-[#DCFCE7] text-[#16A34A]",
-                onClick: () => navigate("?category=painting")
-              },
-              {
-                name: "Appliance Repair",
-                image: "/assets/icon_3d_appliance.jpg",
-                fallbackIcon: Boxes,
-                color: "bg-[#ECFDF5] text-[#059669]",
-                onClick: () => setIsAcModalOpen(true)
-              },
-              {
-                name: "Pest Control",
-                image: "/assets/icon_3d_pest.png",
-                fallbackIcon: Bug,
-                color: "bg-[#FEFCE8] text-[#84CC16]",
-                onClick: () => setIsHomePestModalOpen(true)
-              }
-            ].map((srv, idx) => {
-              const FallbackIcon = srv.fallbackIcon
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={srv.onClick}
-                  className="group flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl bg-white border border-[#E8E3DB] hover:border-[var(--sevo-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.07)] hover:-translate-y-1 transition-all duration-200 cursor-pointer"
-                >
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform overflow-hidden relative">
-                    {srv.image ? (
-                      <img
-                        src={srv.image}
-                        alt={srv.name}
-                        loading="lazy"
-                        className="w-full h-full object-contain drop-shadow-sm rounded-xl"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const nextEl = e.currentTarget.nextElementSibling;
-                          if (nextEl) nextEl.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={`w-full h-full rounded-2xl ${srv.color} ${srv.image ? 'hidden' : 'flex'} items-center justify-center`}
-                    >
-                      <FallbackIcon className="w-6 h-6 stroke-[2.2]" />
-                    </div>
-                  </div>
-                  <span className="text-xs font-black text-[#0B172A] group-hover:text-[var(--sevo-primary)] transition-colors leading-tight">
-                    {srv.name}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <ImageEditModal
+            key={`offer-banner-${offerImageModalIdx}`}
+            isOpen={offerImageModalIdx !== null}
+            onClose={() => setOfferImageModalIdx(null)}
+            currentUrl={offerImageModalIdx !== null ? (homeConfig.offers?.items?.[offerImageModalIdx]?.image || "") : ""}
+            defaultFallback=""
+            title="Edit Offer Banner Image"
+            assetType="homepage"
+            onSave={(url) => {
+              if (offerImageModalIdx !== null) saveHomeConfigField(`offers.items.${offerImageModalIdx}.image`, url)
+            }}
+          />
         </section>
 
-        {/* ── Why Choose Sevo? & Book Services on the Go Split Section (Matching Concept 3) ── */}
-        <section id="why-choose-us" className="max-w-7xl mx-auto px-4 sm:px-6 py-8 scroll-mt-24">
-          <div className="grid lg:grid-cols-12 gap-6 items-stretch">
-            {/* Left: Why Choose Sevo? 6-item Grid */}
-            <div className="lg:col-span-7 bg-white rounded-3xl border border-[#E8E3DB] shadow-[var(--sevo-shadow-xs)] p-6 sm:p-8 flex flex-col justify-between">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--sevo-text-primary)] mb-6">Why Choose Sevo?</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 sm:gap-6">
-                  {[
-                    {
-                      icon: ShieldCheck,
-                      title: "Certified & Verified",
-                      desc: "Trusted professionals",
-                    },
-                    {
-                      icon: IndianRupee,
-                      title: "Transparency",
-                      desc: "Clear pricing always",
-                    },
-                    {
-                      icon: Clock,
-                      title: "On-Time Service",
-                      desc: "We value your time",
-                    },
-                    {
-                      icon: Star,
-                      title: "Satisfaction",
-                      desc: "100% guaranteed",
-                    },
-                    {
-                      icon: CheckCircle2,
-                      title: "Easy Booking",
-                      desc: "Book in 2 minutes",
-                    },
-                    {
-                      icon: Headphones,
-                      title: "24/7 Support",
-                      desc: "We're always here",
-                    }
-                  ].map((feat, idx) => {
-                    const Icon = feat.icon
-                    return (
-                      <div key={idx} className="flex items-start gap-3 text-left group">
-                        <div className="w-9 h-9 rounded-xl bg-[#E8F5F2] text-[#0B8F7A] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <Icon className="w-4.5 h-4.5 stroke-[2.2]" />
+        {/* ── 7. "Recommended for You" 5-Card Service Row ─────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Recommended for You
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1.5 transition-colors cursor-pointer group shrink-0"
+              >
+                <span>See More Like This</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+          {recommendedLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-pulse">
+                  <div className="h-32 bg-slate-100 dark:bg-slate-700" />
+                  <div className="p-3.5 space-y-2">
+                    <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-700 rounded" />
+                    <div className="h-3 w-1/2 bg-slate-100 dark:bg-slate-700 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : recommendedPackages.length === 0 ? null : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {recommendedPackages.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-2xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group"
+                >
+                  {/* Image -- always the real, admin-uploaded package/service
+                      image from the catalog API, never a local/mock asset */}
+                  <div className="relative h-32 bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                    <img
+                      src={pkg.image || pkg.service_image || "/assets/hero_illustration.jpg"}
+                      alt={pkg.name}
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = "/assets/hero_illustration.jpg"
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {pkg.popular && (
+                      <span className="absolute top-2 left-2 bg-[#0B8F7A] text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs">
+                        POPULAR
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                          {pkg.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        <span className="truncate">{pkg.service_name}</span>
+                      </div>
+
+                      {/* Pricing -- real base price from the catalog, no
+                          fabricated "original price" / discount badge */}
+                      <div className="flex items-baseline gap-1.5 pt-1.5">
+                        <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                          ₹{pkg.price}
+                        </span>
+                      </div>
+
+                      {pkg.duration && (
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          <span>{pkg.duration}</span>
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-black text-[var(--sevo-text-primary)] leading-tight">
-                            {feat.title}
-                          </h4>
-                          <p className="text-[11px] text-[var(--sevo-text-muted)] font-medium mt-0.5 leading-snug">
-                            {feat.desc}
-                          </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => navigate(`?category=${pkg.category_slug || ""}&service=${pkg.service_slug || ""}`)}
+                      className="w-full mt-2 py-2 rounded-xl bg-[#0B8F7A] hover:bg-[#087362] text-white text-xs font-black transition-all shadow-2xs active:scale-98 cursor-pointer text-center"
+                    >
+                      Book Now
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── 8. Trust Guarantees (5 Pillars) ─────────────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 shadow-2xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-700 gap-4 sm:gap-0">
+              {(homeConfig.trustBadges || DEFAULT_HOME_PAGE_CONFIG.trustBadges)
+                .filter((t) => t.enabled !== false)
+                .map((pill, idx) => {
+                  const Icon = TRUST_BADGE_ICON_MAP[pill.icon] || ShieldCheck
+                  const color = TRUST_BADGE_COLORS[idx % TRUST_BADGE_COLORS.length]
+                  return (
+                    <div key={pill.id || idx} className="flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-0">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                        <Icon className="w-5 h-5 stroke-[2]" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">
+                          {pill.title}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
+                          {pill.description || pill.desc}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Book Services on the Go! App Card */}
-            <div className="lg:col-span-5 bg-[#F2F8F4] dark:bg-[#0B1E43] rounded-3xl p-6 sm:p-7 border border-[#D5EADB] dark:border-[var(--sevo-border)] shadow-[var(--sevo-shadow-xs)] flex items-center justify-between relative overflow-hidden gap-4">
-              <div className="space-y-3 z-10 max-w-[240px]">
-                <h3 className="text-xl sm:text-2xl font-black text-[#0B8F7A] tracking-tight leading-tight">
-                  Book Services on the Go!
-                </h3>
-                <p className="text-xs sm:text-sm text-[var(--sevo-text-secondary)] font-medium leading-relaxed">
-                  Download our app for a faster &amp; smoother experience.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                  <GooglePlayBtn />
-                  <AppStoreBtn />
-                </div>
-              </div>
-
-              {/* Phone Mockup Illustration */}
-              <div className="flex shrink-0 z-10">
-                <img
-                  src="/assets/phone_app_mockup.jpg"
-                  alt="SEVO App Mockup"
-                  className="w-28 sm:w-36 object-contain rounded-2xl drop-shadow-md select-none"
-                  loading="lazy"
-                />
-              </div>
+                    </div>
+                  )
+                })}
             </div>
           </div>
         </section>
 
-        {/* ── Immediate Booking CTA Banner ───────────────────── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="bg-gradient-to-r from-[var(--sevo-primary)] to-[#087060] dark:from-[#102956] dark:to-[#0B1E43] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-5">
-            <div className="flex items-center gap-4 text-center sm:text-left">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs text-white flex items-center justify-center shrink-0 border border-white/20">
-                <CalendarDays className="w-6 h-6 stroke-[2]" />
+        {/* ── 9. Customer Testimonials ("What Our Customers Say") ──────────────── */}
+        <section id="testimonials" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4 scroll-mt-24">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              What Our Customers Say
+            </h2>
+            <div className="flex items-center gap-3">
+              <a
+                href="#testimonials"
+                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] transition-colors"
+              >
+                Read All Reviews →
+              </a>
+              <div className="hidden sm:flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTestimonialIdx((prev) => (prev - 1 + 3) % 3)}
+                  className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Previous testimonial"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestimonialIdx((prev) => (prev + 1) % 3)}
+                  className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Next testimonial"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                name: "Priya Sharma",
+                city: "Bengaluru",
+                avatar: "PS",
+                rating: 5,
+                review: "Excellent AC service! The technician was professional, on time, and did a fantastic job. Highly recommended!"
+              },
+              {
+                name: "Rahul Mehta",
+                city: "Mumbai",
+                avatar: "RM",
+                rating: 5,
+                review: "Booked deep cleaning for my apartment. Amazing service and very thorough. Will definitely book again!"
+              },
+              {
+                name: "Anjali Desai",
+                city: "Pune",
+                avatar: "AD",
+                rating: 5,
+                review: "Very prompt plumbing service. Fixed the issue quickly. Great experience overall."
+              }
+            ].map((testi, idx) => (
+              <div
+                key={idx}
+                className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-2xs flex flex-col justify-between gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                    {testi.avatar}
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900 dark:text-white">
+                      {testi.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      {testi.city}
+                    </div>
+                  </div>
+                  <div className="ml-auto flex items-center gap-0.5">
+                    {Array.from({ length: testi.rating }).map((_, si) => (
+                      <Star key={si} className="w-3 h-3 fill-amber-400 text-amber-500" />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                  &ldquo;{testi.review}&rdquo;
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Testimonial indicator dots */}
+          <div className="flex items-center justify-center gap-1.5 pt-2">
+            {[0, 1, 2, 3].map((dot) => (
+              <div
+                key={dot}
+                className={`h-1.5 rounded-full transition-all ${
+                  dot === 0 ? "w-6 bg-[#0B8F7A]" : "w-1.5 bg-slate-300 dark:bg-slate-600"
+                }`}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* ── 10. Newsletter / Email Subscription Banner (Dark Emerald #004d40) ──── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+          <div className="bg-[#004d40] text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4 text-center lg:text-left">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20">
+                <Mail className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-black">Need Immediate Service?</h3>
-                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">Book now and get your problem solved quickly.</p>
+                <h3 className="text-lg sm:text-xl font-black">
+                  Stay Updated with Best Offers!
+                </h3>
+                <p className="text-teal-100 text-xs sm:text-sm mt-0.5 font-medium">
+                  Subscribe to our newsletter
+                </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="px-6 py-2.5 bg-white text-[var(--sevo-primary)] hover:bg-teal-50 font-bold rounded-xl text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <span>Book Now</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <form onSubmit={handleNewsletterSubmit} className="w-full max-w-md flex items-center bg-white rounded-full p-1.5 shadow-inner">
+              <input
+                type="email"
+                required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="flex-1 bg-transparent px-4 text-xs sm:text-sm text-slate-800 outline-none placeholder:text-slate-400 font-medium"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-full bg-[#004d40] hover:bg-[#00382f] text-white text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+              >
+                {newsletterSubscribed ? "Subscribed!" : "Subscribe"}
+              </button>
+            </form>
+
+            <span className="text-xs text-teal-100 font-medium max-w-[200px] text-center lg:text-right hidden lg:block">
+              Get exclusive deals &amp; updates straight to your inbox.
+            </span>
           </div>
         </section>
 
-        {/* ── Footer ──── */}
-        <footer id="about-us" className="bg-[var(--sevo-surface)] text-[var(--sevo-text-secondary)] pt-12 border-t border-[var(--sevo-border)] mt-10 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10">
+        {/* ── 11. Comprehensive SEVO Footer (6 Columns Matching Spec) ──────────── */}
+        <footer id="about-us" className="bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 pb-10">
             {/* Col 1: Brand Info & Socials */}
-            <div className="space-y-4">
+            <div className="space-y-4 col-span-2 sm:col-span-1 lg:col-span-1">
               <div className="flex items-center gap-2 select-none shrink-0 cursor-pointer" onClick={() => navigate(routes.landing)}>
                 <img
                   src="/assets/sevo_emblem_transparent.png"
                   alt="SEVO Emblem"
                   className="h-8 w-auto shrink-0 object-contain"
-                  style={{ height: '32px', width: 'auto' }}
                 />
-                <img
-                  src="/assets/sevo_text_logo.png"
-                  alt="SEVO"
-                  className="shrink-0 object-contain"
-                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
-                />
+                <div className="flex flex-col">
+                  <span className="text-lg font-black tracking-tight text-[#0f172a] dark:text-white leading-none">
+                    SEVO
+                  </span>
+                  <span className="text-[8px] font-bold tracking-widest text-[#0B8F7A] uppercase leading-none mt-0.5">
+                    Home Services
+                  </span>
+                </div>
               </div>
-              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xs">
-                SEVO is your trusted partner for all home services. We connect you with verified professionals for a hassle-free experience.
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+                Your trusted partner for all home services. Professional, reliable and on-time.
               </p>
-              <div className="flex items-center gap-2.5 pt-1">
-                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
+              <div className="flex items-center gap-2 pt-1">
+                <a href="#" className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-[#0B8F7A] text-slate-600 hover:text-white flex items-center justify-center transition-colors">
                   <FacebookMark className="w-3.5 h-3.5" />
                 </a>
-                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-[#0B8F7A] text-slate-600 hover:text-white flex items-center justify-center transition-colors">
                   <InstagramMark className="w-3.5 h-3.5" />
                 </a>
-                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
-                  <WhatsAppMark className="w-3.5 h-3.5" />
-                </a>
-                <a href="#" className="w-8 h-8 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary)] text-[var(--sevo-text-secondary)] hover:text-white flex items-center justify-center transition-colors">
+                <a href="#" className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-[#0B8F7A] text-slate-600 hover:text-white flex items-center justify-center transition-colors">
                   <YoutubeMark className="w-3.5 h-3.5" />
+                </a>
+                <a href="#" className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-[#0B8F7A] text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                  <LinkedInMark className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
 
-            {/* Col 2: Our Services */}
+            {/* Col 2: Services */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Our Services</h4>
-              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
-                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">AC Service</button></li>
-                <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Plumbing</button></li>
-                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Electrical</button></li>
-                <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Cleaning</button></li>
-                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
-                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[var(--sevo-primary)] transition-colors text-left cursor-pointer">Pest Control</button></li>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                SERVICES
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Cleaning</button></li>
+                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">AC Services</button></li>
+                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
+                <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Plumbing</button></li>
+                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Electrical</button></li>
+                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Pest Control</button></li>
+                <li><button type="button" onClick={() => setIsAllServicesOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer font-bold text-[#0B8F7A]">View All Services</button></li>
               </ul>
             </div>
 
             {/* Col 3: Company */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Company</h4>
-              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
-                <li><a href="#about-us" className="hover:text-[var(--sevo-primary)] transition-colors">About Us</a></li>
-                <li><a href="#why-choose-us" className="hover:text-[var(--sevo-primary)] transition-colors">How It Works</a></li>
-                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Careers</Link></li>
-                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Blog</Link></li>
-                <li><Link to="/terms" className="hover:text-[var(--sevo-primary)] transition-colors">Terms &amp; Conditions</Link></li>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                COMPANY
+              </h4>
+              <ul className="space-y-2 text-xs">
+                {/* <li><a href="#about-us" className="hover:text-[#0B8F7A] transition-colors">About Us</a></li> */}
+                {/* <li><Link to="/help" className="hover:text-[#0B8F7A] transition-colors">Careers</Link></li> */}
+                {/* <li><Link to="/help" className="hover:text-[#0B8F7A] transition-colors">Blog</Link></li> */}
+                {/* <li><Link to="/help" className="hover:text-[#0B8F7A] transition-colors">Press</Link></li> */}
+                <li><Link to="/contact" className="hover:text-[#0B8F7A] transition-colors">Partner with Us</Link></li>
+                <li><Link to="/terms" className="hover:text-[#0B8F7A] transition-colors">Terms &amp; Conditions</Link></li>
               </ul>
             </div>
 
-            {/* Col 4: Support */}
+            {/* Col 4: Help */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Support</h4>
-              <ul className="space-y-2 text-xs text-[var(--sevo-text-secondary)]">
-                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Help Center</Link></li>
-                <li><Link to="/terms" className="hover:text-[var(--sevo-primary)] transition-colors">Terms &amp; Conditions</Link></li>
-                <li><Link to="/privacy" className="hover:text-[var(--sevo-primary)] transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/cancellation-refund" className="hover:text-[var(--sevo-primary)] transition-colors">Refund Policy</Link></li>
-                <li><Link to="/help" className="hover:text-[var(--sevo-primary)] transition-colors">Sitemap</Link></li>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                HELP
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li><Link to="/help" className="hover:text-[#0B8F7A] transition-colors">Help Center</Link></li>
+                <li><a href="#why-choose-us" className="hover:text-[#0B8F7A] transition-colors">How It Works</a></li>
+                <li><Link to="/cancellation-refund" className="hover:text-[#0B8F7A] transition-colors">Cancellation Policy</Link></li>
+                <li><Link to="/privacy" className="hover:text-[#0B8F7A] transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/cancellation-refund" className="hover:text-[#0B8F7A] transition-colors">Refund Policy</Link></li>
+                <li><Link to="/contact" className="hover:text-[#0B8F7A] transition-colors">Contact Us</Link></li>
               </ul>
             </div>
 
-            {/* Col 5: Contact Us */}
-            <div id="contact-us" className="space-y-3">
-              <h4 className="text-sm font-bold text-[var(--sevo-text-primary)]">Contact Us</h4>
-              <ul className="space-y-2.5 text-xs text-[var(--sevo-text-secondary)]">
-                <li className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
-                  <span className="font-semibold">+91 90909 90909</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Mail className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
-                  <span className="font-semibold">support@sevo.com</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)] shrink-0 mt-0.5" />
-                  <span className="font-semibold">Hosur, Tamil Nadu, India</span>
-                </li>
+            {/* Col 5: Popular Cities */}
+            {/* <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                POPULAR CITIES
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Bengaluru</button></li>
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Mumbai</button></li>
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Delhi</button></li>
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Pune</button></li>
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Hyderabad</button></li>
+                <li><button type="button" onClick={() => setShowLocationPickerModal(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Chennai</button></li>
               </ul>
+            </div> */}
+
+            {/* Col 6: Download App & Payment Badges */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white mb-2.5">
+                  DOWNLOAD OUR APP
+                </h4>
+                <div className="flex flex-col gap-2">
+                  <GooglePlayBtn />
+                  <AppStoreBtn />
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white mb-2">
+                  WE ACCEPT
+                </h4>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <VisaBadge />
+                  <MastercardBadge />
+                  <UpiBadge />
+                  <PaytmBadge />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Bottom Copyright Strip */}
-          <div className="bg-[var(--sevo-surface-raised)] border-t border-[var(--sevo-border)] text-[var(--sevo-text-muted)] py-3.5 text-center text-xs font-semibold">
-            © {new Date().getFullYear()} SEVO. All Rights Reserved.
+          <div className="border-t border-slate-200 dark:border-slate-800 text-slate-400 py-4 text-center text-xs font-medium">
+            © 2024 Sevo Home Services Pvt. Ltd. All rights reserved.
           </div>
         </footer>
 
@@ -4080,7 +5053,12 @@ export function LandingPage() {
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
-                    Home Cleaning &amp; Pest Control
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.title}
+                      placeholder="Home Cleaning & Pest Control"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.title", v)}
+                    />
                   </h3>
                 </div>
 
@@ -4104,14 +5082,20 @@ export function LandingPage() {
                 {/* Cleaning Section */}
                 <div className="mb-6">
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Home Cleaning
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.cleaningSectionTitle}
+                      placeholder="Home Cleaning"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.cleaningSectionTitle", v)}
+                    />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {HOME_SERVICES_SUB.map((item) => {
+                    {(homeConfig.subServicesModal?.cleaningItems || HOME_SERVICES_SUB).map((item, cIdx) => {
                       const isAvailable = isServiceAvailableInZone(item.name)
+                      const GraphicComponent = item.graphic || HOME_SERVICES_SUB[cIdx]?.graphic || Sparkles
                       return (
                         <button
-                          key={item.name}
+                          key={item.name || cIdx}
                           type="button"
                           onClick={() => {
                             if (!isAvailable) {
@@ -4129,13 +5113,13 @@ export function LandingPage() {
                             } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
                               navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
                             } else {
-                              navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                              navigate(`?category=${item.categoryId || 'cleaning'}&subtab=${encodeURIComponent(item.name)}`)
                             }
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
                           <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -4147,7 +5131,12 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            {item.name}
+                            <HomeEditableText
+                              active={homeEditMode}
+                              value={item.name}
+                              placeholder={item.name}
+                              onSave={(v) => saveHomeConfigField(`subServicesModal.cleaningItems.${cIdx}.name`, v)}
+                            />
                           </span>
                         </button>
                       )
@@ -4158,14 +5147,20 @@ export function LandingPage() {
                 {/* Pest Control Section */}
                 <div>
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Pest Control
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.subServicesModal?.pestSectionTitle}
+                      placeholder="Pest Control"
+                      onSave={(v) => saveHomeConfigField("subServicesModal.pestSectionTitle", v)}
+                    />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {PEST_CONTROL_SUB.map((item) => {
+                    {(homeConfig.subServicesModal?.pestItems || PEST_CONTROL_SUB).map((item, pIdx) => {
                       const isAvailable = isServiceAvailableInZone(item.name)
+                      const GraphicComponent = item.graphic || PEST_CONTROL_SUB[pIdx]?.graphic || Sparkles
                       return (
                         <button
-                          key={item.name}
+                          key={item.name || pIdx}
                           type="button"
                           onClick={() => {
                             if (!isAvailable) {
@@ -4174,12 +5169,12 @@ export function LandingPage() {
                             }
                             setIsHomePestModalOpen(false)
                             document.body.style.overflow = "unset"
-                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                            navigate(`?category=${item.categoryId || 'pest_control'}&subtab=${encodeURIComponent(item.name)}`)
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
                           <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -4191,7 +5186,12 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            {item.name}
+                            <HomeEditableText
+                              active={homeEditMode}
+                              value={item.name}
+                              placeholder={item.name}
+                              onSave={(v) => saveHomeConfigField(`subServicesModal.pestItems.${pIdx}.name`, v)}
+                            />
                           </span>
                         </button>
                       )
@@ -5518,16 +6518,31 @@ export function LandingPage() {
 
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                    ⚡ 5 Core Specialized Pillars
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.badge}
+                      placeholder="⚡ 5 Core Specialized Pillars"
+                      onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
+                    />
                   </div>
                   <h3
                     id="home-combined-modal-title"
                     className="text-xl sm:text-2xl font-extrabold text-slate-900"
                   >
-                    Home &amp; Repair Services
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.title}
+                      placeholder="Home & Repair Services"
+                      onSave={(v) => saveHomeConfigField("pillarModal.title", v)}
+                    />
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
-                    Select any service below to explore specific options, verified technicians, and transparent pricing.
+                    <HomeEditableText
+                      active={homeEditMode}
+                      value={homeConfig.pillarModal?.subtitle}
+                      placeholder="Select any service below to explore specific options, verified technicians, and transparent pricing."
+                      onSave={(v) => saveHomeConfigField("pillarModal.subtitle", v)}
+                    />
                   </p>
                 </div>
 
@@ -5550,12 +6565,19 @@ export function LandingPage() {
 
                 {/* 5 Combined Services Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                  {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => {
+                  {(homeConfig.pillarModal?.pillars && homeConfig.pillarModal.pillars.length > 0 ? homeConfig.pillarModal.pillars : CATEGORIES).map((catItem, pIdx) => {
+                    const defaultCat = CATEGORIES[pIdx] || {}
+                    const label = catItem.label || defaultCat.label || ""
+                    const photo = catItem.photo || catItem.image || defaultCat.photo
+                    const Icon = defaultCat.icon || Wrench
+                    const serviceCategoryId = catItem.serviceCategoryId || defaultCat.serviceCategoryId
                     const isAvailable = isServiceAvailableInZone(label)
+
                     return (
-                      <button
-                        key={label}
+                      <div
+                        key={catItem.id || label || pIdx}
                         onClick={() => {
+                          if (homeEditMode) return
                           if (!isAvailable) {
                             showUnavailableServiceAlert(label)
                             return
@@ -5578,11 +6600,30 @@ export function LandingPage() {
                       >
                         {photo ? (
                           <div className="h-24 w-full overflow-hidden bg-slate-100 relative">
-                            <img
-                              src={photo}
-                              alt={label}
-                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
-                            />
+                            {homeEditMode ? (
+                              <EditableImage
+                                active={true}
+                                value={photo}
+                                defaultFallback={defaultCat.photo || "/mockups/service_cleaning.png"}
+                                assetType="services"
+                                title={`Edit ${label} Photo`}
+                                alt={label}
+                                className="w-full h-full"
+                                imgClassName="w-full h-full object-cover"
+                                onSave={(url) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.photo`, url)}
+                              />
+                            ) : (
+                              <img
+                                src={photo}
+                                alt={label}
+                                onError={(e) => {
+                                  if (defaultCat.photo && e.currentTarget.src !== defaultCat.photo) {
+                                    e.currentTarget.src = defaultCat.photo
+                                  }
+                                }}
+                                className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
+                              />
+                            )}
                             {!isAvailable && (
                               <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -5600,9 +6641,14 @@ export function LandingPage() {
                           </div>
                         )}
                         <span className={`text-xs font-extrabold leading-snug p-3 transition-colors ${isAvailable ? 'text-slate-700 group-hover:text-teal-800' : 'text-slate-400'}`}>
-                          {label}
+                          <HomeEditableText
+                            active={homeEditMode}
+                            value={label}
+                            placeholder={label}
+                            onSave={(v) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.label`, v)}
+                          />
                         </span>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -6621,15 +7667,15 @@ export function LandingPage() {
                                       containIntrinsicSize: "0 230px",
                                     }}
                                   >
-                                      <div
-                                        onClick={() => {
-                                          if (selectedFoodSubModule?.id === "vegetables") {
-                                            setSelectedRecipeVegetable(item)
-                                            setIsRecipeModalOpen(true)
-                                          }
-                                        }}
-                                        className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
-                                      >
+                                    <div
+                                      onClick={() => {
+                                        if (selectedFoodSubModule?.id === "vegetables") {
+                                          setSelectedRecipeVegetable(item)
+                                          setIsRecipeModalOpen(true)
+                                        }
+                                      }}
+                                      className={selectedFoodSubModule?.id === "vegetables" ? "cursor-pointer" : ""}
+                                    >
                                       {/* Real Studio Photographic Product Image */}
                                       <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
                                         <img
@@ -7041,10 +8087,10 @@ export function LandingPage() {
                         })
                       }}
                       className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
-                            ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        ? selectedFoodSubModule.id === "vegetables" && !isServiceAvailableInZone("vegetables")
+                          ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25 cursor-pointer active:scale-98"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <span>
@@ -7452,7 +8498,21 @@ export function LandingPage() {
             onCheckout={(customCart) => {
               const finalCart = resolveCartArg(customCart);
               setModalCart(cleanConsultationItems(finalCart));
-              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+              const isEst = finalCart && finalCart.some(c => c.jobType === "ESTIMATION" || c.id === "ac-inspection");
+              const curAddr = user?.id ? getCustomerSelectedAddress(user.id) : null;
+              navigate(routes.booking_checkout, {
+                state: {
+                  category: activeCategory,
+                  cart: finalCart,
+                  jobType: isEst ? "ESTIMATION" : undefined,
+                  address: curAddr?.formatted_address || curAddr?.address || undefined,
+                  latitude: curAddr?.latitude || undefined,
+                  longitude: curAddr?.longitude || undefined,
+                  flat_house_no: curAddr?.flat_house_no || undefined,
+                  landmark: curAddr?.landmark || undefined,
+                  address_type: curAddr?.address_type || undefined
+                }
+              });
             }}
           />
         )

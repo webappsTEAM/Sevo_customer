@@ -61,6 +61,8 @@ const REAL_SERVICE_FALLBACK = [
   { slug: "ac-repair", name: "AC Repair & Diagnostics", category: "AC & Appliance", category_slug: "ac_appliance" },
   { slug: "ac-gas-refill", name: "AC Gas & Refrigerant", category: "AC & Appliance", category_slug: "ac_appliance" },
   { slug: "ac-installation", name: "AC Installation & Uninstallation", category: "AC & Appliance", category_slug: "ac_appliance" },
+  { slug: "ac-pcb-electrical", name: "AC PCB & Electrical", category: "AC & Appliance", category_slug: "ac_appliance" },
+  { slug: "ac-parts-accessories", name: "AC Parts & Accessories", category: "AC & Appliance", category_slug: "ac_appliance" },
   { slug: "refrigerator", name: "Refrigerator", category: "AC & Appliance", category_slug: "ac_appliance" },
   { slug: "washing-machine", name: "Washing Machine", category: "AC & Appliance", category_slug: "ac_appliance" },
   { slug: "tv-display", name: "TV & Display", category: "AC & Appliance", category_slug: "ac_appliance" },

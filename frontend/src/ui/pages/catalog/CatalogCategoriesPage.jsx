@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react"
-import { Plus, Edit2, Trash2 } from "lucide-react"
-import { apiRequest } from "../../../api/client.js"
+import { useNavigate } from "react-router-dom"
+import { Plus, Edit2, Trash2, ArrowUpRight } from "lucide-react"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Card, Button, Input, TextArea, Modal, Pill } from "../../components/kit.jsx"
 import { Table } from "../../components/Table.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { routes } from "../../routes.js"
 
 const EMPTY_CATEGORY = { name: "", slug: "", icon: "", image: "", description: "", is_active: true, sort_order: 0 }
 
 export function CatalogCategoriesPage() {
+  const navigate = useNavigate()
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -47,23 +50,31 @@ export function CatalogCategoriesPage() {
       } else {
         showToast(res.message || "Save failed", "error")
       }
-    } catch {
-      showToast("Save failed", "error")
+    } catch (err) {
+      showToast(extractApiErrorMessage(err, "Save failed"), "error")
     }
   }
 
-  const handleDelete = async (cat) => {
-    if (!window.confirm(`Delete category "${cat.name}"? This is blocked if it still has services.`)) return
+  const handleDelete = async (cat, cascade = false) => {
+    if (!cascade && !window.confirm(`Delete category "${cat.name}"? This is blocked if it still has services.`)) return
     try {
-      const res = await apiRequest(`/settings/catalog/v2/categories/${cat.id}/`, { method: "DELETE" })
+      const qs = cascade ? "?cascade=true" : ""
+      const res = await apiRequest(`/settings/catalog/v2/categories/${cat.id}/${qs}`, { method: "DELETE" })
       if (res.success) {
-        showToast("Category deleted")
+        showToast(cascade ? "Category and all its services/packages deleted" : "Category deleted")
         load()
       } else {
         showToast(res.message || "Delete blocked", "error")
       }
-    } catch {
-      showToast("Delete failed", "error")
+    } catch (err) {
+      const reason = extractApiErrorMessage(err, "Delete failed")
+      if (/still has services/i.test(reason)) {
+        if (window.confirm(`${reason}\n\nDelete "${cat.name}" AND every service (and their packages) inside it? This cannot be undone.`)) {
+          return handleDelete(cat, true)
+        }
+        return
+      }
+      showToast(reason, "error")
     }
   }
 
@@ -88,6 +99,13 @@ export function CatalogCategoriesPage() {
             rows={categories}
             actions={cat => (
               <>
+                <Button
+                  variant="ghost"
+                  title="Manage this category's services"
+                  onClick={() => navigate(`${routes.catalog_services}?category=${cat.id}`)}
+                >
+                  Manage Services <ArrowUpRight size={14} className="ml-1" />
+                </Button>
                 <Button variant="ghost" onClick={() => setEditing(cat)}><Edit2 size={14} /></Button>
                 <Button variant="ghost" onClick={() => handleDelete(cat)}><Trash2 size={14} className="text-rose-500" /></Button>
               </>

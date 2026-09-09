@@ -4,13 +4,17 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react"
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import bathroomFullCleanImg from "../../assets/cleaning/bathroom_full_clean.png";
+import bathroomWeeklySubscriptionImg from "../../assets/cleaning/bathroom_weekly_subscription.png";
+import bathroomQuickExtraImg from "../../assets/cleaning/bathroom_quick_extra.png";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
-  { id: "packages", name: "Full Clean", image: "/mockups/bathroom_cleaning.png" },
-  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "/mockups/bathroom_cleaning.png" },
-  { id: "minis", name: "Quick Extra Services", image: "/mockups/exhaust_fan.png" }
+  { id: "packages", name: "Full Clean", image: bathroomFullCleanImg },
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: bathroomWeeklySubscriptionImg },
+  { id: "minis", name: "Quick Extra Services", image: bathroomQuickExtraImg }
 ];
 
 const BATHROOM_SERVICES = {
@@ -402,6 +406,38 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   const [selectedSubMonths, setSelectedSubMonths] = useState(null);
   const [selectedAddons, setSelectedAddons] = useState([]); // Array of addon objects
 
+  // ── Super Admin Customer Web Edit Mode (Services) ───────────────────
+  // Same shared pattern as SofaCleaningModal.jsx: reuses the catalog
+  // Package model/API (PUT /settings/catalog/v2/packages/<id>/), gated
+  // server-side by RequireModuleAccess("catalog","edit"). Only items that
+  // matched a real DB package (item.db_id set in getActiveServices) are
+  // editable -- a customer never sees this, canEnterServiceEditMode is
+  // false unless isSuperAdmin(user).
+  const canEnterServiceEditMode = useCanEditCustomerUI();
+  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode || !item.db_id) return;
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {
@@ -495,6 +531,40 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
   const getActiveServices = () => {
+    // Fully admin-driven: once any real package exists in the database
+    // tagged for this tab, it is the single source of truth -- render
+    // straight from it, so admin add/update/remove all just work and
+    // nothing hardcoded lingers behind a deleted or renamed package. The
+    // hardcoded BATHROOM_SERVICES list is only a bootstrap placeholder for
+    // a tab nobody has populated in the catalog yet. Safe to key off
+    // tag/subtab alone (no service_slug anchor needed) because dbPackages
+    // is already scoped server-side to service_slug=bathroom-cleaning.
+    const dbItemsForActiveTab = dbPackages.filter(p =>
+      p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab)
+    );
+
+    if (dbItemsForActiveTab.length > 0) {
+      const mapped = dbItemsForActiveTab.map(p => ({
+        id: p.slug || String(p.id),
+        db_id: p.id,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "60 mins",
+        description: p.description || "",
+        image: p.image || "",
+        includes: Array.isArray(p.includes) ? p.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : [],
+        tools: p.tools,
+        ready: p.ready,
+        reviews_list: p.reviews,
+        faqs: p.faqs,
+        badge: p.tag || "",
+        gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+        platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+      }));
+      if (!searchQuery) return mapped;
+      return mapped.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.includes || []).some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase())));
+    }
+
     let list = BATHROOM_SERVICES[activeTab] || [];
     list = JSON.parse(JSON.stringify(list));
 
@@ -507,11 +577,16 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               return {
                 ...subOpt,
                 ...dbMatch,
+                // Real Package row id for THIS sub-option -- without this,
+                // nested sub-options could never be individually edited in
+                // Super Admin Edit Mode even though the parent card was.
+                db_id: dbMatch.id,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
                 platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
                 includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : subOpt.includes,
                 tools: dbMatch.tools,
                 ready: dbMatch.ready,
@@ -534,6 +609,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
+            // Real Package row id -- needed so Super Admin Edit Mode can PUT
+            // back to the exact row this card's content came from (item.id
+            // above stays the local UI slug, not the database id).
+            item.db_id = dbMatch.id;
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
@@ -545,6 +624,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.ready = dbMatch.ready;
             if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             item.faqs = dbMatch.faqs;
+            if (dbMatch.image && !dbMatch.image.includes("supabase.co")) {
+              item.image = resolveImageUrl(dbMatch.image, item.image);
+            }
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
           } else {
@@ -640,6 +722,16 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
   return (
     <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
+      {/* Super Admin Customer Web Edit Mode toggle -- never rendered for a
+          normal customer; canEnterServiceEditMode is false unless
+          isSuperAdmin(user). Only items matched to a real catalog Package
+          (service.db_id) show edit controls when this is on. */}
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
       {/* Sticky Header + Tabs */}
       <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md shadow-xs border-b border-[var(--sevo-border)]">
         <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 px-4 sm:px-6">
@@ -655,27 +747,41 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
         </div>
 
         {/* Sub-tabs */}
-        <div className="flex gap-5 pb-3 pt-4 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto">
+        {/* Sub-tabs */}
+        <div className="flex gap-4 pb-2 pt-1 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto scrollbar-none">
           {BATHROOM_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group outline-none"
               >
-                <img
-                  src={tab.image}
-                  alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
-                  }`}
-                />
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = bathroomFullCleanImg;
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${
+                      isSelected
+                        ? "scale-110 drop-shadow-md"
+                        : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    }`}
+                  />
+                </div>
                 <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
+                  isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                 }`}>
                   {tab.name}
                 </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
               </button>
             );
           })}
@@ -698,9 +804,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           {(() => {
             const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              packages: customB.packages || "/mockups/bathroom_cleaning.png",
-              minis: customB.minis || "/mockups/exhaust_fan.png",
-              subscription: customB.subscription || "/mockups/bathroom_cleaning.png"
+              packages: customB.packages || bathroomFullCleanImg,
+              minis: customB.minis || bathroomQuickExtraImg,
+              subscription: customB.subscription || bathroomWeeklySubscriptionImg
             };
             const bannerUrl = resolveImageUrl(banners[activeTab]);
             if (!bannerUrl) return null;
@@ -722,16 +828,42 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl shadow-xs border border-[var(--sevo-border)] p-5 relative transition-all hover:shadow-md hover:border-[var(--sevo-border-strong)]">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
-                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
 
-                      {service.description && (
-                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      {(service.description || (serviceEditMode && service.db_id)) && (
+                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs pt-1 mb-3">
                         <span className="text-base font-black text-[var(--sevo-text-primary)]">
-                          {service.options && <span className="text-[var(--sevo-text-muted)] font-medium text-xs mr-1">{service.options}</span>}
-                          ₹{service.price}
+                          {serviceEditMode && service.db_id ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            <>
+                              {service.options && <span className="text-[var(--sevo-text-muted)] font-medium text-xs mr-1">{service.options}</span>}
+                              ₹{service.price}
+                            </>
+                          )}
                         </span>
                         <span className="text-[var(--sevo-border)]">•</span>
                         <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
@@ -767,7 +899,15 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
                     <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                       <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        <EditableImage
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.image}
+                          onSave={(url) => handleSaveServiceField(service, "image", url)}
+                          assetType="services"
+                          alt={service.name}
+                          className="w-full h-full"
+                          imgClassName="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="w-24 z-10">
                         {count > 0 ? (

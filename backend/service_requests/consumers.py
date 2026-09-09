@@ -8,6 +8,7 @@ Supports real-time bidirectional communication for:
 - Live GPS Location streaming (latitude, longitude, ETA, distance, location name)
 - Instant Start OTP verification
 - Multi-channel concurrent subscriptions
+
 """
 import json
 import logging
@@ -83,11 +84,11 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             except Exception:
                 pass
 
-    async def disconnect(self, close_code):
+    async def disconnect(self, code):
         for g in self.groups_joined:
             await self.channel_layer.group_discard(g, self.channel_name)
 
-    async def receive_json(self, content):
+    async def receive_json(self, content, **kwargs):
         """Handle incoming client WebSocket requests."""
         action = content.get("action") or content.get("event")
 
@@ -170,6 +171,55 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         """Triggered when OTP is verified."""
         await self.send_json({
             "event": "otp_verification_success",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    # ── Estimation & Quotation Lifecycle Handlers ─────────────────────────────
+    async def estimation_updated(self, event):
+        """Triggered on estimation lifecycle changes."""
+        await self.send_json({
+            "event": "estimation_updated",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_sent(self, event):
+        """Triggered when vendor or technician issues a formal quotation."""
+        await self.send_json({
+            "event": "quotation_sent",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_approved(self, event):
+        """Triggered when customer approves quotation and converts to service."""
+        await self.send_json({
+            "event": "quotation_approved",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def quotation_rejected(self, event):
+        """Triggered when customer rejects quotation."""
+        await self.send_json({
+            "event": "quotation_rejected",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def inspection_started(self, event):
+        """Triggered when technician begins physical inspection."""
+        await self.send_json({
+            "event": "inspection_started",
+            "data": event.get("data"),
+            "timestamp": timezone.now().isoformat(),
+        })
+
+    async def inspection_completed(self, event):
+        """Triggered when technician finishes physical inspection report."""
+        await self.send_json({
+            "event": "inspection_completed",
             "data": event.get("data"),
             "timestamp": timezone.now().isoformat(),
         })
@@ -308,6 +358,8 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
 
     @sync_to_async
     def _get_tracking_payload(self):
+        if not self.sr:
+            return {}
         from service_requests.views import _build_tracking_payload
         from accounts.permissions import is_super_admin, can
         # Refresh from database
@@ -320,6 +372,8 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
 
     @sync_to_async
     def _verify_start_otp(self, entered_otp):
+        if not self.sr:
+            return {"success": False, "error": "Booking not found."}
         self.sr.refresh_from_db()
         from django.utils import timezone
         from service_requests.state_machine import apply_transition

@@ -397,13 +397,18 @@ class GoogleLoginView(APIView):
                 user.is_active = True
                 user.save()
             else:
+                # Was: `if "lokesh" in email or user.role == "admin": ...
+                # is_superuser = True`. That granted full Django/Super Admin
+                # authority to any existing admin who happened to complete
+                # the Google-login staff link for a pending invite -- a
+                # backdoor, not intended behavior. An accepted invite now
+                # only ever applies the role the invite itself specifies
+                # (same as the non-Google accept-invite path in
+                # AcceptInviteView below).
                 user.is_active = True
-                if "lokesh" in (user.email or "").lower() or user.role == "admin":
-                    user.role = "admin"
+                user.role = invite.role
+                if user.role == "admin":
                     user.is_staff = True
-                    user.is_superuser = True
-                else:
-                    user.role = invite.role
                 user.company = invite.company
                 user.save()
 
@@ -561,14 +566,14 @@ class MeView(APIView):
             if not user or not user.is_authenticated:
                 return Response({"detail": "Authentication credentials were not provided."}, status=401)
 
-            email_lower = (user.email or "").lower()
-            user_lower = (user.username or "").lower()
-            if ("lokeshwarikumaresan" in email_lower or "lokeshwarikumaresan" in user_lower or "lokesh" in email_lower or "lokesh" in user_lower) and user.role != "admin":
-                user.role = "admin"
-                user.is_staff = True
-                user.is_superuser = True
-                user.save(update_fields=["role", "is_staff", "is_superuser"])
-
+            # Was: a hardcoded backdoor that force-promoted any account
+            # whose email/username contained "lokesh"/"lokeshwarikumaresan"
+            # to role=admin + is_staff=True + is_superuser=True on every
+            # single /auth/me/ call (i.e. on every page load). Combined
+            # with is_super_admin() previously trusting is_superuser
+            # unconditionally, this silently gave that account permanent,
+            # full Super Admin backend authority regardless of whatever
+            # role Admin Management actually showed for it. Removed.
             return Response(UserSerializer(user, context={"request": request}).data)
         except Exception as err:
             traceback.print_exc()
@@ -862,6 +867,8 @@ class AcceptInviteView(APIView):
                 user.is_active = True
                 if user.role == "admin":
                     user.is_staff = True
+                if invite.custom_permissions:
+                    user.custom_permissions = invite.custom_permissions
                 user.save()
 
                 invite.status = "accepted"

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   Plus, Edit2, Search, Truck, Wrench, Wind, Sparkles,
   Palette, Hammer, Carrot, Layers, Box, Tag, DollarSign,
@@ -8,7 +9,7 @@ import {
   SlidersHorizontal, ArrowUpRight, Trash2, ChefHat, Utensils,
   ShoppingCart, Leaf
 } from "lucide-react"
-import { apiRequest } from "../../../api/client.js"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import ImageUploader from "../../components/ImageUploader.jsx"
 import { resolveImageUrl } from "../../../utils/imageUrl.js"
@@ -1585,6 +1586,8 @@ const EMPTY_PACKAGE = {
   tag: "",
   includes: "",
   excludes: "",
+  tools: [],
+  ready: [],
   payment_policy: "BOTH",
 }
 
@@ -1703,11 +1706,12 @@ const getServiceIcon = (slug = "", name = "") => {
 }
 
 export function CatalogPackagesPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [packages, setPackages] = useState([])
-  const [activeCategoryKey, setActiveCategoryKey] = useState("goods_transports")
-  const [activeSubServiceKey, setActiveSubServiceKey] = useState("all")
+  const [activeCategoryKey, setActiveCategoryKey] = useState(searchParams.get("category") || "goods_transports")
+  const [activeSubServiceKey, setActiveSubServiceKey] = useState(searchParams.get("service") || "all")
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -2526,7 +2530,14 @@ export function CatalogPackagesPage() {
   const handleSave = async (e) => {
     e.preventDefault()
     try {
-      let finalSlug = editing.slug || ""
+      let finalSlug = (editing.slug || "").trim()
+      if (!finalSlug && editing.name) {
+        finalSlug = editing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      }
+      if (!finalSlug) {
+        finalSlug = `package-${Date.now()}`
+      }
+
       if (editing.virtualSlug && !editing.id) {
         const prefixMap = {
           appliance: "appliance-",
@@ -2543,22 +2554,58 @@ export function CatalogPackagesPage() {
         }
       }
 
+      // Resolve clean numeric service ID
+      let rawSvc = editing.service?.id || editing.service
+      if (typeof rawSvc === "string" && rawSvc.includes("-")) {
+        const parts = rawSvc.split("-")
+        if (/^\d+$/.test(parts[0])) {
+          rawSvc = parts[0]
+        }
+      }
+      let serviceId = parseInt(rawSvc, 10)
+      if (isNaN(serviceId) && services.length > 0) {
+        serviceId = services[0].id
+      }
+
+      const basePrice = (editing.base_price !== "" && editing.base_price !== null && !isNaN(Number(editing.base_price)))
+        ? Number(editing.base_price)
+        : 0
+
       const payload = {
-        ...editing,
+        name: (editing.name || "").trim() || "Custom Package",
+        service: serviceId,
         slug: finalSlug,
+        description: editing.description || "",
+        base_price: basePrice,
+        duration: editing.duration || "",
+        tag: editing.tag || "",
+        image: editing.image || "",
+        popular: !!editing.popular,
+        payment_policy: editing.payment_policy || "BOTH",
         includes:
           typeof editing.includes === "string"
             ? editing.includes.split(",").map((s) => s.trim()).filter(Boolean)
-            : editing.includes,
+            : (Array.isArray(editing.includes) ? editing.includes : []),
         excludes:
           typeof editing.excludes === "string"
             ? editing.excludes.split(",").map((s) => s.trim()).filter(Boolean)
-            : editing.excludes,
+            : (Array.isArray(editing.excludes) ? editing.excludes : []),
+        tools: Array.isArray(editing.tools)
+          ? editing.tools
+              .map(t => typeof t === "string" ? { text: t.trim(), enabled: true } : { text: (t?.text || "").trim(), enabled: t?.enabled !== false })
+              .filter(t => t.text)
+          : [],
+        ready: Array.isArray(editing.ready)
+          ? editing.ready
+              .map(r => typeof r === "string" ? { text: r.trim(), enabled: true } : { text: (r?.text || "").trim(), enabled: r?.enabled !== false })
+              .filter(r => r.text)
+          : [],
         offer_price: null,
       }
       if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
         payload.tag = editing.virtualSlug
       }
+
       const res = editing.id
         ? await apiRequest(`/settings/catalog/v2/packages/${editing.id}/`, {
             method: "PUT",
@@ -2568,26 +2615,18 @@ export function CatalogPackagesPage() {
             method: "POST",
             json: payload,
           })
-      if (res.success) {
+      if (res && res.success) {
         showToast(editing.id ? "Package updated successfully" : "Package created successfully")
         setEditing(null)
         loadData()
-      } else if (res.error_code === "PRICING_FORBIDDEN") {
-        // The package is linked to a Goods & Transport ServiceTier.
-        // Changing base_price requires pricing:modify_price — redirect the
-        // operator to the correct page rather than showing a generic error.
-        showToast(
-          "⚠️ GT Pricing Permission Required — Use Goods & Transport Rates to change this price.",
-          "error"
-        )
       } else {
-        showToast(res.message || "Save failed", "error")
+        showToast(res?.message || "Save failed", "error")
       }
-    } catch {
-      showToast("Save failed", "error")
+    } catch (err) {
+      console.error("Save package error:", err)
+      showToast(extractApiErrorMessage(err, "Save failed"), "error")
     }
   }
-
 
   const openQuickPriceEdit = (pkg) => {
     const slug = pkg.slug || pkg.id || ""
@@ -3026,8 +3065,8 @@ export function CatalogPackagesPage() {
       } else {
         showToast(res.message || "Delete failed", "error")
       }
-    } catch {
-      showToast("Delete failed", "error")
+    } catch (err) {
+      showToast(extractApiErrorMessage(err, "Delete failed"), "error")
     }
   }
 
@@ -3037,6 +3076,8 @@ export function CatalogPackagesPage() {
       base_price: Math.round(Number(pkg.base_price) || 0),
       includes: Array.isArray(pkg.includes) ? pkg.includes.join(", ") : "",
       excludes: Array.isArray(pkg.excludes) ? pkg.excludes.join(", ") : "",
+      tools: Array.isArray(pkg.tools) ? pkg.tools.map(t => typeof t === "string" ? t : (t?.text || "")).filter(Boolean) : [],
+      ready: Array.isArray(pkg.ready) ? pkg.ready.map(r => typeof r === "string" ? r : (r?.text || "")).filter(Boolean) : [],
       image: pkg.image || "",
     })
   }
@@ -3078,6 +3119,47 @@ export function CatalogPackagesPage() {
   }
 
   const ActiveIcon = activePillar.icon
+
+  // Deep-link support: open the "Add Package" modal preset to whichever
+  // service tab is currently active, instead of always defaulting to the
+  // first service in the category. This is what makes the "Manage Packages"
+  // / "+ Add Package" links from the Services admin page (CatalogServicesPage)
+  // land the admin directly in the right context, one click, no re-selecting.
+  const openAddPackageModalForActiveService = () => {
+    const activeItem = activeSubServiceKey !== "all"
+      ? activeCategoryServicesWithPackages.find((item) =>
+          item.service.slug === activeSubServiceKey ||
+          item.service.virtualSlug === activeSubServiceKey ||
+          String(item.service.id) === String(activeSubServiceKey) ||
+          String(item.service.realServiceId) === String(activeSubServiceKey) ||
+          item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+        )
+      : null
+    const firstSvc = activeItem?.service || activeCategoryServicesWithPackages[0]?.service || services[0]
+    const rawId = firstSvc?.realServiceId || firstSvc?.id
+    const cleanSvcId = (typeof rawId === "string" && rawId.includes("-"))
+      ? rawId.split("-")[0]
+      : (rawId ? String(rawId) : (services[0]?.id ? String(services[0].id) : ""))
+    setEditing({
+      ...EMPTY_PACKAGE,
+      service: cleanSvcId,
+      virtualSlug: firstSvc?.virtualSlug || "",
+    })
+  }
+
+  // If we arrived here via a "+ Add Package" deep link from the Services
+  // admin page (?openAdd=1, alongside ?category=&service=), open the modal
+  // automatically once the catalog data (and therefore the matching service
+  // tab) is ready, then drop the flag so it doesn't reopen on every re-render.
+  useEffect(() => {
+    if (searchParams.get("openAdd") !== "1") return
+    if (loading || activeCategoryServicesWithPackages.length === 0) return
+    openAddPackageModalForActiveService()
+    const next = new URLSearchParams(searchParams)
+    next.delete("openAdd")
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, activeCategoryServicesWithPackages, searchParams])
 
   const selectedServiceId = String(editing?.service?.id || editing?.service || "")
   const selectedService = services.find((s) => String(s.id) === selectedServiceId)
@@ -3168,14 +3250,7 @@ export function CatalogPackagesPage() {
           <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
             <button
               type="button"
-              onClick={() => {
-                const firstSvc = activeCategoryServicesWithPackages[0]?.service || services[0]
-                setEditing({
-                  ...EMPTY_PACKAGE,
-                  service: firstSvc?.id ? String(firstSvc.id) : "",
-                  virtualSlug: firstSvc?.virtualSlug || "",
-                })
-              }}
+              onClick={openAddPackageModalForActiveService}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" strokeWidth={2.5} />
@@ -3403,9 +3478,13 @@ export function CatalogPackagesPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        const rawId = svcItem.service.realServiceId || svcItem.service.id
+                        const cleanSvcId = (typeof rawId === "string" && rawId.includes("-"))
+                          ? rawId.split("-")[0]
+                          : (rawId ? String(rawId) : (services[0]?.id ? String(services[0].id) : ""))
                         setEditing({
                           ...EMPTY_PACKAGE,
-                          service: String(svcItem.service.realServiceId || svcItem.service.id),
+                          service: cleanSvcId,
                           virtualSlug: svcItem.service.virtualSlug || "",
                         })
                       }}
@@ -3849,6 +3928,7 @@ export function CatalogPackagesPage() {
                         { id: "sofa", label: "Sofa Cleaning" },
                         { id: "mattress", label: "Mattress Cleaning" },
                         { id: "carpet", label: "Carpet Cleaning" },
+                        { id: "addons", label: "Quick Extra Services" },
                       ]) || (serviceCustomizing.slug === "cleaning" && [
                         { id: "full_apartment", label: "Occupied Apartment" },
                         { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
@@ -6319,7 +6399,13 @@ export function CatalogPackagesPage() {
                 value: String(s.id),
                 label: `${s.category_name ? s.category_name + " / " : ""}${s.name}`,
               }))}
-              value={String(editing.service?.id || editing.service || "")}
+              value={(() => {
+                let sVal = editing.service?.id || editing.service || ""
+                if (typeof sVal === "string" && sVal.includes("-")) {
+                  sVal = sVal.split("-")[0]
+                }
+                return String(sVal || (services[0]?.id ? String(services[0].id) : ""))
+              })()}
               onChange={(e) => {
                 const sId = e.target.value
                 const matchSvc = services.find(s => String(s.id) === sId)
@@ -6393,6 +6479,134 @@ export function CatalogPackagesPage() {
               value={editing.excludes}
               onChange={(e) => setEditing({ ...editing, excludes: e.target.value })}
             />
+
+            {/* ── 1) Tools & Products We Use ── */}
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🔧</span> 1) Tools &amp; Products We Use
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Equipment, products &amp; safety tools used for this service (shown in customer details popup).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, tools: [...(editing.tools || []), ""] })}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50/50 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Tool / Product
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {(editing.tools && editing.tools.length > 0) ? (
+                  editing.tools.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`e.g. ${idx === 0 ? "Professional grade safety & service tools" : idx === 1 ? "Microfiber cloths & non-abrasive scrubbers" : "High performance diagnostic equipment"}`}
+                        value={typeof item === 'string' ? item : (item?.text || '')}
+                        onChange={(e) => {
+                          const updated = [...(editing.tools || [])];
+                          updated[idx] = e.target.value;
+                          setEditing({ ...editing, tools: updated });
+                        }}
+                        className="flex-1 h-9 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...(editing.tools || [])];
+                          updated.splice(idx, 1);
+                          setEditing({ ...editing, tools: updated });
+                        }}
+                        className="p-2 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer rounded-lg hover:bg-rose-50"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-400 italic bg-white/60 rounded-xl p-3 border border-dashed border-slate-200 flex items-center justify-between">
+                    <span>No tools/products added yet.</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ ...editing, tools: [""] })}
+                      className="text-xs font-semibold text-indigo-600 hover:underline cursor-pointer"
+                    >
+                      + Add first tool
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── 2) What You Need to Keep Ready ── */}
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📋</span> 2) What You Need to Keep Ready
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Items or conditions the customer should prepare beforehand (shown in customer details popup).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, ready: [...(editing.ready || []), ""] })}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50/50 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Item
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {(editing.ready && editing.ready.length > 0) ? (
+                  editing.ready.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`e.g. ${idx === 0 ? "Continuous water supply" : idx === 1 ? "Working power connection" : idx === 2 ? "Service area accessible and cleared" : "Fragile items and valuables kept safely"}`}
+                        value={typeof item === 'string' ? item : (item?.text || '')}
+                        onChange={(e) => {
+                          const updated = [...(editing.ready || [])];
+                          updated[idx] = e.target.value;
+                          setEditing({ ...editing, ready: updated });
+                        }}
+                        className="flex-1 h-9 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...(editing.ready || [])];
+                          updated.splice(idx, 1);
+                          setEditing({ ...editing, ready: updated });
+                        }}
+                        className="p-2 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer rounded-lg hover:bg-rose-50"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-400 italic bg-white/60 rounded-xl p-3 border border-dashed border-slate-200 flex items-center justify-between">
+                    <span>No customer preparation items added yet.</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ ...editing, ready: [""] })}
+                      className="text-xs font-semibold text-indigo-600 hover:underline cursor-pointer"
+                    >
+                      + Add first item
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* ── Image Customization Section ── */}
             <ImageUploader
