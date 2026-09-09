@@ -54,15 +54,15 @@ export function CustomerDecisionPage() {
           notes: customerNotes,
         }),
       })
-      const data = await res.json()
-      if (data.success) {
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.success) {
         setExtension(data.data)
         setDecisionSuccess(decisionType === "ACCEPT" ? "accepted" : "declined")
       } else {
-        setDecisionSuccess(decisionType === "ACCEPT" ? "accepted" : "declined")
+        setError(data.error || data.message || "Failed to record your decision. Please try again.")
       }
     } catch (err) {
-      setDecisionSuccess(decisionType === "ACCEPT" ? "accepted" : "declined")
+      setError(err.message || "A network error occurred while submitting your decision. Please try again.")
     } finally {
       setSubmitting(false)
     }

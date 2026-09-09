@@ -303,7 +303,7 @@ class WorkforceIntegrationService:
         # Fast path read
         cached = cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached if cached is not False else None
 
         # Deduplication Lock
         lock = cls._get_lock(cache_key)
@@ -311,29 +311,35 @@ class WorkforceIntegrationService:
             # Double-check cache
             cached = cache.get(cache_key)
             if cached is not None:
-                return cached
+                return cached if cached is not False else None
 
-            # Both of these resolve to WorkforceJobLiveTrackingView on the
-            # vendor side. A third candidate ("/tracking/<id>/") used to be tried
-            # here and matches no route at all, so it only ever added a wasted
-            # round trip to every cache miss.
+            # Resolves to WorkforceJobLiveTrackingView on the vendor side.
             candidate_urls = [
                 f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/live-tracking/",
                 f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/tracking/",
             ]
             for url in candidate_urls:
                 try:
-                    response = requests.get(url, headers=cls._headers(), timeout=1.0)
+                    response = requests.get(url, headers=cls._internal_headers(), timeout=1.5)
                     if response.status_code == 200:
                         data = response.json()
                         if isinstance(data, dict):
                             payload = data.get("data") if ("data" in data and isinstance(data.get("data"), dict)) else data
-                            if payload.get("technician") or payload.get("employee") or payload.get("technician_name"):
-                                cache.set(cache_key, payload, timeout=2)
+                            if (
+                                payload.get("technician")
+                                or payload.get("employee")
+                                or payload.get("technician_name")
+                                or payload.get("assigned_technician")
+                            ):
+                                cache.set(cache_key, payload, timeout=3)
                                 return payload
+                    elif response.status_code in [401, 403, 404]:
+                        break
                 except Exception as e:
                     logger.debug(f"Workforce tracking query fallback for {url}: {e}")
 
+            # Cache negative result for 5s to eliminate tight polling loop on missing tracking
+            cache.set(cache_key, False, timeout=5)
             return None
 
     @classmethod
@@ -356,7 +362,7 @@ class WorkforceIntegrationService:
 
         try:
             url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/extension-decision/"
-            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
         except Exception as e:
@@ -384,7 +390,7 @@ class WorkforceIntegrationService:
 
         try:
             url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
-            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=5)
             if response.status_code in [200, 201, 204]:
                 return {"success": True}
         except Exception as e:
@@ -437,8 +443,12 @@ class WorkforceIntegrationService:
                     result = {"success": True, "quote": response.json()}
                     cache.set(cache_key, result, timeout=60)
                     return result
-                return {"success": False, "message": "No quote found"}
+                result = {"success": False, "message": "No quote found", "quote": None}
+                cache.set(cache_key, result, timeout=60)
+                return result
             except Exception as e:
                 logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
-                return {"success": False, "message": "Workforce service unreachable"}
+                result = {"success": False, "message": "Workforce service unreachable", "quote": None}
+                cache.set(cache_key, result, timeout=15)
+                return result
 

@@ -64,9 +64,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-4", name: "Electrical", image: "/assets/icon_3d_electrical.jpg", link: "?category=electrical&subtab=Switches%20%26%20Sockets", enabled: true },
     { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?openModal=ac", enabled: true },
     { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?openModal=homepest", enabled: true },
-    { id: "cat-7", name: "Salon & Spa", image: "", link: "?openModal=pillars", enabled: true },
-    { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=painting", enabled: true },
-    { id: "cat-9", name: "Carpentry", image: "", link: "?category=electrical&subtab=Switches%20%26%20Sockets", enabled: true }
+    { id: "cat-7", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=painting", enabled: true },
+    { id: "cat-8", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
+    { id: "cat-9", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "/logistics", enabled: true }
   ],
   pillarModal: {
     badge: "⚡ 5 Core Specialized Pillars",
@@ -348,6 +348,78 @@ export function resolveDisplayImageUrl(path, fallback = "") {
   return resolveImageUrl(path, fallback)
 }
 
+const CATEGORY_IMAGE_MAP = {
+  ac: "/assets/icon_3d_ac.jpg",
+  hvac: "/assets/icon_3d_ac.jpg",
+  cool: "/assets/icon_3d_ac.jpg",
+  clean: "/assets/icon_3d_cleaning.jpg",
+  plumb: "/assets/icon_3d_plumbing.jpg",
+  elect: "/assets/icon_3d_electrical.jpg",
+  appliance: "/assets/icon_3d_appliance.jpg",
+  pest: "/assets/icon_3d_pest.png",
+  paint: "/mockups/category_home_repair_3d.jpg",
+  grocer: "/assets/cat_food_health.jpg",
+  food: "/assets/cat_food_health.jpg",
+  veg: "/assets/cat_food_health.jpg",
+  transport: "/assets/cat_goods_transport.jpg",
+  goods: "/assets/cat_goods_transport.jpg",
+  logistics: "/assets/cat_goods_transport.jpg",
+  repair: "/assets/cat_home_repair.jpg",
+  carpenter: "/mockups/service_maintenance.png",
+  carpentry: "/mockups/service_maintenance.png",
+  salon: "/assets/cat_food_health.jpg",
+}
+
+const DEFAULT_CATEGORY_FALLBACKS = [
+  "/assets/icon_3d_ac.jpg",
+  "/assets/icon_3d_cleaning.jpg",
+  "/assets/icon_3d_plumbing.jpg",
+  "/assets/icon_3d_electrical.jpg",
+  "/assets/icon_3d_appliance.jpg",
+  "/assets/icon_3d_pest.png",
+  "/mockups/category_home_repair_3d.jpg",
+  "/assets/cat_food_health.jpg",
+  "/assets/cat_goods_transport.jpg"
+]
+
+export function getCategorySafeImage(cat, idx = 0) {
+  const img = cat?.image || cat?.image_url
+  if (img && !img.includes("/media/homepage/") && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
+    return resolveImageUrl(img)
+  }
+  const key = `${cat?.id || ""} ${cat?.name || ""} ${cat?.title || ""} ${cat?.link || ""}`.toLowerCase()
+  for (const [k, fallback] of Object.entries(CATEGORY_IMAGE_MAP)) {
+    if (key.includes(k)) return fallback
+  }
+  return DEFAULT_CATEGORY_FALLBACKS[idx % DEFAULT_CATEGORY_FALLBACKS.length]
+}
+
+const DEFAULT_OFFER_IMAGES = [
+  "/assets/cat_food_health.jpg",
+  "/assets/hero_pro_electrical_rect.jpg",
+  "/assets/hero_pro_ac_rect.jpg",
+  "/assets/hero_pro_cleaning_rect.jpg",
+  "/assets/hero_pro_appliance_rect.jpg"
+]
+
+export function getOfferSafeImage(offer, idx = 0) {
+  const img = offer?.image || offer?.image_url
+  if (img && !img.includes("/media/homepage/") && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
+    return resolveImageUrl(img)
+  }
+  const lower = `${offer?.title || ""} ${offer?.tag || ""} ${offer?.link || ""}`.toLowerCase()
+  if (lower.includes("grocer") || lower.includes("food") || lower.includes("veg")) {
+    return "/assets/cat_food_health.jpg"
+  }
+  if (lower.includes("elect") || lower.includes("repair") || lower.includes("coupon")) {
+    return "/assets/hero_pro_electrical_rect.jpg"
+  }
+  if (lower.includes("ac") || lower.includes("cool") || lower.includes("flat")) {
+    return "/assets/hero_pro_ac_rect.jpg"
+  }
+  return DEFAULT_OFFER_IMAGES[idx % DEFAULT_OFFER_IMAGES.length]
+}
+
 function mergeWithDefaultConfig(parsed) {
   if (!parsed) return DEFAULT_HOME_PAGE_CONFIG
 
@@ -355,7 +427,10 @@ function mergeWithDefaultConfig(parsed) {
   const rawCollage = Array.isArray(parsedHero.collageImages) ? parsedHero.collageImages : []
   const defaultCollage = DEFAULT_HOME_PAGE_CONFIG.hero.collageImages
   const mergedCollage = [0, 1, 2, 3].map((i) => {
-    const rawVal = rawCollage[i] || defaultCollage[i]
+    const rawVal = rawCollage[i]
+    if (!rawVal || rawVal.includes("/media/homepage/")) {
+      return defaultCollage[i]
+    }
     return resolveDisplayImageUrl(rawVal, defaultCollage[i])
   })
 
@@ -363,9 +438,29 @@ function mergeWithDefaultConfig(parsed) {
     parsedHero.heroImage || parsedHero.heroIllustration,
     DEFAULT_HOME_PAGE_CONFIG.hero.heroImage
   )
-  if (!mergedHeroImage || mergedHeroImage === "undefined" || mergedHeroImage === "null") {
+  if (!mergedHeroImage || mergedHeroImage.includes("/media/homepage/") || mergedHeroImage === "undefined" || mergedHeroImage === "null") {
     mergedHeroImage = "/assets/hero_illustration.jpg"
   }
+
+  const defaultSlideImages = [
+    "/assets/hero_pro_ac_rect.jpg",
+    "/assets/hero_pro_cleaning_rect.jpg",
+    "/assets/hero_pro_electrical_rect.jpg"
+  ]
+  const rawSlides = Array.isArray(parsedHero.slides) ? parsedHero.slides : []
+  const mergedSlides = rawSlides.map((s, idx) => {
+    let img = s.heroImage || s.heroImage_url || ""
+    if (!img || img.includes("/media/homepage/")) {
+      img = defaultSlideImages[idx % defaultSlideImages.length]
+    } else {
+      img = resolveDisplayImageUrl(img, defaultSlideImages[idx % defaultSlideImages.length])
+    }
+    return {
+      ...s,
+      heroImage: img,
+      heroImage_url: img
+    }
+  })
 
   const defaultTrustBadges = DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges
   const rawTrustBadges = Array.isArray(parsedHero.trustBadges) && parsedHero.trustBadges.length > 0
@@ -385,9 +480,38 @@ function mergeWithDefaultConfig(parsed) {
     }
   })
 
-  const mergedCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0
+  const defaultCategories = DEFAULT_HOME_PAGE_CONFIG.categories
+  const rawCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0
     ? parsed.categories
-    : DEFAULT_HOME_PAGE_CONFIG.categories
+    : defaultCategories
+
+  const mergedCategories = rawCategories.map((cat, idx) => {
+    const name = cat.name || cat.title || defaultCategories[idx]?.name || `Service ${idx + 1}`
+    const image = getCategorySafeImage(cat, idx)
+    return {
+      ...cat,
+      name,
+      title: cat.title || name,
+      image
+    }
+  })
+
+  const defaultOffers = DEFAULT_HOME_PAGE_CONFIG.offers
+  const rawOffers = parsed.offers || {}
+  const rawOfferItems = Array.isArray(rawOffers.items) && rawOffers.items.length > 0
+    ? rawOffers.items
+    : defaultOffers.items
+
+  const mergedOfferItems = rawOfferItems.map((item, idx) => ({
+    ...item,
+    image: getOfferSafeImage(item, idx)
+  }))
+
+  const mergedOffers = {
+    ...defaultOffers,
+    ...rawOffers,
+    items: mergedOfferItems
+  }
 
   // Pillar Modal merge
   const defaultPillars = DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars
@@ -452,6 +576,7 @@ function mergeWithDefaultConfig(parsed) {
       ...parsedHero,
       heroImage: mergedHeroImage,
       heroIllustration: mergedHeroImage,
+      slides: mergedSlides,
       trustBadges: mergedTrustBadges,
       quickBadges: mergedTrustBadges.map(b => ({ id: b.id, text: b.title, title: b.title, subtitle: b.subtitle, icon: b.icon })),
       collageImages: mergedCollage
@@ -460,7 +585,7 @@ function mergeWithDefaultConfig(parsed) {
     pillarModal: mergedPillarModal,
     subServicesModal: mergedSubServicesModal,
     vendorBanner: { ...DEFAULT_HOME_PAGE_CONFIG.vendorBanner, ...(parsed.vendorBanner || {}) },
-    offers: { ...DEFAULT_HOME_PAGE_CONFIG.offers, ...(parsed.offers || {}) },
+    offers: mergedOffers,
     howItWorks: { ...DEFAULT_HOME_PAGE_CONFIG.howItWorks, ...(parsed.howItWorks || {}) },
     featuredPros: { ...DEFAULT_HOME_PAGE_CONFIG.featuredPros, ...(parsed.featuredPros || {}) },
     testimonials: { ...DEFAULT_HOME_PAGE_CONFIG.testimonials, ...(parsed.testimonials || {}) },

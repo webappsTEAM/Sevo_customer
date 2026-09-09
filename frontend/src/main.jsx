@@ -38,7 +38,7 @@ console.log("DEBUG: Root element found:", rootEl);
 createRoot(rootEl).render(
   <StrictMode>
     <ReduxProvider store={store}>
-      <BrowserRouter basename={import.meta.env.DEV ? "/" : "/Caltrack"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter basename="/" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <App />
         </AuthProvider>

@@ -292,12 +292,13 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # writeup and the schema change that would close this properly).
         # This at least stops the crude cases: negative/zero submitted
         # amounts and unreasonably large ones.
+        # Zero amounts are allowed for site consultations/inspections (e.g. Painting/Masonry) and free promotions.
         try:
             amt = float(value)
         except (TypeError, ValueError):
             raise serializers.ValidationError("Enter a valid amount.")
-        if amt <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero.")
+        if amt < 0:
+            raise serializers.ValidationError("Amount cannot be negative.")
         if amt > 1000000:
             raise serializers.ValidationError("Amount is outside the allowed range.")
         return value
@@ -470,12 +471,15 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_photo       = serializers.SerializerMethodField()
     technician_rating      = serializers.SerializerMethodField()
     child_requests         = serializers.SerializerMethodField()
+    job_type               = serializers.CharField(read_only=True)
+    estimation             = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
+            "job_type", "estimation",
             "issue_title", "description", "address", "preferred_date", "preferred_time",
             "status", "status_display", "priority", "priority_display",
             "payment_method", "payment_method_display",
@@ -503,6 +507,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if children:
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
+
+    def get_estimation(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation is not None:
+            return EstimationSummarySerializer(obj.estimation, context=self.context).data
+        return None
 
     def get_customer_id(self, obj):
         try:
@@ -814,12 +823,15 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     total_amount           = serializers.SerializerMethodField()
     available_actions      = serializers.SerializerMethodField()
     technician             = serializers.SerializerMethodField()
+    job_type               = serializers.CharField(read_only=True)
+    estimation             = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
+            "job_type", "estimation",
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             # discount_amount exposed for the same reason as in
             # ServiceRequestListSerializer -- see comment there.
@@ -842,6 +854,11 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
                 return obj.customer.customer_id
         except Exception:
             pass
+        return None
+
+    def get_estimation(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation is not None:
+            return EstimationSerializer(obj.estimation, context=self.context).data
         return None
 
     def get_technician(self, obj):
@@ -1613,7 +1630,7 @@ class EstimationSerializer(serializers.ModelSerializer):
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
+    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:

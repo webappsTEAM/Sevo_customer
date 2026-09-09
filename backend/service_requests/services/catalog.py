@@ -468,7 +468,10 @@ def update_package(package, data, actor, reason=None):
     # Non-logistics packages (home services, etc.) have no matching
     # ServiceTier, so _logistics_tier_for_package returns None and this block
     # is never reached for them.
-    _pre_tier = _logistics_tier_for_package(package)
+    try:
+        _pre_tier = _logistics_tier_for_package(package)
+    except Exception:
+        _pre_tier = None
     if _pre_tier is not None:
         # Only gate on price-bearing fields that flow into the fare engine.
         _price_fields_changing = {

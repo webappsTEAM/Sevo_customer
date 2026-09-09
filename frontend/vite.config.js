@@ -4,7 +4,7 @@ import path from "path"
 
 export default defineConfig({
   // Base path for subpath deployment at caldimproducts.com/Caltrack
-  base: process.env.NODE_ENV === "production" ? "/Caltrack/" : "/",
+  base: "/",
 
   plugins: [
     react({

@@ -130,7 +130,7 @@ class QuotationService:
                 quote_ref=quote_ref,
                 status=EstimationQuotation.Status.SENT,
                 vendor_id=vendor_id or sr.vendor_id,
-                technician_id=technician_id or getattr(sr.technician, "id", "") or "",
+                technician_id=technician_id or getattr(getattr(sr, "technician", None), "id", "") or getattr(sr, "technician_id", "") or "",
                 subtotal=totals["subtotal"],
                 tax_amount=totals["tax_amount"],
                 discount_amount=totals["discount_amount"],

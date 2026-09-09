@@ -6,7 +6,7 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.PROD
-    ? `${window.location.origin}/Caltrack/api`
+    ? `${window.location.origin}/api`
     : `/api`);
 
 export const WS_BASE_URL =

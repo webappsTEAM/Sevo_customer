@@ -409,20 +409,68 @@ const INVENTORY_DATA = {
 }
 
 /* ── Slots & Dates Helper ── */
+const SHIFTING_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+}
+
+const isSlotPassed = (slot, dateObj) => {
+  if (!slot || !dateObj) return false
+  const today = new Date()
+  const d = dateObj instanceof Date ? dateObj : new Date(dateObj)
+  if (isNaN(d.getTime())) return false
+  if (d.toDateString() !== today.toDateString()) return false
+
+  const parts = slot.split("-")
+  if (parts.length < 2) return false
+  const startTimeStr = parts[0].trim()
+  
+  const match = startTimeStr.match(/^(\d+)(AM|PM)$/i)
+  if (!match) return false
+  let hour = parseInt(match[1], 10)
+  const ampm = match[2].toUpperCase()
+  if (ampm === "PM" && hour < 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  const slotStart = new Date(d)
+  slotStart.setHours(hour, 0, 0, 0)
+
+  // Backend booking_window.py enforces minimum 60 minutes lead time from now
+  const minLeadTime = new Date(today.getTime() + 60 * 60 * 1000)
+  return slotStart < minLeadTime
+}
+
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
-  for (let i = 1; i <= 7; i++) {
+  
+  const hasRemainingSlots = (dateObj) => {
+    for (const slots of Object.values(SHIFTING_SLOTS)) {
+      for (const slot of slots) {
+        if (!isSlotPassed(slot, dateObj)) return true
+      }
+    }
+    return false
+  }
+
+  let startOffset = 0
+  if (!hasRemainingSlots(today)) {
+    startOffset = 1
+  }
+
+  for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
     nextDate.setDate(today.getDate() + i)
-    
+
     let dayName = ""
-    if (i === 1) dayName = "Tomorrow"
+    if (i === 0) dayName = "Today"
+    else if (i === 1) dayName = "Tomorrow"
     else dayName = nextDate.toLocaleDateString("en-US", { weekday: "short" })
-    
+
     const dateNum = nextDate.getDate().toString().padStart(2, "0")
     const monthStr = nextDate.toLocaleDateString("en-US", { month: "short" })
-    
+
     dates.push({
       id: `date_${i}`,
       label: dayName,
@@ -433,13 +481,18 @@ const generateUpcomingDates = () => {
   return dates
 }
 
-const SHIFTING_DATES = generateUpcomingDates()
-
-const SHIFTING_SLOTS = {
-  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
-  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
-  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+const getFirstAvailableSlotAndCategory = (dateObj) => {
+  for (const [category, slots] of Object.entries(SHIFTING_SLOTS)) {
+    for (const slot of slots) {
+      if (!isSlotPassed(slot, dateObj)) {
+        return { category, slot }
+      }
+    }
+  }
+  return { category: "Morning", slot: "" }
 }
+
+const SHIFTING_DATES = generateUpcomingDates()
 
 /* ── Enhanced Custom Shifting Date Picker ── */
 function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shifting Date" }) {
@@ -752,9 +805,10 @@ export function PackersMoversBookingHosurPage() {
   const [inventorySearchQuery, setInventorySearchQuery] = useState("")
 
   // Step 3: Date & Slot State
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
+  const [selectedDate, setSelectedDate] = useState(() => SHIFTING_DATES[0] || null)
+  const initialAvailable = getFirstAvailableSlotAndCategory(SHIFTING_DATES[0]?.fullDate || new Date())
+  const [selectedSlot, setSelectedSlot] = useState(() => initialAvailable.slot || null)
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => initialAvailable.category || "Morning")
 
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -829,7 +883,7 @@ export function PackersMoversBookingHosurPage() {
 
   // Live Dispatch & Polling State
   const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
-  const [partnerCountdown, setPartnerCountdown] = useState(120)
+  const [partnerCountdown, setPartnerCountdown] = useState(600) // 10:00 mins
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
@@ -853,7 +907,7 @@ export function PackersMoversBookingHosurPage() {
   useEffect(() => {
     let t = null
     if (lookingForPartnerOpen) {
-      setPartnerCountdown(120)
+      setPartnerCountdown(600)
       t = setInterval(() => {
         setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
       }, 1000)
@@ -1273,7 +1327,18 @@ export function PackersMoversBookingHosurPage() {
     setBookingSubmitting(true)
     try {
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
-      const fare = pmServerQuote?.total != null ? Number(pmServerQuote.total) : (Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 1499)
+      const quoteTotal = pmServerQuote?.total != null 
+        ? Number(pmServerQuote.total) 
+        : (pmServerQuote?.pricing?.total != null ? Number(pmServerQuote.pricing.total) : null)
+      if (quoteTotal == null) {
+        setBookingSubmitting(false)
+        setBookingError(
+          pmQuoteError ||
+            "We couldn't calculate a relocation quote for this move. Please ensure pickup, drop, and items are selected."
+        )
+        return
+      }
+      const fare = quoteTotal
       const quoteId = pmServerQuote?.quote_id || null
       
       let dateString = todayDateString()
@@ -2599,10 +2664,19 @@ export function PackersMoversBookingHosurPage() {
                   </div>
                   <button
                     onClick={() => {
+                      if (!selectedDate) {
+                        const defaultDate = SHIFTING_DATES[0]
+                        setSelectedDate(defaultDate)
+                        const { category, slot } = getFirstAvailableSlotAndCategory(defaultDate?.fullDate || new Date())
+                        if (!selectedSlot) {
+                          setSelectedSlot(slot || null)
+                          if (category) setExpandedSlotCategory(category)
+                        }
+                      }
                       setStepperStep(3)
                     }}
                     disabled={totalItemsCount === 0}
-                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled:bg-[#CBD5E1] aria-disabled:cursor-not-allowed"
+                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled={totalItemsCount === 0}"
                     aria-disabled={totalItemsCount === 0}
                   >
                     Continue
@@ -2629,7 +2703,14 @@ export function PackersMoversBookingHosurPage() {
                         {SHIFTING_DATES.map((dateObj) => (
                           <div 
                             key={dateObj.id}
-                            onClick={() => setSelectedDate(dateObj)}
+                            onClick={() => {
+                              setSelectedDate(dateObj)
+                              if (selectedSlot && isSlotPassed(selectedSlot, dateObj.fullDate)) {
+                                const { category, slot } = getFirstAvailableSlotAndCategory(dateObj.fullDate)
+                                setSelectedSlot(slot || null)
+                                if (category) setExpandedSlotCategory(category)
+                              }
+                            }}
                             className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
                               selectedDate?.id === dateObj.id 
                                 ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
@@ -2671,19 +2752,26 @@ export function PackersMoversBookingHosurPage() {
                               
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                  {slots.map(slot => (
-                                    <div 
-                                      key={slot}
-                                      onClick={() => setSelectedSlot(slot)}
-                                      className={`py-2 px-1 rounded-xl border text-center cursor-pointer transition-all ${
-                                        selectedSlot === slot 
-                                          ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
-                                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium"
-                                      }`}
-                                    >
-                                      <span className="text-[12px]">{slot}</span>
-                                    </div>
-                                  ))}
+                                  {slots.map(slot => {
+                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    return (
+                                      <button 
+                                        key={slot}
+                                        type="button"
+                                        disabled={passed}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                                          selectedSlot === slot 
+                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
+                                            : passed
+                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                        }`}
+                                      >
+                                        <span className="text-[12px]">{slot}</span>
+                                      </button>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -2717,7 +2805,7 @@ export function PackersMoversBookingHosurPage() {
                           onClick={() => {
                             setStepperStep(4)
                           }}
-                          disabled={!selectedDate || !selectedSlot}
+                          disabled={!selectedDate || !selectedSlot || isSlotPassed(selectedSlot, selectedDate?.fullDate || new Date())}
                           className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
                         >
                           Confirm
@@ -2978,15 +3066,19 @@ export function PackersMoversBookingHosurPage() {
                       <div>
                         <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Total Fare</p>
                         <p className="text-xl font-black text-slate-800">
-                          {pmServerQuote?.pricing?.total ? `₹ ${pmServerQuote.pricing.total}` : (pmQuoteLoading ? "Calculating..." : "₹ 1,499")}
+                          {pmServerQuote?.pricing?.total 
+                            ? `₹ ${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
+                            : pmServerQuote?.total 
+                              ? `₹ ${Number(pmServerQuote.total).toLocaleString("en-IN")}`
+                              : (pmQuoteLoading ? "Calculating..." : "Quote required")}
                         </p>
                       </div>
                       <button
                         onClick={() => {
                           handleBookNow()
                         }}
-                        disabled={bookingSubmitting || pmQuoteLoading}
-                        className="px-8 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
+                        disabled={bookingSubmitting || pmQuoteLoading || (!pmServerQuote?.pricing?.total && !pmServerQuote?.total)}
+                        className="px-8 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {bookingSubmitting ? "Confirming Move..." : "Confirm Move"}
                       </button>

@@ -1,3 +1,9 @@
+"""
+service_requests/models.py
+
+Five models for the Service Request -> Job -> Proof -> Feedback -> Performance pipeline.
+FKs reference the existing Employee and User models -- no duplication.
+"""
 import uuid
 from decimal import Decimal
 

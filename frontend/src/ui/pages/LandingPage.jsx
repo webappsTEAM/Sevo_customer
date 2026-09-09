@@ -43,7 +43,7 @@ import {
   clearCustomerLocation,
   clearLegacyLocationStorage
 } from "../../utils/customerLocationStorage.js"
-import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG } from "../../config/homePageConfig.js"
+import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, getCategorySafeImage, getOfferSafeImage } from "../../config/homePageConfig.js"
 import { isSuperAdmin } from "../../auth/authorization.js"
 import { EditableImage, ImageEditModal } from "../components/SuperAdminEditControls.jsx"
 import acServiceImg from "../../assets/ac service.png"
@@ -4342,8 +4342,8 @@ export function LandingPage() {
               ...homeCategories.map((cat, idx) => ({
                 ...cat,
                 idx,
-                fallback: MoreHorizontal,
-                color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                fallback: Sparkles,
+                color: "bg-teal-50 text-[#0B8F7A] dark:bg-slate-800 dark:text-teal-400",
                 onClick: () => !homeEditMode && goToBannerLink(cat.link)
               })),
               {
@@ -4369,10 +4369,16 @@ export function LandingPage() {
                     {cat.image ? (
                       <img
                         src={cat.image}
-                        alt={cat.name}
+                        alt={cat.name || cat.title || "Category"}
                         loading="lazy"
                         className="w-full h-full object-contain drop-shadow-2xs rounded-xl"
                         onError={(e) => {
+                          const fallbackImg = getCategorySafeImage(cat, cat.idx >= 0 ? cat.idx : 0)
+                          if (fallbackImg && e.currentTarget.src !== fallbackImg && !e.currentTarget.dataset.failed) {
+                            e.currentTarget.dataset.failed = "true"
+                            e.currentTarget.src = fallbackImg
+                            return
+                          }
                           e.currentTarget.style.display = 'none'
                           const nextEl = e.currentTarget.nextElementSibling
                           if (nextEl) nextEl.style.display = 'flex'
@@ -4384,7 +4390,7 @@ export function LandingPage() {
                     </div>
                   </div>
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#0B8F7A] transition-colors leading-tight line-clamp-2">
-                    {cat.name}
+                    {cat.name || cat.title || "Service"}
                   </span>
                 </button>
 
@@ -4496,7 +4502,18 @@ export function LandingPage() {
                   className={`block w-full aspect-[4/3] ${homeEditMode ? "cursor-default" : "cursor-pointer"}`}
                 >
                   {offer.image ? (
-                    <img src={offer.image} alt={offer.title || "Offer"} className="w-full h-full object-cover" />
+                    <img
+                      src={offer.image}
+                      alt={offer.title || "Offer"}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const fallback = getOfferSafeImage(offer, idx)
+                        if (fallback && e.currentTarget.src !== fallback && !e.currentTarget.dataset.failed) {
+                          e.currentTarget.dataset.failed = "true"
+                          e.currentTarget.src = fallback
+                        }
+                      }}
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500">
                       <Gift className="w-10 h-10 opacity-40" />

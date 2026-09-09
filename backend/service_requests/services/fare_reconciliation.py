@@ -95,8 +95,7 @@ def reconcile_booking_fare(booking, actual_distance_km=None, notes=""):
     """
     from ..models import FareReconciliation
 
-    is_pm_quoted = (booking.service_category == "packers_movers" and bool(booking.fare_breakdown))
-    if booking.service_category not in DISTANCE_PRICED_CATEGORIES and not is_pm_quoted:
+    if booking.service_category not in DISTANCE_PRICED_CATEGORIES:
         return None
 
     estimate = booking.fare_breakdown or {}
