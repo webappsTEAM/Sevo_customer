@@ -9,6 +9,7 @@ from inventory.views import (
     VegetableStockAdjustView,
     VegetableStockSetDefaultView,
     VegetableStockHistoryView,
+    VegetableDetailsUpdateView,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ urlpatterns = [
     path('vegetable-stock/<int:product_id>/adjust/', VegetableStockAdjustView.as_view(), name='vegetable-stock-adjust'),
     path('vegetable-stock/<int:product_id>/set-default/', VegetableStockSetDefaultView.as_view(), name='vegetable-stock-set-default'),
     path('vegetable-stock/<int:product_id>/history/', VegetableStockHistoryView.as_view(), name='vegetable-stock-history'),
+    path('vegetable-stock/<int:product_id>/update-details/', VegetableDetailsUpdateView.as_view(), name='vegetable-stock-update-details'),
     path('', include(router.urls)),
 ]
 

@@ -154,8 +154,6 @@ class BookingService:
             address=final_address,
             latitude=final_lat,
             longitude=final_lng,
-            saved_address_id=saved_addr.id if saved_addr else None,
-            service_location_snapshot=location_snapshot,
             status=initial_status,
             payment_method=payment_method,
             payment_status=initial_payment_status,

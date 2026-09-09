@@ -156,8 +156,8 @@ export function VegetableProductCard({
               </span>
             ) : (
               item.mrp && item.mrp > item.price && (
-                <span className="text-[10px] text-slate-400 line-through">
-                  ₹{item.mrp}
+                <span className="text-[10px] text-slate-400 font-medium">
+                  MRP <span className="line-through">₹{item.mrp}</span>
                 </span>
               )
             )}

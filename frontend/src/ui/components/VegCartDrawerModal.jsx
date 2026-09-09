@@ -19,6 +19,7 @@ export function VegCartDrawerModal({
   selectedFoodSubModule,
   getFoodItemPhoto,
   deliveryAddress = "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu",
+  deliveryAddressType = "Home",
   onChangeAddress,
   isServiceAvailable = true,
 }) {
@@ -455,19 +456,27 @@ export function VegCartDrawerModal({
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <MapPin className="w-4 h-4 text-emerald-700 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-extrabold text-slate-900 truncate">Delivering to Home</p>
-                  <p className="text-[10px] text-slate-500 truncate">{deliveryAddress}</p>
+                  <p className="font-extrabold text-slate-900 truncate">
+                    Delivering to {deliveryAddressType || "Home"}
+                  </p>
+                  <p className="text-[10px] text-slate-500 truncate" title={deliveryAddress}>
+                    {deliveryAddress || "Hosur, Tamil Nadu"}
+                  </p>
                 </div>
               </div>
-              {onChangeAddress && (
-                <button
-                  type="button"
-                  onClick={onChangeAddress}
-                  className="text-xs font-extrabold text-emerald-700 hover:underline cursor-pointer shrink-0"
-                >
-                  Change
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onChangeAddress === "function") {
+                    onChangeAddress()
+                  } else {
+                    handleProceedToPay()
+                  }
+                }}
+                className="text-xs font-extrabold text-emerald-700 hover:underline cursor-pointer shrink-0"
+              >
+                Change
+              </button>
             </div>
 
             {/* Out-of-zone warning if vegetables not allowed in current area */}

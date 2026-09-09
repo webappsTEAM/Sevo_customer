@@ -569,9 +569,14 @@ class BookingCreateView(APIView):
                 corrected_fare = Decimal("0.00")
 
         payment_method = (request.data.get("payment_method") or "COD").upper()
+        req_payment_status = str(request.data.get("payment_status") or "").lower()
         if payment_method == "ONLINE":
-            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
-            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
+            if req_payment_status == "paid":
+                initial_status = ServiceRequest.Status.CONFIRMED
+                initial_payment_status = ServiceRequest.PaymentStatus.PAID
+            else:
+                initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
+                initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
         else:
             payment_method = "COD"
             initial_status = ServiceRequest.Status.CONFIRMED

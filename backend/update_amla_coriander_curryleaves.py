@@ -6,7 +6,7 @@ django.setup()
 
 from service_requests.models import Package, VegetableRecipe, RecipeIngredient
 
-p_amla = Package.objects.get(id=925)            # Amla (Nellikaai)
+p_amla = Package.objects.filter(id=925).first() or Package.objects.filter(name__icontains='Amla').first()
 p_coriander = Package.objects.get(id=875)       # Coriander Bunch (Kothamalli)
 p_curry_leaves = Package.objects.get(id=874)    # Curry Leaves (Karuvepillai)
 
@@ -22,8 +22,9 @@ garlic_pkg = Package.objects.filter(id=870).first() or Package.objects.filter(na
 ginger_pkg = Package.objects.filter(id=871).first() or Package.objects.filter(name__icontains='Ginger').first()
 lemon_pkg = Package.objects.filter(id=877).first() or Package.objects.filter(name__icontains='Lemon').first()
 
-print("Deleting old recipes for Amla, Coriander, Curry Leaves...")
-p_amla.recipes.all().delete()
+print("Deleting old recipes for Coriander, Curry Leaves (and Amla if present)...")
+if p_amla:
+    p_amla.recipes.all().delete()
 p_coriander.recipes.all().delete()
 p_curry_leaves.recipes.all().delete()
 
@@ -31,139 +32,139 @@ p_curry_leaves.recipes.all().delete()
 # 1. AMLA (NELLIKAAI) - Package ID: 925
 # ==============================================================================
 
-# Recipe 1: Nellikai Pachadi
-r_a1 = VegetableRecipe.objects.create(
-    package=p_amla,
-    name="Nellikai Pachadi",
-    slug="nellikai-pachadi",
-    image="/mockups/recipes/amla_nellikaai_amla_rice.jpg",
-    short_description="Cooling, probiotic South Indian yogurt relish with coarse grated Indian gooseberries, coconut, green chilies, and cucumber.",
-    prep_time_minutes=10,
-    cook_time_minutes=3,
-    total_time_minutes=13,
-    difficulty=VegetableRecipe.Difficulty.EASY,
-    servings=2,
-    calories=105,
-    protein="5 g",
-    carbohydrates="10 g",
-    fiber="2 g",
-    fat="5 g",
-    health_benefits=[
-        "Amla delivers massive doses of natural vitamin C, tannins, and immunity-enhancing antioxidants.",
-        "Probiotic curd and cooling cucumber soothe gastric acidity and nurture gut microbiome."
-    ],
-    health_tips=[
-        "Deseed fresh amla and pulse coarsely without excess water for the best pachadi texture.",
-        "Serve chilled alongside spicy South Indian gravies or hot steamed rice."
-    ],
-    instructions=[
-        "Wash 5–6 fresh nellikai and remove the seeds.",
-        "Grind the nellikai with 2 tbsp grated coconut, 1 green chili, and a little salt into a coarse mixture.",
-        "Whisk 1 cup thick curd until smooth.",
-        "Add the nellikai mixture to the curd and mix well.",
-        "Add 2 tbsp grated cucumber and mix gently.",
-        "Heat 1 tsp oil and add 1/2 tsp mustard seeds and a few curry leaves. Cook until the mustard seeds start popping.",
-        "Pour the seasoning over the pachadi, mix well, and serve chilled."
-    ],
-    tags=["Pachadi", "Probiotic", "Immunity Booster", "Cooling Relish"],
-    is_active=True,
-    is_popular=True,
-    sort_order=0
-)
-RecipeIngredient.objects.create(recipe=r_a1, package=p_amla, name=p_amla.name, quantity=Decimal("6"), unit="pieces", notes="Deseeded and coarsely crushed", is_catalog_vegetable=True, sort_order=0)
-RecipeIngredient.objects.create(recipe=r_a1, package=None, name="Thick Curd / Yogurt", quantity=Decimal("1"), unit="cup", notes="Whisked smooth", is_catalog_vegetable=False, sort_order=1)
-RecipeIngredient.objects.create(recipe=r_a1, package=None, name="Grated Coconut", quantity=Decimal("2"), unit="tbsp", notes="Fresh", is_catalog_vegetable=False, sort_order=2)
-if cucumber_pkg:
-    RecipeIngredient.objects.create(recipe=r_a1, package=cucumber_pkg, name=cucumber_pkg.name, quantity=Decimal("2"), unit="tbsp", notes="Grated", is_catalog_vegetable=True, sort_order=3)
-if chilli_pkg:
-    RecipeIngredient.objects.create(recipe=r_a1, package=chilli_pkg, name=chilli_pkg.name, quantity=Decimal("1"), unit="piece", notes="For coarse grind", is_catalog_vegetable=True, sort_order=4)
+if p_amla:
+    r_a1 = VegetableRecipe.objects.create(
+        package=p_amla,
+        name="Nellikai Pachadi",
+        slug="nellikai-pachadi",
+        image="/mockups/recipes/amla_nellikaai_amla_rice.jpg",
+        short_description="Cooling, probiotic South Indian yogurt relish with coarse grated Indian gooseberries, coconut, green chilies, and cucumber.",
+        prep_time_minutes=10,
+        cook_time_minutes=3,
+        total_time_minutes=13,
+        difficulty=VegetableRecipe.Difficulty.EASY,
+        servings=2,
+        calories=105,
+        protein="5 g",
+        carbohydrates="10 g",
+        fiber="2 g",
+        fat="5 g",
+        health_benefits=[
+            "Amla delivers massive doses of natural vitamin C, tannins, and immunity-enhancing antioxidants.",
+            "Probiotic curd and cooling cucumber soothe gastric acidity and nurture gut microbiome."
+        ],
+        health_tips=[
+            "Deseed fresh amla and pulse coarsely without excess water for the best pachadi texture.",
+            "Serve chilled alongside spicy South Indian gravies or hot steamed rice."
+        ],
+        instructions=[
+            "Wash 5–6 fresh nellikai and remove the seeds.",
+            "Grind the nellikai with 2 tbsp grated coconut, 1 green chili, and a little salt into a coarse mixture.",
+            "Whisk 1 cup thick curd until smooth.",
+            "Add the nellikai mixture to the curd and mix well.",
+            "Add 2 tbsp grated cucumber and mix gently.",
+            "Heat 1 tsp oil and add 1/2 tsp mustard seeds and a few curry leaves. Cook until the mustard seeds start popping.",
+            "Pour the seasoning over the pachadi, mix well, and serve chilled."
+        ],
+        tags=["Pachadi", "Probiotic", "Immunity Booster", "Cooling Relish"],
+        is_active=True,
+        is_popular=True,
+        sort_order=0
+    )
+    RecipeIngredient.objects.create(recipe=r_a1, package=p_amla, name=p_amla.name, quantity=Decimal("6"), unit="pieces", notes="Deseeded and coarsely crushed", is_catalog_vegetable=True, sort_order=0)
+    RecipeIngredient.objects.create(recipe=r_a1, package=None, name="Thick Curd / Yogurt", quantity=Decimal("1"), unit="cup", notes="Whisked smooth", is_catalog_vegetable=False, sort_order=1)
+    RecipeIngredient.objects.create(recipe=r_a1, package=None, name="Grated Coconut", quantity=Decimal("2"), unit="tbsp", notes="Fresh", is_catalog_vegetable=False, sort_order=2)
+    if cucumber_pkg:
+        RecipeIngredient.objects.create(recipe=r_a1, package=cucumber_pkg, name=cucumber_pkg.name, quantity=Decimal("2"), unit="tbsp", notes="Grated", is_catalog_vegetable=True, sort_order=3)
+    if chilli_pkg:
+        RecipeIngredient.objects.create(recipe=r_a1, package=chilli_pkg, name=chilli_pkg.name, quantity=Decimal("1"), unit="piece", notes="For coarse grind", is_catalog_vegetable=True, sort_order=4)
 
-# Recipe 2: Nellikai Oorugai
-r_a2 = VegetableRecipe.objects.create(
-    package=p_amla,
-    name="Nellikai Oorugai",
-    slug="nellikai-oorugai",
-    image="/mockups/recipes/amla_nellikaai_amla_chutney.jpg",
-    short_description="Instant South Indian style amla pickle simmered in sesame oil, red chili, mustard, and roasted fenugreek powder.",
-    prep_time_minutes=15,
-    cook_time_minutes=12,
-    total_time_minutes=27,
-    difficulty=VegetableRecipe.Difficulty.EASY,
-    servings=2,
-    calories=115,
-    protein="2 g",
-    carbohydrates="9 g",
-    fiber="4 g",
-    fat="8 g",
-    health_benefits=[
-        "Amla helps purify blood, supports liver vitality, and strengthens capillary resistance.",
-        "Roasted fenugreek and sesame oil provide digestive enzymes and healthy fats."
-    ],
-    health_tips=[
-        "Steam amla until segments open naturally; this keeps the pickle tender and easy to deseed.",
-        "Use authentic sesame (gingelly) oil and finish with roasted methi powder for deep flavor."
-    ],
-    instructions=[
-        "Wash 150 g nellikai and steam or boil for about 10 minutes until slightly soft.",
-        "Allow them to cool, remove the seeds, and separate the nellikai into small pieces.",
-        "Heat 1½ tbsp sesame oil and add 1/2 tsp mustard seeds and a pinch of asafoetida (perungayam).",
-        "Add the nellikai pieces, 1/4 tsp turmeric powder, 1 tsp red chili powder, and salt.",
-        "Cook on low heat for 7–10 minutes until the spices coat the nellikai well.",
-        "Add 1/4 tsp roasted fenugreek powder and mix well.",
-        "Turn off the heat, cool completely, and serve as a pickle with curd rice or rice."
-    ],
-    tags=["Pickle", "Oorugai", "Instant Pickle", "Traditional"],
-    is_active=True,
-    is_popular=True,
-    sort_order=1
-)
-RecipeIngredient.objects.create(recipe=r_a2, package=p_amla, name=p_amla.name, quantity=Decimal("150"), unit="g", notes="Steamed, deseeded segments", is_catalog_vegetable=True, sort_order=0)
-RecipeIngredient.objects.create(recipe=r_a2, package=None, name="Sesame Oil", quantity=Decimal("1.5"), unit="tbsp", notes="Gingelly oil", is_catalog_vegetable=False, sort_order=1)
+    # Recipe 2: Nellikai Oorugai
+    r_a2 = VegetableRecipe.objects.create(
+        package=p_amla,
+        name="Nellikai Oorugai",
+        slug="nellikai-oorugai",
+        image="/mockups/recipes/amla_nellikaai_amla_chutney.jpg",
+        short_description="Instant South Indian style amla pickle simmered in sesame oil, red chili, mustard, and roasted fenugreek powder.",
+        prep_time_minutes=15,
+        cook_time_minutes=12,
+        total_time_minutes=27,
+        difficulty=VegetableRecipe.Difficulty.EASY,
+        servings=2,
+        calories=115,
+        protein="2 g",
+        carbohydrates="9 g",
+        fiber="4 g",
+        fat="8 g",
+        health_benefits=[
+            "Amla helps purify blood, supports liver vitality, and strengthens capillary resistance.",
+            "Roasted fenugreek and sesame oil provide digestive enzymes and healthy fats."
+        ],
+        health_tips=[
+            "Steam amla until segments open naturally; this keeps the pickle tender and easy to deseed.",
+            "Use authentic sesame (gingelly) oil and finish with roasted methi powder for deep flavor."
+        ],
+        instructions=[
+            "Wash 150 g nellikai and steam or boil for about 10 minutes until slightly soft.",
+            "Allow them to cool, remove the seeds, and separate the nellikai into small pieces.",
+            "Heat 1½ tbsp sesame oil and add 1/2 tsp mustard seeds and a pinch of asafoetida (perungayam).",
+            "Add the nellikai pieces, 1/4 tsp turmeric powder, 1 tsp red chili powder, and salt.",
+            "Cook on low heat for 7–10 minutes until the spices coat the nellikai well.",
+            "Add 1/4 tsp roasted fenugreek powder and mix well.",
+            "Turn off the heat, cool completely, and serve as a pickle with curd rice or rice."
+        ],
+        tags=["Pickle", "Oorugai", "Instant Pickle", "Traditional"],
+        is_active=True,
+        is_popular=True,
+        sort_order=1
+    )
+    RecipeIngredient.objects.create(recipe=r_a2, package=p_amla, name=p_amla.name, quantity=Decimal("150"), unit="g", notes="Steamed, deseeded segments", is_catalog_vegetable=True, sort_order=0)
+    RecipeIngredient.objects.create(recipe=r_a2, package=None, name="Sesame Oil", quantity=Decimal("1.5"), unit="tbsp", notes="Gingelly oil", is_catalog_vegetable=False, sort_order=1)
 
-# Recipe 3: Amla Sabzi
-r_a3 = VegetableRecipe.objects.create(
-    package=p_amla,
-    name="Amla Sabzi",
-    slug="amla-sabzi",
-    image="/mockups/recipes/amla_nellikaai_amla_vegetable_salad.jpg",
-    short_description="Wholesome North Indian spiced gooseberry dry curry cooked with onions, tomatoes, coriander, and amchur.",
-    prep_time_minutes=10,
-    cook_time_minutes=15,
-    total_time_minutes=25,
-    difficulty=VegetableRecipe.Difficulty.EASY,
-    servings=2,
-    calories=125,
-    protein="2 g",
-    carbohydrates="13 g",
-    fiber="4 g",
-    fat="7 g",
-    health_benefits=[
-        "Supports metabolic detox, skin glow, and blood glucose balance.",
-        "Cumin, coriander, and tomato lycopene create a nutrient-dense vegetable side."
-    ],
-    health_tips=[
-        "Boil gooseberries for 5–7 minutes so the sharp astringency mellows into a savory bite.",
-        "Cook covered with 1/4 cup water so amla segments absorb the spiced tomato gravy."
-    ],
-    instructions=[
-        "Wash 200 g nellikai and boil for 5–7 minutes until slightly soft. Cool and remove the seeds.",
-        "Heat 1 tbsp oil in a pan and add 1/2 tsp cumin seeds.",
-        "Add 1 small chopped onion and cook until it becomes soft.",
-        "Add 1 chopped tomato, 1/4 tsp turmeric powder, 1/2 tsp red chili powder, 1 tsp coriander powder, and salt. Cook until the tomato becomes soft.",
-        "Add the nellikai pieces and mix gently with the masala.",
-        "Add 1/4 cup water, cover, and cook for 5–6 minutes until the nellikai absorbs the spices.",
-        "Add 1/2 tsp amchur powder and chopped coriander leaves, mix well, and serve hot."
-    ],
-    tags=["Sabzi", "Low Calorie", "Immunity Booster", "Roti Side"],
-    is_active=True,
-    is_popular=True,
-    sort_order=2
-)
-RecipeIngredient.objects.create(recipe=r_a3, package=p_amla, name=p_amla.name, quantity=Decimal("200"), unit="g", notes="Boiled and deseeded", is_catalog_vegetable=True, sort_order=0)
-if onion_pkg:
-    RecipeIngredient.objects.create(recipe=r_a3, package=onion_pkg, name=onion_pkg.name, quantity=Decimal("1"), unit="small", notes="Chopped", is_catalog_vegetable=True, sort_order=1)
-if tomato_pkg:
-    RecipeIngredient.objects.create(recipe=r_a3, package=tomato_pkg, name=tomato_pkg.name, quantity=Decimal("1"), unit="piece", notes="Chopped", is_catalog_vegetable=True, sort_order=2)
+    # Recipe 3: Amla Sabzi
+    r_a3 = VegetableRecipe.objects.create(
+        package=p_amla,
+        name="Amla Sabzi",
+        slug="amla-sabzi",
+        image="/mockups/recipes/amla_nellikaai_amla_vegetable_salad.jpg",
+        short_description="Wholesome North Indian spiced gooseberry dry curry cooked with onions, tomatoes, coriander, and amchur.",
+        prep_time_minutes=10,
+        cook_time_minutes=15,
+        total_time_minutes=25,
+        difficulty=VegetableRecipe.Difficulty.EASY,
+        servings=2,
+        calories=125,
+        protein="2 g",
+        carbohydrates="13 g",
+        fiber="4 g",
+        fat="7 g",
+        health_benefits=[
+            "Supports metabolic detox, skin glow, and blood glucose balance.",
+            "Cumin, coriander, and tomato lycopene create a nutrient-dense vegetable side."
+        ],
+        health_tips=[
+            "Boil gooseberries for 5–7 minutes so the sharp astringency mellows into a savory bite.",
+            "Cook covered with 1/4 cup water so amla segments absorb the spiced tomato gravy."
+        ],
+        instructions=[
+            "Wash 200 g nellikai and boil for 5–7 minutes until slightly soft. Cool and remove the seeds.",
+            "Heat 1 tbsp oil in a pan and add 1/2 tsp cumin seeds.",
+            "Add 1 small chopped onion and cook until it becomes soft.",
+            "Add 1 chopped tomato, 1/4 tsp turmeric powder, 1/2 tsp red chili powder, 1 tsp coriander powder, and salt. Cook until the tomato becomes soft.",
+            "Add the nellikai pieces and mix gently with the masala.",
+            "Add 1/4 cup water, cover, and cook for 5–6 minutes until the nellikai absorbs the spices.",
+            "Add 1/2 tsp amchur powder and chopped coriander leaves, mix well, and serve hot."
+        ],
+        tags=["Sabzi", "Low Calorie", "Immunity Booster", "Roti Side"],
+        is_active=True,
+        is_popular=True,
+        sort_order=2
+    )
+    RecipeIngredient.objects.create(recipe=r_a3, package=p_amla, name=p_amla.name, quantity=Decimal("200"), unit="g", notes="Boiled and deseeded", is_catalog_vegetable=True, sort_order=0)
+    if onion_pkg:
+        RecipeIngredient.objects.create(recipe=r_a3, package=onion_pkg, name=onion_pkg.name, quantity=Decimal("1"), unit="small", notes="Chopped", is_catalog_vegetable=True, sort_order=1)
+    if tomato_pkg:
+        RecipeIngredient.objects.create(recipe=r_a3, package=tomato_pkg, name=tomato_pkg.name, quantity=Decimal("1"), unit="piece", notes="Chopped", is_catalog_vegetable=True, sort_order=2)
 
 
 # ==============================================================================

@@ -235,6 +235,9 @@ export function getVegetableProducePhoto(name) {
   if (n.includes("turmeric") || n.includes("manjal")) {
     return "/mockups/veg/turmeric.jpg"
   }
+  if (n.includes("amla") || n.includes("nellikaai") || n.includes("nellikai") || n.includes("nelli")) {
+    return "/mockups/veg/amla.jpg"
+  }
 
   return "/mockups/vegetables_realistic.png"
 }
