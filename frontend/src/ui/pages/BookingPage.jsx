@@ -8324,21 +8324,28 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 /* ─────────────────────────────────────────────────────────────
    ───────────────────────────────────────────────────────────── */
 
-// ── Quick Commerce Pricing Configuration (Consistent ₹10 delivery & ₹2 handling) ──
+// ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
 const QUICK_COMMERCE_PRICING = {
+  FREE_DELIVERY_THRESHOLD: 200,
   HANDLING_FEE: 2,
-  DELIVERY_FEE: 10,
+  SMALL_CART_FEE: 5,
+  SMALL_CART_THRESHOLD: 100,
+  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
+  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
   getDeliveryFee: (subtotal) => {
-    return subtotal > 0 ? 10 : 0
+    if (subtotal <= 0 || subtotal >= 200) return 0
+    if (subtotal >= 100) return 10
+    return 15
   },
   getSmallCartFee: (subtotal) => {
+    if (subtotal > 0 && subtotal < 100) return 5
     return 0
   },
   getHandlingFee: (subtotal) => {
     return subtotal > 0 ? 2 : 0
   },
-  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 0) => {
-    return 0
+  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
+    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
   }
 }
 
@@ -8733,6 +8740,38 @@ function QuickCommerceCartCheckout({
               </div>
             )}
 
+            {/* Free Delivery Incentive Card */}
+            {itemsTotal > 0 && (
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold text-slate-800">
+                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
+                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
+                      ) : (
+                        <span>
+                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
+                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
+                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
@@ -12069,10 +12108,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const contentRef = useRef(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
-  }, [searchQuery]);
+  }, [searchQuery, activeTab]);
 
   const scrollToCard = (id) => {
     const card = cardRefs.current[id];
@@ -14186,6 +14226,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [expandedFaq, setExpandedFaq] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const MASON_SEARCH_HINTS = ["Brick & Block Work", "Plastering", "Wall Partition", "House Construction", "Demolition"];
   useEffect(() => {
     const t = setInterval(() => setMasonSearchRotateIdx(i => (i + 1) % MASON_SEARCH_HINTS.length), 2800);
@@ -14709,6 +14750,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const contentRef = useRef(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
@@ -24600,4 +24642,4 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       onCheckout={onCheckout}
     />
   );
-}
+}

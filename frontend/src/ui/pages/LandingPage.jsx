@@ -2705,6 +2705,7 @@ export function LandingPage() {
 
   const goToLogin = () => setShowCustomerEntryModal(true)
   const goToCategoryServices = (serviceCategoryId, subTabName) => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     let url = serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services;
     if (subTabName) {
       const encoded = encodeURIComponent(subTabName);
@@ -2724,6 +2725,13 @@ export function LandingPage() {
       c.id === `${activeCategoryId}_cleaning`
     ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
+
+  // Always reset scroll to top when category changes
+  useEffect(() => {
+    if (activeCategoryId) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+  }, [activeCategoryId]);
 
   // Hot reload services catalog when category choice becomes active
   useEffect(() => {
@@ -5561,6 +5569,7 @@ export function LandingPage() {
                           }
                           setIsHomeServicesCombinedModalOpen(false)
                           document.body.style.overflow = "unset"
+                          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                           if (label === "Goods & Transports") {
                             setIsGoodsModalOpen(true)
                           } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
@@ -7342,6 +7351,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsHomeServicesCombinedModalOpen(false)
                       document.body.style.overflow = "unset"
+                      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                       if (label === "Goods & Transports") {
                         setIsGoodsModalOpen(true)
                       } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
