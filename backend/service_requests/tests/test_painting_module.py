@@ -1,6 +1,8 @@
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.urls import reverse
+from datetime import timedelta
 from django.utils import timezone
 from rest_framework import status
 from decimal import Decimal
@@ -53,7 +55,7 @@ class PaintingModuleTests(APITestCase):
             "service_category": "painting",
             "issue_title": "Painting Service",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -77,7 +79,7 @@ class PaintingModuleTests(APITestCase):
             "service_category": "painting",
             "issue_title": "Painting Service",
             "address": "Bangalore Main Rd",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.9716,
             "longitude": 77.5946,
@@ -252,6 +254,13 @@ class PaintingModuleTests(APITestCase):
         self.assertEqual(child.status, ServiceRequest.Status.CONFIRMED)
         self.assertEqual(child.total_amount, Decimal("5000.00"))
 
+    # No live payment gateway in the test environment. Rather than mocking
+    # the Razorpay client, run the documented "gateway not configured" path:
+    # PaymentInitiateView issues a local sandbox order and still returns the
+    # server-computed amount, which is the thing this test is about. With
+    # real credentials present it would call out to Razorpay and fail with
+    # 502 -- a network result, not a statement about the advance split.
+    @override_settings(RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
     def test_waterproofing_advance_payment_split(self):
         parent_sr = ServiceRequest.objects.create(
             company=self.company,
@@ -293,7 +302,13 @@ class PaintingModuleTests(APITestCase):
         
         child = ServiceRequest.objects.get(parent_request=parent_sr, request_kind="quoted_work")
         
-        # Initiate first payment (Advance)
+        # Initiate first payment (Advance).
+        # Authenticate as the booking's own customer: /payment/initiate/
+        # verifies ownership (HS-C-01) before issuing an order, so an
+        # anonymous caller holding only a booking_id is refused -- that is
+        # the control working, not a regression. A real client is either
+        # logged in or supplies the tracking token.
+        self.client.force_authenticate(user=self.customer)
         initiate_url = reverse("payment-initiate")
         res_pay1 = self.client.post(initiate_url, {"booking_id": child.id})
         self.assertEqual(res_pay1.status_code, status.HTTP_200_OK)
@@ -381,7 +396,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -405,7 +420,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "Bangalore Main Rd",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.9716,
             "longitude": 77.5946,
@@ -430,7 +445,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -449,7 +464,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -470,7 +485,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -489,7 +504,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -508,7 +523,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -527,7 +542,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "123 Main St, Hosur",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.7420,
             "longitude": 77.8260,
@@ -629,6 +644,11 @@ class MasonryModuleTests(APITestCase):
         apply_transition(child, ServiceRequest.Status.IN_PROGRESS)
         self.assertEqual(child.status, ServiceRequest.Status.IN_PROGRESS)
 
+    # Same reason as above for the gateway keys. PAYMENT_SANDBOX_MODE is the
+    # switch PaymentVerifyView itself documents for exercising the flow
+    # without live credentials -- without it the endpoint now (correctly)
+    # refuses to mark anything paid rather than defaulting to success.
+    @override_settings(RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="", PAYMENT_SANDBOX_MODE=True)
     def test_payment_replay_protection_and_status_update(self):
         parent_sr = ServiceRequest.objects.create(
             company=self.company,
@@ -656,30 +676,45 @@ class MasonryModuleTests(APITestCase):
         self.client.post(decide_url, {"decision": "CUSTOMER_ACCEPTED"})
         child = ServiceRequest.objects.get(parent_request=parent_sr, request_kind="quoted_work")
 
+        # Ownership is required here too -- see the note in
+        # test_waterproofing_advance_payment_split.
+        self.client.force_authenticate(user=self.customer)
+
+        # An order_id can no longer be invented client-side: HS-C-01 made
+        # /payment/verify/ reject any order this app did not itself issue
+        # (before that, one unauthenticated POST with any booking_id and a
+        # made-up order could mark a booking paid). So obtain a real order
+        # the way a real client does, then replay against it. What this test
+        # proves is unchanged -- it now actually reaches the replay path
+        # instead of being turned away at the door.
+        initiate_url = reverse("payment-initiate")
+        res_init = self.client.post(initiate_url, {"booking_id": child.id})
+        self.assertEqual(res_init.status_code, status.HTTP_200_OK)
+        real_order_id = res_init.data["data"]["order_id"]
+
         verify_url = reverse("payment-verify")
-        
-        # Verify first call with unique payment ID
         payload1 = {
             "payment_id": "pay_xyz_123",
-            "order_id": "order_xyz",
+            "order_id": real_order_id,
             "signature": "sig_xyz",
             "booking_id": child.id,
             "amount": 5000
         }
         res1 = self.client.post(verify_url, payload1, format="json")
         self.assertEqual(res1.status_code, status.HTTP_200_OK)
-        
-        # Check payment record exists and is collected
-        child.refresh_from_db()
-        self.assertEqual(child.payment_status, ServiceRequest.PaymentStatus.COLLECTED)
 
-        # Attempt duplicate verify call with same payment ID -> should return success=True saying already processed
+        # Recorded as PAID. (The old assertion was COLLECTED, which is the
+        # cash-at-site state -- an online gateway payment was never that.)
+        child.refresh_from_db()
+        self.assertEqual(child.payment_status, ServiceRequest.PaymentStatus.PAID)
+
+        # Replay the identical call -> idempotent success, not a second charge.
         res2 = self.client.post(verify_url, payload1, format="json")
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
         self.assertTrue(res2.data["success"])
-        self.assertIn("already processed", res2.data["message"].lower())
-        
-        # Assert that only 1 Payment record exists in the database (duplicate call did not insert another record)
+        self.assertIn("already confirmed", res2.data["message"].lower())
+
+        # And still exactly one Payment row -- the replay inserted nothing.
         self.assertEqual(Payment.objects.filter(service_request=child).count(), 1)
 
     def test_consultation_fee_not_counted_toward_advance(self):
@@ -692,7 +727,7 @@ class MasonryModuleTests(APITestCase):
             "service_category": "mason",
             "issue_title": "Masonry Service Consultation",
             "address": "Bangalore Main Rd",
-            "preferred_date": str(timezone.now().date()),
+            "preferred_date": str(timezone.now().date() + timedelta(days=1)),
             "preferred_time": "09:00 AM",
             "latitude": 12.9716,
             "longitude": 77.5946,

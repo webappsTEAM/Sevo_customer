@@ -10,7 +10,9 @@ import hashlib
 import hmac
 import logging
 import uuid
+from decimal import Decimal
 from django.conf import settings
+from django.db.models import Sum
 from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework import permissions, status
@@ -51,9 +53,19 @@ def _verify_booking_ownership(request, sr):
         or request.query_params.get("token")
         or request.data.get("tracking_token")
     )
+    # The expiry rule has to apply here too. EC-08 gave tracking tokens a
+    # 180-day life because a link that has been forwarded, screenshotted or
+    # left in an old SMS should stop being a bearer credential -- but that
+    # check lived only on the tracking endpoints. This one accepts the same
+    # token to authorise a PAYMENT, so without it an expired link was still
+    # good enough to start and confirm an order on someone's booking: a
+    # weaker rule guarding the more sensitive action.
+    from .views import _tracking_token_is_expired
+
     token_matches = bool(
         provided_token and sr.tracking_token and
-        str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+        str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+        not _tracking_token_is_expired(sr)
     )
     if request.user and request.user.is_authenticated:
         is_owner = bool(
@@ -113,10 +125,30 @@ class PaymentInitiateView(APIView):
         if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
             return _error("This booking is already paid.")
 
+        # How much to charge for THIS order.
+        #
+        # This used to be sr.total_amount unconditionally, which contradicted
+        # every other part of the system for quoted painting/masonry work: the
+        # quote the customer accepted names an advance (PaintingQuote.
+        # advance_amount, set to 50% of the grand total when the quote is
+        # raised), state_machine.py refuses to start the work until that
+        # advance is recorded, and the booking page shows the advance as what
+        # is due. Only this endpoint asked for the whole grand total up front
+        # -- so a customer who accepted a Rs.20,000 quote with a Rs.10,000
+        # advance was presented with a Rs.20,000 order.
+        #
+        # The frontend was papering over it by computing `grandTotal * 0.5`
+        # itself (BookingPage.jsx), which means the amount actually charged
+        # was being decided client-side. The amount charged has to come from
+        # the server.
+        amount_due, due_error = self._amount_due(sr)
+        if due_error:
+            return _error(due_error)
+
         gateway_configured = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
         if gateway_configured:
-            order_id, gateway_error = self._create_razorpay_order(sr)
+            order_id, gateway_error = self._create_razorpay_order(sr, amount_due)
             if gateway_error:
                 return _error(gateway_error, 502)
         else:
@@ -126,7 +158,7 @@ class PaymentInitiateView(APIView):
             customer=sr.customer,
             service_request=sr,
             razorpay_order_id=order_id,
-            amount=sr.total_amount,
+            amount=amount_due,
             currency="INR",
             status=ServiceRequest.PaymentStatus.PENDING,
             gateway="razorpay" if gateway_configured else "sandbox",
@@ -135,7 +167,8 @@ class PaymentInitiateView(APIView):
         return _success(
             data={
                 "order_id": order_id,
-                "amount": float(sr.total_amount),
+                "amount": float(amount_due),
+                "booking_total": float(sr.total_amount),
                 "currency": "INR",
                 "booking_id": sr.id,
                 "request_id": sr.request_id,
@@ -149,7 +182,62 @@ class PaymentInitiateView(APIView):
             message="Payment order created.",
         )
 
-    def _create_razorpay_order(self, sr):
+    def _amount_due(self, sr):
+        """
+        (amount, error). What this order should charge, decided here rather
+        than accepted from the client.
+
+        For quoted work with an advance: the advance first, then whatever is
+        left. For everything else: the remaining balance on the booking. In
+        both cases already-recorded payments are subtracted, so a second
+        order after a part payment asks for the remainder rather than the
+        whole amount again.
+
+        The quote lookup deliberately mirrors state_machine.py's advance
+        check (parent booking first, then the booking itself, APPROVED only)
+        so the amount charged and the gate that lets work start can never
+        disagree about what the advance is.
+        """
+        from .models import PaintingQuote
+
+        total = Decimal(str(sr.total_amount or 0))
+        if total <= 0:
+            return None, "This booking has no amount to pay."
+
+        paid = Payment.objects.filter(
+            service_request=sr,
+            status__in=[
+                ServiceRequest.PaymentStatus.PAID,
+                ServiceRequest.PaymentStatus.COLLECTED,
+            ],
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        paid = Decimal(str(paid))
+
+        quote = None
+        if sr.parent_request_id:
+            quote = PaintingQuote.objects.filter(
+                service_request=sr.parent_request, status=PaintingQuote.Status.APPROVED
+            ).first()
+        if quote is None:
+            quote = PaintingQuote.objects.filter(
+                service_request=sr, status=PaintingQuote.Status.APPROVED
+            ).first()
+
+        if quote and quote.advance_amount and Decimal(str(quote.advance_amount)) > 0:
+            advance = Decimal(str(quote.advance_amount))
+            if paid < advance:
+                due = advance - paid
+            else:
+                due = total - paid
+        else:
+            due = total - paid
+
+        if due <= 0:
+            return None, "This booking is already fully paid."
+        # Never ask for more than the booking is worth, whatever the quote says.
+        return min(due, total), None
+
+    def _create_razorpay_order(self, sr, amount):
         """
         Creates a real order via the Razorpay Orders API. Only reached when
         RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are configured (i.e. once the
@@ -165,7 +253,7 @@ class PaymentInitiateView(APIView):
         try:
             client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             order = client.order.create({
-                "amount": int(float(sr.total_amount) * 100),  # paise
+                "amount": int(float(amount) * 100),  # paise
                 "currency": "INR",
                 "receipt": sr.request_id,
                 "notes": {"booking_id": str(sr.id), "request_id": sr.request_id},

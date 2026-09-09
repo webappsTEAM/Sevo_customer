@@ -34,6 +34,7 @@ from .models import (
     Coupon, CouponUsage,
     BookingSeries,
     BookingMessage,
+    TripStop,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -54,7 +55,8 @@ from .serializers import (
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
-from .services.logistics_pricing import resolve_logistics_fare, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
+from .services.logistics_pricing import resolve_logistics_fare_v2, UnresolvedLogisticsFareError, LOGISTICS_CATEGORIES
+from .services.routing import get_route_eta
 from .services.address_service import AddressService
 
 
@@ -70,10 +72,14 @@ def _success(data=None, message="", status_code=200):
     )
 
 
-def _error(message, status_code=400, extra=None):
+def _error(message, status_code=400, extra=None, errors=None, **kwargs):
     body = {"success": False, "message": message}
+    if errors is not None:
+        body["errors"] = errors
     if extra:
         body.update(extra)
+    if kwargs:
+        body.update(kwargs)
     return Response(body, status=status_code)
 
 # Fixes EC-08: tracking_token never expired -- a link handed to a customer
@@ -360,11 +366,23 @@ class BookingCreateView(APIView):
         # ── END ZONE GATE ─────────────────────────────────────────────────────
 
         try:
-            corrected_fare = resolve_logistics_fare(
+            # GT-B-01: server-side fare resolution. For a distance-priced
+            # category whose tier is configured with a per-km rate and
+            # which has real pickup + drop coordinates, this measures the
+            # trip (services/routing.py) and computes the H.1 formula;
+            # otherwise it falls back to the previous flat lane/tier
+            # lookup. The client-submitted total_amount is still never
+            # trusted for any logistics category.
+            corrected_fare, fare_breakdown = resolve_logistics_fare_v2(
                 service_category=serializer.validated_data.get("service_category", ""),
                 logistics_tier=serializer.validated_data.get("logistics_tier"),
                 logistics_lane=serializer.validated_data.get("logistics_lane"),
                 submitted_amount=serializer.validated_data.get("total_amount", 0),
+                pickup_lat=serializer.validated_data.get("latitude"),
+                pickup_lng=serializer.validated_data.get("longitude"),
+                drop_lat=serializer.validated_data.get("drop_latitude"),
+                drop_lng=serializer.validated_data.get("drop_longitude"),
+                cart_data=serializer.validated_data.get("cart_data"),
             )
         except UnresolvedLogisticsFareError:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -511,6 +529,27 @@ class BookingCreateView(APIView):
             elif request.user and request.user.is_authenticated and request.user.email:
                 final_email = request.user.email
 
+        # Ensure cart_data carries clean numeric prices matching authoritative fare
+        clean_cart = serializer.validated_data.get("cart_data")
+        if clean_cart and isinstance(clean_cart, list):
+            for item in clean_cart:
+                if isinstance(item, dict):
+                    raw_p = str(item.get("price", "") or "")
+                    clean_str = "".join(ch for ch in raw_p if ch.isdigit() or ch in ".-")
+                    try:
+                        p_val = float(clean_str)
+                    except (ValueError, TypeError):
+                        p_val = float(corrected_fare)
+                    # For logistics bookings, if single vehicle item or placeholder indicative price, set to authoritative corrected_fare
+                    if serializer.validated_data.get("service_category") in LOGISTICS_CATEGORIES:
+                        if len(clean_cart) == 1 or p_val == 0:
+                            item["price"] = float(corrected_fare)
+                        else:
+                            item["price"] = p_val
+                    else:
+                        item["price"] = p_val
+            serializer.validated_data["cart_data"] = clean_cart
+
         sr = serializer.save(
             company=company,
             customer=customer_user,
@@ -519,6 +558,9 @@ class BookingCreateView(APIView):
             payment_method=payment_method,
             payment_status=initial_payment_status,
             total_amount=corrected_fare,
+            # GT-B-01: the itemised quote behind total_amount, when the
+            # fare was distance-computed. Empty for flat-priced bookings.
+            fare_breakdown=_jsonable_fare_breakdown(fare_breakdown),
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
             service_zone_id_snapshot=zone_result.zone_id,
@@ -782,6 +824,20 @@ class CustomerBookingCancelView(APIView):
                 message="Booking is already cancelled.",
             )
 
+        if getattr(sr, "otp_verified", False) or sr.status in [
+            ServiceRequest.Status.IN_PROGRESS,
+            ServiceRequest.Status.PROOF_SUBMITTED,
+            ServiceRequest.Status.COMPLETED,
+        ]:
+            return Response(
+                {
+                    "success": False,
+                    "code": "CANCELLATION_LOCKED_AFTER_OTP",
+                    "message": "Cancellation is locked because customer OTP has been verified.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         reason = request.data.get("reason", "Customer requested cancellation")
         previous_status = sr.status
         
@@ -855,6 +911,123 @@ class CustomerBookingCancelView(APIView):
 
 import math
 
+def _notify_quote_sent(quote):
+    """
+    Fixes a live 500: both quotation endpoints called
+    `send_quote_notification(quote)`, which was never defined anywhere --
+    so submitting a quotation raised NameError AFTER the quote had already
+    been saved. Routed to the real notification (added in
+    notifications.py) and made non-fatal, matching how every other
+    notification is called in this codebase: a mail failure must never
+    fail the request that triggered it.
+    """
+    try:
+        from .notifications import notify_painting_quote_sent
+        notify_painting_quote_sent(quote)
+    except Exception as exc:
+        logger.warning("Could not send quote notification: %s", exc)
+
+
+GENERIC_TECHNICIAN_LABEL = "Assigned Service Professional"
+
+
+def _humanised_technician_name(name, service_category):
+    """
+    Return `name` unless it is obviously not a person's name.
+
+    Technician identity is snapshotted at acceptance from
+    `user.get_full_name() or user.username`, and some accounts have
+    slug-style usernames that match the service category ("pest_control",
+    "ac_repair"). Those leaked into the customer's tracking view as the
+    technician's name. A slug is recognisable: it has no spaces and uses
+    underscores/hyphens as separators, or it simply equals the booking's
+    own service category.
+    """
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return cleaned
+    category = (service_category or "").strip().lower()
+    normalised = cleaned.lower()
+    if category and normalised == category:
+        return GENERIC_TECHNICIAN_LABEL
+    if " " not in cleaned and ("_" in cleaned or "-" in cleaned):
+        return GENERIC_TECHNICIAN_LABEL
+    return cleaned
+
+
+def _build_logistics_progress(sr):
+    """
+    GT-B-03 / GT-D-01: the logistics-specific slice of the tracking
+    payload -- current leg, its history, per-stop progress, and any
+    proof-of-delivery captured so far.
+
+    Returns the same empty shape for a non-logistics booking rather than
+    None or a missing key, so clients can read it unconditionally.
+    """
+    empty = {"leg": "", "leg_updated_at": None, "leg_history": [], "stops": [], "proofs": []}
+    if sr.service_category not in LOGISTICS_CATEGORIES:
+        return empty
+
+    try:
+        stops = [
+            {
+                "id": s.id,
+                "sequence": s.sequence,
+                "stop_type": s.stop_type,
+                "address": s.address,
+                "latitude": float(s.latitude) if s.latitude is not None else None,
+                "longitude": float(s.longitude) if s.longitude is not None else None,
+                "arrived_at": s.arrived_at.isoformat() if s.arrived_at else None,
+                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            }
+            for s in sr.trip_stops.all().order_by("sequence")
+        ]
+    except Exception:
+        stops = []
+
+    try:
+        proofs = [
+            {
+                "id": p.id,
+                "stop": p.stop_id,
+                "proof_type": p.proof_type,
+                "image": p.image.name if p.image else None,
+                "recipient_name": p.recipient_name,
+                # recipient_phone is deliberately omitted -- see
+                # DeliveryProofSerializer for the reasoning.
+                "notes": p.notes,
+                "captured_by_name": p.captured_by_name,
+                "captured_at": p.captured_at.isoformat() if p.captured_at else None,
+            }
+            for p in sr.delivery_proofs.all().order_by("captured_at", "id")
+        ]
+    except Exception:
+        proofs = []
+
+    return {
+        "leg": sr.logistics_leg or "",
+        "leg_updated_at": sr.logistics_leg_updated_at.isoformat() if sr.logistics_leg_updated_at else None,
+        "leg_history": list(sr.logistics_leg_history or []),
+        "stops": stops,
+        "proofs": proofs,
+    }
+
+
+def _jsonable_fare_breakdown(breakdown):
+    """
+    GT-B-01: JSONField can't store Decimal. Convert the fare breakdown's
+    Decimals to strings (not floats -- money must not go through binary
+    floating point, even one-way) so the stored quote is exact and
+    round-trips for reconciliation later. None/empty -> {}.
+    """
+    if not breakdown:
+        return {}
+    out = {}
+    for key, value in breakdown.items():
+        out[key] = str(value) if isinstance(value, Decimal) else value
+    return out
+
+
 def _haversine_meters(lat1, lon1, lat2, lon2):
     try:
         R = 6371000.0  # meters
@@ -876,11 +1049,73 @@ def _build_tracking_payload(sr, has_full_access):
     """
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
+    dest_address = sr.address or ""
+
+    # GT-D-02: sr.latitude/sr.longitude are the PICKUP point (see the
+    # field comment above sr.address). Bookings that used TripStop
+    # (multi-stop routes, GT-B-05) have real per-stop coordinates; use
+    # them to target whichever leg logistics_leg says is current.
+    # Bookings with no TripStop rows (the common single-pickup/
+    # single-drop case) now fall back to sr.drop_latitude/drop_longitude
+    # (added alongside this fix) when the booking is past pickup -- see
+    # the field comment on those two columns. Only if NEITHER a TripStop
+    # nor a drop coordinate exists does this still show the pickup point
+    # post-pickup, which is the one remaining, honestly-unresolvable gap:
+    # older bookings created before drop coordinates were captured.
+    if sr.service_category in LOGISTICS_CATEGORIES:
+        post_pickup_legs = {
+            ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
+            ServiceRequest.LogisticsLeg.UNLOADING,
+            ServiceRequest.LogisticsLeg.DELIVERED,
+        }
+        try:
+            stops = list(sr.trip_stops.all().order_by("sequence"))
+        except Exception:
+            stops = []
+        if stops:
+            target_stop = None
+            if sr.logistics_leg in post_pickup_legs:
+                drop_stops = [s for s in stops if s.stop_type == TripStop.StopType.DROP]
+                target_stop = drop_stops[-1] if drop_stops else stops[-1]
+            else:
+                pickup_stops = [s for s in stops if s.stop_type == TripStop.StopType.PICKUP]
+                target_stop = pickup_stops[0] if pickup_stops else stops[0]
+            if target_stop is not None and target_stop.latitude is not None and target_stop.longitude is not None:
+                dest_lat = float(target_stop.latitude)
+                dest_lng = float(target_stop.longitude)
+                dest_address = target_stop.address or dest_address
+        elif (
+            sr.logistics_leg in post_pickup_legs
+            and sr.drop_latitude is not None
+            and sr.drop_longitude is not None
+        ):
+            dest_lat = float(sr.drop_latitude)
+            dest_lng = float(sr.drop_longitude)
+            dest_address = sr.drop_address or dest_address
 
     # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
+    #
+    # These three used to be denormalised columns on ServiceRequest. When
+    # those columns were dropped, the writer moved to TechnicianLocation but
+    # this reader was left initialising them to 0/0/None and never assigning
+    # them again -- so every tracking payload reported heading 0, speed 0 and
+    # accuracy null regardless of what the technician's device actually sent.
+    # TechnicianLocation is the authoritative per-fix record, so read the
+    # latest fix from there.
     db_heading = 0.0
     db_speed = 0.0
     db_accuracy = None
+    try:
+        from service_requests.services.technician_tracking import latest_fix
+
+        _fix = latest_fix(sr)
+        if _fix is not None:
+            db_heading = float(_fix.heading or 0.0)
+            db_speed = float(_fix.speed or 0.0)
+            db_accuracy = _fix.accuracy
+    except Exception as _fix_err:  # never let telemetry break the tracking page
+        logger.warning("Could not read latest technician fix for %s: %s",
+                       getattr(sr, "request_id", sr.pk), _fix_err)
 
     assigned_emp = getattr(sr, "assigned_employee", None)
     if assigned_emp:
@@ -1023,13 +1258,18 @@ def _build_tracking_payload(sr, has_full_access):
             eta_seconds = 0
             eta_minutes = 0
         elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
-            raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
-            if raw_meters is not None:
-                distance_m = int(round(raw_meters))
-                distance_km = round(distance_m / 1000.0, 1)
-                eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
-                eta_minutes = eta_mins
-                eta_seconds = eta_mins * 60
+            # X-10: server-side routing/ETA. Prefers a real Google Maps
+            # Distance Matrix road-network result; falls back to the
+            # straight-line haversine + assumed-speed estimate used here
+            # previously on ANY Maps failure (no key, network error,
+            # timeout, bad API status) -- never silently pretending to be
+            # more precise than the data actually is.
+            route = get_route_eta(tech_lat, tech_lng, dest_lat, dest_lng)
+            if route is not None:
+                distance_km = route["distance_km"]
+                distance_m = int(round(distance_km * 1000.0))
+                eta_seconds = route["duration_seconds"]
+                eta_minutes = max(1, int(round(route["duration_seconds"] / 60.0)))
         else:
             distance_m = None
             distance_km = None
@@ -1040,6 +1280,13 @@ def _build_tracking_payload(sr, has_full_access):
             eta_minutes = tracking.get("eta_minutes")
         if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
             distance_km = tracking.get("distance_km")
+
+        # Never present a service slug as a person's name. Technician names
+        # are snapshotted from whatever the accepting system had -- which
+        # falls back to a username, and usernames here are sometimes service
+        # slugs like "pest_control". Showing that to a customer as "your
+        # technician" is worse than showing nothing specific.
+        tech_name = _humanised_technician_name(tech_name, sr.service_category)
 
         technician_data = {
             "id": tech_job_id,
@@ -1126,13 +1373,18 @@ def _build_tracking_payload(sr, has_full_access):
         "payment_status": sr.payment_status or "pending",
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
+        # GT-B-03 / GT-D-01: the logistics trip's own progress, separate
+        # from `status` (which is shared by every service category). Only
+        # populated for logistics bookings; every other booking gets the
+        # empty defaults, so no existing consumer changes shape.
+        "logistics": _build_logistics_progress(sr),
         "service_location": {
-            "address": sr.address or "",
+            "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
         "destination": {
-            "address": sr.address or "",
+            "address": dest_address,
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
@@ -1523,7 +1775,7 @@ class AdminSRUpdateTechnicianLocationView(APIView):
         is_staff_or_admin = (
             request.user and request.user.is_authenticated and (getattr(request.user, "is_staff", False) or getattr(request.user, "role", "") in ["admin", "staff", "manager"])
         )
-        from workforce_integration.views import _verify_webhook_signature
+        from workforce_integration.views import _verify_webhook_signature, parse_datetime_safe
         has_wf_secret = _verify_webhook_signature(request)
         if not is_staff_or_admin and not has_wf_secret:
             return _error("Only authorized staff or workforce services can update technician location.", 403)
@@ -1544,10 +1796,6 @@ class AdminSRUpdateTechnicianLocationView(APIView):
             sr.technician_photo = request.data.get("technician_photo")
         if "technician_rating" in request.data:
             sr.technician_rating = request.data.get("technician_rating")
-        if "latitude" in request.data or "technician_latitude" in request.data or "lat" in request.data:
-            sr.technician_latitude = request.data.get("latitude") or request.data.get("technician_latitude") or request.data.get("lat")
-        if "longitude" in request.data or "technician_longitude" in request.data or "lng" in request.data:
-            sr.technician_longitude = request.data.get("longitude") or request.data.get("technician_longitude") or request.data.get("lng")
         if "location_name" in request.data or "technician_location_name" in request.data or "current_location_name" in request.data:
             sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name") or request.data.get("current_location_name")
         if "status" in request.data and request.data.get("status") in dict(ServiceRequest.Status.choices):
@@ -1555,16 +1803,61 @@ class AdminSRUpdateTechnicianLocationView(APIView):
 
         sr.save()
 
-        # Broadcast live tracking update via WebSockets
-        try:
-            from .notifications import broadcast_tracking_event
-            full_payload = _build_tracking_payload(sr, has_full_access=True)
-            broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
-        except Exception as b_err:
-            logger.warning(f"Error broadcasting live location: {b_err}")
+        # Coordinates go through record_technician_fix -- the same service the
+        # technician app and the workforce webhook already use -- rather than
+        # being written straight onto the row.
+        #
+        # This endpoint used to assign technician_latitude/longitude directly
+        # and ignore `captured_at` entirely, so a GPS packet that arrived late
+        # overwrote a NEWER position: the marker jumped backwards along the
+        # route until the next fresh packet happened to arrive. It also stored
+        # no TechnicianLocation telemetry at all, so heading/speed/accuracy
+        # were dropped and there was no trail to reconstruct. Both are fixed
+        # by using the shared path, which drops stale fixes and persists the
+        # fix -- so the two transports cannot drift apart again.
+        lat = request.data.get("latitude") or request.data.get("technician_latitude") or request.data.get("lat")
+        lng = request.data.get("longitude") or request.data.get("technician_longitude") or request.data.get("lng")
+        outcome = None
+        if lat is not None and lng is not None:
+            from service_requests.services.technician_tracking import record_technician_fix
+
+            outcome, _fix = record_technician_fix(
+                sr,
+                latitude=lat,
+                longitude=lng,
+                accuracy=request.data.get("accuracy"),
+                heading=request.data.get("heading") or 0.0,
+                speed=request.data.get("speed") or 0.0,
+                captured_at=parse_datetime_safe(
+                    request.data.get("captured_at")
+                    or request.data.get("timestamp")
+                    or request.data.get("updated_at")
+                ),
+                technician=request.user if getattr(request.user, "is_authenticated", False) else None,
+            )
+            if outcome == "invalid":
+                return _error("Invalid coordinates.", 400)
+
+        # Only broadcast a position the server actually accepted. Broadcasting
+        # a rejected stale fix would push the old coordinates to every
+        # watching client, which is the very jump this guard exists to stop.
+        if outcome != "stale":
+            try:
+                from .notifications import broadcast_tracking_event
+                full_payload = _build_tracking_payload(sr, has_full_access=True)
+                broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
+            except Exception as b_err:
+                logger.warning(f"Error broadcasting live location: {b_err}")
+
+        payload = _build_tracking_payload(sr, has_full_access=True)
+        if outcome == "stale":
+            # Additive key only -- the existing response shape is unchanged,
+            # and the position returned is the newer one already stored.
+            payload["ignored"] = True
+            return _success(data=payload, message="Out-of-order location packet ignored.")
 
         return _success(
-            data=_build_tracking_payload(sr, has_full_access=True),
+            data=payload,
             message="Technician live location updated successfully."
         )
 
@@ -3658,7 +3951,7 @@ class AdminQuoteCreateView(APIView):
                 )
 
         if quote.status == PaintingQuote.Status.SENT_TO_CUSTOMER:
-            send_quote_notification(quote)
+            _notify_quote_sent(quote)
 
         return _success(
             data=PaintingQuoteSerializer(quote).data,
@@ -3683,7 +3976,7 @@ class AdminQuoteActionView(APIView):
         if action == "APPROVE_AND_SEND":
             quote.status = PaintingQuote.Status.SENT_TO_CUSTOMER
             quote.save(update_fields=["status"])
-            send_quote_notification(quote)
+            _notify_quote_sent(quote)
             return _success(message="Quotation approved and sent to customer.")
         elif action == "REJECT":
             quote.status = PaintingQuote.Status.DECLINED

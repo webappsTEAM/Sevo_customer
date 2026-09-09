@@ -8,7 +8,7 @@ import {
   ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -22,6 +22,7 @@ import {
   searchHosurPlacesOnline,
   formatExactLocation,
   isHosurRouteServed,
+  resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
@@ -408,20 +409,68 @@ const INVENTORY_DATA = {
 }
 
 /* ── Slots & Dates Helper ── */
+const SHIFTING_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+}
+
+const isSlotPassed = (slot, dateObj) => {
+  if (!slot || !dateObj) return false
+  const today = new Date()
+  const d = dateObj instanceof Date ? dateObj : new Date(dateObj)
+  if (isNaN(d.getTime())) return false
+  if (d.toDateString() !== today.toDateString()) return false
+
+  const parts = slot.split("-")
+  if (parts.length < 2) return false
+  const startTimeStr = parts[0].trim()
+  
+  const match = startTimeStr.match(/^(\d+)(AM|PM)$/i)
+  if (!match) return false
+  let hour = parseInt(match[1], 10)
+  const ampm = match[2].toUpperCase()
+  if (ampm === "PM" && hour < 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  const slotStart = new Date(d)
+  slotStart.setHours(hour, 0, 0, 0)
+
+  // Backend booking_window.py enforces minimum 60 minutes lead time from now
+  const minLeadTime = new Date(today.getTime() + 60 * 60 * 1000)
+  return slotStart < minLeadTime
+}
+
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
-  for (let i = 1; i <= 7; i++) {
+  
+  const hasRemainingSlots = (dateObj) => {
+    for (const slots of Object.values(SHIFTING_SLOTS)) {
+      for (const slot of slots) {
+        if (!isSlotPassed(slot, dateObj)) return true
+      }
+    }
+    return false
+  }
+
+  let startOffset = 0
+  if (!hasRemainingSlots(today)) {
+    startOffset = 1
+  }
+
+  for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
     nextDate.setDate(today.getDate() + i)
-    
+
     let dayName = ""
-    if (i === 1) dayName = "Tomorrow"
+    if (i === 0) dayName = "Today"
+    else if (i === 1) dayName = "Tomorrow"
     else dayName = nextDate.toLocaleDateString("en-US", { weekday: "short" })
-    
+
     const dateNum = nextDate.getDate().toString().padStart(2, "0")
     const monthStr = nextDate.toLocaleDateString("en-US", { month: "short" })
-    
+
     dates.push({
       id: `date_${i}`,
       label: dayName,
@@ -432,13 +481,18 @@ const generateUpcomingDates = () => {
   return dates
 }
 
-const SHIFTING_DATES = generateUpcomingDates()
-
-const SHIFTING_SLOTS = {
-  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
-  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
-  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+const getFirstAvailableSlotAndCategory = (dateObj) => {
+  for (const [category, slots] of Object.entries(SHIFTING_SLOTS)) {
+    for (const slot of slots) {
+      if (!isSlotPassed(slot, dateObj)) {
+        return { category, slot }
+      }
+    }
+  }
+  return { category: "Morning", slot: "" }
 }
+
+const SHIFTING_DATES = generateUpcomingDates()
 
 /* ── Enhanced Custom Shifting Date Picker ── */
 function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shifting Date" }) {
@@ -712,6 +766,23 @@ export function PackersMoversBookingHosurPage() {
   // Form State
   const [pickup, setPickup] = useState("")
   const [drop, setDrop] = useState("")
+
+  // Real geocoded coordinates for the pickup / drop the customer actually
+  // picked. searchHosurPlacesOnline() already returns lat/lng on every
+  // online suggestion (Google Geocoding, Photon and Nominatim all supply
+  // it) and the live-GPS button already has exact device coordinates --
+  // both were being thrown away, and every booking was submitted with the
+  // same hardcoded Hosur town-centre point regardless of where the
+  // customer said they were. That fake coordinate then drove the
+  // server-side zone gate, technician dispatch and the live-tracking ETA.
+  //
+  // Each entry remembers the exact address string it was resolved FOR, so
+  // any later change to that field (typing, picking a popular route, an
+  // autofilled default) automatically invalidates it -- better to send no
+  // coordinate and let the backend fall back than to attach a stale point
+  // to an address the customer has since changed.
+  const [pickupCoords, setPickupCoords] = useState(null) // { lat, lng, forAddress }
+  const [dropCoords, setDropCoords] = useState(null)     // { lat, lng, forAddress }
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("1 BHK House Shifting")
@@ -734,9 +805,10 @@ export function PackersMoversBookingHosurPage() {
   const [inventorySearchQuery, setInventorySearchQuery] = useState("")
 
   // Step 3: Date & Slot State
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
+  const [selectedDate, setSelectedDate] = useState(() => SHIFTING_DATES[0] || null)
+  const initialAvailable = getFirstAvailableSlotAndCategory(SHIFTING_DATES[0]?.fullDate || new Date())
+  const [selectedSlot, setSelectedSlot] = useState(() => initialAvailable.slot || null)
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => initialAvailable.category || "Morning")
 
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -750,9 +822,68 @@ export function PackersMoversBookingHosurPage() {
   const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
   const isSignedIn = Boolean(user) || localIsSignedIn
 
+  // Relocation Services & Floor States
+  const [pickupFloor, setPickupFloor] = useState(0)
+  const [pickupHasLift, setPickupHasLift] = useState(true)
+  const [dropFloor, setDropFloor] = useState(0)
+  const [dropHasLift, setDropHasLift] = useState(true)
+  const [packingTier, setPackingTier] = useState("standard")
+  const [dismantlingRequired, setDismantlingRequired] = useState(true)
+  const [unpackingRequired, setUnpackingRequired] = useState(false)
+  const [pmServerQuote, setPmServerQuote] = useState(null)
+  const [pmQuoteLoading, setPmQuoteLoading] = useState(false)
+  const [pmQuoteError, setPmQuoteError] = useState("")
+
+  const refreshPmQuote = async () => {
+    const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
+    const dropAddressValue = drop || "Bengaluru, Karnataka, India"
+    const usableCoords = (coords, address) =>
+      coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+        ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+        : null
+    const pickupPoint = usableCoords(pickupCoords, pickupAddressValue) || { lat: 12.7409, lng: 77.8253 }
+    const dropPoint = usableCoords(dropCoords, dropAddressValue) || { lat: 12.7500, lng: 77.8350 }
+
+    setPmQuoteLoading(true)
+    setPmQuoteError("")
+    try {
+      const res = await fetchPackersMoversQuote({
+        pickup: pickupPoint,
+        drop: dropPoint,
+        inventory: inventoryItems,
+        packingTier,
+        dismantlingRequired,
+        unpackingRequired,
+        pickupFloor,
+        pickupHasLift,
+        dropFloor,
+        dropHasLift,
+        relocationType,
+      })
+      const quoteData = res?.data || res
+      if (quoteData && quoteData.quote_id) {
+        setPmServerQuote(quoteData)
+      } else {
+        setPmQuoteError(quoteData?.message || "Failed to calculate relocation quote.")
+      }
+    } catch (err) {
+      console.warn("Failed to fetch PM quote:", err)
+      setPmQuoteError("Could not retrieve live price calculation.")
+    } finally {
+      setPmQuoteLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (stepperStep === 4) {
+      refreshPmQuote()
+    }
+  }, [stepperStep, packingTier, dismantlingRequired, unpackingRequired, pickupFloor, pickupHasLift, dropFloor, dropHasLift])
+
+
   // Live Dispatch & Polling State
   const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
-  const [partnerCountdown, setPartnerCountdown] = useState(120)
+  const [partnerCountdown, setPartnerCountdown] = useState(600) // 10:00 mins
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
@@ -776,7 +907,7 @@ export function PackersMoversBookingHosurPage() {
   useEffect(() => {
     let t = null
     if (lookingForPartnerOpen) {
-      setPartnerCountdown(120)
+      setPartnerCountdown(600)
       t = setInterval(() => {
         setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
       }, 1000)
@@ -1041,14 +1172,22 @@ export function PackersMoversBookingHosurPage() {
             const parts = [p.name, p.street, p.suburb || p.district, p.city || p.locality, p.state].filter(Boolean)
             const uniqueParts = parts.filter((v, i, a) => a.indexOf(v) === i)
             const formatted = uniqueParts.join(", ")
-            setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+            const resolved = formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+            setPickup(resolved)
+            // Exact device GPS -- the most accurate pickup point we can get.
+            setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           } else {
-            setPickup(`Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+            const resolved = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+            setPickup(resolved)
+            setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           }
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
-          setPickup(`Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          // Reverse geocoding failed, but the GPS fix itself is still valid.
+          const resolved = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(resolved)
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } finally {
@@ -1188,7 +1327,19 @@ export function PackersMoversBookingHosurPage() {
     setBookingSubmitting(true)
     try {
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
-      const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 455
+      const quoteTotal = pmServerQuote?.total != null 
+        ? Number(pmServerQuote.total) 
+        : (pmServerQuote?.pricing?.total != null ? Number(pmServerQuote.pricing.total) : null)
+      if (quoteTotal == null) {
+        setBookingSubmitting(false)
+        setBookingError(
+          pmQuoteError ||
+            "We couldn't calculate a relocation quote for this move. Please ensure pickup, drop, and items are selected."
+        )
+        return
+      }
+      const fare = quoteTotal
+      const quoteId = pmServerQuote?.quote_id || null
       
       let dateString = todayDateString()
       if (selectedDate && selectedDate.fullDate) {
@@ -1197,32 +1348,79 @@ export function PackersMoversBookingHosurPage() {
       }
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
+
+      const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
+      const dropAddressValue = drop || "Bengaluru, Karnataka, India"
+      // Only use a stored coordinate if it was resolved for the address
+      // being submitted right now -- see the pickupCoords/dropCoords
+      // declaration above for why.
+      const usableCoords = (coords, address) =>
+        coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+          ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+          : null
+      const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
+      const dropPoint = usableCoords(dropCoords, dropAddressValue)
+
+      // No hardcoded fallback coordinate. A relocation whose pickup we
+      // could not pin is refused rather than booked at a made-up point --
+      // the crew and vehicle are allocated from that location.
+      if (!pickupPoint) {
+        setBookingSubmitting(false)
+        setBookingError(
+          "We couldn't pin your pickup location. Please pick it from the suggestions so we can plan your move."
+        )
+        return
+      }
+
       const payload = {
         customer_name: name || "Thejaa T",
         phone: phone || "6379222691",
         email: customerEmail,
         service_category: "packers_movers",
-        issue_title: `Packers & Movers — ${pkg.name || "House Shifting"} (${relocationType})`,
-        description: `Type: ${userType} | Relocation: ${relocationType}`,
-        address: pickup || "Hosur, Tamil Nadu",
-        drop_address: drop || "Bengaluru, Karnataka, India",
-        latitude: 12.7409,
-        longitude: 77.8253,
+        issue_title: `Packers & Movers — ${pmServerQuote?.vehicle?.name || pkg.name || "House Shifting"} (${relocationType})`,
+        description: `Type: ${userType} | Relocation: ${relocationType} | Volume: ${pmServerQuote?.inventory_summary?.total_cft || 0} CFT`,
+        address: pickupAddressValue,
+        drop_address: dropAddressValue,
+        // Only ever the REAL resolved pickup point -- see the guard above.
+        latitude: Number(Number(pickupPoint.lat).toFixed(6)),
+        longitude: Number(Number(pickupPoint.lng).toFixed(6)),
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
         payment_method: "COD",
         cart_data: [{
-          package: pkg.name || "Packers & Movers", price: pkg.price || `₹ ${fare}`, route: selectedRoute?.to || null,
-          relocation_type: relocationType, inventory: inventoryItems,
-          date: selectedDate?.value, slot: selectedSlot
+          quote_id: quoteId,
+          package: pmServerQuote?.vehicle?.name || pkg.name || "Packers & Movers",
+          price: fare,
+          route: selectedRoute?.to || null,
+          relocation_type: relocationType,
+          inventory: inventoryItems,
+          packing_tier: packingTier,
+          dismantling_required: dismantlingRequired,
+          unpacking_required: unpackingRequired,
+          pickup_floor: pickupFloor,
+          pickup_has_lift: pickupHasLift,
+          drop_floor: dropFloor,
+          drop_has_lift: dropHasLift,
+          date: selectedDate?.value,
+          slot: selectedSlot
         }],
       }
-      if (pkg?._tierId) payload.logistics_tier = pkg._tierId
+      payload.logistics_tier = pkg?._tierId || 7
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+      // Backend accepts these as optional; only send a real resolved point.
+      if (dropPoint?.lat != null && dropPoint?.lng != null) {
+        payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
+        payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
+      }
 
       const res = await createBooking(payload)
-      const bookingId = res?.data?.request_id || res?.request_id || ("CRN" + Math.floor(100000000000 + Math.random() * 900000000000))
+      // No request_id means the server did not create the booking, whatever
+      // status it returned. Treated as a failure rather than papered over.
+      const bookingId = res?.data?.request_id || res?.request_id
+      if (!bookingId) {
+        throw { status: 0, body: { message: "The booking was not confirmed by the server." } }
+      }
       const token = res?.data?.tracking_token || res?.tracking_token || null
       setLastBookingId(bookingId)
       setLastTrackingToken(token)
@@ -1230,13 +1428,34 @@ export function PackersMoversBookingHosurPage() {
       setVehicleSelectorOpen(false)
       setLookingForPartnerOpen(true)
     } catch (err) {
-      console.warn("Booking creation fallback:", err)
-      const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
-      setLastBookingId(fallbackCRN)
-      setLastTrackingToken(null)
-      setInventoryBuilderOpen(false)
-      setVehicleSelectorOpen(false)
-      setLookingForPartnerOpen(true)
+      // A booking exists only if the backend created the ServiceRequest.
+      //
+      // This block used to invent a "CRN<12 random digits>" reference, store
+      // it as the booking id and open the "looking for a partner" screen --
+      // on the FAILURE path. A customer whose booking the server had just
+      // rejected was shown a confirmed booking, with a reference number that
+      // matched nothing in the database, and then waited for a driver who was
+      // never dispatched. Surface the failure instead; never fabricate a
+      // booking reference.
+      console.error("Booking creation failed:", err)
+      let detail = err?.body?.detail
+      if (!detail && err?.body?.errors && typeof err.body.errors === "object") {
+        const firstField = Object.keys(err.body.errors)[0]
+        const firstErr = err.body.errors[firstField]
+        detail = Array.isArray(firstErr) ? firstErr[0] : String(firstErr)
+      }
+      if (!detail) {
+        detail =
+          err?.body?.message ||
+          (err?.status === 401
+            ? "Please sign in again to complete this booking."
+            : "")
+      }
+      setBookingError(
+        detail ||
+          "We couldn't confirm your booking just now. Nothing has been charged — please try again."
+      )
+      setLookingForPartnerOpen(false)
     } finally {
       setBookingSubmitting(false)
     }
@@ -1487,6 +1706,14 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setPickup(loc.name)
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
                                           setShowPickupSuggestions(false)
                                         }}
                                         className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
@@ -1521,6 +1748,14 @@ export function PackersMoversBookingHosurPage() {
                                             e.preventDefault()
                                             const exact = formatExactLocation(loc)
                                             setDrop(exact)
+                                            if (loc.lat != null && loc.lng != null) {
+                                              setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
+                                            } else {
+                                              setDropCoords(null)
+                                              resolveLocationCoords(loc).then((c) => {
+                                                if (c) setDropCoords({ ...c, forAddress: exact })
+                                              })
+                                            }
                                             setShowDropSuggestions(false)
                                           }}
                                           className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
@@ -1566,6 +1801,14 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setPickup(loc.name)
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
                                           if (relocationType === "Between Cities" && drop && drop.trim().toLowerCase() === loc.name.toLowerCase()) {
                                             setDrop("")
                                           }
@@ -2231,7 +2474,9 @@ export function PackersMoversBookingHosurPage() {
                 <><span>Book Now</span><ArrowRight className="w-4 h-4" /></>
               )}
             </button>
-            {isSignedIn && bookingError && (
+            {/* A failed booking must be reported to whoever attempted it;
+                gating on isSignedIn hid it in exactly the 401 case. */}
+            {bookingError && (
               <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
             )}
           </div>
@@ -2419,10 +2664,19 @@ export function PackersMoversBookingHosurPage() {
                   </div>
                   <button
                     onClick={() => {
+                      if (!selectedDate) {
+                        const defaultDate = SHIFTING_DATES[0]
+                        setSelectedDate(defaultDate)
+                        const { category, slot } = getFirstAvailableSlotAndCategory(defaultDate?.fullDate || new Date())
+                        if (!selectedSlot) {
+                          setSelectedSlot(slot || null)
+                          if (category) setExpandedSlotCategory(category)
+                        }
+                      }
                       setStepperStep(3)
                     }}
                     disabled={totalItemsCount === 0}
-                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled:bg-[#CBD5E1] aria-disabled:cursor-not-allowed"
+                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled={totalItemsCount === 0}"
                     aria-disabled={totalItemsCount === 0}
                   >
                     Continue
@@ -2449,7 +2703,14 @@ export function PackersMoversBookingHosurPage() {
                         {SHIFTING_DATES.map((dateObj) => (
                           <div 
                             key={dateObj.id}
-                            onClick={() => setSelectedDate(dateObj)}
+                            onClick={() => {
+                              setSelectedDate(dateObj)
+                              if (selectedSlot && isSlotPassed(selectedSlot, dateObj.fullDate)) {
+                                const { category, slot } = getFirstAvailableSlotAndCategory(dateObj.fullDate)
+                                setSelectedSlot(slot || null)
+                                if (category) setExpandedSlotCategory(category)
+                              }
+                            }}
                             className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
                               selectedDate?.id === dateObj.id 
                                 ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
@@ -2491,19 +2752,26 @@ export function PackersMoversBookingHosurPage() {
                               
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                  {slots.map(slot => (
-                                    <div 
-                                      key={slot}
-                                      onClick={() => setSelectedSlot(slot)}
-                                      className={`py-2 px-1 rounded-xl border text-center cursor-pointer transition-all ${
-                                        selectedSlot === slot 
-                                          ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
-                                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium"
-                                      }`}
-                                    >
-                                      <span className="text-[12px]">{slot}</span>
-                                    </div>
-                                  ))}
+                                  {slots.map(slot => {
+                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    return (
+                                      <button 
+                                        key={slot}
+                                        type="button"
+                                        disabled={passed}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                                          selectedSlot === slot 
+                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
+                                            : passed
+                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                        }`}
+                                      >
+                                        <span className="text-[12px]">{slot}</span>
+                                      </button>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -2537,7 +2805,7 @@ export function PackersMoversBookingHosurPage() {
                           onClick={() => {
                             setStepperStep(4)
                           }}
-                          disabled={!selectedDate || !selectedSlot}
+                          disabled={!selectedDate || !selectedSlot || isSlotPassed(selectedSlot, selectedDate?.fullDate || new Date())}
                           className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
                         >
                           Confirm
@@ -2559,73 +2827,260 @@ export function PackersMoversBookingHosurPage() {
                       </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-32">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-36">
+                      {/* Movement & Floor Access Details */}
                       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-bold text-slate-800 text-base">Movement Details</h3>
-                          <button onClick={() => setStepperStep(1)} className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer">Edit</button>
+                          <h3 className="font-bold text-slate-800 text-base">Movement &amp; Floor Access</h3>
+                          <button onClick={() => setStepperStep(1)} className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer">Edit Locations</button>
                         </div>
-                        <div className="space-y-4 relative ml-1">
+                        <div className="space-y-5 relative ml-1">
                           <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
                           
+                          {/* Pickup Floor & Lift */}
                           <div className="flex items-start gap-4 relative bg-white">
                             <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                              <MapPin className="w-3.5 h-3.5 text-slate-700" />
+                              <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                             </div>
-                            <div className="pt-0.5">
-                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <input type="checkbox" className="w-3.5 h-3.5 accent-[#0B8860]" />
-                                <span className="text-[12px] text-slate-500">Is service lift available<span className="text-red-500">*</span></span>
+                            <div className="pt-0.5 flex-1">
+                              <p className="text-[14px] text-slate-800 font-semibold leading-relaxed">{pickup || "Hosur Origin"}</p>
+                              <div className="flex flex-wrap items-center gap-4 mt-2.5">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                  <span>Pickup Floor:</span>
+                                  <select
+                                    value={pickupFloor}
+                                    onChange={(e) => setPickupFloor(Number(e.target.value))}
+                                    className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#0B8860]"
+                                  >
+                                    <option value={0}>Ground Floor</option>
+                                    <option value={1}>1st Floor</option>
+                                    <option value={2}>2nd Floor</option>
+                                    <option value={3}>3rd Floor</option>
+                                    <option value={4}>4th Floor</option>
+                                    <option value={5}>5th Floor+</option>
+                                  </select>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={pickupHasLift}
+                                    onChange={(e) => setPickupHasLift(e.target.checked)}
+                                    className="w-3.5 h-3.5 accent-[#0B8860] rounded cursor-pointer"
+                                  />
+                                  <span className="text-[12px] text-slate-600">Service Lift Available</span>
+                                </label>
                               </div>
                             </div>
                           </div>
+
+                          {/* Drop Floor & Lift */}
                           <div className="flex items-start gap-4 relative bg-white">
                             <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                              <MapPin className="w-3.5 h-3.5 text-slate-700" />
+                              <MapPin className="w-3.5 h-3.5 text-rose-500" />
                             </div>
-                            <div className="pt-0.5">
-                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{drop || "Destination"}</p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <input type="checkbox" className="w-3.5 h-3.5 accent-[#0B8860]" />
-                                <span className="text-[12px] text-slate-500">Is service lift available<span className="text-red-500">*</span></span>
+                            <div className="pt-0.5 flex-1">
+                              <p className="text-[14px] text-slate-800 font-semibold leading-relaxed">{drop || "Destination"}</p>
+                              <div className="flex flex-wrap items-center gap-4 mt-2.5">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                  <span>Drop Floor:</span>
+                                  <select
+                                    value={dropFloor}
+                                    onChange={(e) => setDropFloor(Number(e.target.value))}
+                                    className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#0B8860]"
+                                  >
+                                    <option value={0}>Ground Floor</option>
+                                    <option value={1}>1st Floor</option>
+                                    <option value={2}>2nd Floor</option>
+                                    <option value={3}>3rd Floor</option>
+                                    <option value={4}>4th Floor</option>
+                                    <option value={5}>5th Floor+</option>
+                                  </select>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={dropHasLift}
+                                    onChange={(e) => setDropHasLift(e.target.checked)}
+                                    className="w-3.5 h-3.5 accent-[#0B8860] rounded cursor-pointer"
+                                  />
+                                  <span className="text-[12px] text-slate-600">Service Lift Available</span>
+                                </label>
                               </div>
                             </div>
                           </div>
                         </div>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                               <Calendar className="w-4 h-4 text-indigo-600" />
                             </div>
                             <span className="text-[13px] text-slate-700 font-medium">
-                              {selectedDate ? `${selectedDate.fullDate.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})} | ` : ""}{selectedSlot || "Time not selected"}
+                              {selectedDate ? `${selectedDate.fullDate.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})} | ` : ""}{selectedSlot || "Morning Slot"}
                             </span>
                           </div>
-                          <button onClick={() => setStepperStep(3)} className="text-[13px] font-bold text-slate-500 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Explore Slots</button>
+                          <button onClick={() => setStepperStep(3)} className="text-[12px] font-bold text-slate-600 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Change Slot</button>
                         </div>
                       </div>
 
-                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between cursor-pointer hover:border-[#0B8860] transition-colors" onClick={() => setStepperStep(2)}>
-                        <h3 className="font-bold text-slate-800 text-base">Your Added Inventory ({Object.values(inventoryItems).reduce((a, b) => a + b, 0)})</h3>
-                        <ChevronDown className="w-5 h-5 text-slate-400 -rotate-90" />
+                      {/* Packing & Service Customization */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+                        <h3 className="font-bold text-slate-800 text-base">Packing &amp; Moving Services</h3>
+                        
+                        {/* Packing Tier Selector */}
+                        <div>
+                          <p className="text-xs font-semibold text-slate-600 mb-2">Packing Materials &amp; Standards</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: "standard", label: "Standard Packing", desc: "Multi-layer bubble & foam" },
+                              { id: "premium", label: "Premium Fragile", desc: "4-Layer + edge crates" },
+                              { id: "no_packing", label: "Customer Packed", desc: "Transport & loading only" },
+                            ].map((tier) => (
+                              <div
+                                key={tier.id}
+                                onClick={() => setPackingTier(tier.id)}
+                                className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
+                                  packingTier === tier.id
+                                    ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] shadow-xs"
+                                    : "border-slate-200 hover:border-slate-300 text-slate-700"
+                                }`}
+                              >
+                                <p className="text-xs font-bold">{tier.label}</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{tier.desc}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Add-on service toggles */}
+                        <div className="pt-2 border-t border-slate-100 space-y-2">
+                          <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Furniture Dismantling &amp; Reassembly</p>
+                              <p className="text-[11px] text-slate-500">Beds, wardrobes, and modular dining tables</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={dismantlingRequired}
+                              onChange={(e) => setDismantlingRequired(e.target.checked)}
+                              className="w-4 h-4 accent-[#0B8860] rounded cursor-pointer"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Unpacking Assistance at Destination</p>
+                              <p className="text-[11px] text-slate-500">Unpack cartons and place goods in respective rooms</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={unpackingRequired}
+                              onChange={(e) => setUnpackingRequired(e.target.checked)}
+                              className="w-4 h-4 accent-[#0B8860] rounded cursor-pointer"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Added Inventory Summary Accordion */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-center justify-between cursor-pointer hover:border-[#0B8860] transition-colors" onClick={() => setStepperStep(2)}>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-sm">
+                            Added Inventory: {Object.values(inventoryItems).reduce((a, b) => a + b, 0)} Items
+                          </h3>
+                          {pmServerQuote?.inventory_summary && (
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Estimated Volume: {pmServerQuote.inventory_summary.total_cft} CFT • {pmServerQuote.inventory_summary.fragile_count} Fragile
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-[#0B8860] hover:underline">Edit Items</span>
+                      </div>
+
+                      {/* Server-Authoritative Price Breakdown */}
+                      <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-slate-800 text-sm">Price Breakdown</h3>
+                          {pmServerQuote?.vehicle && (
+                            <span className="text-[11px] font-bold bg-[#0B8860]/10 text-[#0B8860] px-2.5 py-0.5 rounded-full">
+                              {pmServerQuote.vehicle.name} ({pmServerQuote.vehicle.crew_size} Movers)
+                            </span>
+                          )}
+                        </div>
+
+                        {pmQuoteLoading ? (
+                          <div className="py-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
+                            Calculating live relocation fare...
+                          </div>
+                        ) : pmServerQuote?.pricing ? (
+                          <div className="space-y-2 text-xs text-slate-600 pt-1">
+                            <div className="flex justify-between">
+                              <span>Base Transport &amp; Route ({pmServerQuote.route?.distance_km} km)</span>
+                              <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.transport_total}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Packing ({pmServerQuote.pricing.packing_label})</span>
+                              <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.packing_charge}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Loading, Unloading &amp; Floor Labor</span>
+                              <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.labor_total}</span>
+                            </div>
+                            {Number(pmServerQuote.pricing.dismantling_charge) > 0 && (
+                              <div className="flex justify-between">
+                                <span>Furniture Dismantling / Reassembly</span>
+                                <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.dismantling_charge}</span>
+                              </div>
+                            )}
+                            {Number(pmServerQuote.pricing.unpacking_charge) > 0 && (
+                              <div className="flex justify-between">
+                                <span>Unpacking Service</span>
+                                <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.unpacking_charge}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200">
+                              <span>Subtotal</span>
+                              <span>₹ {pmServerQuote.pricing.subtotal}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500">
+                              <span>Taxes (GST 18%)</span>
+                              <span>₹ {pmServerQuote.pricing.gst_amount}</span>
+                            </div>
+                            <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-200">
+                              <span>Total Moving Fare</span>
+                              <span className="text-[#0B8860]">₹ {pmServerQuote.pricing.total}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 pt-1">
+                              Quote Reference: {pmServerQuote.quote_id} • Authoritative quote valid for 48 hours
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-rose-500">{pmQuoteError || "Unable to retrieve price calculation."}</p>
+                        )}
                       </div>
                     </div>
 
+                    {/* Bottom Action Bar */}
                     <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
                       <div>
-                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Token Amount</p>
-                        <p className="text-xl font-black text-slate-800">₹ 455</p>
+                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Total Fare</p>
+                        <p className="text-xl font-black text-slate-800">
+                          {pmServerQuote?.pricing?.total 
+                            ? `₹ ${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
+                            : pmServerQuote?.total 
+                              ? `₹ ${Number(pmServerQuote.total).toLocaleString("en-IN")}`
+                              : (pmQuoteLoading ? "Calculating..." : "Quote required")}
+                        </p>
                       </div>
                       <button
                         onClick={() => {
                           handleBookNow()
                         }}
-                        disabled={bookingSubmitting}
-                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
+                        disabled={bookingSubmitting || pmQuoteLoading || (!pmServerQuote?.pricing?.total && !pmServerQuote?.total)}
+                        className="px-8 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
+                        {bookingSubmitting ? "Confirming Move..." : "Confirm Move"}
                       </button>
                     </div>
                   </>
@@ -2758,7 +3213,7 @@ export function PackersMoversBookingHosurPage() {
                   >
                     <div>
                       <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "CRN288650604065"}</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
                   </button>

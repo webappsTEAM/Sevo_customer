@@ -13,12 +13,14 @@ import hmac
 import hashlib
 import logging
 import os
+from datetime import timezone as dt_timezone
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 
 from .services import WorkforceIntegrationService
 
@@ -53,6 +55,31 @@ if not _raw_webhook_secret:
         )
 else:
     WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret
+
+
+def parse_datetime_safe(value):
+    """
+    Parse a timestamp out of a webhook payload, or return None.
+
+    Returns None rather than raising or defaulting to "now": a fix with an
+    unreadable capture time must not be treated as the freshest thing we
+    have, because that is exactly how a stale packet would win.
+    """
+    if not value:
+        return None
+    from django.utils.dateparse import parse_datetime
+
+    try:
+        parsed = parse_datetime(str(value))
+    except (TypeError, ValueError):
+        return None
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        # datetime.timezone.utc, not django.utils.timezone.utc -- the latter
+        # was removed in Django 5.
+        parsed = timezone.make_aware(parsed, dt_timezone.utc)
+    return parsed
 
 
 def _verify_webhook_signature(request) -> bool:
@@ -95,8 +122,19 @@ class WorkforceWebhookView(APIView):
     Ingests asynchronous events from the separate Workforce system.
     Enforces webhook idempotency, transaction safety, state-machine validation,
     and strict ASSIGNED != ACCEPTED privacy rules.
+
+    AllowAny is correct here -- the vendor app has no user session to send,
+    and trust comes from _verify_webhook_signature (shared secret or an
+    HMAC-SHA256 over the raw body), not from Django auth. But AllowAny also
+    meant this endpoint inherited the blanket anonymous 60/minute rate,
+    which is far too low for what it receives: one request per event, with
+    GPS alone running at roughly six per minute per active driver. Ten
+    drivers saturate it. Because delivery is fire-and-forget with no retry,
+    every throttled event is lost for good, silently.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "workforce_webhook"
 
     def post(self, request):
         from service_requests.notifications import notify_technician_assigned, notify_technician_on_the_way, notify_delivery_recipient
@@ -395,6 +433,15 @@ class WorkforceWebhookView(APIView):
                         safe_apply_transition(sr, "completed")
                     sr.save()
 
+                    # GT-C-01: reconcile the fare quoted at booking against
+                    # what the trip actually was, from server-side facts
+                    # only (measured distance if the vendor reported one,
+                    # recorded stop progress, customer-approved extra work).
+                    # Runs inside the same transaction as the completion so
+                    # a booking can never be marked complete with an
+                    # unreconciled fare.
+                    self._reconcile_fare(sr, payload)
+
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_completed"))
                     # HS-A-06: reward a pending referral once the referee's
                     # first booking actually completes. Fire-and-forget, same
@@ -404,12 +451,53 @@ class WorkforceWebhookView(APIView):
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
+                    # Was: write latitude/longitude straight onto the booking
+                    # and broadcast. Two things were wrong with that.
+                    #
+                    # (1) No ordering check. Mobile networks retry and
+                    # reorder, so a fix captured at 17:15 routinely arrives
+                    # after one captured at 17:20 -- and the later-arriving,
+                    # older packet won, moving the customer's map pin
+                    # backwards. Because the stale value was persisted it
+                    # survived a page reload; the frontend's own out-of-order
+                    # guard only protects a live socket session.
+                    #
+                    # (2) heading, speed and accuracy sent by the vendor were
+                    # thrown away, and no TechnicianLocation row was written,
+                    # even though that table is the authoritative per-fix
+                    # record every reader now uses.
+                    #
+                    # Both are handled by the same service the technician
+                    # app's own ingestion path uses, so the two transports
+                    # cannot drift apart again.
+                    from service_requests.services.technician_tracking import record_technician_fix
+
                     loc_dict = payload.get("location") or payload
                     if isinstance(loc_dict, dict) and loc_dict.get("latitude") and loc_dict.get("longitude"):
-                        sr.technician_latitude = loc_dict.get("latitude")
-                        sr.technician_longitude = loc_dict.get("longitude")
-                        sr.save(update_fields=["technician_latitude", "technician_longitude", "updated_at"])
-                        transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
+                        captured_at = parse_datetime_safe(
+                            loc_dict.get("updated_at")
+                            or loc_dict.get("captured_at")
+                            or loc_dict.get("timestamp")
+                            or payload.get("captured_at")
+                        )
+                        outcome, _fix = record_technician_fix(
+                            sr,
+                            latitude=loc_dict.get("latitude"),
+                            longitude=loc_dict.get("longitude"),
+                            accuracy=loc_dict.get("accuracy"),
+                            heading=loc_dict.get("heading"),
+                            speed=loc_dict.get("speed"),
+                            captured_at=captured_at,
+                            location_name=loc_dict.get("location_name"),
+                        )
+                        # Only broadcast a position the server actually
+                        # accepted. Broadcasting a rejected stale fix would
+                        # push the old coordinates to every watching client
+                        # and undo the guard on the client side.
+                        if outcome == "applied":
+                            transaction.on_commit(
+                                lambda: self._broadcast_event(sr, "technician_location_updated")
+                            )
 
                 # ── 9. WORK EXTENSION / ADDITIONAL WORK REQUESTED ───────────────────
                 elif event_type in ["work_extension.created", "additional_work.requested", "job.extension_requested"]:
@@ -479,7 +567,47 @@ class WorkforceWebhookView(APIView):
                         sr.description = f"{sr.description}\n[Completion Remarks]: {notes}".strip()
                         sr.save(update_fields=["description", "updated_at"])
 
+                    # GT-D-01: record an actual proof-of-delivery artefact,
+                    # not just free text appended to the description. See
+                    # DeliveryProof's docstring for why this is a row per
+                    # proof rather than columns on the booking.
+                    self._record_delivery_proof(sr, payload)
+
                     transaction.on_commit(lambda: self._broadcast_event(sr, "completion_proof_submitted"))
+
+                # ── 12b. LOGISTICS LEG ADVANCED (GT-B-03) ───────────────────────────
+                # The leg fields shipped with GT-B-03 but nothing ever wrote
+                # them, so logistics_leg was permanently "" and everything
+                # reading it (leg-aware tracking destination, trip timeline)
+                # was inert. This is the write path.
+                elif event_type in ["logistics.leg_changed", "job.leg_changed", "trip.leg_changed"]:
+                    leg = str(payload.get("leg") or payload.get("logistics_leg") or "").strip().upper()
+                    if sr.service_category not in LOGISTICS_CATEGORIES:
+                        logger.warning(
+                            "Ignoring leg_changed for non-logistics booking %s (category=%s)",
+                            sr.id, sr.service_category,
+                        )
+                    else:
+                        try:
+                            sr.set_logistics_leg(leg)
+                        except ValueError:
+                            # A bad leg value is a vendor-side bug, not a
+                            # reason to 500 the webhook. Log it and move on
+                            # rather than writing garbage into a field the
+                            # customer-facing tracking UI reads.
+                            logger.warning("Rejected invalid logistics leg %r for booking %s", leg, sr.id)
+                        else:
+                            # DELIVERED is the moment every input to the final
+                            # fare exists: stops completed, extra work
+                            # approved, distance travelled. This is where the
+                            # estimate becomes the amount actually charged.
+                            if leg == "DELIVERED":
+                                self._reconcile_final_fare(sr, payload)
+                            transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
+
+                # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
+                elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:
+                    self._record_stop_progress(sr, event_type, payload)
 
                 # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
                 elif event_type in ["job.rescheduled", "appointment.rescheduled"]:
@@ -524,6 +652,263 @@ class WorkforceWebhookView(APIView):
             webhook_event.error_message = str(err)
             webhook_event.save()
             return Response({"error": f"Failed to process webhook: {err}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @staticmethod
+    def _reconcile_fare(sr, payload):
+        """
+        GT-C-01: build the estimated-vs-final fare record at completion.
+
+        `actual_distance_km` is the one number taken from the completion
+        payload, and it is a FACT ABOUT THE TRIP, not a price -- it is
+        re-priced here using the rates already locked into the stored
+        quote. A payload can never supply an amount.
+
+        Never raises into the webhook: a reconciliation failure must not
+        prevent a job from being marked complete. It leaves the booking
+        with its quoted fare, which is the safe direction to fail.
+        """
+        from service_requests.services.fare_reconciliation import reconcile_booking_fare
+
+        try:
+            actual_km = (
+                payload.get("actual_distance_km")
+                or payload.get("distance_km")
+                or payload.get("trip_distance_km")
+            )
+            reconcile_booking_fare(sr, actual_distance_km=actual_km)
+        except Exception as exc:
+            logger.warning("Fare reconciliation failed for booking %s: %s", sr.id, exc)
+
+    @staticmethod
+    def _resolve_stop(sr, payload):
+        """
+        Find the TripStop a webhook payload refers to, by explicit id or by
+        1-based sequence. Returns None when the booking has no stops (the
+        ordinary single-drop case) or the reference doesn't match -- callers
+        treat that as "applies to the booking as a whole", never as an error.
+        """
+        from service_requests.models import TripStop
+
+        stop_id = payload.get("stop_id") or payload.get("trip_stop_id")
+        if stop_id is not None:
+            return TripStop.objects.filter(booking=sr, id=stop_id).first()
+        sequence = payload.get("stop_sequence") or payload.get("sequence")
+        if sequence is not None:
+            return TripStop.objects.filter(booking=sr, sequence=sequence).first()
+        return None
+
+    @classmethod
+    def _record_stop_progress(cls, sr, event_type, payload):
+        """
+        GT-D-01: advance per-stop progress (arrived_at / completed_at).
+
+        Idempotent -- the vendor webhook may retry, and a stop that is
+        already marked arrived must not have its timestamp rewritten to a
+        later time, or the trip timeline would drift every retry.
+        """
+        stop = cls._resolve_stop(sr, payload)
+        if stop is None:
+            logger.warning(
+                "Stop progress event %s for booking %s did not resolve to a TripStop (payload keys: %s)",
+                event_type, sr.id, sorted(payload.keys()),
+            )
+            return
+
+        completed = event_type == "trip.stop_completed" or bool(payload.get("completed"))
+        fields = []
+        now = timezone.now()
+        if stop.arrived_at is None:
+            stop.arrived_at = now
+            fields.append("arrived_at")
+        if completed and stop.completed_at is None:
+            stop.completed_at = now
+            fields.append("completed_at")
+        if fields:
+            # `transaction` is imported inside post() in this module, not at
+            # module level, so import it locally here too.
+            from django.db import transaction
+
+            stop.save(update_fields=fields)
+            transaction.on_commit(lambda: cls._broadcast_event(sr, "trip_stop_progress"))
+
+    @classmethod
+    def _reconcile_final_fare(cls, sr, payload):
+        """
+        Turn the booking's estimate into the final fare once the trip is
+        delivered.
+
+        This is the SECOND of two call sites, and both of them run in
+        production.
+
+        The first is _reconcile_fare(), wired to the `service_completed`
+        event. An earlier version of this docstring claimed the vendor app
+        never emits `service_completed` and that the final-fare step
+        therefore never ran. That was wrong, and it was wrong because the
+        claim rested on a truncated search of the vendor codebase. The
+        vendor DOES emit it: service_requests/state_machine.py maps
+        "completed" -> "service_completed" in _CUSTOMER_WEBHOOK_EVENT_MAP
+        and calls notify_customer_app() on every transition, and
+        apply_transition(job, "completed") is reached from three paths in
+        workforce_api/views.py plus the complete_stuck_paid_jobs management
+        command. Reconciliation at completion is live.
+
+        This hook attaches the same reconciliation to the DELIVERED leg,
+        which the vendor also emits (via set_logistics_leg on the proof
+        endpoint). For Goods & Transport that is the meaningful "the trip is
+        over" moment, and it can land before the status flips to completed,
+        so a delivered trip gets its final fare without waiting on the
+        status transition.
+
+        Both call sites are safe together: reconcile_booking_fare is
+        idempotent (update_or_create keyed on the booking), so whichever
+        arrives second simply refreshes the row.
+
+        `actual_distance_km` is used only when the vendor app reports a
+        measured trip distance, and NEITHER event currently carries one --
+        no notify_customer_app() call in the vendor codebase sets
+        actual_distance_km, distance_km or trip_distance_km. So in practice
+        both call sites reconcile stops, approved extra work and the minimum
+        fare locked into the quote -- all exact recorded facts -- and leave
+        distance variance unapplied. Charging distance variance needs the
+        vendor to include a measured trip distance on one of these events;
+        deriving one from the GPS trail here was considered and rejected,
+        because a haversine sum over jittery fixes overstates distance and
+        would quietly overcharge.
+
+        Fire-and-forget, and idempotent on the receiving side
+        (update_or_create keyed on the booking), so a retried DELIVERED
+        event cannot double-adjust a fare and a reconciliation failure can
+        never undo the delivery it accompanied.
+        """
+        from service_requests.services.fare_reconciliation import reconcile_booking_fare
+
+        try:
+            measured = (
+                payload.get("actual_distance_km")
+                or payload.get("distance_km")
+                or payload.get("trip_distance_km")
+            )
+            recon = reconcile_booking_fare(sr, actual_distance_km=measured)
+            if recon is not None and recon.delta:
+                logger.info(
+                    "Fare reconciled for booking %s: estimate %s -> final %s (delta %s)",
+                    sr.request_id, recon.estimated_amount, recon.final_amount, recon.delta,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Could not reconcile the final fare for booking %s: %s",
+                getattr(sr, "request_id", sr.pk), exc,
+            )
+
+    @classmethod
+    def _record_delivery_proof(cls, sr, payload):
+        """
+        GT-D-01: persist a proof-of-delivery artefact.
+
+        Accepts whichever evidence the driver app actually captured -- any
+        of a photo URL, a signature image, a recipient name/phone, an OTP
+        confirmation, or a note -- and writes one DeliveryProof row per
+        distinct kind. Never raises into the webhook: a proof that fails to
+        record must not roll back the completion event it accompanied.
+
+        Idempotent per (booking, stop, kind, value). The event-id replay
+        guard alone is not enough here: a driver who loses the network
+        mid-upload retries, the vendor's proof endpoint accepts the
+        re-submission (it upserts a single PostServiceProof and explicitly
+        allows a repeat while the job is in proof_submitted), and it emits a
+        FRESH event with a new id. Same delivery, same photo, different
+        event -- so without this the customer would see the same signature
+        and recipient listed twice on their tracking screen.
+        """
+        from service_requests.models import DeliveryProof
+
+        def _record(proof_type, **extra):
+            """Create this proof unless an identical one is already stored."""
+            lookup = dict(
+                booking=common["booking"], stop=common["stop"],
+                proof_type=proof_type,
+            )
+            # The value that identifies this evidence: the image reference
+            # for a photo/signature, the recipient for a name, the note for
+            # a note. OTP has no value of its own -- one confirmed OTP per
+            # stop is one fact, not several.
+            if "image" in extra:
+                lookup["image"] = extra["image"]
+            elif proof_type == DeliveryProof.ProofType.RECIPIENT_NAME:
+                lookup["recipient_name"] = common["recipient_name"]
+            elif proof_type == DeliveryProof.ProofType.NOTE:
+                lookup["notes"] = extra.get("notes", "")
+            _obj, was_created = DeliveryProof.objects.get_or_create(
+                defaults={**common, **extra}, **lookup
+            )
+            return 1 if was_created else 0
+
+        try:
+            stop = cls._resolve_stop(sr, payload)
+            loc = payload.get("location") or {}
+            common = dict(
+                booking=sr,
+                stop=stop,
+                recipient_name=str(payload.get("recipient_name") or "")[:200],
+                recipient_phone=str(payload.get("recipient_phone") or "")[:30],
+                captured_by_name=str(payload.get("technician_name") or sr.technician_name or "")[:200],
+                captured_by_workforce_id=str(payload.get("workforce_employee_id") or "")[:64],
+                latitude=loc.get("latitude"),
+                longitude=loc.get("longitude"),
+            )
+
+            created = 0   # rows actually written by this event
+            supplied = 0  # kinds of evidence the payload carried at all
+            notes = str(payload.get("notes") or payload.get("remarks") or "")
+
+            # A photo/signature arrives as a URL from the vendor app's own
+            # storage. ImageField holds the path; we store the reference we
+            # were given rather than re-downloading someone else's file into
+            # this backend's media root from inside a webhook.
+            photo_ref = payload.get("photo_url") or payload.get("proof_image") or payload.get("image_url")
+            if photo_ref:
+                supplied += 1
+                created += _record(
+                    DeliveryProof.ProofType.PHOTO,
+                    image=str(photo_ref), notes=notes,
+                )
+
+            signature_ref = payload.get("signature_url") or payload.get("signature_image")
+            if signature_ref:
+                supplied += 1
+                created += _record(
+                    DeliveryProof.ProofType.SIGNATURE, image=str(signature_ref),
+                )
+
+            if common["recipient_name"]:
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.RECIPIENT_NAME)
+
+            if payload.get("otp_verified"):
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.OTP)
+
+            # Only fall back to a bare note if nothing stronger was supplied,
+            # so a note doesn't duplicate the photo row's own notes field.
+            # Keyed on `supplied`, not `created`: on a retry every kind is
+            # already stored, and treating that as "nothing was supplied"
+            # would invent a bare note the first delivery never had.
+            if supplied == 0 and notes:
+                supplied += 1
+                created += _record(DeliveryProof.ProofType.NOTE, notes=notes)
+
+            if supplied == 0:
+                logger.warning(
+                    "completion_proof event for booking %s carried no usable evidence (payload keys: %s)",
+                    sr.id, sorted(payload.keys()),
+                )
+            elif created == 0:
+                logger.info(
+                    "completion_proof event for booking %s was a repeat -- every artefact it "
+                    "carried is already recorded; nothing duplicated.", sr.id,
+                )
+        except Exception as exc:
+            logger.warning("Failed to record delivery proof for booking %s: %s", sr.id, exc)
 
     @classmethod
     def _broadcast_event(cls, sr, event_type):

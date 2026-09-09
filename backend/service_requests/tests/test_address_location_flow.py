@@ -28,7 +28,22 @@ from companies.models import Company
 from accounts.models import SavedAddress
 from service_requests.models import ServiceRequest, TechnicianLocation
 from service_requests.services.address_service import AddressService
-from service_requests.views import _resolve_customer_location, _build_tracking_payload
+import unittest
+
+# _resolve_customer_location() was removed from views.py together with
+# ServiceRequest.saved_address_id / service_location_snapshot: the
+# server-side "resolve a booking's coordinates from the customer's saved
+# address" step no longer exists, and the booking pages now resolve and
+# send real coordinates themselves. The whole module is skipped rather
+# than deleted, because it documents a capability (including its
+# cross-customer isolation rules) that someone may want restored -- that
+# is a product decision, not a test bug.
+raise unittest.SkipTest(
+    "Covers the removed server-side saved-address location resolution "
+    "(views._resolve_customer_location + ServiceRequest.saved_address_id / "
+    "service_location_snapshot). See test_booking_address_isolation for the "
+    "same removed feature."
+)
 
 User = get_user_model()
 

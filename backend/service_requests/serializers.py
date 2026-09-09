@@ -16,6 +16,7 @@ from .models import (
     Coupon, CouponUsage,
     InsuranceClaim, InsuranceClaimAttachment,
     TripStop,
+    DeliveryProof,
     BookingSeries,
     BookingMessage,
     _generate_secure_start_otp,
@@ -154,8 +155,37 @@ class CatalogChangeLogSerializer(serializers.ModelSerializer):
         return "System"
 
 
+class CoordinateField(serializers.DecimalField):
+    """
+    Coordinates from browser geolocation or map providers carry 7-14 decimal places.
+    ServiceRequest stores them in DecimalField(max_digits=9, decimal_places=6).
+    Rounds raw input coordinates to 6 decimal places before precision validation runs,
+    preventing spurious 'Ensure that there are no more than 6 decimal places' 400 rejections.
+    """
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_digits", 9)
+        kwargs.setdefault("decimal_places", 6)
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_null", True)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        if data is not None and data != "":
+            try:
+                val = round(float(data), 6)
+                data = f"{val:.6f}"
+            except (ValueError, TypeError):
+                pass
+        return super().to_internal_value(data)
+
+
 class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
     """Validates public booking submission from the React booking wizard."""
+
+    latitude = CoordinateField()
+    longitude = CoordinateField()
+    drop_latitude = CoordinateField()
+    drop_longitude = CoordinateField()
 
     class Meta:
         model = ServiceRequest
@@ -165,7 +195,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "address", "latitude", "longitude",
             "preferred_date", "preferred_time", "photo",
             "payment_method", "total_amount", "cart_data",
-            "drop_address", "logistics_tier", "logistics_lane",
+            "drop_address", "drop_latitude", "drop_longitude", "logistics_tier", "logistics_lane",
             # Fixes GT-D-03: accept the recipient's contact info if the
             # frontend sends it. Deliberately NOT required yet -- the
             # booking wizard doesn't collect these fields today, so
@@ -192,6 +222,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "preferred_time":      {"required": False, "allow_blank": True, "allow_null": True},
             "cart_data":           {"required": False},
             "drop_address":        {"required": False, "allow_blank": True},
+            "drop_latitude":       {"required": False, "allow_null": True},
+            "drop_longitude":      {"required": False, "allow_null": True},
             "logistics_tier":      {"required": False, "allow_null": True},
             "logistics_lane":      {"required": False, "allow_null": True},
             "drop_contact_name":   {"required": False, "allow_blank": True},
@@ -203,26 +235,24 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_latitude(self, value):
-        if value is not None and value != "":
-            try:
-                lat = round(float(value), 6)
-                if not (-90.0 <= lat <= 90.0):
-                    raise serializers.ValidationError("Latitude must be between -90 and 90.")
-                return lat
-            except (ValueError, TypeError):
-                return None
-        return None
+        if value is not None and not (-90.0 <= float(value) <= 90.0):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
 
     def validate_longitude(self, value):
-        if value is not None and value != "":
-            try:
-                lon = round(float(value), 6)
-                if not (-180.0 <= lon <= 180.0):
-                    raise serializers.ValidationError("Longitude must be between -180 and 180.")
-                return lon
-            except (ValueError, TypeError):
-                return None
-        return None
+        if value is not None and not (-180.0 <= float(value) <= 180.0):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+
+    def validate_drop_latitude(self, value):
+        if value is not None and not (-90.0 <= float(value) <= 90.0):
+            raise serializers.ValidationError("Drop latitude must be between -90 and 90.")
+        return value
+
+    def validate_drop_longitude(self, value):
+        if value is not None and not (-180.0 <= float(value) <= 180.0):
+            raise serializers.ValidationError("Drop longitude must be between -180 and 180.")
+        return value
 
     def validate_cart_data(self, value):
         import json
@@ -414,7 +444,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             # discount line and stop assuming it's always 0 (it was never in
             # this list before, even though ServiceRequest.discount_amount is
             # a real, populated field once a coupon is applied at booking).
-            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "transaction_id", "invoice_id",
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "fare_breakdown", "transaction_id", "invoice_id",
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
             "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
@@ -569,24 +599,78 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
 
-    def get_payment_confirmation_otp(self, obj):
-        if obj.payment_status in ["cash_pending", "pending", "collected"]:
+    _OTP_STATUSES = ("cash_pending", "pending", "collected")
+
+    def _payment_otp_map(self):
+        """
+        Payment-confirmation OTPs for every booking on this page, in ONE
+        query.
+
+        This used to run a raw per-object SELECT against the vendor app's
+        workforce_notification table inside get_payment_confirmation_otp,
+        which made every customer list endpoint scale linearly with the
+        number of bookings returned -- one extra query per row, exactly
+        the N+1 the query-regression tests exist to catch.
+
+        Built once per serializer instance and cached. Falls back to an
+        empty map on any error, which simply yields no OTP -- the same
+        outcome the previous per-row try/except produced.
+        """
+        cached = getattr(self, "_otp_map_cache", None)
+        if cached is not None:
+            return cached
+
+        # With many=True this child serializer hangs off a ListSerializer
+        # that holds the full queryset; alone, it holds its own instance.
+        holder = self.parent if isinstance(self.parent, serializers.ListSerializer) else self
+        source = getattr(holder, "instance", None)
+        if source is None:
+            items = []
+        elif isinstance(source, (list, tuple)):
+            items = list(source)
+        elif hasattr(source, "__iter__"):
+            items = list(source)
+        else:
+            items = [source]
+
+        ids = [
+            str(o.id) for o in items
+            if getattr(o, "id", None) is not None
+            and getattr(o, "payment_status", None) in self._OTP_STATUSES
+        ]
+
+        otp_map = {}
+        if ids:
             try:
                 import re
                 from django.db import connection
+                placeholders = ",".join(["%s"] * len(ids))
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "SELECT message FROM workforce_notification WHERE related_object_id = %s AND notification_type = 'PAYMENT_CONFIRMATION_OTP' ORDER BY created_at DESC LIMIT 1;",
-                        [str(obj.id)]
+                        "SELECT related_object_id, message FROM workforce_notification "
+                        "WHERE related_object_id IN (%s) "
+                        "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                        "ORDER BY created_at ASC;" % placeholders,
+                        ids,
                     )
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    for related_id, message in cursor.fetchall():
+                        if not message:
+                            continue
+                        m = re.search(r'OTP\s+([0-9]{6})', message)
                         if m:
-                            return m.group(1)
+                            # Ascending order means the last row for an id
+                            # wins, matching the previous "most recent" query.
+                            otp_map[str(related_id)] = m.group(1)
             except Exception:
-                pass
-        return None
+                otp_map = {}
+
+        self._otp_map_cache = otp_map
+        return otp_map
+
+    def get_payment_confirmation_otp(self, obj):
+        if obj.payment_status not in self._OTP_STATUSES:
+            return None
+        return self._payment_otp_map().get(str(obj.id))
 
     def get_extension_amount(self, obj):
         try:
@@ -699,7 +783,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             # discount_amount exposed for the same reason as in
             # ServiceRequestListSerializer -- see comment there.
-            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data",
+            "total_amount", "base_amount", "extension_amount", "discount_amount", "cart_data", "fare_breakdown",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
             "transaction_id", "payment_gateway",
@@ -1158,8 +1242,34 @@ class TripStopSerializer(serializers.ModelSerializer):
         fields = (
             "id", "sequence", "stop_type", "address", "contact_name",
             "contact_phone", "latitude", "longitude", "notes", "created_at",
+            # GT-D-01: per-stop progress. Read-only -- these are advanced by
+            # the vendor app via the workforce webhook, never by a customer.
+            "arrived_at", "completed_at",
         )
-        read_only_fields = ("id", "sequence", "created_at")
+        read_only_fields = ("id", "sequence", "created_at", "arrived_at", "completed_at")
+
+
+class DeliveryProofSerializer(serializers.ModelSerializer):
+    """
+    GT-D-01: customer-facing read shape for one proof-of-delivery artefact.
+
+    Read-only by design: proofs are written by the vendor app through the
+    authenticated workforce webhook, never submitted by a customer. The
+    recipient's phone is deliberately NOT exposed here -- the customer
+    already knows who they sent goods to, and echoing a third party's
+    number back out of the API widens its exposure for no benefit (same
+    reasoning as the technician phone masking in X-09).
+    """
+    proof_type_display = serializers.CharField(source="get_proof_type_display", read_only=True)
+
+    class Meta:
+        model = DeliveryProof
+        fields = (
+            "id", "stop", "proof_type", "proof_type_display", "image",
+            "recipient_name", "notes", "captured_by_name",
+            "latitude", "longitude", "captured_at",
+        )
+        read_only_fields = fields
 
 
 class BookingSeriesSerializer(serializers.ModelSerializer):

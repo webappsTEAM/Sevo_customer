@@ -17,9 +17,27 @@ Callers must pass already-validated data (e.g. a DRF serializer's
 _apply_updates rely on values already being coerced to the model's real
 Python types (Decimal, list, etc.), not raw JSON strings.
 """
+import logging
+
 from django.core.exceptions import ValidationError
 
 from ..models import CatalogCategory, Service, Package, AddOn, CatalogChangeLog, PackageStatus
+
+logger = logging.getLogger(__name__)
+
+
+class LogisticsPricingPermissionError(PermissionError):
+    """
+    Raised by update_package() when a caller tries to change the base_price
+    of a Package that maps to a logistics ServiceTier without holding
+    pricing:modify_price.
+
+    Separate from Django's PermissionDenied so the view can return a
+    structured 403 body (error_code PRICING_FORBIDDEN) rather than the
+    generic DRF 403, matching the shape that logisticsAdminService.js
+    already handles from the GT rate-card endpoint.
+    """
+    pass
 
 # Fields whose change increments Package.version — the set Phase 2's booking
 # snapshot will compare against to detect a stale price.
@@ -48,7 +66,16 @@ def _log(entity_type, entity_id, entity_name, action, actor, field_name="", old_
             changed_by=actor if (actor and hasattr(actor, "id")) else None,
         )
     except Exception:
-        pass
+        # Still not re-raised -- an audit failure must not roll back the
+        # catalog edit the administrator just made. But a silently missing
+        # audit row is worse than a noisy one: it makes the trail look
+        # complete when it is not, and this trail is what answers "who
+        # changed this price".
+        logger.exception(
+            "Could not write a CatalogChangeLog row for %s #%s (%s / %s); "
+            "this change is NOT in the audit trail.",
+            entity_type, entity_id, action, field_name or "-",
+        )
 
 
 def _apply_updates(instance, data, entity_type, actor, reason=None, version_fields=None):
@@ -135,6 +162,69 @@ def delete_service(service):
     service.delete()
 
 
+# Canonical bidirectional slug aliases between Package and ServiceTier.
+# Reconciles hyphenated variants (e.g. 1-rk-1-bhk-shifting vs 1rk-1bhk-shifting)
+# without unsafe substring guessing.
+CANONICAL_LOGISTICS_TIER_SLUG_MAP = {
+    "1-rk-1-bhk-shifting": "1rk-1bhk-shifting",
+    "1rk-1bhk-shifting": "1rk-1bhk-shifting",
+    "2-bhk-3-bhk-shifting": "2bhk-3bhk-shifting",
+    "2bhk-3bhk-shifting": "2bhk-3bhk-shifting",
+    "villa-office-relocation": "villa-office-relocation",
+}
+
+
+def _logistics_tier_for_package(package):
+    """
+    The ServiceTier a Package maps to, by EXACT slug or canonical slug alias, or None.
+
+    Avoids unsafe substring matching while deterministically resolving
+    canonical Packers & Movers slug variants (1-rk-1-bhk-shifting <-> 1rk-1bhk-shifting).
+    Exact slug equality is tried first, followed by canonical alias dictionary.
+    """
+    from logistics.models import ServiceTier
+
+    slug = (getattr(package, "slug", "") or "").strip().lower()
+    if not slug:
+        return None
+
+    # 1. Exact slug match
+    tier = ServiceTier.objects.filter(slug=slug).first()
+    if tier:
+        return tier
+
+    # 2. Canonical alias match
+    canonical_slug = CANONICAL_LOGISTICS_TIER_SLUG_MAP.get(slug)
+    if canonical_slug and canonical_slug != slug:
+        return ServiceTier.objects.filter(slug=canonical_slug).first()
+
+    return None
+
+
+def _package_for_logistics_tier(tier):
+    """
+    The active Package a ServiceTier maps to, by exact slug or canonical alias, or None.
+    """
+    from service_requests.models import Package
+
+    if not tier or not getattr(tier, "slug", None):
+        return None
+
+    slug = tier.slug.strip().lower()
+    pkg = Package.objects.filter(slug=slug, status="ACTIVE").first()
+    if pkg:
+        return pkg
+
+    for pkg_slug, mapped_tier_slug in CANONICAL_LOGISTICS_TIER_SLUG_MAP.items():
+        if mapped_tier_slug == slug and pkg_slug != slug:
+            pkg = Package.objects.filter(slug=pkg_slug, status="ACTIVE").first()
+            if pkg:
+                return pkg
+
+    return Package.objects.filter(slug=slug).first()
+
+
+
 # ── Package ───────────────────────────────────────────────────────────────
 
 def create_package(data, actor):
@@ -156,6 +246,8 @@ def create_package(data, actor):
         elif "packers" in svc_slug or "mover" in svc_slug:
             cat_enum = LogisticsCategory.PACKERS_MOVERS
         if cat_enum:
+            # Keyed on the package's own slug, so this creates or updates
+            # exactly one tier and can never reach a different one.
             price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
             ServiceTier.objects.update_or_create(
                 slug=package.slug,
@@ -171,7 +263,15 @@ def create_package(data, actor):
                 }
             )
     except Exception:
-        pass
+        # Not re-raised: a logistics-tier mirror failing must not roll back a
+        # catalog package the admin just created. But it is no longer
+        # swallowed silently -- an out-of-step tier is a pricing
+        # inconsistency, and nobody could previously see one had happened.
+        logger.exception(
+            "Could not sync new Package #%s (%s) to its logistics ServiceTier; "
+            "the tier may be missing or stale.",
+            getattr(package, "pk", "?"), getattr(package, "slug", "?"),
+        )
     _sync_goods_tables(package)
     return package
 
@@ -300,21 +400,59 @@ def _sync_goods_tables(package):
 
 
 def update_package(package, data, actor, reason=None):
+    # ── GT pricing permission gate ─────────────────────────────────────────
+    # If this package maps to a logistics ServiceTier AND base_price is
+    # changing, the caller must hold pricing:modify_price and supply a reason.
+    # This mirrors the same control enforced by logistics/pricing_admin.py for
+    # direct edits via /catalog/goods-transport-rates.
+    #
+    # The check runs BEFORE _apply_updates so a permission failure never
+    # partially writes the package and then errors — the whole call is clean.
+    #
+    # Non-logistics packages (home services, etc.) have no matching
+    # ServiceTier, so _logistics_tier_for_package returns None and this block
+    # is never reached for them.
+    try:
+        _pre_tier = _logistics_tier_for_package(package)
+    except Exception:
+        _pre_tier = None
+    if _pre_tier is not None:
+        # Only gate on price-bearing fields that flow into the fare engine.
+        _price_fields_changing = {
+            f for f in ("base_price", "offer_price")
+            if f in data and data[f] != getattr(package, f)
+        }
+        if _price_fields_changing:
+            from accounts.permissions import can as _can
+            if not _can(actor, "pricing", "modify_price"):
+                raise LogisticsPricingPermissionError(
+                    "Changing the price of a Goods & Transport package updates the "
+                    "ServiceTier starting fare and requires the 'modify_price' "
+                    "permission on the Pricing module. "
+                    "Use Goods & Transport Rates to change this price, or ask a "
+                    "Pricing Admin to make the change."
+                )
+            if not (reason or "").strip():
+                raise ValidationError(
+                    {"reason": [
+                        "A reason is required when changing a Goods & Transport "
+                        "package price. It is recorded in the pricing audit trail."
+                    ]}
+                )
+    # ── End GT permission gate ─────────────────────────────────────────────
+
     pkg = _apply_updates(package, data, CatalogChangeLog.EntityType.PACKAGE, actor, reason=reason, version_fields=_VERSION_FIELDS)
     try:
-        from logistics.models import ServiceTier
-        tier = ServiceTier.objects.filter(slug=pkg.slug).first()
-        if not tier:
-            for t in ServiceTier.objects.all():
-                if t.slug in pkg.slug or pkg.slug in t.slug or t.name.lower() in pkg.name.lower():
-                    tier = t
-                    break
+        tier = _logistics_tier_for_package(pkg)
         if tier:
             fields_to_update = []
             price_to_sync = pkg.base_price if pkg.base_price is not None else pkg.offer_price
             if price_to_sync is not None and tier.starting_price != price_to_sync:
+                old_starting_price = tier.starting_price
                 tier.starting_price = price_to_sync
                 fields_to_update.append("starting_price")
+            else:
+                old_starting_price = None
             if pkg.name and tier.name != pkg.name:
                 tier.name = pkg.name
                 fields_to_update.append("name")
@@ -337,8 +475,37 @@ def update_package(package, data, actor, reason=None):
                 fields_to_update.append("duration")
             if fields_to_update:
                 tier.save(update_fields=fields_to_update)
+                logger.info(
+                    "Package #%s (%s) synced to ServiceTier #%s: %s",
+                    pkg.pk, pkg.slug, tier.pk, ", ".join(fields_to_update),
+                )
+                # Write a tier-level audit row for the starting_price sync so
+                # the GT rate card's history view shows this change, matching
+                # the audit trail produced by logistics/pricing_admin.py.
+                if "starting_price" in fields_to_update and old_starting_price is not None:
+                    _log(
+                        CatalogChangeLog.EntityType.SERVICE_TIER,
+                        tier.id,
+                        f"{tier.name} ({getattr(tier, 'get_category_display', lambda: tier.category)()}, {tier.city})",
+                        CatalogChangeLog.Action.UPDATE,
+                        actor,
+                        field_name="starting_price",
+                        old_value=old_starting_price,
+                        new_value=price_to_sync,
+                        reason=f"[via package #{pkg.pk}] {reason or ''}",
+                    )
+    except (LogisticsPricingPermissionError, ValidationError):
+        # Permission and validation errors must propagate cleanly — they are
+        # not mirror failures and must not be swallowed.
+        raise
     except Exception:
-        pass
+        # Same reasoning as create_package: never roll back the package edit
+        # over a mirror failure, but never hide one either.
+        logger.exception(
+            "Could not sync Package #%s (%s) to its logistics ServiceTier; "
+            "the tier may now be stale.",
+            getattr(pkg, "pk", "?"), getattr(pkg, "slug", "?"),
+        )
     _sync_goods_tables(pkg)
     return pkg
 

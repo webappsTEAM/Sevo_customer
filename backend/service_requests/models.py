@@ -165,6 +165,17 @@ class ServiceRequest(models.Model):
         EN_ROUTE_DROP   = "EN_ROUTE_DROP",   "En Route to Drop"
         UNLOADING       = "UNLOADING",       "Unloading"
         DELIVERED       = "DELIVERED",       "Delivered"
+        # Relocation / Packers & Movers legs
+        ASSIGNED        = "ASSIGNED",        "Assigned"
+        TEAM_EN_ROUTE   = "TEAM_EN_ROUTE",   "Team En Route"
+        ARRIVED_PICKUP  = "ARRIVED_PICKUP",  "Arrived at Pickup"
+        PACKING         = "PACKING",         "Packing"
+        DISMANTLING     = "DISMANTLING",     "Dismantling"
+        IN_TRANSIT      = "IN_TRANSIT",      "In Transit"
+        ARRIVED_DROP    = "ARRIVED_DROP",    "Arrived at Drop"
+        REASSEMBLY      = "REASSEMBLY",      "Reassembly"
+        UNPACKING       = "UNPACKING",       "Unpacking"
+        COMPLETED       = "COMPLETED",       "Completed"
 
     class PaymentMethod(models.TextChoices):
         COD    = "COD",    "Cash on Service"
@@ -251,6 +262,36 @@ class ServiceRequest(models.Model):
     # own rule warns against. Revisit if Packers & Movers ever needs
     # multi-stop routing.
     drop_address     = models.TextField(blank=True, default="")
+    # GT-B-XX (drop-point coordinates): drop_address above is free text
+    # only -- there was no drop-side coordinate anywhere on this model,
+    # so GT-D-02's leg-aware tracking fix could only target the drop
+    # point for bookings that also have TripStop rows (the multi-stop
+    # case). The common single-pickup/single-drop logistics booking had
+    # no drop coordinate to target at all. Also blocks any real
+    # distance-based fare calculation (GT-B-01) -- distance needs two
+    # real coordinates, not one real + one guessed. Additive, nullable
+    # fields, same pattern as latitude/longitude above; never required
+    # at the serializer level so existing bookings/clients keep working
+    # unchanged if a drop coordinate genuinely couldn't be resolved.
+    drop_latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    # GT-B-01: the itemised fare the server actually computed at booking
+    # time (base, chargeable km, per-km charge, loading, stop charges,
+    # surge, whether the minimum applied, and crucially whether the
+    # distance came from the Google Maps road network or a straight-line
+    # estimate -- see services/logistics_pricing.quote_logistics_fare).
+    #
+    # Stored rather than recomputed because it is the *quote the customer
+    # was given*, locked at booking per CALTRACK_PHASE_14 H.1. Rates can
+    # change afterwards, so recomputing later would silently produce a
+    # different number and there would be no record of what was actually
+    # agreed. This is also the "estimated" half that final-fare
+    # reconciliation (GT-C-01) needs to compare an actual against.
+    #
+    # Empty dict for every booking priced by the flat lane/tier lookup and
+    # for every non-logistics booking -- absence means "not distance-priced",
+    # not "missing data".
+    fare_breakdown   = models.JSONField(default=dict, blank=True)
     # Fixes GT-D-03: nothing captured who's actually receiving the goods at
     # the drop address, so they could never be notified. See
     # GT_D_03_RECIPIENT_NOTIFICATION_NOTE.md for the full write-up; this is
@@ -293,6 +334,74 @@ class ServiceRequest(models.Model):
     logistics_leg = models.CharField(max_length=20, choices=LogisticsLeg.choices, blank=True, default="")
     logistics_leg_updated_at = models.DateTimeField(null=True, blank=True)
     logistics_leg_history = models.JSONField(default=list, blank=True)
+    # GT-B-03 (completing it): the three fields above shipped, but nothing
+    # in either backend ever wrote them -- the model comment referred to a
+    # set_logistics_leg() that did not exist, so logistics_leg was
+    # permanently "" in production and every consumer of it (the
+    # leg-aware tracking destination, the customer trip timeline) was
+    # dead code. This is that method.
+    # Forward-only ordering for a trip. Mirrors LEG_SEQUENCE in the vendor
+    # app's workforce_api/services/logistics_events.py -- the two must agree.
+    LEG_SEQUENCE = [
+        "EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED",
+    ]
+
+    def set_logistics_leg(self, leg, actor=None, save=True):
+        """
+        Advance this booking's logistics leg, appending to the audit trail.
+
+        Append-only history, one entry per call:
+            {"leg": <value>, "at": <iso8601>, "by": <user id or None>}
+
+        Returns True if the leg changed, False if it did not. False covers
+        two distinct non-error cases, both of which a webhook receiver must
+        tolerate:
+
+          - a REPEAT of the leg already set (the vendor app retries; see the
+            replay-signature guard in workforce_integration/views.py);
+          - a STALE, out-of-order event naming an EARLIER leg. Webhook
+            delivery is not ordered, so an EN_ROUTE_PICKUP event can
+            genuinely arrive after UNLOADING. Applying it would drag the
+            customer's tracking view backwards and corrupt the audit trail,
+            so it is ignored rather than applied or treated as an error.
+
+        Raises ValueError only for a value that is not a LogisticsLeg at
+        all, so a typo in a webhook payload fails loudly instead of
+        silently writing garbage into a field the tracking UI reads.
+        """
+        valid = {choice.value for choice in self.LogisticsLeg}
+        if leg not in valid:
+            raise ValueError(
+                f"{leg!r} is not a valid logistics leg. Expected one of: {sorted(valid)}"
+            )
+        if self.logistics_leg == leg:
+            return False
+        if self.logistics_leg:
+            try:
+                if self.LEG_SEQUENCE.index(leg) < self.LEG_SEQUENCE.index(self.logistics_leg):
+                    return False
+            except ValueError:
+                # A leg outside the ordered sequence: fall through and apply
+                # it rather than silently dropping a legitimate value.
+                pass
+
+        now = timezone.now()
+        history = list(self.logistics_leg_history or [])
+        history.append({
+            "leg": leg,
+            "at": now.isoformat(),
+            "by": getattr(actor, "id", None),
+        })
+        self.logistics_leg = leg
+        self.logistics_leg_updated_at = now
+        self.logistics_leg_history = history
+        if save:
+            self.save(update_fields=[
+                "logistics_leg", "logistics_leg_updated_at",
+                "logistics_leg_history", "updated_at",
+            ])
+        return True
+
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
         on_delete=models.SET_NULL,
@@ -871,6 +980,14 @@ class CatalogChangeLog(models.Model):
         SERVICE  = "SERVICE",  "Service"
         PACKAGE  = "PACKAGE",  "Package"
         ADDON    = "ADDON",    "Add-on"
+        # Goods & Transport vehicle tiers. Deliberately logged here rather
+        # than in a new audit model: this one already carries exactly the
+        # shape a rate change needs (entity, field, old value, new value,
+        # actor, reason, timestamp) and its soft entity_type + entity_id
+        # reference was built to span unrelated tables. ServiceTier lives in
+        # the `logistics` app, which is precisely the case a soft reference
+        # handles and a ForeignKey would not.
+        SERVICE_TIER = "SERVICE_TIER", "Goods & Transport Tier"
 
     class Action(models.TextChoices):
         CREATE        = "CREATE",        "Created"
@@ -1894,6 +2011,12 @@ class TripStop(models.Model):
     longitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     notes         = models.CharField(max_length=500, blank=True, default="")
     created_at    = models.DateTimeField(auto_now_add=True)
+    # GT-D-01: per-stop progress. Until these existed there was no concept
+    # of "which stop is the driver at" anywhere in the platform -- a stop
+    # was a static address row, never advanced by anything. Both nullable:
+    # a stop that hasn't been reached yet simply has neither set.
+    arrived_at    = models.DateTimeField(null=True, blank=True)
+    completed_at  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "service_requests_trip_stop"
@@ -1902,6 +2025,121 @@ class TripStop(models.Model):
 
     def __str__(self):
         return f"Stop {self.sequence} ({self.stop_type}) for booking #{self.booking_id}"
+
+
+class DeliveryProof(models.Model):
+    """
+    GT-D-01: proof of delivery.
+
+    Before this there was no proof record of any kind. The vendor app
+    could POST a `job.completion_proof_submitted` webhook, and all the
+    handler did was append the free-text remarks onto
+    ServiceRequest.description -- no photo, no signature, no recipient
+    identity, no link to which stop it belonged to. For a goods-transport
+    platform that is the single most load-bearing missing artefact: it is
+    what settles "it was never delivered" disputes and what an insurance
+    claim (GT-C-03) is assessed against.
+
+    Deliberately one row PER PROOF rather than a set of columns on
+    ServiceRequest: a multi-stop trip needs proof at each drop, and a
+    single delivery routinely needs more than one kind of evidence (a
+    photo of the goods AND a signature AND the recipient's name). Both
+    are naturally many-per-booking.
+
+    `stop` is nullable so the common single-drop booking -- which has no
+    TripStop rows at all -- can still record proof against the booking
+    itself. Captured-by is stored as a name/id snapshot rather than an FK
+    for the same reason the technician fields on ServiceRequest are (see
+    HS-E-01): the technician identity lives in the vendor app's own
+    database, and this backend deliberately holds no FK into it.
+    """
+    class ProofType(models.TextChoices):
+        PHOTO          = "PHOTO",          "Photo of delivered goods"
+        SIGNATURE      = "SIGNATURE",      "Recipient signature"
+        RECIPIENT_NAME = "RECIPIENT_NAME", "Recipient name captured"
+        OTP            = "OTP",            "Delivery OTP verified"
+        NOTE           = "NOTE",           "Driver note"
+
+    booking     = models.ForeignKey(
+        ServiceRequest, on_delete=models.CASCADE, related_name="delivery_proofs",
+    )
+    stop        = models.ForeignKey(
+        TripStop, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="delivery_proofs",
+        help_text="Which stop this proves. Null for a single-drop booking with no TripStop rows.",
+    )
+    proof_type  = models.CharField(max_length=20, choices=ProofType.choices)
+    image       = models.ImageField(upload_to="delivery_proofs/", null=True, blank=True)
+    recipient_name  = models.CharField(max_length=200, blank=True, default="")
+    recipient_phone = models.CharField(max_length=30, blank=True, default="")
+    notes       = models.TextField(blank=True, default="")
+    # Snapshot of who captured it, mirroring the technician_* snapshot
+    # pattern already used on ServiceRequest -- no FK into the vendor DB.
+    captured_by_name = models.CharField(max_length=200, blank=True, default="")
+    captured_by_workforce_id = models.CharField(max_length=64, blank=True, default="")
+    latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    captured_at = models.DateTimeField(default=timezone.now)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "service_requests_delivery_proof"
+        ordering = ["booking", "captured_at", "id"]
+        indexes = [
+            models.Index(fields=["booking", "proof_type"], name="sr_delivery_proof_bk_ty_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_proof_type_display()} for booking #{self.booking_id}"
+
+
+class FareReconciliation(models.Model):
+    """
+    GT-C-01: the estimated-vs-final fare record.
+
+    A Porter-style booking quotes a fare upfront and locks it, then the
+    real trip deviates -- the route was longer than quoted, the customer
+    added a stop, extra work was approved mid-job. Before this there was
+    no record connecting the two: ServiceRequest.total_amount was simply
+    whatever it had most recently been set to, with no statement of what
+    was originally quoted, what changed, or why. A customer disputing a
+    final charge, or anyone auditing revenue, had nothing to read.
+
+    One row per booking (OneToOne). It is written at completion, from the
+    server's own numbers -- never from a client-supplied total. Each
+    adjustment is itemised in `adjustments` so the delta is explainable
+    line by line rather than being a single unexplained difference.
+
+    Deliberately additive and non-authoritative for charging: this
+    records and explains the reconciliation, it does not silently move
+    money. ServiceRequest.total_amount remains the field the rest of the
+    system charges against, and is updated in the same transaction only
+    when the reconciliation actually resolves to a different number.
+    """
+    booking = models.OneToOneField(
+        ServiceRequest, on_delete=models.CASCADE, related_name="fare_reconciliation",
+    )
+    estimated_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    final_amount     = models.DecimalField(max_digits=10, decimal_places=2)
+    # Signed: positive means the customer owes more than quoted.
+    delta            = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Snapshots, so the record stays readable even after tier rates change.
+    estimated_breakdown = models.JSONField(default=dict, blank=True)
+    final_breakdown     = models.JSONField(default=dict, blank=True)
+    # [{"code": ..., "label": ..., "amount": "123.00", "source": ...}, ...]
+    adjustments         = models.JSONField(default=list, blank=True)
+
+    notes      = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_requests_fare_reconciliation"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Fare reconciliation for booking #{self.booking_id} (delta {self.delta})"
 
 
 class BookingSeries(models.Model):
@@ -2281,6 +2519,13 @@ class TechnicianLocation(models.Model):
     heading = models.FloatField(default=0.0, blank=True)
     speed = models.FloatField(default=0.0, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # When the DEVICE recorded the fix, as opposed to when this server
+    # received it. The two diverge whenever a packet is retried, queued
+    # behind a tunnel, or reordered by the mobile network -- and without a
+    # capture time there is no way to tell a fresh fix from an old one that
+    # simply arrived late. Nullable because rows written before this field
+    # existed have no capture time; readers fall back to created_at.
+    captured_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
