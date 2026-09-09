@@ -5,7 +5,7 @@ import {
   Globe, Layout, Sparkles, ShieldCheck, Clock, Award, Headphones,
   BadgeCheck, Star, HeartPulse, Plus, Trash2, Check, RotateCcw,
   Eye, Save, ArrowUp, ArrowDown, Image as ImageIcon, MessageSquare,
-  Users, Gift, Repeat2, BarChart3, FileText, Phone, Mail, ChevronRight,
+  Gift, FileText, Phone, Mail, ChevronRight,
   Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight,
   ChefHat, Utensils, Monitor, Tablet, Smartphone, Maximize2, RefreshCw,
   IndianRupee, CheckCircle2, ChevronDown, ChevronUp, Pencil, Search, X
@@ -312,28 +312,13 @@ export default function HomePageCustomizerPage() {
     })
   }
 
-  const updateVendorBanner = (field, value) => {
-    setConfig(prev => {
-      const next = {
-        ...prev,
-        vendorBanner: { ...prev.vendorBanner, [field]: value }
-      }
-      saveHomePageConfig(next)
-      return next
-    })
-  }
-
   const navWorkflowSteps = [
     { id: "hero", label: "Hero Banner", icon: Globe, color: "text-amber-600 bg-amber-50" },
     { id: "categories", label: "Browse Categories", icon: Layers, color: "text-blue-600 bg-blue-50" },
     { id: "recipes", label: "Vegetable Recipes", icon: ChefHat, color: "text-emerald-600 bg-emerald-50" },
     { id: "recommendations", label: "Produce Pairings", icon: Utensils, color: "text-green-700 bg-green-50" },
-    { id: "vendorBanner", label: "Vendor Hire Banner", icon: Users, color: "text-teal-600 bg-teal-50" },
     { id: "offers", label: "Promotional Offers", icon: Gift, color: "text-pink-600 bg-pink-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
-    { id: "workflow", label: "How It Works", icon: Repeat2, color: "text-purple-600 bg-purple-50" },
-    { id: "stats", label: "Live Stats Bar", icon: BarChart3, color: "text-sky-600 bg-sky-50" },
-    { id: "experts", label: "Featured Pros", icon: Users, color: "text-indigo-600 bg-indigo-50" },
     { id: "testimonials", label: "Customer Reviews", icon: Award, color: "text-orange-600 bg-orange-50" },
     { id: "footer", label: "Footer & Contacts", icon: FileText, color: "text-slate-600 bg-slate-100" },
   ]
@@ -643,70 +628,38 @@ export default function HomePageCustomizerPage() {
                   </button>
                 </div>
 
-                {/* Real-time Hero Live Visualizer Mockup */}
+                {/* Live Hero Banner Preview -- matches the ACTUAL customer
+                    homepage design: the entire banner is a single full-width
+                    image (no code-drawn heading/badge/search-bar text is
+                    ever rendered on top of it on the live page anymore).
+                    For a pixel-exact preview use the "Preview" tab, which
+                    embeds the real LandingPage.jsx in an iframe -- this
+                    block is just a quick at-a-glance sanity check that the
+                    uploaded image + price badge look right. */}
                 <div className="bg-slate-900 rounded-2xl p-4 sm:p-6 border border-slate-800 shadow-inner space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-400" /> Current Homepage Hero Live Visual Mockup
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Current Homepage Hero Banner Preview
                     </span>
-                    <span className="text-[11px] text-slate-400 font-mono">Real-time Concept 3 Layout</span>
+                    <span className="text-[11px] text-slate-400 font-mono">Full-width image banner</span>
                   </div>
 
-                  <div className="p-4 sm:p-6 rounded-2xl bg-slate-950/80 border border-slate-800/80 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-                    {/* Mockup Left Column */}
-                    <div className="lg:col-span-7 space-y-3">
-                      <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-400 text-[11px] font-bold">
-                        <ShieldCheck className="w-3 h-3 text-teal-400" />
-                        <span>{config.hero.badge || "Reliable. Affordable. Right at Your Doorstep."}</span>
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950/80">
+                    <img
+                      src={resolveDisplayImageUrl(config.hero.heroImage || config.hero.heroIllustration, "/assets/hero_illustration.jpg")}
+                      onError={(e) => { e.currentTarget.src = "/assets/hero_illustration.jpg" }}
+                      alt="Current Hero Banner"
+                      className="w-full h-[180px] sm:h-[260px] object-cover"
+                    />
+                    {config.hero.priceBadge && (
+                      <div className="absolute bottom-3 right-3 bg-white/95 rounded-xl px-3 py-1.5 shadow-lg">
+                        <span className="text-xs font-black text-slate-900">{config.hero.priceBadge}</span>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-white leading-tight">
-                        <span>{config.hero.mainHeadingFirst || "Professional"} </span>
-                        <span className="text-teal-400">{config.hero.mainHeadingHighlight || "Services"}</span>
-                        <br />
-                        <span>{config.hero.mainHeadingLast || "Made Simple"}</span>
-                      </div>
-                      <p className="text-slate-400 text-xs font-medium line-clamp-2">
-                        {config.hero.subtitle || "Quick booking. Quality work. Guaranteed satisfaction."}
-                      </p>
-                      {/* Search mockup */}
-                      <div className="flex items-center bg-slate-800 rounded-full px-3 py-1.5 border border-slate-700 max-w-md">
-                        <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
-                        <span className="text-xs text-slate-400 flex-1 truncate">
-                          {config.hero.searchPlaceholder || "What service do you need?"}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold px-2 py-0.5 rounded bg-slate-700/60 mr-2">
-                          {config.hero.searchLocation || "Hosur"}
-                        </span>
-                        <div className="w-6 h-6 rounded-full bg-teal-600 flex items-center justify-center text-white shrink-0">
-                          <Search className="w-3 h-3" />
-                        </div>
-                      </div>
-                      {/* Mockup 6 Badges */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                        {(config.hero.trustBadges || DEFAULT_HOME_PAGE_CONFIG.hero.trustBadges).slice(0, 6).map((b, i) => (
-                          <div key={b.id || i} className="flex items-center gap-1.5 p-1 rounded bg-slate-900/60 border border-slate-800">
-                            <div className="w-5 h-5 rounded bg-teal-900/60 text-teal-400 flex items-center justify-center shrink-0">
-                              <Check className="w-3 h-3 stroke-[2.5]" />
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-[10px] font-bold text-slate-200 block truncate">{b.title || b.text}</span>
-                              <span className="text-[8px] text-slate-400 block truncate">{b.subtitle}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Mockup Right Column */}
-                    <div className="lg:col-span-5 flex items-center justify-center p-2 bg-slate-900/50 rounded-xl border border-slate-800/60">
-                      <img
-                        src={resolveDisplayImageUrl(config.hero.heroImage || config.hero.heroIllustration, "/assets/hero_illustration.jpg")}
-                        onError={(e) => { e.currentTarget.src = "/assets/hero_illustration.jpg" }}
-                        alt="Current Hero Illustration"
-                        className="max-h-[220px] w-auto object-contain drop-shadow-md"
-                      />
-                    </div>
+                    )}
                   </div>
+                  <p className="text-[11px] text-slate-500">
+                    This is the entire banner shown to customers -- it's a single admin-uploaded image with an optional price badge and click-through redirect link (set below). Nothing else is drawn on top of it.
+                  </p>
                 </div>
 
                 {/* Hero Illustration Controls & Presets */}
@@ -787,6 +740,106 @@ export default function HomePageCustomizerPage() {
                 </div>
               </div>
 
+              {/* Advertisement Banner Carousel -- the actual rotating "ad" on
+                  the customer homepage, separate from the hero illustration
+                  above. Slide #1 always reuses the hero image configured
+                  above; every additional slide here is a pure banner image
+                  (+ optional link and price sticker) that rotates in every
+                  ~4.5s, matching exactly what LandingPage.jsx renders --
+                  no code-drawn headline/text is ever placed on top of it. */}
+              <div className="space-y-4 pt-6 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-teal-600" />
+                    Advertisement Banner Carousel
+                  </label>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Extra rotating banner images shown after slide #1 (the hero image above). Each is just an image + optional click-through link -- design any text/price into the image itself.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {(config.hero.slides || []).map((slide, idx) => {
+                    const updateSlideField = (field, value) => {
+                      setConfig(prev => {
+                        const newSlides = [...(prev.hero.slides || [])]
+                        newSlides[idx] = { ...newSlides[idx], [field]: value }
+                        const next = { ...prev, hero: { ...prev.hero, slides: newSlides } }
+                        saveHomePageConfig(next)
+                        return next
+                      })
+                    }
+                    return (
+                      <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-slate-700">Slide #{idx + 2}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newSlides = (prev.hero.slides || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, hero: { ...prev.hero, slides: newSlides } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <ImageUploadField
+                          value={slide.heroImage || ""}
+                          onChange={(newPath) => updateSlideField("heroImage", newPath)}
+                          section="hero"
+                          fallbackSrc="/assets/hero_illustration.jpg"
+                          aspectRatio="aspect-[4/3]"
+                        />
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Price Badge (optional)</label>
+                          <input
+                            type="text"
+                            value={slide.priceBadge || ""}
+                            onChange={(e) => updateSlideField("priceBadge", e.target.value)}
+                            placeholder="e.g. ₹499"
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                          <input
+                            type="text"
+                            value={slide.link || ""}
+                            onChange={(e) => updateSlideField("link", e.target.value)}
+                            placeholder="?category=cleaning or https://..."
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfig(prev => {
+                      const newSlides = [...(prev.hero.slides || []), {
+                        heroImage: prev.hero.heroImage || "/assets/hero_illustration.jpg",
+                        priceBadge: "",
+                        link: "",
+                      }]
+                      const next = { ...prev, hero: { ...prev.hero, slides: newSlides } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Add Banner Slide
+                </button>
+              </div>
+
               {/* Collapsible Legacy 4-Grid Collage (Optional Archive) */}
               <div className="pt-4 border-t border-slate-100">
                 <button
@@ -836,476 +889,108 @@ export default function HomePageCustomizerPage() {
             </div>
           )}
 
-          {/* TAB 2: BROWSE CATEGORIES */}
+          {/* TAB 2: BROWSE CATEGORIES -- the "What do you need help with?"
+              icon grid on the live customer homepage. Each tile is just an
+              icon image + a name + a click-through link, matching exactly
+              what LandingPage.jsx renders (a fixed "More" tile is always
+              appended live and isn't editable here). */}
           {activeTab === "categories" && (
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
               <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                     <Layers className="w-5 h-5 text-blue-500" />
-                    Browse by Category Cards
+                    "What Do You Need Help With?" Category Icons
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
-                    Manage category title, subtitles, badges, cover images and navigation links.
+                    Manage the quick-category icon tiles shown near the top of the customer homepage -- name, icon image, and click-through link. A fixed "More" tile is always shown after these.
                   </p>
                 </div>
                 <button
                   onClick={() => {
-                    const newCat = {
-                      id: `cat-${Date.now()}`,
-                      title: "New Category",
-                      subtitle: "Category description",
-                      badge: "New",
-                      badgeColor: "emerald",
-                      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop",
-                      link: "/booking",
-                      enabled: true
-                    }
-                    setConfig(prev => ({ ...prev, categories: [...prev.categories, newCat] }))
+                    const newCat = { id: `cat-${Date.now()}`, name: "New Category", image: "", link: "", enabled: true }
+                    setConfig(prev => {
+                      const next = { ...prev, categories: [...prev.categories, newCat] }
+                      saveHomePageConfig(next)
+                      return next
+                    })
                   }}
                   className="px-3.5 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold transition flex items-center gap-1.5"
                 >
-                  <Plus className="w-4 h-4" /> Add Category Card
+                  <Plus className="w-4 h-4" /> Add Category
                 </button>
               </div>
 
-              <div className="space-y-4">
-                {config.categories.map((cat, idx) => (
-                  <div key={cat.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span className="font-semibold text-sm text-slate-800">{cat.title}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            const newCats = [...config.categories]
-                            newCats[idx].enabled = !newCats[idx].enabled
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${cat.enabled ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
-                            }`}
-                        >
-                          {cat.enabled ? "Enabled" : "Disabled"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const newCats = config.categories.filter((_, i) => i !== idx)
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title</label>
-                        <input
-                          type="text"
-                          value={cat.title}
-                          onChange={(e) => {
-                            const newCats = [...config.categories]
-                            newCats[idx].title = e.target.value
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Subtitle</label>
-                        <input
-                          type="text"
-                          value={cat.subtitle}
-                          onChange={(e) => {
-                            const newCats = [...config.categories]
-                            newCats[idx].subtitle = e.target.value
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Badge Tag</label>
-                        <input
-                          type="text"
-                          value={cat.badge}
-                          onChange={(e) => {
-                            const newCats = [...config.categories]
-                            newCats[idx].badge = e.target.value
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                        />
-                      </div>
-                      <div className="md:col-span-2 space-y-2">
-                        <ImageUploadField
-                          value={cat.image}
-                          onChange={(newPath) => {
-                            const newCats = [...config.categories]
-                            newCats[idx].image = newPath
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
-                          section="categories"
-                          fallbackSrc={idx === 0 ? "/mockups/category_for_you.png" : idx === 1 ? "/mockups/category_food_health.png" : "/mockups/category_home_transport.png"}
-                          label="Category Cover Image"
-                          aspectRatio="aspect-[16/9]"
-                        />
-
-                        {/* Presets Quick Picker */}
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            Quick Category Presets:
-                          </span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[
-                              { label: "For You", path: "/mockups/category_for_you.png" },
-                              { label: "Food & Health", path: "/mockups/category_food_health.png" },
-                              { label: "Home & Transport", path: "/mockups/category_home_transport.png" },
-                              { label: "Groceries", path: "/mockups/groceries_realistic.png" },
-                              { label: "Fresh Veggies", path: "/mockups/vegetables_realistic.png" },
-                              { label: "Home Cleaning", path: "/mockups/service_cleaning.png" },
-                              { label: "Electrical", path: "/mockups/service_electrical.png" },
-                              { label: "Plumbing", path: "/mockups/service_plumbing.png" }
-                            ].map((preset) => (
-                              <button
-                                key={preset.path}
-                                type="button"
-                                onClick={() => {
-                                  const newCats = [...config.categories]
-                                  newCats[idx].image = preset.path
-                                  setConfig(prev => ({ ...prev, categories: newCats }))
-                                }}
-                                className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${cat.image === preset.path
-                                    ? "bg-blue-600 text-white border-blue-600 font-bold"
-                                    : "bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700"
-                                  }`}
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {config.categories.map((cat, idx) => {
+                  const updateCatField = (field, value) => {
+                    setConfig(prev => {
+                      const newCats = [...prev.categories]
+                      newCats[idx] = { ...newCats[idx], [field]: value }
+                      const next = { ...prev, categories: newCats }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={cat.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700 truncate">{cat.name || "Untitled"}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateCatField("enabled", cat.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${cat.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {cat.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newCats = prev.categories.filter((_, i) => i !== idx)
+                                const next = { ...prev, categories: newCats }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
+                      <ImageUploadField
+                        value={cat.image || ""}
+                        onChange={(newPath) => updateCatField("image", newPath)}
+                        section="categories"
+                        fallbackSrc="/assets/hero_illustration.jpg"
+                        label="Icon Image"
+                        aspectRatio="aspect-square"
+                      />
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Target Link</label>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Name</label>
                         <input
                           type="text"
-                          value={cat.link}
-                          onChange={(e) => {
-                            const newCats = [...config.categories]
-                            newCats[idx].link = e.target.value
-                            setConfig(prev => ({ ...prev, categories: newCats }))
-                          }}
+                          value={cat.name || ""}
+                          onChange={(e) => updateCatField("name", e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={cat.link || ""}
+                          onChange={(e) => updateCatField("link", e.target.value)}
+                          placeholder="?category=cleaning or https://..."
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
                         />
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
-
-          {/* TAB: VENDOR HIRE BANNER */}
-          {activeTab === "vendorBanner" && (() => {
-            const vendorBanner = config.vendorBanner || {}
-            return (
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-                <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                      <Users className="w-5 h-5 text-teal-600" />
-                      Vendor Hire Banner
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Manage top banner headline, subtext, badges, features, benefit list items and links for the booking page.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500 mr-1">Banner Visibility</span>
-                    <button
-                      onClick={() => {
-                        updateVendorBanner("enabled", !(vendorBanner.enabled !== false))
-                      }}
-                      className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5`}
-                      style={{
-                        backgroundColor: (vendorBanner.enabled !== false) ? "#f0fdf4" : "#f1f5f9",
-                        color: (vendorBanner.enabled !== false) ? "#16a34a" : "#475569",
-                        borderColor: (vendorBanner.enabled !== false) ? "#bbf7d0" : "#cbd5e1"
-                      }}
-                    >
-                      {(vendorBanner.enabled !== false) ? "Visible on Landing Page" : "Hidden"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Main Text Content Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Badge text */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Badge Icon (Emoji)</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.badgeIcon ?? ""}
-                      placeholder="🤝"
-                      onChange={(e) => updateVendorBanner("badgeIcon", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Badge Text</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.badgeText ?? ""}
-                      placeholder="We're Looking for Professionals"
-                      onChange={(e) => updateVendorBanner("badgeText", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-
-                  {/* Title parts */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Prefix</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.titlePrefix ?? ""}
-                      placeholder="We Hire"
-                      onChange={(e) => updateVendorBanner("titlePrefix", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Highlight (Emerald Color)</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.titleHighlight ?? ""}
-                      placeholder="Technicians, Employees"
-                      onChange={(e) => updateVendorBanner("titleHighlight", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Suffix</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.titleSuffix ?? ""}
-                      placeholder="& Vendors"
-                      onChange={(e) => updateVendorBanner("titleSuffix", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-
-                  {/* Banner Image */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Technician Image URL</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.image ?? ""}
-                      placeholder="https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top"
-                      onChange={(e) => updateVendorBanner("image", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-
-                  {/* Description Subtitle */}
-                  <div className="md:col-span-2">
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Subtitle Description</label>
-                    <textarea
-                      rows={2}
-                      value={vendorBanner.subtitle ?? ""}
-                      placeholder="Join our team of skilled professionals and be part of a growing service community that works with trust and quality."
-                      onChange={(e) => updateVendorBanner("subtitle", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-
-                  {/* CTA text and url */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">CTA Button Text</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.ctaText ?? ""}
-                      placeholder="Join as a Professional"
-                      onChange={(e) => updateVendorBanner("ctaText", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">CTA Redirect URL</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.ctaUrl ?? ""}
-                      placeholder="https://calservices-vendor.vercel.app"
-                      onChange={(e) => updateVendorBanner("ctaUrl", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-
-                  {/* Learn more text and url */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Learn More Link Text</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.learnMoreText ?? ""}
-                      placeholder="Learn more"
-                      onChange={(e) => updateVendorBanner("learnMoreText", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Learn More Redirect URL</label>
-                    <input
-                      type="text"
-                      value={vendorBanner.learnMoreUrl ?? ""}
-                      placeholder="https://calservices-vendor.vercel.app"
-                      onChange={(e) => updateVendorBanner("learnMoreUrl", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
-                    />
-                  </div>
-                </div>
-
-
-                {/* Dynamic Feature Highlights List (Left Side) */}
-                <div className="border-t border-slate-100 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">Left-Side Feature Highlights</h3>
-                      <p className="text-[11px] text-slate-500">Add up to 3 quick feature items displayed on the left column.</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const list = vendorBanner.features || []
-                        if (list.length >= 3) {
-                          alert("You can add up to 3 highlights only.")
-                          return
-                        }
-                        const newItem = { id: `vf-${Date.now()}`, icon: "⚡", label: "New Feature" }
-                        updateVendorBanner("features", [...list, newItem])
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Highlight
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {(vendorBanner.features || [
-                      { id: "vf-1", icon: "📅", label: "Flexible Timings" },
-                      { id: "vf-2", icon: "💼", label: "Stable Work" },
-                      { id: "vf-3", icon: "🤝", label: "Team Support" }
-                    ]).map((f, fIdx) => (
-                      <div key={f.id || fIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center gap-3">
-                        <input
-                          type="text"
-                          value={f.icon}
-                          onChange={(e) => {
-                            const list = [...(vendorBanner.features || [])]
-                            list[fIdx] = { ...list[fIdx], icon: e.target.value }
-                            updateVendorBanner("features", list)
-                          }}
-                          placeholder="Icon"
-                          className="w-10 px-1 py-1.5 rounded-lg border border-slate-200 text-center text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={f.label}
-                          onChange={(e) => {
-                            const list = [...(vendorBanner.features || [])]
-                            list[fIdx] = { ...list[fIdx], label: e.target.value }
-                            updateVendorBanner("features", list)
-                          }}
-                          placeholder="Label"
-                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                        />
-                        <button
-                          onClick={() => {
-                            const list = (vendorBanner.features || []).filter((_, i) => i !== fIdx)
-                            updateVendorBanner("features", list)
-                          }}
-                          className="text-slate-400 hover:text-rose-600 p-1"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Dynamic Benefits List (Right Side) */}
-                <div className="border-t border-slate-100 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">Right-Side Benefit Points</h3>
-                      <p className="text-[11px] text-slate-500">Add up to 4 trust points displayed on the right column.</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const list = vendorBanner.benefits || []
-                        if (list.length >= 4) {
-                          alert("You can add up to 4 benefits only.")
-                          return
-                        }
-                        const newItem = { id: `vb-${Date.now()}`, icon: "✅", text: "New Benefit Point" }
-                        updateVendorBanner("benefits", [...list, newItem])
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Benefit Point
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(vendorBanner.benefits || [
-                      { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
-                      { id: "vb-2", icon: "🕐", text: "On-time service & support" },
-                      { id: "vb-3", icon: "📍", text: "Work close to your area" },
-                      { id: "vb-4", icon: "🌟", text: "Recognition for quality work" }
-                    ]).map((p, pIdx) => (
-                      <div key={p.id || pIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center gap-3">
-                        <input
-                          type="text"
-                          value={p.icon}
-                          onChange={(e) => {
-                            const list = [...(vendorBanner.benefits || [])]
-                            list[pIdx] = { ...list[pIdx], icon: e.target.value }
-                            updateVendorBanner("benefits", list)
-                          }}
-                          placeholder="Icon"
-                          className="w-10 px-1 py-1.5 rounded-lg border border-slate-200 text-center text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={p.text}
-                          onChange={(e) => {
-                            const list = [...(vendorBanner.benefits || [])]
-                            list[pIdx] = { ...list[pIdx], text: e.target.value }
-                            updateVendorBanner("benefits", list)
-                          }}
-                          placeholder="Benefit Text"
-                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                        />
-                        <button
-                          onClick={() => {
-                            const list = (vendorBanner.benefits || []).filter((_, i) => i !== pIdx)
-                            updateVendorBanner("benefits", list)
-                          }}
-                          className="text-slate-400 hover:text-rose-600 p-1"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
 
           {/* TAB 3: PROMOTIONAL OFFERS */}
           {activeTab === "offers" && (
@@ -1324,23 +1009,26 @@ export default function HomePageCustomizerPage() {
                   onClick={() => {
                     const newOff = {
                       id: `off-${Date.now()}`,
-                      tag: "SPECIAL",
-                      discount: "10% OFF",
-                      title: "on Plumbing",
-                      cta: "Book Now →",
-                      bgColor: "bg-emerald-50 text-emerald-900 border-emerald-100",
+                      image: "",
+                      title: "New Offer",
+                      link: "",
                       enabled: true
                     }
-                    setConfig(prev => ({
-                      ...prev,
-                      offers: { ...prev.offers, items: [...prev.offers.items, newOff] }
-                    }))
+                    setConfig(prev => {
+                      const next = { ...prev, offers: { ...prev.offers, items: [...prev.offers.items, newOff] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
                   }}
                   className="px-3.5 py-2 rounded-xl bg-pink-50 text-pink-700 hover:bg-pink-100 text-xs font-semibold transition flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" /> Add Offer Card
                 </button>
               </div>
+
+              <p className="text-xs text-slate-500 -mt-2">
+                Each card on the customer homepage is a single banner image you upload here (plus an optional link) — like a real ad, there's no separate discount/title text drawn on top of it in code. Design the offer straight into the image.
+              </p>
 
               {/* Main Teal Offer Card */}
               <div className="p-4 bg-teal-900 text-white rounded-xl space-y-3">
@@ -1377,78 +1065,67 @@ export default function HomePageCustomizerPage() {
               </div>
 
               {/* Offer Items Grid */}
-              <div className="space-y-4">
-                {config.offers.items.map((off, idx) => (
-                  <div key={off.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <span className="font-semibold text-xs text-slate-700">Offer Card #{idx + 1}</span>
-                      <button
-                        onClick={() => {
-                          const newItems = config.offers.items.filter((_, i) => i !== idx)
-                          setConfig(prev => ({ ...prev, offers: { ...prev.offers, items: newItems } }))
-                        }}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {config.offers.items.map((off, idx) => {
+                  const updateOfferField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...prev.offers.items]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, offers: { ...prev.offers, items: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={off.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Offer Card #{idx + 1}</span>
+                        <button
+                          onClick={() => {
+                            setConfig(prev => {
+                              const newItems = prev.offers.items.filter((_, i) => i !== idx)
+                              const next = { ...prev, offers: { ...prev.offers, items: newItems } }
+                              saveHomePageConfig(next)
+                              return next
+                            })
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <ImageUploadField
+                        value={off.image || ""}
+                        onChange={(newPath) => updateOfferField("image", newPath)}
+                        section="offers"
+                        fallbackSrc=""
+                        aspectRatio="aspect-[4/3]"
+                      />
+
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Tag</label>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Alt Text / Label (not shown on the image)</label>
                         <input
                           type="text"
-                          value={off.tag}
-                          onChange={(e) => {
-                            const newItems = [...config.offers.items]
-                            newItems[idx].tag = e.target.value
-                            setConfig(prev => ({ ...prev, offers: { ...prev.offers, items: newItems } }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Discount Amount</label>
-                        <input
-                          type="text"
-                          value={off.discount}
-                          onChange={(e) => {
-                            const newItems = [...config.offers.items]
-                            newItems[idx].discount = e.target.value
-                            setConfig(prev => ({ ...prev, offers: { ...prev.offers, items: newItems } }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-pink-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Service Title</label>
-                        <input
-                          type="text"
-                          value={off.title}
-                          onChange={(e) => {
-                            const newItems = [...config.offers.items]
-                            newItems[idx].title = e.target.value
-                            setConfig(prev => ({ ...prev, offers: { ...prev.offers, items: newItems } }))
-                          }}
+                          value={off.title || ""}
+                          onChange={(e) => updateOfferField("title", e.target.value)}
+                          placeholder="e.g. Home Cleaning Offer"
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Button CTA</label>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
                         <input
                           type="text"
-                          value={off.cta}
-                          onChange={(e) => {
-                            const newItems = [...config.offers.items]
-                            newItems[idx].cta = e.target.value
-                            setConfig(prev => ({ ...prev, offers: { ...prev.offers, items: newItems } }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
+                          value={off.link || ""}
+                          onChange={(e) => updateOfferField("link", e.target.value)}
+                          placeholder="?category=cleaning or https://..."
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
                         />
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
@@ -1494,201 +1171,6 @@ export default function HomePageCustomizerPage() {
                         }}
                         className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
                         placeholder="Description..."
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: HOW IT WORKS WORKFLOW */}
-          {activeTab === "workflow" && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Repeat2 className="w-5 h-5 text-purple-500" />
-                  How It Works Workflow Steps
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Manage the 5-step customer booking lifecycle process on the homepage.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {config.howItWorks.steps.map((step, idx) => (
-                  <div key={step.num || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center gap-4">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
-                      {step.num}
-                    </div>
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">Step Title</label>
-                        <input
-                          type="text"
-                          value={step.title}
-                          onChange={(e) => {
-                            const newSteps = [...config.howItWorks.steps]
-                            newSteps[idx].title = e.target.value
-                            setConfig(prev => ({ ...prev, howItWorks: { ...prev.howItWorks, steps: newSteps } }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">Step Description</label>
-                        <input
-                          type="text"
-                          value={step.description}
-                          onChange={(e) => {
-                            const newSteps = [...config.howItWorks.steps]
-                            newSteps[idx].description = e.target.value
-                            setConfig(prev => ({ ...prev, howItWorks: { ...prev.howItWorks, steps: newSteps } }))
-                          }}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: LIVE STATS BAR */}
-          {activeTab === "stats" && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-sky-500" />
-                  Live Platform Stats Bar
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Manage dark counter bar stats (Happy Customers, Verified Experts, Response Time, Rating).
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {config.statsBar.map((st, idx) => (
-                  <div key={st.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-900 text-white space-y-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Count Value</label>
-                      <input
-                        type="text"
-                        value={st.number}
-                        onChange={(e) => {
-                          const newStats = [...config.statsBar]
-                          newStats[idx].number = e.target.value
-                          setConfig(prev => ({ ...prev, statsBar: newStats }))
-                        }}
-                        className="w-full px-3 py-1.5 rounded-lg bg-slate-800 text-amber-400 font-bold text-sm border border-slate-700"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Label Text</label>
-                      <input
-                        type="text"
-                        value={st.label}
-                        onChange={(e) => {
-                          const newStats = [...config.statsBar]
-                          newStats[idx].label = e.target.value
-                          setConfig(prev => ({ ...prev, statsBar: newStats }))
-                        }}
-                        className="w-full px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs border border-slate-700"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 7: FEATURED EXPERTS */}
-          {activeTab === "experts" && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-indigo-500" />
-                    Featured Professionals Section
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Manage spotlight expert profiles displayed on the homepage.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {config.featuredPros.pros.map((pro, idx) => (
-                  <div key={pro.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <img src={pro.image} alt={pro.name} className="w-12 h-12 rounded-xl object-cover border border-slate-300" />
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={pro.name}
-                          onChange={(e) => {
-                            const newPros = [...config.featuredPros.pros]
-                            newPros[idx].name = e.target.value
-                            setConfig(prev => ({ ...prev, featuredPros: { ...prev.featuredPros, pros: newPros } }))
-                          }}
-                          className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold"
-                        />
-                        <input
-                          type="text"
-                          value={pro.title}
-                          onChange={(e) => {
-                            const newPros = [...config.featuredPros.pros]
-                            newPros[idx].title = e.target.value
-                            setConfig(prev => ({ ...prev, featuredPros: { ...prev.featuredPros, pros: newPros } }))
-                          }}
-                          className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-500 mt-1"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">Rating ★</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={pro.rating}
-                          onChange={(e) => {
-                            const newPros = [...config.featuredPros.pros]
-                            newPros[idx].rating = parseFloat(e.target.value) || 5.0
-                            setConfig(prev => ({ ...prev, featuredPros: { ...prev.featuredPros, pros: newPros } }))
-                          }}
-                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold text-amber-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">Jobs Done</label>
-                        <input
-                          type="text"
-                          value={pro.jobs}
-                          onChange={(e) => {
-                            const newPros = [...config.featuredPros.pros]
-                            newPros[idx].jobs = e.target.value
-                            setConfig(prev => ({ ...prev, featuredPros: { ...prev.featuredPros, pros: newPros } }))
-                          }}
-                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <ImageUploadField
-                        value={pro.image}
-                        onChange={(newPath) => {
-                          const newPros = [...config.featuredPros.pros]
-                          newPros[idx].image = newPath
-                          setConfig(prev => ({ ...prev, featuredPros: { ...prev.featuredPros, pros: newPros } }))
-                        }}
-                        section="featured-pros"
-                        fallbackSrc="/mockups/expert_electrical.png"
-                        label="Professional Photo"
-                        aspectRatio="aspect-square"
                       />
                     </div>
                   </div>
@@ -2142,7 +1624,6 @@ export default function HomePageCustomizerPage() {
                       { id: "subcategories", label: "Subcategories", icon: Layers },
                       { id: "categories", label: "Categories", icon: Layout },
                       { id: "offers", label: "Offers", icon: Gift },
-                      { id: "vendor", label: "Vendor", icon: Users },
                       { id: "trust", label: "Why Us", icon: ShieldCheck },
                       { id: "footer", label: "Footer", icon: FileText }
                     ].map((tab) => (
@@ -2329,6 +1810,77 @@ export default function HomePageCustomizerPage() {
                             ))}
                           </div>
                         </div>
+
+                        {/* Advertisement Banner Carousel in Quick Edit -- same
+                            model as the full Hero Banner tab, so an admin can
+                            manage the rotating ad banners from right inside
+                            the live preview too. */}
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                            Advertisement Banner Slides
+                          </label>
+                          {(config.hero.slides || []).map((slide, idx) => (
+                            <div key={idx} className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/80 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-teal-400">
+                                <span>Slide #{idx + 2}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newSlides = (config.hero.slides || []).filter((_, i) => i !== idx)
+                                    const next = { ...config, hero: { ...config.hero, slides: newSlides } }
+                                    setConfig(next)
+                                    saveHomePageConfig(next)
+                                  }}
+                                  className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <ImageUploadField
+                                value={slide.heroImage || ""}
+                                onChange={(newPath) => {
+                                  const newSlides = [...(config.hero.slides || [])]
+                                  newSlides[idx] = { ...newSlides[idx], heroImage: newPath }
+                                  const next = { ...config, hero: { ...config.hero, slides: newSlides } }
+                                  setConfig(next)
+                                  saveHomePageConfig(next)
+                                }}
+                                section="hero"
+                                fallbackSrc="/assets/hero_illustration.jpg"
+                                aspectRatio="aspect-[4/3]"
+                              />
+                              <input
+                                type="text"
+                                value={slide.link || ""}
+                                onChange={(e) => {
+                                  const newSlides = [...(config.hero.slides || [])]
+                                  newSlides[idx] = { ...newSlides[idx], link: e.target.value }
+                                  const next = { ...config, hero: { ...config.hero, slides: newSlides } }
+                                  setConfig(next)
+                                  saveHomePageConfig(next)
+                                }}
+                                placeholder="Link (e.g. ?category=cleaning)"
+                                className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 text-[10px] font-mono outline-none"
+                              />
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newSlides = [...(config.hero.slides || []), {
+                                heroImage: config.hero.heroImage || "/assets/hero_illustration.jpg",
+                                priceBadge: "",
+                                link: "",
+                              }]
+                              const next = { ...config, hero: { ...config.hero, slides: newSlides } }
+                              setConfig(next)
+                              saveHomePageConfig(next)
+                            }}
+                            className="text-[10px] text-teal-400 hover:underline cursor-pointer"
+                          >
+                            + Add Banner Slide
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -2495,52 +2047,53 @@ export default function HomePageCustomizerPage() {
                     {previewQuickEditTab === "categories" && (
                       <div className="space-y-3">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                          Categories ({config.categories?.length || 0})
+                          Category Icons ({config.categories?.length || 0})
                         </span>
                         {(config.categories || []).map((cat, idx) => (
                           <div key={cat.id || idx} className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-white">{cat.title}</span>
+                              <span className="text-xs font-bold text-white">{cat.name}</span>
                               <button
                                 type="button"
                                 onClick={() => {
                                   const nextCats = [...config.categories]
-                                  nextCats[idx].enabled = !nextCats[idx].enabled
+                                  nextCats[idx].enabled = nextCats[idx].enabled === false
                                   setConfig(prev => ({ ...prev, categories: nextCats }))
                                   saveHomePageConfig({ ...config, categories: nextCats })
                                 }}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                  cat.enabled ? "bg-emerald-900 text-emerald-300" : "bg-slate-700 text-slate-400"
+                                  cat.enabled !== false ? "bg-emerald-900 text-emerald-300" : "bg-slate-700 text-slate-400"
                                 }`}
                               >
-                                {cat.enabled ? "Active" : "Disabled"}
+                                {cat.enabled !== false ? "Active" : "Disabled"}
                               </button>
                             </div>
                             <input
                               type="text"
-                              value={cat.title}
+                              value={cat.name || ""}
                               onChange={(e) => {
                                 const nextCats = [...config.categories]
-                                nextCats[idx].title = e.target.value
+                                nextCats[idx].name = e.target.value
                                 setConfig(prev => ({ ...prev, categories: nextCats }))
                                 saveHomePageConfig({ ...config, categories: nextCats })
                               }}
+                              placeholder="Name"
                               className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs outline-none font-bold"
                             />
                             <input
                               type="text"
-                              value={cat.subtitle}
+                              value={cat.link || ""}
                               onChange={(e) => {
                                 const nextCats = [...config.categories]
-                                nextCats[idx].subtitle = e.target.value
+                                nextCats[idx].link = e.target.value
                                 setConfig(prev => ({ ...prev, categories: nextCats }))
                                 saveHomePageConfig({ ...config, categories: nextCats })
                               }}
-                              placeholder="Subtitle"
+                              placeholder="?category=cleaning or https://..."
                               className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-[10px] outline-none"
                             />
                             <div>
-                              <label className="text-[9px] text-slate-400 uppercase block mb-1">Photo URL or Path</label>
+                              <label className="text-[9px] text-slate-400 uppercase block mb-1">Icon Image URL or Path</label>
                               <div className="flex items-center gap-2">
                                 <input
                                   type="text"
@@ -2594,36 +2147,72 @@ export default function HomePageCustomizerPage() {
                             className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
                           />
                         </div>
-                      </div>
-                    )}
 
-                    {previewQuickEditTab === "vendor" && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendor Banner Title</label>
-                          <input
-                            type="text"
-                            value={config.vendorBanner?.titleHighlight || ""}
-                            onChange={(e) => {
-                              const next = { ...config, vendorBanner: { ...config.vendorBanner, titleHighlight: e.target.value } }
+                        {/* Each offer card is a single banner image + link --
+                            no separate text fields, matching what actually
+                            renders on the customer page. */}
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                            Offer Banner Images
+                          </label>
+                          {(config.offers?.items || []).map((off, idx) => (
+                            <div key={off.id || idx} className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/80 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-teal-400">
+                                <span>Card #{idx + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newItems = (config.offers?.items || []).filter((_, i) => i !== idx)
+                                    const next = { ...config, offers: { ...config.offers, items: newItems } }
+                                    setConfig(next)
+                                    saveHomePageConfig(next)
+                                  }}
+                                  className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <ImageUploadField
+                                value={off.image || ""}
+                                onChange={(newPath) => {
+                                  const newItems = [...(config.offers?.items || [])]
+                                  newItems[idx] = { ...newItems[idx], image: newPath }
+                                  const next = { ...config, offers: { ...config.offers, items: newItems } }
+                                  setConfig(next)
+                                  saveHomePageConfig(next)
+                                }}
+                                section="offers"
+                                fallbackSrc=""
+                                aspectRatio="aspect-[4/3]"
+                              />
+                              <input
+                                type="text"
+                                value={off.link || ""}
+                                onChange={(e) => {
+                                  const newItems = [...(config.offers?.items || [])]
+                                  newItems[idx] = { ...newItems[idx], link: e.target.value }
+                                  const next = { ...config, offers: { ...config.offers, items: newItems } }
+                                  setConfig(next)
+                                  saveHomePageConfig(next)
+                                }}
+                                placeholder="Link (e.g. ?category=cleaning)"
+                                className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 text-[10px] font-mono outline-none"
+                              />
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newOff = { id: `off-${Date.now()}`, image: "", title: "New Offer", link: "", enabled: true }
+                              const newItems = [...(config.offers?.items || []), newOff]
+                              const next = { ...config, offers: { ...config.offers, items: newItems } }
                               setConfig(next)
                               saveHomePageConfig(next)
                             }}
-                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-teal-400 font-bold text-xs outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">CTA Text</label>
-                          <input
-                            type="text"
-                            value={config.vendorBanner?.ctaText || ""}
-                            onChange={(e) => {
-                              const next = { ...config, vendorBanner: { ...config.vendorBanner, ctaText: e.target.value } }
-                              setConfig(next)
-                              saveHomePageConfig(next)
-                            }}
-                            className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs outline-none"
-                          />
+                            className="text-[10px] text-teal-400 hover:underline cursor-pointer"
+                          >
+                            + Add Offer Card
+                          </button>
                         </div>
                       </div>
                     )}

@@ -1,15 +1,17 @@
 import React, { useEffect, useState, useMemo } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   Plus, Edit2, Trash2, ChevronDown, ChevronUp, Search,
   Truck, Wrench, Wind, Sparkles, Palette, Hammer, Carrot,
   Layers, Box, Tag, FolderOpen, Zap, Clock, Check,
-  Package as PackageIcon
+  Package as PackageIcon, ArrowUpRight
 } from "lucide-react"
-import { apiRequest } from "../../../api/client.js"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import ImageUploader from "../../components/ImageUploader.jsx"
 import { resolveImageUrl } from "../../../utils/imageUrl.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { routes } from "../../routes.js"
 
 const SERVICE_SUBTABS = {
   "kitchen-cleaning": [
@@ -111,13 +113,15 @@ const CATEGORY_THEMES = {
 
 
 export function CatalogServicesPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [dbPackages, setDbPackages] = useState([])
   const [expandedCategoryIds, setExpandedCategoryIds] = useState(new Set())
   const [expandedServiceIds, setExpandedServiceIds] = useState(new Set(["carpentry"]))
   const [searchQuery, setSearchQuery] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") || "")
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [toast, showToast] = useToast()
@@ -150,6 +154,15 @@ export function CatalogServicesPage() {
     loadCategories()
     loadServices()
   }, [])
+
+  // Deep-linked here from the Categories page (?category=<id>) -- auto-expand
+  // that category so its services are visible immediately, no extra click.
+  useEffect(() => {
+    if (categoryFilter) {
+      setExpandedCategoryIds((prev) => new Set([...prev, Number(categoryFilter) || categoryFilter]))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryFilter])
 
   // Toggle category expansion
   const toggleCategory = (catId) => {
@@ -248,8 +261,8 @@ export function CatalogServicesPage() {
       } else {
         showToast(res.message || "Save failed", "error")
       }
-    } catch {
-      showToast("Save failed", "error")
+    } catch (err) {
+      showToast(extractApiErrorMessage(err, "Save failed"), "error")
     }
   }
 
@@ -265,15 +278,28 @@ export function CatalogServicesPage() {
         showToast(res.message || "Delete blocked", "error")
       }
     } catch (err) {
-      const reason = err?.body?.errors?.detail || err?.body?.message || err?.body?.error
-      if (reason && /still has packages/i.test(reason)) {
+      const reason = extractApiErrorMessage(err, "Delete failed")
+      if (/still has packages/i.test(reason)) {
         if (window.confirm(`${reason}\n\nDelete "${svc.name}" AND every package inside it? This cannot be undone.`)) {
           return handleDelete(svc, true)
         }
         return
       }
-      showToast(reason || "Delete failed", "error")
+      showToast(reason, "error")
     }
+  }
+
+  // One-click hand-off into the Packages admin, deep-linked straight to this
+  // service's tab (no re-picking the category/service tab by hand) -- the
+  // connective piece that makes Categories -> Services -> Packages feel like
+  // one managed tree instead of three disconnected pages.
+  const goToPackagesFor = (svc, { openAdd = false } = {}) => {
+    const cat = categories.find((c) => c.id === (svc.category || svc.category_id))
+    const params = new URLSearchParams()
+    if (cat?.slug) params.set("category", cat.slug)
+    if (svc?.slug) params.set("service", svc.slug)
+    if (openAdd) params.set("openAdd", "1")
+    navigate(`${routes.catalog_packages}?${params.toString()}`)
   }
 
   const categoryOptions = [
@@ -282,24 +308,15 @@ export function CatalogServicesPage() {
   ]
 
   // Always use live DB packages — no hardcoded fallbacks
-  const getPackagesForService = (svc, cat) => {
+  const getPackagesForService = (svc) => {
     const dbPkgs = dbPackages.filter((p) => p.service === svc.id || p.service_id === svc.id)
-    const catId = svc.category || svc.category_id || cat?.id
-    const catObj = cat || categories.find((c) => c.id === catId)
-    const isGt =
-      catObj?.slug === "goods_transport" ||
-      ["truck", "two-wheeler", "two_wheeler", "packers-and-movers", "goods_transport"].some((s) =>
-        (svc.slug || "").includes(s)
-      )
-
     return dbPkgs.map((p) => ({
       id: p.id,
       categoryName: svc.name,
       name: p.name,
       tag: p.tag || (p.popular ? "Popular" : "Standard"),
       tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: `₹${p.base_price}`,
-      isGtPrice: isGt,
+      price: `\u20b9${p.base_price}`,
       duration: p.duration || "1 hr",
       description: p.description,
       includes: Array.isArray(p.includes) ? p.includes : [],
@@ -517,7 +534,7 @@ export function CatalogServicesPage() {
                       </div>
                     ) : (
                       catServices.map((svc) => {
-                        const packages = getPackagesForService(svc, cat)
+                        const packages = getPackagesForService(svc)
                         const hasPackages = packages.length > 0
                         const isServiceExpanded = expandedServiceIds.has(svc.slug) || expandedServiceIds.has(String(svc.id))
 
@@ -594,6 +611,15 @@ export function CatalogServicesPage() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => goToPackagesFor(svc, { openAdd: !hasPackages })}
+                                  title={hasPackages ? "Manage this service's packages" : "This service has no packages yet — add one"}
+                                  className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                >
+                                  {hasPackages ? "Manage Packages" : "+ Add Package"} <ArrowUpRight className="w-3 h-3" />
+                                </button>
+
                                 {hasPackages && (
                                   <button
                                     type="button"
@@ -666,16 +692,7 @@ export function CatalogServicesPage() {
                                         {/* Price & Duration */}
                                         <div className="flex items-center gap-2.5 text-xs font-medium text-slate-700 mb-2.5 pb-2.5 border-b border-slate-100">
                                           <span className="text-xs font-semibold text-slate-900">
-                                            {pkg.isGtPrice ? (
-                                              <span className="inline-flex items-center gap-1">
-                                                <span className="text-[10px] font-normal text-slate-500 uppercase tracking-wider">
-                                                  Starting from
-                                                </span>
-                                                <span className="font-semibold text-slate-900">{pkg.price}</span>
-                                              </span>
-                                            ) : (
-                                              pkg.price
-                                            )}
+                                            {pkg.price}
                                           </span>
                                           {pkg.duration && (
                                             <span className="flex items-center gap-1 text-[11px] text-slate-400 font-normal">

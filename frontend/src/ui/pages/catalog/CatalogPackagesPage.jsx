@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   Plus, Edit2, Search, Truck, Wrench, Wind, Sparkles,
   Palette, Hammer, Carrot, Layers, Box, Tag, DollarSign,
@@ -8,7 +9,7 @@ import {
   SlidersHorizontal, ArrowUpRight, Trash2, ChefHat, Utensils,
   ShoppingCart, Leaf
 } from "lucide-react"
-import { apiRequest } from "../../../api/client.js"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import ImageUploader from "../../components/ImageUploader.jsx"
 import { resolveImageUrl } from "../../../utils/imageUrl.js"
@@ -1705,11 +1706,12 @@ const getServiceIcon = (slug = "", name = "") => {
 }
 
 export function CatalogPackagesPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [packages, setPackages] = useState([])
-  const [activeCategoryKey, setActiveCategoryKey] = useState("goods_transports")
-  const [activeSubServiceKey, setActiveSubServiceKey] = useState("all")
+  const [activeCategoryKey, setActiveCategoryKey] = useState(searchParams.get("category") || "goods_transports")
+  const [activeSubServiceKey, setActiveSubServiceKey] = useState(searchParams.get("service") || "all")
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -2617,34 +2619,14 @@ export function CatalogPackagesPage() {
         showToast(editing.id ? "Package updated successfully" : "Package created successfully")
         setEditing(null)
         loadData()
-      } else if (res.error_code === "PRICING_FORBIDDEN") {
-        // The package is linked to a Goods & Transport ServiceTier.
-        // Changing base_price requires pricing:modify_price — redirect the
-        // operator to the correct page rather than showing a generic error.
-        showToast(
-          "⚠️ GT Pricing Permission Required — Use Goods & Transport Rates to change this price.",
-          "error"
-        )
       } else {
         showToast(res?.message || "Save failed", "error")
       }
     } catch (err) {
       console.error("Save package error:", err)
-      let msg = "Save failed"
-      if (err?.body?.errors) {
-        const firstKey = Object.keys(err.body.errors)[0]
-        const firstVal = err.body.errors[firstKey]
-        const text = Array.isArray(firstVal) ? firstVal[0] : (typeof firstVal === "object" ? JSON.stringify(firstVal) : String(firstVal))
-        msg = `${firstKey}: ${text}`
-      } else if (err?.body?.message) {
-        msg = err.body.message
-      } else if (err?.message) {
-        msg = err.message
-      }
-      showToast(msg, "error")
+      showToast(extractApiErrorMessage(err, "Save failed"), "error")
     }
   }
-
 
   const openQuickPriceEdit = (pkg) => {
     const slug = pkg.slug || pkg.id || ""
@@ -3084,8 +3066,7 @@ export function CatalogPackagesPage() {
         showToast(res.message || "Delete failed", "error")
       }
     } catch (err) {
-      const reason = err?.body?.errors?.detail || err?.body?.message || err?.body?.error
-      showToast(reason || "Delete failed", "error")
+      showToast(extractApiErrorMessage(err, "Delete failed"), "error")
     }
   }
 
@@ -3138,6 +3119,47 @@ export function CatalogPackagesPage() {
   }
 
   const ActiveIcon = activePillar.icon
+
+  // Deep-link support: open the "Add Package" modal preset to whichever
+  // service tab is currently active, instead of always defaulting to the
+  // first service in the category. This is what makes the "Manage Packages"
+  // / "+ Add Package" links from the Services admin page (CatalogServicesPage)
+  // land the admin directly in the right context, one click, no re-selecting.
+  const openAddPackageModalForActiveService = () => {
+    const activeItem = activeSubServiceKey !== "all"
+      ? activeCategoryServicesWithPackages.find((item) =>
+          item.service.slug === activeSubServiceKey ||
+          item.service.virtualSlug === activeSubServiceKey ||
+          String(item.service.id) === String(activeSubServiceKey) ||
+          String(item.service.realServiceId) === String(activeSubServiceKey) ||
+          item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+        )
+      : null
+    const firstSvc = activeItem?.service || activeCategoryServicesWithPackages[0]?.service || services[0]
+    const rawId = firstSvc?.realServiceId || firstSvc?.id
+    const cleanSvcId = (typeof rawId === "string" && rawId.includes("-"))
+      ? rawId.split("-")[0]
+      : (rawId ? String(rawId) : (services[0]?.id ? String(services[0].id) : ""))
+    setEditing({
+      ...EMPTY_PACKAGE,
+      service: cleanSvcId,
+      virtualSlug: firstSvc?.virtualSlug || "",
+    })
+  }
+
+  // If we arrived here via a "+ Add Package" deep link from the Services
+  // admin page (?openAdd=1, alongside ?category=&service=), open the modal
+  // automatically once the catalog data (and therefore the matching service
+  // tab) is ready, then drop the flag so it doesn't reopen on every re-render.
+  useEffect(() => {
+    if (searchParams.get("openAdd") !== "1") return
+    if (loading || activeCategoryServicesWithPackages.length === 0) return
+    openAddPackageModalForActiveService()
+    const next = new URLSearchParams(searchParams)
+    next.delete("openAdd")
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, activeCategoryServicesWithPackages, searchParams])
 
   const selectedServiceId = String(editing?.service?.id || editing?.service || "")
   const selectedService = services.find((s) => String(s.id) === selectedServiceId)
@@ -3228,18 +3250,7 @@ export function CatalogPackagesPage() {
           <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
             <button
               type="button"
-              onClick={() => {
-                const firstSvc = activeCategoryServicesWithPackages[0]?.service || services[0]
-                const rawId = firstSvc?.realServiceId || firstSvc?.id
-                const cleanSvcId = (typeof rawId === "string" && rawId.includes("-"))
-                  ? rawId.split("-")[0]
-                  : (rawId ? String(rawId) : (services[0]?.id ? String(services[0].id) : ""))
-                setEditing({
-                  ...EMPTY_PACKAGE,
-                  service: cleanSvcId,
-                  virtualSlug: firstSvc?.virtualSlug || "",
-                })
-              }}
+              onClick={openAddPackageModalForActiveService}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" strokeWidth={2.5} />

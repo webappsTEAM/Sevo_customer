@@ -20,10 +20,28 @@ Python types (Decimal, list, etc.), not raw JSON strings.
 import logging
 
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 
 from ..models import CatalogCategory, Service, Package, AddOn, CatalogChangeLog, PackageStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _delete_or_raise(instance, label):
+    """
+    Runs instance.delete() and turns any DB-level IntegrityError (a FK
+    constraint the exists() pre-checks above didn't know about -- schema
+    drift, a stray reference from another app, etc.) into the same
+    ValidationError shape the "still has services/packages" checks use,
+    instead of letting it bubble up as an unhandled 500. The original DB
+    message is included so the real constraint is visible in the toast
+    rather than swallowed.
+    """
+    try:
+        instance.delete()
+    except IntegrityError as exc:
+        logger.exception("IntegrityError deleting %s", label)
+        raise ValidationError({"detail": f"Cannot delete {label}: still referenced elsewhere ({exc})."})
 
 
 class LogisticsPricingPermissionError(PermissionError):
@@ -153,16 +171,15 @@ def delete_category(category, actor=None, cascade=False):
     if category.services.exists():
         if not cascade:
             raise ValidationError({"detail": "Cannot delete a category that still has services. Move or delete its services first."})
-        from django.db import transaction
         with transaction.atomic():
             for service in list(category.services.all()):
                 delete_service(service, actor=actor, cascade=True)
             _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.DELETE, actor,
                  reason="Cascade delete: removed with all child services and packages.")
-            category.delete()
+            _delete_or_raise(category, f'category "{category.name}"')
         return
     _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.DELETE, actor)
-    category.delete()
+    _delete_or_raise(category, f'category "{category.name}"')
 
 
 # ── Service ───────────────────────────────────────────────────────────────
@@ -190,16 +207,15 @@ def delete_service(service, actor=None, cascade=False):
     if service.packages.exists():
         if not cascade:
             raise ValidationError({"detail": "Cannot delete a service that still has packages. Move or delete its packages first."})
-        from django.db import transaction
         with transaction.atomic():
             for package in list(service.packages.all()):
                 delete_package(package, actor=actor)
             _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor,
                  reason="Cascade delete: removed with all child packages.")
-            service.delete()
+            _delete_or_raise(service, f'service "{service.name}"')
         return
     _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor)
-    service.delete()
+    _delete_or_raise(service, f'service "{service.name}"')
 
 
 # Canonical bidirectional slug aliases between Package and ServiceTier.
@@ -596,7 +612,7 @@ def delete_package(package, actor=None):
     except Exception:
         pass
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.DELETE, actor)
-    package.delete()
+    _delete_or_raise(package, f'package "{package.name}"')
 
 
 # ── AddOn ─────────────────────────────────────────────────────────────────

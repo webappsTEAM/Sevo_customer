@@ -1023,6 +1023,7 @@ class CatalogChangeLog(models.Model):
         CREATE        = "CREATE",        "Created"
         UPDATE        = "UPDATE",        "Updated"
         STATUS_CHANGE = "STATUS_CHANGE", "Status Changed"
+        DELETE        = "DELETE",        "Deleted"
 
     entity_type = models.CharField(max_length=20, choices=EntityType.choices)
     entity_id   = models.PositiveIntegerField(db_index=True)

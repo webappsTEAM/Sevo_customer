@@ -31,6 +31,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { ACInspectionFormModal } from "../components/estimation/ACInspectionFormModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -8366,20 +8367,7 @@ function QuickCommerceCartCheckout({
   }, [])
 
   const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
-  const [savedAddresses, setSavedAddresses] = useState([
-    {
-      id: "addr_home",
-      type: "Home",
-      address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
-      icon: "home"
-    },
-    {
-      id: "addr_work",
-      type: "Work",
-      address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
-      icon: "work"
-    }
-  ])
+  const [savedAddresses, setSavedAddresses] = useState([""])
   const [selectedAddressId, setSelectedAddressId] = useState("addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
   const [selectedTip, setSelectedTip] = useState(null)
@@ -9746,6 +9734,31 @@ function StepWorkflowCheckout({
                         )}
                       </div>
                     </div>
+                    {item.description && (
+                      <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, paddingLeft: '2px', marginTop: '2px', textAlign: 'left' }}>
+                        {item.description}
+                      </div>
+                    )}
+                    {item.ac_notes && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', paddingLeft: '2px', marginTop: '1px', textAlign: 'left' }}>
+                        Note: {item.ac_notes}
+                      </div>
+                    )}
+                    {item.ac_images && item.ac_images.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingLeft: '2px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Photos:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {item.ac_images.map((img, imgIdx) => (
+                            <img
+                              key={imgIdx}
+                              src={img}
+                              alt={`AC Photo ${imgIdx + 1}`}
+                              style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
                       <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
                         Areas: {item.selectedSubOptions.join(", ")}
@@ -10869,7 +10882,11 @@ export function BookingPage() {
       categoryName: c.categoryName || category?.name || "",
       selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
       selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
-      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice
+      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice,
+      ac_brand: c.ac_brand || "",
+      ac_type: c.ac_type || "",
+      ac_quantity: c.ac_quantity || c.quantity || 1,
+      ac_notes: c.ac_notes || ""
     }))))
     data.append("payment_method", backendPaymentMethod)
     if (couponCode) {
@@ -11412,7 +11429,15 @@ export function BookingPage() {
                     setShowPackageModal(false);
                     navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
-                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onCheckout={(newCart) => {
+                    if (newCart && Array.isArray(newCart)) setCart(newCart);
+                    setShowPackageModal(false);
+                    setStep(3);
+                  }}
+                  setFormData={setFormData}
+                  formData={formData}
+                  setPhotoFile={setPhotoFile}
+                  setPhotoPreview={setPhotoPreview}
                 />
               );
             }
@@ -16276,7 +16301,19 @@ function getCategoryFaqsAndReviews(pkg) {
   };
 }
 
-export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, packagesData, isFullPage = false }) {
+export function CustomCleaningPackageModal({
+  category,
+  cart,
+  setCart,
+  onClose,
+  onCheckout,
+  packagesData,
+  isFullPage = false,
+  setFormData,
+  formData,
+  setPhotoFile,
+  setPhotoPreview
+}) {
   const rawCatKey = (category?.id || category?.slug || category?.name || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
   if (["washing_machine", "washing", "washer", "wm"].some(k => rawCatKey.includes(k))) normalizedKey = "washing_machine";
@@ -16893,6 +16930,68 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [activeFaq, setActiveFaq] = useState(null);
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
 
+  const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
+  const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+
+  const handleAcInspectionSubmit = (inspectionData) => {
+    setShowAcInspectionModal(false);
+    setSelectedPackageDetail(null);
+
+    const inspectionCartId = "serv-hvac-ac-inspection";
+    const unitPrice = Number(inspectionData.price) || 199;
+    const qty = Math.max(1, Number(inspectionData.quantity) || 1);
+
+    const remainingCart = cart.filter(c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection");
+
+    const itemDesc = `${inspectionData.type} (${inspectionData.brand}) • ${qty} Unit${qty > 1 ? 's' : ''}`;
+
+    const inspectionCartItem = {
+      id: inspectionCartId,
+      name: "AC Inspection",
+      price: unitPrice,
+      quantity: qty,
+      duration: "45 mins",
+      ac_brand: inspectionData.brand,
+      ac_type: inspectionData.type,
+      ac_quantity: qty,
+      ac_images: inspectionData.images || [],
+      ac_notes: inspectionData.notes || "",
+      description: itemDesc,
+      categoryName: "AC & Heating",
+      category_id: "hvac"
+    };
+
+    const updatedCart = [...remainingCart, inspectionCartItem];
+    setCart(updatedCart);
+
+    if (inspectionData.primaryFile && typeof setPhotoFile === "function") {
+      setPhotoFile(inspectionData.primaryFile);
+    }
+    if (inspectionData.primaryPreview && typeof setPhotoPreview === "function") {
+      setPhotoPreview(inspectionData.primaryPreview);
+    }
+
+    if (typeof setFormData === "function") {
+      setFormData(prev => ({
+        ...prev,
+        issue_title: `AC Inspection (${inspectionData.type} - ${inspectionData.brand})`,
+        description: [
+          prev?.description || "",
+          `[AC Inspection: ${inspectionData.type} - ${inspectionData.brand} (${qty} Unit${qty > 1 ? 's' : ''})]`,
+          inspectionData.notes ? `[Notes: ${inspectionData.notes}]` : ""
+        ].filter(Boolean).join("\n"),
+        ac_brand: inspectionData.brand,
+        ac_type: inspectionData.type,
+        ac_quantity: qty,
+        ac_notes: inspectionData.notes || ""
+      }));
+    }
+
+    if (typeof onCheckout === "function") {
+      onCheckout(updatedCart);
+    }
+  };
+
   const canEnterServiceEditMode = useCanEditCustomerUI();
   const [serviceEditMode, setServiceEditMode] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
@@ -17205,23 +17304,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     hvac: {
       "AC Inspection": [
         {
-          id: "hvac-insp-comp",
-          name: "Comprehensive AC Inspection & Diagnosis",
+          id: "hvac-ac-inspection",
+          name: "AC Inspection",
           price: 199,
           duration: "45 mins",
-          badge: "Most Popular",
+          badge: "Certified Inspection",
           badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-          description: "Complete multi-point diagnostic check-up covering cooling, electricals, gas pressure, compressor health, and airflow with upfront repair estimate.",
+          description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
           includes: [
-            "Indoor unit & cooling coil inspection",
+            "Indoor cooling coil & filter inspection",
             "Outdoor condenser & compressor health scan",
             "Cooling performance & airflow delta test",
             "Electrical voltage, wiring & amp check",
             "Gas / refrigerant pressure & leak check",
             "Drain pipe & tray water leakage inspection",
             "Noise, vibration & motor bearing check",
-            "Remote sensor & PCB control test",
-            "Detailed digital inspection report with quotation"
+            "Detailed digital inspection report with upfront repair quote"
           ],
           image: "/mockups/service_inspection.png",
           tools: [
@@ -17243,97 +17341,27 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           faqs: [
             { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
             { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
-          ]
-        },
-        {
-          id: "hvac-insp-split",
-          name: "Split AC Deep Inspection & Health Audit",
-          price: 249,
-          duration: "45 mins",
-          badge: "Split Specialist",
-          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-          description: "Specialized in-depth inspection for Split ACs covering blower wheel, flare joints, PCB communication lines, and copper piping.",
-          includes: [
-            "Indoor blower wheel & air louvers inspection",
-            "Copper flare nut & joint leak detection",
-            "Inverter PCB communication & voltage test",
-            "Compressor capacitor & contactor health audit",
-            "Cooling coil fin condition assessment",
-            "Drain line slope & blockage scan",
-            "Detailed repair estimate before any work"
-          ],
-          image: "/mockups/appliance_cleaning_thumb.png",
-          tools: [
-            "Electronic leak sniffer",
-            "Digital clamp meter",
-            "Digital anemometer & airflow gauge",
-            "Capacitor tester"
-          ],
-          ready: [
-            "Safe accessibility to indoor and outdoor units",
-            "AC remote control handy"
-          ],
-          notes: "Inspection fee is adjusted into the repair bill if service is approved during the visit.",
-          reviews: [
-            { name: "Raghav M.", rating: "5.0", text: "Deep inspection uncovered a tiny flare nut leak before all gas leaked out. Saved me thousands!" }
-          ],
-          faqs: [
-            { q: "Does this include checking inverter boards?", a: "Yes, both indoor and outdoor PCB modules and error codes are audited." }
-          ]
-        },
-        {
-          id: "hvac-insp-win",
-          name: "Window AC General Inspection & Diagnostics",
-          price: 199,
-          duration: "30 mins",
-          badge: "Window Care",
-          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
-          description: "Compact and thorough diagnostic check for Window ACs including front grill, thermostat sensor, compressor mounts, and fan motor.",
-          includes: [
-            "Front grill & mesh filter condition check",
-            "Thermostat calibration & cooling delta check",
-            "Motor shaft & fan blade balance audit",
-            "Compressor mount & vibration inspection",
-            "Electrical wiring & start capacitor test",
-            "Drain plug & base tray rust inspection"
-          ],
-          image: "/mockups/service_hvac.png",
-          tools: [
-            "Infrared laser thermometer",
-            "Digital multimeter",
-            "Capacitor tester"
-          ],
-          ready: [
-            "Ensure the AC power socket is switchable"
-          ],
-          notes: "Covers all window AC brands and capacities (0.75 Ton to 2 Ton).",
-          reviews: [
-            { name: "Nitin B.", rating: "4.8", text: "Technician fixed abnormal rattling and diagnosed cooling delay quickly." }
-          ],
-          faqs: [
-            { q: "How long does window AC inspection take?", a: "Typically 30 to 45 minutes for a full multi-point audit." }
           ]
         }
       ],
       "Not Sure? Book Inspection": [
         {
-          id: "hvac-insp-comp",
-          name: "Comprehensive AC Inspection & Diagnosis",
+          id: "hvac-ac-inspection",
+          name: "AC Inspection",
           price: 199,
           duration: "45 mins",
-          badge: "Most Popular",
+          badge: "Certified Inspection",
           badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-          description: "Complete multi-point diagnostic check-up covering cooling, electricals, gas pressure, compressor health, and airflow with upfront repair estimate.",
+          description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
           includes: [
-            "Indoor unit & cooling coil inspection",
+            "Indoor cooling coil & filter inspection",
             "Outdoor condenser & compressor health scan",
             "Cooling performance & airflow delta test",
             "Electrical voltage, wiring & amp check",
             "Gas / refrigerant pressure & leak check",
             "Drain pipe & tray water leakage inspection",
             "Noise, vibration & motor bearing check",
-            "Remote sensor & PCB control test",
-            "Detailed digital inspection report with quotation"
+            "Detailed digital inspection report with upfront repair quote"
           ],
           image: "/mockups/service_inspection.png",
           tools: [
@@ -17355,75 +17383,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           faqs: [
             { q: "Is the ₹199 inspection fee adjusted if I approve the repair?", a: "Yes, the inspection fee is fully factored into your repair quote when you proceed with the recommended service." },
             { q: "What does the technician check during inspection?", a: "The technician inspects indoor & outdoor units, cooling airflow, electrical components, refrigerant levels, drain lines, and overall AC health." }
-          ]
-        },
-        {
-          id: "hvac-insp-split",
-          name: "Split AC Deep Inspection & Health Audit",
-          price: 249,
-          duration: "45 mins",
-          badge: "Split Specialist",
-          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-          description: "Specialized in-depth inspection for Split ACs covering blower wheel, flare joints, PCB communication lines, and copper piping.",
-          includes: [
-            "Indoor blower wheel & air louvers inspection",
-            "Copper flare nut & joint leak detection",
-            "Inverter PCB communication & voltage test",
-            "Compressor capacitor & contactor health audit",
-            "Cooling coil fin condition assessment",
-            "Drain line slope & blockage scan",
-            "Detailed repair estimate before any work"
-          ],
-          image: "/mockups/appliance_cleaning_thumb.png",
-          tools: [
-            "Electronic leak sniffer",
-            "Digital clamp meter",
-            "Digital anemometer & airflow gauge",
-            "Capacitor tester"
-          ],
-          ready: [
-            "Safe accessibility to indoor and outdoor units",
-            "AC remote control handy"
-          ],
-          notes: "Inspection fee is adjusted into the repair bill if service is approved during the visit.",
-          reviews: [
-            { name: "Raghav M.", rating: "5.0", text: "Deep inspection uncovered a tiny flare nut leak before all gas leaked out. Saved me thousands!" }
-          ],
-          faqs: [
-            { q: "Does this include checking inverter boards?", a: "Yes, both indoor and outdoor PCB modules and error codes are audited." }
-          ]
-        },
-        {
-          id: "hvac-insp-win",
-          name: "Window AC General Inspection & Diagnostics",
-          price: 199,
-          duration: "30 mins",
-          badge: "Window Care",
-          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
-          description: "Compact and thorough diagnostic check for Window ACs including front grill, thermostat sensor, compressor mounts, and fan motor.",
-          includes: [
-            "Front grill & mesh filter condition check",
-            "Thermostat calibration & cooling delta check",
-            "Motor shaft & fan blade balance audit",
-            "Compressor mount & vibration inspection",
-            "Electrical wiring & start capacitor test",
-            "Drain plug & base tray rust inspection"
-          ],
-          image: "/mockups/service_hvac.png",
-          tools: [
-            "Infrared laser thermometer",
-            "Digital multimeter",
-            "Capacitor tester"
-          ],
-          ready: [
-            "Ensure the AC power socket is switchable"
-          ],
-          notes: "Covers all window AC brands and capacities (0.75 Ton to 2 Ton).",
-          reviews: [
-            { name: "Nitin B.", rating: "4.8", text: "Technician fixed abnormal rattling and diagnosed cooling delay quickly." }
-          ],
-          faqs: [
-            { q: "How long does window AC inspection take?", a: "Typically 30 to 45 minutes for a full multi-point audit." }
           ]
         }
       ],
@@ -18217,6 +18176,32 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     } else {
       finalPlans = filteredRawPlans;
     }
+
+    // Guarantee that AC Inspection tab always displays ONLY ONE single service card
+    if (activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection") {
+      const baseInspection = OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {
+        id: "hvac-ac-inspection",
+        name: "AC Inspection",
+        price: 199,
+        duration: "45 mins",
+        badge: "Certified Inspection",
+        badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        description: "Comprehensive multi-point diagnostic check-up covering cooling efficiency, electrical safety, refrigerant levels, compressor health, and airflow with upfront repair estimate.",
+        includes: [
+          "Indoor cooling coil & filter inspection",
+          "Outdoor condenser & compressor health scan",
+          "Cooling performance & airflow delta test",
+          "Electrical voltage, wiring & amp check",
+          "Gas / refrigerant pressure & leak check",
+          "Drain pipe & tray water leakage inspection",
+          "Noise, vibration & motor bearing check",
+          "Detailed digital inspection report with upfront repair quote"
+        ],
+        image: "/mockups/service_inspection.png"
+      };
+      return [baseInspection];
+    }
+
     return finalPlans;
   }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
@@ -18679,13 +18664,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   const cartId = `serv-${normalizedKey}-${p.id}`;
                   const count = getCartItemCount(cartId);
                   const isFirst = idx === 0 && !searchQuery;
+                  const isAcInspection = (p.id === "hvac-ac-inspection" || p.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
 
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
+                      onClick={() => {
+                        if (isAcInspection) {
+                          setActiveAcInspectionItem(p);
+                          setShowAcInspectionModal(true);
+                        }
+                      }}
+                      className={`bg-white border border-[#E8E3DB] rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative ${isAcInspection ? "cursor-pointer" : ""}`}
                     >
-                      {isFirst && (
+                      {isFirst && !isAcInspection && (
                         <div className="w-full aspect-[16/6] sm:aspect-[10/3] bg-[#F5F0E6] rounded-2xl overflow-hidden mb-5 border border-[#E8E3DB]/60 shadow-xs">
                           <img
                             src={
@@ -18841,7 +18833,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                           <div className="flex items-center gap-3 mt-3">
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (normalizedKey === "mason") {
                                   setSelectedMasonDetail(p);
                                 } else {
@@ -18907,6 +18900,23 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             )}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {
+                                if (isAcInspection) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer hover:text-emerald-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveAcInspectionItem(p);
+                                        setShowAcInspectionModal(true);
+                                      }}
+                                    >
+                                      <ShoppingCart size={11} className="shrink-0" />
+                                      <span>Add</span>
+                                    </button>
+                                  );
+                                }
+
                                 const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
                                 const cartItemPrice = normalizedKey === "mason" ? currentFee : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
                                 const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
@@ -19720,6 +19730,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   {/* Add button inside details modal */}
                   <div className="w-24">
                     {(() => {
+                      const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
+                      if (isDetailAcInspection) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveAcInspectionItem(selectedPackageDetail);
+                              setShowAcInspectionModal(true);
+                            }}
+                            className="w-full bg-white border border-[#E8E3DB] text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-[#F5F0E6]/40 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <ShoppingCart size={13} /> Add
+                          </button>
+                        );
+                      }
+
                       const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
                       const pkgCount = getCartItemCount(pkgCartId);
                       const pkgName = selectedPackageDetail.name;
@@ -19888,6 +19914,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </span>
               <button
                 onClick={() => {
+                  const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
+                  if (isDetailAcInspection) {
+                    setActiveAcInspectionItem(selectedPackageDetail);
+                    setShowAcInspectionModal(true);
+                    return;
+                  }
+
                   const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
                   if (getCartItemCount(pkgCartId) === 0) {
                     const pkgName = selectedPackageDetail.name;
@@ -19909,6 +19942,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         </div>,
         document.body
       )}
+
+      {/* AC Inspection Form Modal */}
+      <ACInspectionFormModal
+        isOpen={showAcInspectionModal}
+        onClose={() => setShowAcInspectionModal(false)}
+        onSubmit={handleAcInspectionSubmit}
+        initialData={{
+          brand: formData?.ac_brand || "Daikin",
+          type: formData?.ac_type || "Split AC",
+          quantity: formData?.ac_quantity || 1,
+          notes: formData?.ac_notes || ""
+        }}
+        basePrice={activeAcInspectionItem?.price || 199}
+      />
     </div>
   );
 }
@@ -25508,7 +25555,18 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 }
 
 
-export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+export function PackageModal({
+  category,
+  cart,
+  setCart,
+  onClose,
+  onCheckout,
+  packagesData,
+  setFormData,
+  formData,
+  setPhotoFile,
+  setPhotoPreview
+}) {
   return (
     <CustomCleaningPackageModal
       category={category}
@@ -25516,6 +25574,11 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       setCart={setCart}
       onClose={onClose}
       onCheckout={onCheckout}
+      packagesData={packagesData}
+      setFormData={setFormData}
+      formData={formData}
+      setPhotoFile={setPhotoFile}
+      setPhotoPreview={setPhotoPreview}
     />
   );
 }
