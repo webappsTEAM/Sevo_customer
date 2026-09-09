@@ -40,7 +40,8 @@ if not _raw_webhook_secret:
     # in DEBUG without extra setup, but fails closed in production so a
     # real secret (matching value on both apps) must be set before going
     # live.
-    if settings.DEBUG:
+    import sys
+    if settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False):
         WORKFORCE_WEBHOOK_SECRET = "dev-insecure-workforce-webhook-secret-local-testing-only"
         logger.warning(
             "WORKFORCE_WEBHOOK_SECRET is not configured -- using a DEBUG-only "

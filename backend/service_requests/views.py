@@ -35,6 +35,7 @@ from .models import (
     BookingSeries,
     BookingMessage,
     TripStop,
+    Payment, PaintingQuote,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -280,6 +281,20 @@ class CatalogSubServiceListView(APIView):
         return Response({"success": True, "data": data})
 
 
+def _haversine_meters(lat1, lon1, lat2, lon2):
+    try:
+        import math
+        R = 6371000.0  # meters
+        phi1 = math.radians(float(lat1))
+        phi2 = math.radians(float(lat2))
+        dphi = math.radians(float(lat2) - float(lat1))
+        dlam = math.radians(float(lon2) - float(lon1))
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
+        return R * 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    except (ValueError, TypeError):
+        return None
+
+
 class BookingCreateView(APIView):
     """
     POST /api/booking/
@@ -318,6 +333,91 @@ class BookingCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         company = _get_company(request)
+
+        # Masonry Backend Validations
+        cart_data = request.data.get("cart_data", [])
+        if isinstance(cart_data, str):
+            import json
+            try:
+                cart_data = json.loads(cart_data)
+            except Exception:
+                cart_data = []
+
+        for item in cart_data:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get("id") or "").lower()
+            if "mason" in item_id or item.get("categoryName") == "Mason":
+                # Verify package and properties against database
+                if "minor-masonry" in item_id:
+                    # Validate area
+                    area = item.get("selectedArea")
+                    if area is None:
+                        return Response(
+                            {"success": False, "message": "Area is required for Minor Masonry."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    try:
+                        area_val = float(area)
+                        # Fetch dynamic minimum_area from database customization
+                        from service_requests.models import Package
+                        pkg = Package.objects.filter(slug="minor-masonry", status="ACTIVE").first()
+                        min_area = 500
+                        if pkg and pkg.service and isinstance(pkg.service.customization, dict):
+                            min_area = float(pkg.service.customization.get("minimum_area", 500))
+                        
+                        if area_val < min_area:
+                            return Response(
+                                {"success": False, "message": f"Minimum service area is {int(min_area)} sq.ft. Please enter an area of {int(min_area)} sq.ft or more."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    except (ValueError, TypeError):
+                        return Response(
+                            {"success": False, "message": "Invalid area value. Area must be a number."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                elif "tile-fixing" in item_id:
+                    size = str(item.get("selectedBathroomSize") or "").strip()
+                    if not size:
+                        return Response(
+                            {"success": False, "message": "Bathroom size choice is required."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Fetch dynamic pricing_slabs from database customization
+                    from service_requests.models import Package
+                    pkg = Package.objects.filter(slug="bathroom-tile-fixing", status="ACTIVE").first()
+                    pricing_slabs = {"Small": 10000, "Medium": 10000, "Large": 20000}
+                    if pkg and pkg.service and isinstance(pkg.service.customization, dict):
+                        pricing_slabs = pkg.service.customization.get("pricing_slabs", pricing_slabs)
+                    
+                    allowed_sizes = [s.strip().lower() for s in pricing_slabs.keys()]
+                    if size.lower() not in allowed_sizes:
+                        return Response(
+                            {"success": False, "message": f"Invalid bathroom size choice. Allowed values: {', '.join(pricing_slabs.keys())}."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Get exact expected price
+                    expected_price = None
+                    for key, val in pricing_slabs.items():
+                        if key.strip().lower() == size.lower():
+                            expected_price = float(val)
+                            break
+                    
+                    submitted_price = item.get("predefinedPrice")
+                    if submitted_price is not None:
+                        try:
+                            if float(submitted_price) != expected_price:
+                                return Response(
+                                    {"success": False, "message": f"Predefined price mismatch for {size} bathroom."},
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                        except (ValueError, TypeError):
+                            return Response(
+                                {"success": False, "message": "Invalid predefined price value."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
 
         # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
         # This is the authoritative zone check. It runs on EVERY booking API
@@ -445,6 +545,32 @@ class BookingCreateView(APIView):
                         "Please refresh and try booking again.",
                         400,
                     )
+
+        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
+        is_painting_booking = False
+        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
+            is_painting_booking = True
+        else:
+            if any(isinstance(it, dict) and (it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id"))) for it in cart_data):
+                is_painting_booking = True
+
+        is_mason_booking = False
+        if _service_category in ["mason", "masonry"]:
+            is_mason_booking = True
+        else:
+            if any(isinstance(it, dict) and (it.get("categoryName") == "Mason" or "mason" in str(it.get("id"))) for it in cart_data):
+                is_mason_booking = True
+
+        if is_painting_booking or is_mason_booking:
+            dist_km = 0.0
+            if _lat is not None and _lng is not None:
+                dist_m = _haversine_meters(12.7409, 77.8253, _lat, _lng)
+                if dist_m is not None:
+                    dist_km = dist_m / 1000.0
+            if dist_km > 15.0:
+                corrected_fare = Decimal("300.00")
+            else:
+                corrected_fare = Decimal("0.00")
 
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
@@ -1350,6 +1476,57 @@ def _build_tracking_payload(sr, has_full_access):
         for ev in sr.status_events.all().order_by("occurred_at")
     ] if hasattr(sr, "status_events") else []
 
+    # Quote financial breakdown
+    local_quote = PaintingQuote.objects.filter(service_request=sr).order_by("-quote_version").first()
+    if not local_quote and sr.parent_request:
+        local_quote = PaintingQuote.objects.filter(service_request=sr.parent_request).order_by("-quote_version").first()
+
+    quote_data = None
+    if local_quote:
+        from .serializers import PaintingQuoteSerializer
+        quote_data = PaintingQuoteSerializer(local_quote).data
+    else:
+        quote_res = WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id)
+        if quote_res.get("success"):
+            quote_data = quote_res.get("quote")
+
+    child_booking_data = None
+    child_sr = ServiceRequest.objects.filter(parent_request=sr, request_kind="quoted_work").order_by("-id").first()
+    if child_sr:
+        child_booking_data = {
+            "id": child_sr.id,
+            "request_id": child_sr.request_id,
+            "status": child_sr.status,
+            "payment_status": child_sr.payment_status,
+            "total_amount": float(child_sr.total_amount) if child_sr.total_amount else 0.0,
+            "payment_method": child_sr.payment_method,
+            "invoice_id": child_sr.invoice_id,
+            "tracking_token": str(child_sr.tracking_token) if child_sr.tracking_token else None,
+            "service_category": child_sr.service_category,
+        }
+
+    target_pay_sr = child_sr if child_sr else (sr if sr.request_kind == "quoted_work" else None)
+    
+    quote_grand_total = 0.0
+    quote_advance_amount = 0.0
+    quote_balance_amount = 0.0
+    quote_paid_amount = 0.0
+    quote_remaining_amount = 0.0
+    advance_paid = False
+    balance_paid = False
+
+    if local_quote:
+        quote_grand_total = float(local_quote.grand_total)
+        quote_advance_amount = float(local_quote.advance_amount)
+        quote_balance_amount = float(local_quote.balance_amount)
+
+        if target_pay_sr:
+            payments = Payment.objects.filter(service_request=target_pay_sr, status=ServiceRequest.PaymentStatus.PAID)
+            quote_paid_amount = float(sum(p.amount for p in payments))
+            quote_remaining_amount = max(0.0, quote_grand_total - quote_paid_amount)
+            advance_paid = bool(quote_paid_amount >= quote_advance_amount)
+            balance_paid = bool(quote_paid_amount >= quote_grand_total)
+
     return {
         "booking_id": sr.id,
         "status_history": status_history,
@@ -1401,7 +1578,15 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
-        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
+        "quote": quote_data,
+        "child_booking": child_booking_data,
+        "quote_grand_total": quote_grand_total,
+        "quote_advance_amount": quote_advance_amount,
+        "quote_balance_amount": quote_balance_amount,
+        "quote_paid_amount": quote_paid_amount,
+        "quote_remaining_amount": quote_remaining_amount,
+        "advance_paid": advance_paid,
+        "balance_paid": balance_paid,
     }
 
 
