@@ -206,16 +206,20 @@ export function VegCartDrawerModal({
 
   return (
     <div
-      className="fixed inset-0 z-[10080] bg-black/35 flex justify-end transition-opacity"
+      className="fixed inset-0 z-[10080] overflow-hidden"
       onClick={onClose}
     >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity" />
+
+      {/* Drawer Container */}
       <motion.div
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
-        transition={{ type: "spring", damping: 28, stiffness: 280 }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#F4F6FB] h-full flex flex-col shadow-2xl overflow-hidden font-sans relative"
+        className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-[#F4F6FB] h-full flex flex-col shadow-2xl overflow-hidden font-sans z-10"
       >
         {/* Toast Warning */}
         {drawerToast && (
