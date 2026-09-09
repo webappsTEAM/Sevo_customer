@@ -250,20 +250,25 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
         prod = entry.get("product")
         if not prod:
             continue
+        stock_item = getattr(prod, "stock_item", None)
+        if stock_item is None:
+            continue
         qty = entry.get("quantity")
         if qty is None or qty == "":
             raise ValidationError(
                 f"Missing quantity for product '{getattr(prod, 'name', 'Unknown')}'."
             )
-        req_grams = to_grams(qty, entry.get("unit", "g"))
-        stock_item = prod.stock_item
-        if stock_item is not None:
-            item_ids_to_lock.add(stock_item.id)
-            parsed_requests.append({
-                "product": prod,
-                "stock_item_id": stock_item.id,
-                "requested_grams": req_grams,
-            })
+        try:
+            req_grams = to_grams(qty, entry.get("unit", "g"))
+        except (ValueError, TypeError):
+            continue
+
+        item_ids_to_lock.add(stock_item.id)
+        parsed_requests.append({
+            "product": prod,
+            "stock_item_id": stock_item.id,
+            "requested_grams": req_grams,
+        })
 
     if not parsed_requests:
         return

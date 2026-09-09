@@ -6,12 +6,14 @@ import {
   adjustVegetableStock,
   setDefaultDailyStock,
   fetchVegetableStockHistory,
+  updateVegetableDetails,
 } from "../../../store/inventorySlice.js"
 import {
   Sprout, RefreshCw, PlusCircle, Edit3, Settings,
   History, CheckCircle2, AlertCircle, HelpCircle,
   X, Calendar, ArrowUpRight, ArrowDownRight, Search,
-  Download, FileSpreadsheet, FileText
+  Download, FileSpreadsheet, FileText, Tag, Percent,
+  Scale, Layers, Save, SlidersHorizontal
 } from "lucide-react"
 
 export function VegetableStockAdminPage() {
@@ -26,8 +28,25 @@ export function VegetableStockAdminPage() {
   const [adjustModalItem, setAdjustModalItem] = useState(null)
   const [defaultModalItem, setDefaultModalItem] = useState(null)
   const [historyModalItem, setHistoryModalItem] = useState(null)
+  const [editDetailsModalItem, setEditDetailsModalItem] = useState(null)
 
-  // Form states
+  // Edit details form state
+  const [editForm, setEditForm] = useState({
+    price: "",
+    offer_price: "",
+    offer_percentage: "",
+    vegetable_gram: "",
+    opening_stock_quantity: "",
+    opening_stock_unit: "kg",
+    current_stock_quantity: "",
+    current_stock_unit: "kg",
+    restock_level_quantity: "",
+    restock_level_unit: "kg",
+    reorder_level_quantity: "",
+    reorder_level_unit: "kg",
+  })
+
+  // Form states for simple modals
   const [actionQty, setActionQty] = useState("")
   const [actionUnit, setActionUnit] = useState("kg")
   const [actionReason, setActionReason] = useState("")
@@ -57,12 +76,111 @@ export function VegetableStockAdminPage() {
 
   const filteredVegetables = (vegetables || []).filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.slug.toLowerCase().includes(searchQuery.toLowerCase())
+      item.slug.toLowerCase().includes(searchQuery.toLowerCase())
     if (filterState === "in_stock") return matchesSearch && item.state === "in_stock"
     if (filterState === "out_of_stock") return matchesSearch && item.state === "out_of_stock"
     if (filterState === "not_tracked") return matchesSearch && item.state === "not_tracked"
     return matchesSearch
   })
+
+  // Open Edit Details Modal
+  const handleOpenEditDetails = (item) => {
+    setEditDetailsModalItem(item)
+    setActionError("")
+
+    // Parse values in kg/g for ease of editing
+    const currKg = item.today_available_grams != null ? (item.today_available_grams / 1000).toString() : ""
+    const opKg = item.opening_stock_grams != null ? (item.opening_stock_grams / 1000).toString() : ""
+    const rstkKg = item.restock_level_grams ? (item.restock_level_grams / 1000).toString() : ""
+    const reorderKg = item.reorder_level_grams ? (item.reorder_level_grams / 1000).toString() : ""
+
+    const mrpVal = item.mrp ? Math.round(Number(item.mrp)).toString() : ""
+    const priceVal = item.price ? Math.round(Number(item.price)).toString() : ""
+
+    setEditForm({
+      mrp: mrpVal,
+      price: priceVal,
+      offer_percentage: item.offer_percentage || "0",
+      vegetable_gram: item.vegetable_gram || "500 g",
+      opening_stock_quantity: opKg,
+      opening_stock_unit: "kg",
+      current_stock_quantity: currKg,
+      current_stock_unit: "kg",
+      restock_level_quantity: rstkKg,
+      restock_level_unit: "kg",
+      reorder_level_quantity: reorderKg,
+      reorder_level_unit: "kg",
+    })
+  }
+
+  const handleMrpChange = (newMrp) => {
+    setEditForm(prev => {
+      const mrpNum = parseFloat(newMrp) || 0
+      const priceNum = parseFloat(prev.price) || 0
+      let pct = 0
+      if (mrpNum > 0 && priceNum > 0 && mrpNum > priceNum) {
+        pct = Math.round(((mrpNum - priceNum) / mrpNum) * 100)
+      }
+      return {
+        ...prev,
+        mrp: newMrp,
+        offer_percentage: pct.toString(),
+      }
+    })
+  }
+
+  const handlePriceChange = (newPrice) => {
+    setEditForm(prev => {
+      const priceNum = parseFloat(newPrice) || 0
+      const mrpNum = parseFloat(prev.mrp) || 0
+      let pct = 0
+      if (mrpNum > 0 && priceNum > 0 && mrpNum > priceNum) {
+        pct = Math.round(((mrpNum - priceNum) / mrpNum) * 100)
+      }
+      return {
+        ...prev,
+        price: newPrice,
+        offer_percentage: pct.toString(),
+      }
+    })
+  }
+
+  const handleSubmitEditDetails = async (e) => {
+    e.preventDefault()
+    if (!editDetailsModalItem) return
+    setSubmitting(true)
+    setActionError("")
+
+    try {
+      const payload = {
+        price: parseFloat(editForm.price) || 0,
+        mrp: editForm.mrp !== "" ? parseFloat(editForm.mrp) : null,
+        offer_percentage: parseFloat(editForm.offer_percentage) || 0,
+        vegetable_gram: editForm.vegetable_gram.trim() || "500 g",
+        opening_stock_quantity: editForm.opening_stock_quantity !== "" ? parseFloat(editForm.opening_stock_quantity) : null,
+        opening_stock_unit: editForm.opening_stock_unit,
+        current_stock_quantity: editForm.current_stock_quantity !== "" ? parseFloat(editForm.current_stock_quantity) : null,
+        current_stock_unit: editForm.current_stock_unit,
+        restock_level_quantity: editForm.restock_level_quantity !== "" ? parseFloat(editForm.restock_level_quantity) : null,
+        restock_level_unit: editForm.restock_level_unit,
+        reorder_level_quantity: editForm.reorder_level_quantity !== "" ? parseFloat(editForm.reorder_level_quantity) : null,
+        reorder_level_unit: editForm.reorder_level_unit,
+      }
+
+      await dispatch(updateVegetableDetails({
+        productId: editDetailsModalItem.product_id,
+        data: payload
+      })).unwrap()
+
+      setEditDetailsModalItem(null)
+      dispatch(fetchVegetableStock())
+    } catch (err) {
+      const msg = typeof err === "string" ? err : (err?.message || (err?.body ? (typeof err.body === "string" ? err.body : JSON.stringify(err.body)) : "Failed to update vegetable details."))
+      setActionError(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   // Handlers
   const handleOpenRestock = (item) => {
@@ -250,39 +368,43 @@ export function VegetableStockAdminPage() {
                     `).join("")}
                   </tbody>
                 </table>
-              ` : `<div style="padding: 10px; text-align: center; color: #94a3b8; font-size: 11px;">No stock movements on this date</div>`}
+              ` : `
+                <div style="padding: 10px; text-align: center; color: #94a3b8; font-style: italic;">
+                  No intraday movements recorded on this date.
+                </div>
+              `}
             </div>
           `).join("")}
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
         </body>
       </html>
     `
 
     printWindow.document.write(html)
     printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+    }, 250)
   }
 
+  // Form Submissions
   const handleSubmitRestock = async (e) => {
     e.preventDefault()
-    if (!actionQty || parseFloat(actionQty) <= 0) {
-      setActionError("Please enter a valid positive quantity.")
-      return
-    }
+    if (!restockModalItem) return
     setSubmitting(true)
     setActionError("")
+
     try {
-      const res = await dispatch(restockVegetable({
+      await dispatch(restockVegetable({
         productId: restockModalItem.product_id,
         quantity: parseFloat(actionQty),
         unit: actionUnit,
       })).unwrap()
+
       setRestockModalItem(null)
+      dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to restock vegetable.")
+      setActionError(err || "Failed to restock item.")
     } finally {
       setSubmitting(false)
     }
@@ -290,16 +412,14 @@ export function VegetableStockAdminPage() {
 
   const handleSubmitAdjust = async (e) => {
     e.preventDefault()
-    if (actionQty === "" || parseFloat(actionQty) < 0) {
-      setActionError("Please enter a valid quantity (0 or greater).")
-      return
-    }
+    if (!adjustModalItem) return
     if (!actionReason.trim()) {
-      setActionError("A reason is strictly required for stock adjustment.")
+      setActionError("A reason is required for manual stock adjustment.")
       return
     }
     setSubmitting(true)
     setActionError("")
+
     try {
       await dispatch(adjustVegetableStock({
         productId: adjustModalItem.product_id,
@@ -307,9 +427,11 @@ export function VegetableStockAdminPage() {
         unit: actionUnit,
         reason: actionReason.trim(),
       })).unwrap()
+
       setAdjustModalItem(null)
+      dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to adjust vegetable stock.")
+      setActionError(err || "Failed to adjust stock.")
     } finally {
       setSubmitting(false)
     }
@@ -317,8 +439,10 @@ export function VegetableStockAdminPage() {
 
   const handleSubmitSetDefault = async (e) => {
     e.preventDefault()
+    if (!defaultModalItem) return
     setSubmitting(true)
     setActionError("")
+
     try {
       await dispatch(setDefaultDailyStock({
         productId: defaultModalItem.product_id,
@@ -326,55 +450,55 @@ export function VegetableStockAdminPage() {
         unit: actionUnit,
         applyNow: applyNow,
       })).unwrap()
+
       setDefaultModalItem(null)
+      dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to update default daily stock.")
+      setActionError(err || "Failed to set default daily stock.")
     } finally {
       setSubmitting(false)
     }
   }
 
   const renderStateBadge = (state) => {
-    if (state === "in_stock") {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          In Stock
-        </span>
-      )
+    switch (state) {
+      case "in_stock":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            In Stock
+          </span>
+        )
+      case "out_of_stock":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 shadow-2xs">
+            <AlertCircle className="w-3.5 h-3.5" />
+            Out of Stock
+          </span>
+        )
+      case "not_tracked":
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+            <HelpCircle className="w-3.5 h-3.5" />
+            Not Tracked
+          </span>
+        )
     }
-    if (state === "out_of_stock") {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300">
-          <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-          Out of Stock
-        </span>
-      )
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300">
-        <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-        Not Tracked
-      </span>
-    )
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-            <Sprout className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Vegetable Stock Management
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              Manage daily vendor capacities, 4:00 AM auto-resets, and intra-day stock corrections.
-            </p>
-          </div>
+    <div className="space-y-5">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Sprout className="w-6 h-6 text-emerald-600" />
+            Vegetables Inventory & Pricing Matrix
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+            Manage live stock, opening balance, restock levels, pack weights, MRP pricing, and discount offers in real-time.
+          </p>
         </div>
 
         <button
@@ -405,11 +529,10 @@ export function VegetableStockAdminPage() {
             <button
               key={st}
               onClick={() => setFilterState(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize cursor-pointer shrink-0 ${
-                filterState === st
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize cursor-pointer shrink-0 ${filterState === st
                   ? "bg-emerald-600 text-white shadow-xs"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
+                }`}
             >
               {st.replace("_", " ")}
             </button>
@@ -417,90 +540,141 @@ export function VegetableStockAdminPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Comprehensive Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[1050px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-500 tracking-wider">
-                <th className="py-3 px-4">Vegetable</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Today's Available</th>
-                <th className="py-3 px-4">Default Daily Stock</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-3.5">Vegetable</th>
+                <th className="py-3 px-3">Gram / Pack</th>
+                <th className="py-3 px-3">Price</th>
+                <th className="py-3 px-3">Offer (%)</th>
+                <th className="py-3 px-3">Opening Stock</th>
+                <th className="py-3 px-3">Current Stock</th>
+                <th className="py-3 px-3">Reorder Level</th>
+                <th className="py-3 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {filteredVegetables.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400 font-semibold">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-semibold">
                     No vegetables found matching current filters.
                   </td>
                 </tr>
               ) : (
                 filteredVegetables.map((item) => (
-                  <tr key={item.product_id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">
-                      <div className="flex items-center gap-3">
+                  <tr key={item.product_id} className="hover:bg-slate-50/70 transition-colors">
+                    {/* 1. Vegetable Name & Slug */}
+                    <td className="py-3 px-3.5 font-bold text-slate-900">
+                      <div className="flex items-center gap-2.5">
                         {item.image ? (
                           <img
                             src={item.image}
                             alt={item.name}
-                            className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                            className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-[10px] shrink-0">
                             VEG
                           </div>
                         )}
                         <div>
-                          <div className="font-extrabold text-slate-900">{item.name}</div>
-                          <div className="text-xs text-slate-400 font-mono">{item.slug}</div>
+                          <div className="font-extrabold text-slate-900 line-clamp-1">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono line-clamp-1">{item.slug}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">{renderStateBadge(item.state)}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="font-extrabold text-slate-800 text-sm">
-                        {item.today_available_display}
+
+                    {/* 2. Vegetable Gram / Pack Size */}
+                    <td className="py-3 px-3">
+                      <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">
+                        <Scale className="w-3 h-3 text-slate-400" />
+                        {item.vegetable_gram || "500 g"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-slate-800 text-sm">
-                          {item.default_daily_display}
+
+                    {/* 3. Price (Selling Price & Strikethrough MRP) */}
+                    <td className="py-3 px-3">
+                      <div>
+                        <span className="font-black text-slate-900 text-xs sm:text-sm">
+                          ₹{Math.round(Number(item.price || 0))}
                         </span>
-                        <button
-                          onClick={() => handleOpenSetDefault(item)}
-                          className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          title="Configure Default Daily Stock"
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                        </button>
+                        {item.mrp && Number(item.mrp) > Number(item.price) && (
+                          <span className="text-[10px] text-slate-400 line-through font-semibold ml-1.5">
+                            ₹{Math.round(Number(item.mrp))}
+                          </span>
+                        )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+
+                    {/* 4. Offer (%) */}
+                    <td className="py-3 px-3">
+                      {item.offer_percentage > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-lg shadow-2xs">
+                          <Percent className="w-3 h-3 text-amber-600" />
+                          {item.offer_percentage}% OFF
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-semibold text-xs">None</span>
+                      )}
+                    </td>
+
+                    {/* 5. Opening Stock */}
+                    <td className="py-3 px-3">
+                      <span className="font-bold text-slate-700 text-xs">
+                        {item.opening_stock_display || "—"}
+                      </span>
+                    </td>
+
+                    {/* 6. Current Stock */}
+                    <td className="py-3 px-3">
+                      <div className="space-y-1">
+                        <span className="font-black text-slate-900 text-xs sm:text-sm block">
+                          {item.today_available_display}
+                        </span>
+                        {renderStateBadge(item.state)}
+                      </div>
+                    </td>
+
+                    {/* 7. Reorder Level */}
+                    <td className="py-3 px-3">
+                      <span className="font-bold text-rose-700 text-xs">
+                        {item.reorder_level_display || "—"}
+                      </span>
+                    </td>
+
+                    {/* 10. Actions */}
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Quick Edit Full Details */}
+                        <button
+                          onClick={() => handleOpenEditDetails(item)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] transition-colors cursor-pointer"
+                          title="Edit Details & Pricing"
+                        >
+                          <SlidersHorizontal className="w-3 h-3" />
+                          Edit
+                        </button>
+
+                        {/* Restock */}
                         <button
                           onClick={() => handleOpenRestock(item)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] transition-colors cursor-pointer"
+                          title="Quick Restock"
                         >
-                          <PlusCircle className="w-3.5 h-3.5" />
+                          <PlusCircle className="w-3 h-3" />
                           Restock
                         </button>
-                        <button
-                          onClick={() => handleOpenAdjust(item)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          Adjust
-                        </button>
+
+                        {/* History */}
                         <button
                           onClick={() => handleOpenHistory(item)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
-                          title="View History"
+                          className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
+                          title="View History Audit"
                         >
-                          <History className="w-4 h-4" />
+                          <History className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -511,6 +685,210 @@ export function VegetableStockAdminPage() {
           </table>
         </div>
       </div>
+
+      {/* Edit Details & Pricing Modal */}
+      {editDetailsModalItem && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
+                Edit Details: {editDetailsModalItem.name}
+              </h3>
+              <button
+                onClick={() => setEditDetailsModalItem(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {actionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-600">
+                {actionError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitEditDetails} className="overflow-y-auto space-y-4 pr-1">
+              {/* Product Pricing & Pack Weight */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="text-xs font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-indigo-600" /> Pricing & Unit Weight
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">MRP (₹)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={editForm.mrp}
+                      onChange={(e) => handleMrpChange(e.target.value)}
+                      placeholder="e.g. 55"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Selling Price (₹)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      required
+                      value={editForm.price}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      placeholder="e.g. 46"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Offer Discount (%)</label>
+                    <div className="flex items-center h-[34px] px-3 bg-amber-50/70 border border-amber-200 rounded-lg">
+                      <span className="text-xs font-black text-amber-800">
+                        {editForm.offer_percentage > 0 ? `${editForm.offer_percentage}% OFF` : "None"}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Vegetable Gram (Pack)</label>
+                    <input
+                      type="text"
+                      value={editForm.vegetable_gram}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, vegetable_gram: e.target.value }))}
+                      placeholder="e.g. 500 g or 1 kg"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Stock Capacities */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="text-xs font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-600" /> Stock Configuration
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Current Live Stock */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Current Live Stock</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.current_stock_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, current_stock_quantity: e.target.value }))}
+                        placeholder="Live Stock"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                      <select
+                        value={editForm.current_stock_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, current_stock_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Opening / Daily Stock */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Opening Stock (Daily)</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.opening_stock_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_quantity: e.target.value }))}
+                        placeholder="Opening/Daily"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                      <select
+                        value={editForm.opening_stock_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Restock Level */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Restock Level</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.restock_level_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_quantity: e.target.value }))}
+                        placeholder="Restock amount"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                      <select
+                        value={editForm.restock_level_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Reorder Level (Low stock threshold) */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Reorder Level (Alert)</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={editForm.reorder_level_quantity}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, reorder_level_quantity: e.target.value }))}
+                        placeholder="Threshold"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-rose-500 outline-none"
+                      />
+                      <select
+                        value={editForm.reorder_level_unit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, reorder_level_unit: e.target.value }))}
+                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditDetailsModalItem(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {submitting ? "Saving..." : "Save All Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Restock Modal */}
       {restockModalItem && (
@@ -857,12 +1235,11 @@ export function VegetableStockAdminPage() {
                             <tr key={m.id} className="hover:bg-slate-50/70">
                               <td className="py-2 px-3 text-slate-500 font-medium whitespace-nowrap">{m.time}</td>
                               <td className="py-2 px-3 font-bold">
-                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  m.type === 'RESTOCK' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                  m.type === 'DAILY_RESET' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                                  m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                  'bg-blue-50 text-blue-700 border border-blue-200'
-                                }`}>
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${m.type === 'RESTOCK' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                    m.type === 'DAILY_RESET' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                      m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                        'bg-blue-50 text-blue-700 border border-blue-200'
+                                  }`}>
                                   {m.type_display}
                                 </span>
                               </td>

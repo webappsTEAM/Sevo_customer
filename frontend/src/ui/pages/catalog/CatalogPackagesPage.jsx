@@ -1712,6 +1712,7 @@ export function CatalogPackagesPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [quickPriceEditing, setQuickPriceEditing] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [newItemText, setNewItemText] = useState("")
   const [serviceEditing, setServiceEditing] = useState(null)
   const [expandedPackages, setExpandedPackages] = useState(new Set())
@@ -2689,12 +2690,29 @@ export function CatalogPackagesPage() {
       "sub-bath-hands-on": "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop"
     }
 
+    const cust = pkg.customization || {}
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
       offer_price: pkg.offer_price ? Math.round(Number(pkg.offer_price)) : "",
-      product_title_enabled: true,
-      custom_packs: Array.isArray(pkg.custom_packs) && pkg.custom_packs.length > 0 ? pkg.custom_packs : [],
+      product_title_enabled: cust.product_title_enabled !== undefined ? cust.product_title_enabled : (pkg.product_title_enabled !== false),
+      standard_pack_enabled: cust.standard_pack_enabled !== undefined ? cust.standard_pack_enabled : (pkg.standard_pack_enabled !== false),
+      enable_family_saver: cust.enable_family_saver !== undefined ? cust.enable_family_saver : (pkg.enable_family_saver !== false),
+      show_net_price_bar: cust.show_net_price_bar !== undefined ? cust.show_net_price_bar : (pkg.show_net_price_bar !== false),
+      show_add_to_basket_cta: cust.show_add_to_basket_cta !== undefined ? cust.show_add_to_basket_cta : (pkg.show_add_to_basket_cta !== false),
+      promise_farm: cust.promise_farm !== undefined ? cust.promise_farm : (pkg.promise_farm !== false),
+      promise_farm_title: cust.promise_farm_title || pkg.promise_farm_title || "Direct From Farm",
+      promise_farm_sub: cust.promise_farm_sub || pkg.promise_farm_sub || "Zero cold storage",
+      promise_express: cust.promise_express !== undefined ? cust.promise_express : (pkg.promise_express !== false),
+      promise_express_title: cust.promise_express_title || pkg.promise_express_title || "Express Delivery",
+      promise_express_sub: cust.promise_express_sub || pkg.promise_express_sub || "Guaranteed slot",
+      promise_quality: cust.promise_quality !== undefined ? cust.promise_quality : (pkg.promise_quality !== false),
+      promise_quality_title: cust.promise_quality_title || pkg.promise_quality_title || "100% Quality",
+      promise_quality_sub: cust.promise_quality_sub || pkg.promise_quality_sub || "Instant replacement",
+      pesticide_free: cust.pesticide_free !== undefined ? cust.pesticide_free : (pkg.pesticide_free !== false),
+      ro_washed: cust.ro_washed !== undefined ? cust.ro_washed : (pkg.ro_washed !== false),
+      handpicked: cust.handpicked !== undefined ? cust.handpicked : (pkg.handpicked !== false),
+      custom_packs: Array.isArray(pkg.custom_packs) && pkg.custom_packs.length > 0 ? pkg.custom_packs : (Array.isArray(cust.custom_packs) ? cust.custom_packs : []),
       gst_rate: pkg.gst_rate !== undefined && pkg.gst_rate !== null ? parseFloat(pkg.gst_rate) : 18,
       platform_fee: pkg.platform_fee !== undefined && pkg.platform_fee !== null ? parseFloat(pkg.platform_fee) : 29,
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
@@ -2811,10 +2829,25 @@ export function CatalogPackagesPage() {
         button_text: quickPriceEditing.button_text || "Add",
         icon: quickPriceEditing.icon || "",
         custom_packs: Array.isArray(quickPriceEditing.custom_packs) ? quickPriceEditing.custom_packs : [],
-        product_title_enabled: quickPriceEditing.product_title_enabled !== false,
-        standard_pack_enabled: quickPriceEditing.standard_pack_enabled !== false,
-        show_net_price_bar: quickPriceEditing.show_net_price_bar !== false,
-        show_add_to_basket_cta: quickPriceEditing.show_add_to_basket_cta !== false,
+        customization: {
+          product_title_enabled: quickPriceEditing.product_title_enabled !== false,
+          standard_pack_enabled: quickPriceEditing.standard_pack_enabled !== false,
+          enable_family_saver: quickPriceEditing.enable_family_saver !== false,
+          show_net_price_bar: quickPriceEditing.show_net_price_bar !== false,
+          show_add_to_basket_cta: quickPriceEditing.show_add_to_basket_cta !== false,
+          promise_farm: quickPriceEditing.promise_farm !== false,
+          promise_farm_title: quickPriceEditing.promise_farm_title || "Direct From Farm",
+          promise_farm_sub: quickPriceEditing.promise_farm_sub || "Zero cold storage",
+          promise_express: quickPriceEditing.promise_express !== false,
+          promise_express_title: quickPriceEditing.promise_express_title || "Express Delivery",
+          promise_express_sub: quickPriceEditing.promise_express_sub || "Guaranteed slot",
+          promise_quality: quickPriceEditing.promise_quality !== false,
+          promise_quality_title: quickPriceEditing.promise_quality_title || "100% Quality",
+          promise_quality_sub: quickPriceEditing.promise_quality_sub || "Instant replacement",
+          pesticide_free: quickPriceEditing.pesticide_free !== false,
+          ro_washed: quickPriceEditing.ro_washed !== false,
+          handpicked: quickPriceEditing.handpicked !== false,
+        },
       }
 
       // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
@@ -2840,6 +2873,7 @@ export function CatalogPackagesPage() {
         return
       }
 
+      setIsSubmitting(true)
       const targetId = quickPriceEditing.realPackageId || quickPriceEditing.id || quickPriceEditing.slug
       const res = await apiRequest(`/settings/catalog/v2/packages/${targetId}/`, {
         method: "PUT",
@@ -2854,7 +2888,9 @@ export function CatalogPackagesPage() {
       }
     } catch (err) {
       console.error("Save failed:", err)
-      showToast("Update failed", "error")
+      showToast(err?.body?.message || err?.message || "Update failed", "error")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -6285,9 +6321,10 @@ export function CatalogPackagesPage() {
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-sm font-extrabold shadow-lg shadow-indigo-600/25 transition-all cursor-pointer flex items-center gap-2"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-sm font-extrabold shadow-lg shadow-indigo-600/25 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Save &amp; Publish Live</span>
+                <span>{isSubmitting ? "Publishing Live..." : "Save & Publish Live"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
