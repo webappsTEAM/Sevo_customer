@@ -1522,19 +1522,32 @@ function ZoneCard({ zone, isSelected, onSelect, onEdit, onDelete, onToggleActive
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--stroke)" }}>
           <button onClick={handleToggle} disabled={toggling}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--stroke)", background: "transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: zone.is_active ? "#F59E0B" : "#10B981" }}>
             {zone.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
             {zone.is_active ? "Disable" : "Enable"}
           </button>
           <div style={{ flex: 1 }} />
-          <button onClick={(e) => { e?.stopPropagation?.(); onEdit(zone) }}
-            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--stroke)", background: "transparent", cursor: "pointer", color: "var(--muted)" }}>
-            <Pencil size={14} />
+          <button
+            type="button"
+            onClick={(e) => { e?.stopPropagation?.(); onEdit(zone) }}
+            title="Edit Zone"
+            style={{
+              display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+              borderRadius: 8, border: "1.5px solid #c7d2fe", background: "#eef2ff",
+              cursor: "pointer", color: "#4338ca", fontWeight: 700, fontSize: 12
+            }}
+          >
+            <Pencil size={13} />
+            <span>Edit</span>
           </button>
-          <button onClick={(e) => { e?.stopPropagation?.(); onDelete(zone.id) }}
-            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #fecaca", background: "transparent", cursor: "pointer", color: "#EF4444" }}>
+          <button
+            type="button"
+            onClick={(e) => { e?.stopPropagation?.(); onDelete(zone.id) }}
+            title="Delete Zone"
+            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #fecaca", background: "transparent", cursor: "pointer", color: "#EF4444" }}
+          >
             <Trash2 size={14} />
           </button>
         </div>
@@ -1852,6 +1865,20 @@ export function ServiceAreasPanel() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {selectedZone && (
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(selectedZone)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 8, border: "1.5px solid #c7d2fe",
+                        background: "#eef2ff", color: "#4338ca",
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 6
+                      }}
+                    >
+                      <Pencil size={13} /> Edit Zone
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleCreateZoneFromPin}

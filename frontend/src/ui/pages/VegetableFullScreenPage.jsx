@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react"
+import { AnimatePresence } from "framer-motion"
 import { useNavigate, useLocation, Link } from "react-router-dom"
 import {
   ChevronLeft, Search, ShoppingCart, Clock, X,
@@ -578,23 +579,27 @@ export function VegetableFullScreenPage() {
       />
 
       {/* ── Cart Drawer Modal ── */}
-      <VegCartDrawerModal
-        isOpen={showCartDrawer}
-        onClose={() => setShowCartDrawer(false)}
-        foodCart={foodCart}
-        setFoodCart={setFoodCart}
-        deliveryAddress={activeAddressObj?.formatted_address || activeAddressObj?.address || activeLocationLabel}
-        deliveryAddressType={activeAddressObj?.address_type || activeAddressObj?.type || "Home"}
-        onChangeAddress={() => {
-          setShowCartDrawer(false)
-          navigate(routes.booking_checkout)
-        }}
-        selectedFoodSubModule={{
-          id: "vegetables",
-          name: "Farm-Fresh Vegetables",
-          items: vegetables,
-        }}
-      />
+      <AnimatePresence>
+        {showCartDrawer && (
+          <VegCartDrawerModal
+            isOpen={showCartDrawer}
+            onClose={() => setShowCartDrawer(false)}
+            foodCart={foodCart}
+            setFoodCart={setFoodCart}
+            deliveryAddress={activeAddressObj?.formatted_address || activeAddressObj?.address || activeLocationLabel}
+            deliveryAddressType={activeAddressObj?.address_type || activeAddressObj?.type || "Home"}
+            onChangeAddress={() => {
+              setShowCartDrawer(false)
+              navigate(routes.booking_checkout)
+            }}
+            selectedFoodSubModule={{
+              id: "vegetables",
+              name: "Farm-Fresh Vegetables",
+              items: vegetables,
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Toast Notification Banner ── */}
       {toastMessage && (

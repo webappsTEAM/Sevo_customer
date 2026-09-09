@@ -74,6 +74,15 @@ class BookingService:
                     pass
 
             if pkg:
+                # Only process if this package is actually a vegetable product
+                is_veg = (
+                    getattr(pkg, "stock_item_id", None) is not None
+                    or (pkg.service and "veg" in (getattr(pkg.service, "slug", "") or "").lower())
+                    or (pkg.service and getattr(pkg.service, "category", None) and "veg" in (getattr(pkg.service.category, "slug", "") or "").lower())
+                )
+                if not is_veg:
+                    continue
+
                 raw_qty = item.get("quantity") or item.get("qty") or item.get("count") or 1
                 try:
                     qty_num = float(raw_qty)
@@ -111,12 +120,20 @@ class BookingService:
                     })
                     continue
 
-                # Fallback to direct quantity & unit
-                extracted.append({
-                    "product": pkg,
-                    "quantity": qty_num,
-                    "unit": unit_str or "g",
-                })
+                # Fallback to direct quantity & unit if valid weight unit or default to grams
+                clean_unit = unit_str.lower()
+                if clean_unit in ["kg", "g", "gram", "grams", "kilogram", "kilograms"]:
+                    extracted.append({
+                        "product": pkg,
+                        "quantity": qty_num,
+                        "unit": clean_unit,
+                    })
+                elif not unit_str:
+                    extracted.append({
+                        "product": pkg,
+                        "quantity": qty_num,
+                        "unit": "g",
+                    })
         return extracted
 
     @staticmethod
