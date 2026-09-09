@@ -303,16 +303,44 @@ class BookingCreateView(APIView):
         # unchanged from before, since we can't safely infer "duplicate" from
         # payload contents alone without risking two genuinely different
         # bookings from the same customer being wrongly deduplicated.
-        idem_key = (request.headers.get("Idempotency-Key") or "").strip()
+        idem_key = (request.headers.get("Idempotency-Key") or request.data.get("idempotency_key") or "").strip()
         idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
         if idem_cache_key:
+            import time
             from django.core.cache import cache
             cached = cache.get(idem_cache_key)
             if cached is not None:
-                return Response(cached["body"], status=cached["status"])
+                if not cached.get("in_progress"):
+                    return Response(cached["body"], status=cached["status"])
+                # Wait briefly for in-progress concurrent request
+                for _ in range(20):
+                    time.sleep(0.1)
+                    cached = cache.get(idem_cache_key)
+                    if cached and not cached.get("in_progress"):
+                        return Response(cached["body"], status=cached["status"])
+                return Response(
+                    {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Atomically claim idempotency key in-flight
+            claimed = cache.add(idem_cache_key, {"in_progress": True}, timeout=60)
+            if not claimed:
+                for _ in range(20):
+                    time.sleep(0.1)
+                    cached = cache.get(idem_cache_key)
+                    if cached and not cached.get("in_progress"):
+                        return Response(cached["body"], status=cached["status"])
+                return Response(
+                    {"success": False, "message": "Booking request is already being processed."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
         if not serializer.is_valid():
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
             return Response(
                 {"success": False, "message": "Validation error.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -384,15 +412,20 @@ class BookingCreateView(APIView):
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
             )
-        except UnresolvedLogisticsFareError:
-            # Fixes GT-B-01: a logistics booking with neither a resolvable
-            # Lane nor ServiceTier has no server-verifiable price, so reject
-            # it with a clear message instead of recording a client-supplied
-            # amount unchecked.
-            return _error(
-                "We couldn't verify a fare for this route/tier. Please pick a valid "
-                "route or service tier and try again.",
-                400,
+        except UnresolvedLogisticsFareError as err:
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            err_text = str(err).strip() or "We couldn't verify a fare for this route/tier. Please pick a valid route or service tier and try again."
+            is_survey_review = any(k in err_text.lower() for k in ("survey", "review", "uncataloged", "estimate"))
+            return Response(
+                {
+                    "success": False,
+                    "error": err_text,
+                    "message": err_text,
+                    "code": "SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Fixes HS-B-01 (partial): for non-logistics (home-services) bookings,
@@ -664,6 +697,22 @@ class BookingCreateView(APIView):
             except Exception as notify_err:
                 logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
+        # Booking confirmation notification (SMS with live tracking URL + Email)
+        try:
+            from django.conf import settings
+            from .notifications import send_booking_confirmation
+            if getattr(settings, "TESTING", False):
+                send_booking_confirmation(sr)
+            else:
+                import threading
+                threading.Thread(
+                    target=send_booking_confirmation,
+                    args=(sr,),
+                    daemon=True,
+                ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start booking confirmation notification for booking {sr.id}: {notify_err}")
+
         if is_admin_booking_on_behalf:
             try:
                 from accounts.audit_service import record_platform_audit
@@ -701,7 +750,8 @@ class BookingCreateView(APIView):
             status_code=201,
         )
         if idem_cache_key:
-            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code}, timeout=600)
+            from django.core.cache import cache
+            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code, "in_progress": False}, timeout=86400)
         return response
 
 
@@ -1178,7 +1228,13 @@ def _build_tracking_payload(sr, has_full_access):
     freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
 
     if is_accepted:
-        tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
+        # Workforce backend returns 'assigned_technician'; older integration may use 'technician'.
+        # Prefer whichever is populated.
+        tech_obj = (
+            (tracking.get("technician") or tracking.get("assigned_technician") or {})
+            if (tracking and isinstance(tracking, dict))
+            else {}
+        )
 
         # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
         tech_name = None
@@ -1224,7 +1280,13 @@ def _build_tracking_payload(sr, has_full_access):
             tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
 
         # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
-        loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
+        # Location is top-level 'location' in older callers, nested inside
+        # 'assigned_technician.location' in the current WorkforceJobLiveTrackingView response.
+        loc = (
+            tracking.get("location")
+            or (tracking.get("assigned_technician") or {}).get("location")
+            or {}
+        ) if (tracking and isinstance(tracking, dict)) else {}
         if is_terminal:
             tech_lat = None
             tech_lng = None
@@ -1304,7 +1366,12 @@ def _build_tracking_payload(sr, has_full_access):
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
-            "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
+            "updated_at": (
+                tracking.get("updated_at")
+                or (loc.get("received_at") if loc else None)
+                or (loc.get("captured_at") if loc else None)
+                or timezone.now().isoformat()
+            ) if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
         }
 
         if tech_lat is not None and tech_lng is not None and not is_terminal:

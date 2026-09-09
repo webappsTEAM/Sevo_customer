@@ -6,8 +6,16 @@
  */
 import { apiRequest } from "./client.js"
 
-export async function createBooking(payload) {
-  return apiRequest("/booking/", { method: "POST", json: payload })
+export async function createBooking(payload, idempotencyKey = null) {
+  const headers = {}
+  const bodyData = { ...payload }
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = idempotencyKey
+    if (!bodyData.idempotency_key) {
+      bodyData.idempotency_key = idempotencyKey
+    }
+  }
+  return apiRequest("/booking/", { method: "POST", json: bodyData, headers })
 }
 
 export async function cancelBooking(identifier, reason = "Customer requested cancellation") {

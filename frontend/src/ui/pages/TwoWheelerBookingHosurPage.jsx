@@ -299,6 +299,9 @@ export function TwoWheelerBookingHosurPage() {
   const [pickupCoords, setPickupCoords] = useState(null) // { lat, lng, forAddress }
   const [dropCoords, setDropCoords] = useState(null)     // { lat, lng, forAddress }
 
+  // Unique Idempotency Key per user booking attempt (reused on retry, reset on parameter change)
+  const bookingAttemptKeyRef = useRef(null)
+
   // GT-B-01: the authoritative fare comes from the SERVER, never from this
   // component. See MiniTruckBookingHosurPage for the full rationale --
   // same contract, same endpoint, different category slug.
@@ -327,6 +330,10 @@ export function TwoWheelerBookingHosurPage() {
       setExpandedSlotCategory(category)
     }
   }, [selectedDate, bookingMode])
+
+  useEffect(() => {
+    bookingAttemptKeyRef.current = null
+  }, [pickup, drop, selectedVehicle, bookingMode])
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
@@ -456,7 +463,27 @@ export function TwoWheelerBookingHosurPage() {
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [lastBookingId, setLastBookingId] = useState(null)
   const [lastTrackingToken, setLastTrackingToken] = useState(null)
+  const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+
+  // Recover active in-flight partner search if customer refreshes the page
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        const isFresh = Date.now() - (parsed.timestamp || 0) < 15 * 60 * 1000
+        if (isFresh && parsed.bookingId && parsed.serviceCategory === "goods_transport_two_wheeler") {
+          setLastBookingId(parsed.bookingId)
+          if (parsed.trackingToken) setLastTrackingToken(parsed.trackingToken)
+          if (parsed.amount != null) setLastBookingAmount(parsed.amount)
+          setLookingForPartnerOpen(true)
+        } else if (!isFresh) {
+          sessionStorage.removeItem("calservice_active_partner_search")
+        }
+      }
+    } catch (e) {}
+  }, [])
 
   useEffect(() => {
     if (!lookingForPartnerOpen || !lastBookingId) return
@@ -478,6 +505,9 @@ export function TwoWheelerBookingHosurPage() {
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
+            try {
+              sessionStorage.removeItem("calservice_active_partner_search")
+            } catch (e) {}
             const bookingPayload = {
               id: lastBookingId,
               request_id: lastBookingId,
@@ -933,9 +963,22 @@ export function TwoWheelerBookingHosurPage() {
         return
       }
 
+      if (!name || !name.trim()) {
+        setBookingSubmitting(false)
+        setBookingError("Please enter your name to complete the booking.")
+        return
+      }
+
+      const cleanPhone = (phone || "").replace(/\D/g, "")
+      if (!cleanPhone || cleanPhone.length < 10) {
+        setBookingSubmitting(false)
+        setBookingError("Please enter a valid 10-digit mobile number.")
+        return
+      }
+
       const payload = {
-        customer_name: name || "Thejaa T",
-        phone: phone || "6379222691",
+        customer_name: name.trim(),
+        phone: cleanPhone,
         email: customerEmail,
         service_category: "goods_transport_two_wheeler",
         issue_title: `Two-wheeler delivery — ${vehicle.name} (${currentGoodsType})`,
@@ -966,20 +1009,45 @@ export function TwoWheelerBookingHosurPage() {
         payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
       }
 
-      const res = await createBooking(payload)
+      if (!bookingAttemptKeyRef.current) {
+        const randStr = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
+        const uuidStr = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${randStr}`
+        bookingAttemptKeyRef.current = `idem_${uuidStr}`
+      }
+      const attemptKey = bookingAttemptKeyRef.current
+
+      const res = await createBooking(payload, attemptKey)
       // No request_id means the server did not create the booking, whatever
       // status it returned. Treated as a failure rather than papered over.
       const bookingId = res?.data?.request_id || res?.request_id
       if (!bookingId) {
         throw { status: 0, body: { message: "The booking was not confirmed by the server." } }
       }
+      bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      const authoritativeAmount = res?.data?.total_amount != null 
+        ? Number(res.data.total_amount) 
+        : (res?.total_amount != null ? Number(res.total_amount) : null)
       setLastBookingId(bookingId)
       setLastTrackingToken(token)
+      setLastBookingAmount(authoritativeAmount)
       setVehicleSelectorOpen(false)
       setSlotStepperOpen(false)
       setGoodsTypeModalOpen(false)
-      setLookingForPartnerOpen(true)
+      if (bookingMode === "SCHEDULED") {
+        setBookingSuccessOpen(true)
+      } else {
+        setLookingForPartnerOpen(true)
+        try {
+          sessionStorage.setItem("calservice_active_partner_search", JSON.stringify({
+            bookingId,
+            trackingToken: token,
+            amount: authoritativeAmount,
+            serviceCategory: "goods_transport_two_wheeler",
+            timestamp: Date.now()
+          }))
+        } catch (e) {}
+      }
     } catch (err) {
       // A booking exists only if the backend created the ServiceRequest.
       //
@@ -1027,6 +1095,9 @@ export function TwoWheelerBookingHosurPage() {
       setCancelSubmitting(false)
       setCancelModalOpen(false)
       setLookingForPartnerOpen(false)
+      try {
+        sessionStorage.removeItem("calservice_active_partner_search")
+      } catch (e) {}
     }
   }
 
@@ -1141,6 +1212,9 @@ export function TwoWheelerBookingHosurPage() {
                 onClick={() => {
                   setShowExitConfirm(false)
                   setLookingForPartnerOpen(false)
+                  try {
+                    sessionStorage.removeItem("calservice_active_partner_search")
+                  } catch (e) {}
                   const bookingPayload = {
                     id: lastBookingId,
                     request_id: lastBookingId,
@@ -2010,7 +2084,7 @@ export function TwoWheelerBookingHosurPage() {
                 <div className="flex items-start gap-3 mb-3">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
                     <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Bengaluru, Karnataka, India"}</p>
                   </div>
                   <button
@@ -2031,7 +2105,7 @@ export function TwoWheelerBookingHosurPage() {
                 <div className="flex items-start gap-3 mb-5">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
                     <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
                   </div>
                   <button
@@ -2251,8 +2325,8 @@ export function TwoWheelerBookingHosurPage() {
                           <p className="text-xs text-slate-500">{v.capacity}</p>
                         </div>
                         <div className="text-right shrink-0">
+                          <span className="text-[10px] text-slate-400 font-medium block">Starting from</span>
                           <p className="text-sm font-extrabold text-slate-800">{v.price}</p>
-                          <span className="text-[10px] text-slate-400 line-through">₹327.00</span>
                         </div>
                       </button>
                     )
@@ -2278,7 +2352,7 @@ export function TwoWheelerBookingHosurPage() {
                         ? "Calculating…"
                         : quoteError
                           ? "Fare unavailable"
-                          : selectedVehicle?.price || "—"}
+                          : "—"}
                   </p>
                 </div>
               </div>
@@ -2399,7 +2473,7 @@ export function TwoWheelerBookingHosurPage() {
                       <div className="flex items-start gap-3">
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
                           <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Bengaluru, Karnataka, India"}</p>
                         </div>
                       </div>
@@ -2408,7 +2482,7 @@ export function TwoWheelerBookingHosurPage() {
                       <div className="flex items-start gap-3">
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
                           <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
                         </div>
                       </div>
@@ -2423,7 +2497,11 @@ export function TwoWheelerBookingHosurPage() {
                           <span className="text-base">💵</span> Amount Payable
                         </div>
                         <span className="text-sm font-extrabold text-slate-900">
-                          {serverQuote?.total != null ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}` : "—"}
+                          {lastBookingAmount != null
+                            ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                            : (serverQuote?.total != null
+                                ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                                : "Amount unavailable")}
                         </span>
                       </div>
                     </div>
@@ -2488,7 +2566,7 @@ export function TwoWheelerBookingHosurPage() {
                     <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
                     <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
                     <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
-                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
+                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h10 v5 h-10 z M85,90 h10 v5 h-10 z" />
                   </svg>
                 </div>
               </div>
@@ -2544,7 +2622,7 @@ export function TwoWheelerBookingHosurPage() {
               Booking Cancelled
             </h2>
             <p className="text-sm text-slate-500 font-medium mb-6">
-              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "GT0586"}</strong> has been cancelled.
+              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "—"}</strong> has been cancelled.
             </p>
 
             {/* Cancellation Details Card */}
@@ -2889,7 +2967,15 @@ export function TwoWheelerBookingHosurPage() {
                     <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
                       <div>
                         <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Estimated Fare</p>
-                        <p className="text-xl font-black text-slate-800">{selectedVehicle?.price || (selectedRoute ? selectedRoute.fare : "₹ 48")}</p>
+                        <p className="text-xl font-black text-slate-800">
+                          {serverQuote?.total != null
+                            ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                            : quoteLoading
+                              ? "Calculating…"
+                              : quoteError
+                                ? "Fare unavailable"
+                                : "—"}
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -2900,7 +2986,7 @@ export function TwoWheelerBookingHosurPage() {
                             submitBooking()
                           }
                         }}
-                        disabled={bookingSubmitting}
+                        disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
                         className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
                       >
                         {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
@@ -2961,10 +3047,12 @@ export function TwoWheelerBookingHosurPage() {
             </div>
 
             <h3 className="text-xl font-extrabold text-slate-900 mb-2">
-              Booking Requested Successfully!
+              {bookingMode === "SCHEDULED" ? "Booking Scheduled Successfully!" : "Booking Confirmed!"}
             </h3>
             <p className="text-sm font-semibold text-emerald-700 bg-emerald-50 py-2.5 px-4 rounded-xl mb-4">
-              Our service partner will contact you shortly
+              {bookingMode === "SCHEDULED"
+                ? `Pickup scheduled for ${selectedDate?.value || "chosen date"} (${selectedSlot || "window"})`
+                : "Our service partner will contact you shortly"}
             </p>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2 border border-slate-200 mb-6">
@@ -2972,6 +3060,12 @@ export function TwoWheelerBookingHosurPage() {
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Booking ID:</span>
                   <span className="font-bold text-emerald-700">{lastBookingId}</span>
+                </div>
+              )}
+              {bookingMode === "SCHEDULED" && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Scheduled For:</span>
+                  <span className="font-bold text-slate-900">{selectedDate?.value} · {selectedSlot}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -2991,20 +3085,41 @@ export function TwoWheelerBookingHosurPage() {
                 <span className="font-bold text-slate-900">{name || "Valued Customer"} (+91 {phone})</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-200">
-                <span className="text-slate-500 font-medium">Estimated Base Fare:</span>
-                <span className="font-extrabold text-emerald-700 text-sm">{selectedVehicle?.price || "₹48"}</span>
+                <span className="text-slate-500 font-medium">Final Booking Amount:</span>
+                <span className="font-extrabold text-emerald-700 text-sm">
+                  {lastBookingAmount != null
+                    ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                    : (serverQuote?.total != null
+                        ? `₹${Number(serverQuote.total).toLocaleString("en-IN")}`
+                        : "Amount unavailable")}
+                </span>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setBookingSuccessOpen(false)
-                navigate(routes.landing)
-              }}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
-            >
-              Back to Home
-            </button>
+            <div className="flex gap-3">
+              {lastBookingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingSuccessOpen(false)
+                    navigate(`/track/${encodeURIComponent(lastBookingId)}${lastTrackingToken ? `?token=${encodeURIComponent(lastTrackingToken)}` : ""}`)
+                  }}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Track Booking
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingSuccessOpen(false)
+                  navigate(routes.landing)
+                }}
+                className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
+              >
+                Back to Home
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -314,6 +314,14 @@ def quote_logistics_fare(
             total = minimum_fare
             minimum_applied = True
 
+    source = route.get("source")
+    is_authoritative = (source == "google_maps")
+    is_estimate = not is_authoritative
+    estimate_notice = (
+        "Road routing unavailable; this fare is an estimate based on straight-line distance and is subject to actual road distance verification."
+        if is_estimate else None
+    )
+
     return LogisticsFareBreakdown(
         total=total,
         base_fare=base_fare,
@@ -342,7 +350,10 @@ def quote_logistics_fare(
         rate_additional_stop=per_stop,
         rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
         free_km=free_km,
-        distance_source=route.get("source"),
+        distance_source=source,
+        is_authoritative=is_authoritative,
+        is_estimate=is_estimate,
+        estimate_notice=estimate_notice,
         currency=getattr(tier, "currency", "INR") or "INR",
     )
 
@@ -445,7 +456,9 @@ def resolve_logistics_fare_v2(
         if quote_id:
             from .packers_movers_pricing import verify_packers_movers_quote
             is_valid, cached_quote, err_msg = verify_packers_movers_quote(quote_id, submitted_total=submitted_amount)
-            if is_valid and cached_quote:
+            if not is_valid:
+                raise UnresolvedLogisticsFareError(err_msg or f"Quote '{quote_id}' is invalid or requires survey/review.")
+            if cached_quote:
                 return _money(cached_quote["total"]), cached_quote
 
         # Compute on-the-fly quote from inventory line items if coordinates are available
@@ -466,6 +479,10 @@ def resolve_logistics_fare_v2(
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
             )
+            if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
+                survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"
+                reason = computed_quote.get("estimate_notice") or computed_quote.get("review_reason") or "Pre-move survey required."
+                raise UnresolvedLogisticsFareError(f"Packers & Movers booking requires survey/review ({survey_status}: {reason}) and cannot be finalized as an instant booking.")
             return _money(computed_quote["total"]), computed_quote
 
     # Fall through to the original flat resolver rather than duplicating

@@ -65,26 +65,42 @@ class MockSMSProvider(SMSProviderInterface):
         return True
 
 
+import logging
+
+sms_logger = logging.getLogger("accounts.sms")
+
+
 class TwilioSMSProvider(SMSProviderInterface):
     """Twilio production SMS provider."""
     def send_sms(self, mobile_number: str, message: str) -> bool:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_FROM_NUMBER")
+
+        if not (account_sid and auth_token and from_number and not account_sid.startswith("your_")):
+            sms_logger.warning("[SMS] Twilio credentials missing or unconfigured in environment (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER).")
+            # Fallback to Mock in dev or testing environments
+            if getattr(settings, "DEBUG", False) or getattr(settings, "TESTING", False) or os.getenv("TESTING"):
+                return MockSMSProvider().send_sms(mobile_number, message)
+            return False
+
         try:
             from twilio.rest import Client as TwilioClient
-            account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-            auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-            from_number = os.getenv("TWILIO_FROM_NUMBER")
-            if account_sid and auth_token and from_number and not account_sid.startswith("your_"):
-                client = TwilioClient(account_sid, auth_token)
-                client.messages.create(
-                    body=message,
-                    from_=from_number,
-                    to=f"+91{mobile_number}" if not mobile_number.startswith("+") else mobile_number
-                )
-                return True
+            client = TwilioClient(account_sid, auth_token)
+            clean_to = f"+91{mobile_number}" if not str(mobile_number).startswith("+") else str(mobile_number)
+            client.messages.create(
+                body=message,
+                from_=from_number,
+                to=clean_to
+            )
+            sms_logger.info("[SMS] Twilio SMS sent successfully to %s", clean_to[-4:])
+            return True
         except Exception as e:
-            print(f"Twilio SMS Error: {e}")
-        # Fallback to Mock if Twilio fails
-        return MockSMSProvider().send_sms(mobile_number, message)
+            sms_logger.error(f"[SMS] Twilio SMS Error: {e}")
+            # Fallback to Mock in dev or testing environments
+            if getattr(settings, "DEBUG", False) or getattr(settings, "TESTING", False) or os.getenv("TESTING"):
+                return MockSMSProvider().send_sms(mobile_number, message)
+            return False
 
 
 def get_sms_provider() -> SMSProviderInterface:

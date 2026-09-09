@@ -78,6 +78,10 @@ export async function fetchLogisticsQuote({
       total: data.total,
       currency: data.currency || "INR",
       pricingMode: data.pricing_mode,
+      isAuthoritative: Boolean(data.is_authoritative),
+      isEstimate: Boolean(data.is_estimate),
+      distanceSource: data.distance_source || data.breakdown?.distance_source,
+      estimateNotice: data.estimate_notice || data.breakdown?.estimate_notice,
       breakdown: data.breakdown || null,
       tierId: data.tier_id,
     }
