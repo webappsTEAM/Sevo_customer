@@ -365,7 +365,11 @@ export function RecipeDetails({
                       )}
                     </div>
 
-                    {cartCount > 0 ? (
+                    {ing.in_stock === false || ing.max_quantity === 0 ? (
+                      <div className="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-extrabold text-[10px] border border-slate-200 select-none uppercase tracking-wider">
+                        OUT OF STOCK
+                      </div>
+                    ) : cartCount > 0 ? (
                       <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
                         <button
                           type="button"

@@ -97,10 +97,44 @@ class CompanyScopedModel(models.Model):
 
 ---
 
-## 4. Migration & Seeding Workflows
+## 4. Vegetable Stock & Inventory Models
+
+```text
++-----------------------+           +-----------------------+
+|        Package        | 1       1 |     InventoryItem     |
++-----------------------+ <-------> +-----------------------+
+| id: BigAutoField (PK) |           | id: BigAutoField (PK) |
+| name: VarChar         |           | org_id: FK(Company)   |
+| stock_item_id: FK(1:1)|           | stock_quantity_grams  |
+| base_price: Decimal   |           | default_daily_qty_g   |
++-----------------------+           | unit: VarChar         |
+                                    | last_reset_date: Date |
+                                    +-----------+-----------+
+                                                | 1
+                                                |
+                                                | *
+                                    +-----------v-----------+
+                                    |     StockMovement     |
+                                    +-----------------------+
+                                    | id: BigAutoField (PK) |
+                                    | org_id: FK(Company)   |
+                                    | item_id: FK           |
+                                    | movement_type: Enum   |
+                                    | delta_grams: Integer  |
+                                    | balance_after_grams   |
+                                    | reason: Text          |
+                                    | booking_ref: VarChar  |
+                                    | created_at: DateTime  |
+                                    +-----------------------+
+```
+
+---
+
+## 5. Migration & Seeding Workflows
 
 The repository contains automated seed scripts located in `backend/` for catalog initialization:
 - `python seed_catalog.py` — Populates standard service categories (Plumbing, Electrical, Carpentry, AC Repair, Masonry).
 - `python seed_ac_and_repair_services_data.py` — Populates complex appliance repair subservices.
 - `python seed_all_68_vegetable_recipes.py` — Populates customized meal kit recipes and pricing packages.
 - `python setup_tenants.py` — Provisions initial demo company tenant and admin account.
+

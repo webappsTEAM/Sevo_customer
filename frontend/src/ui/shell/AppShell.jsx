@@ -26,7 +26,7 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout
 } from "lucide-react"
 
 const SUPER_ADMIN_NAV_ITEMS = [
@@ -116,7 +116,16 @@ const ADMIN_NAV_ITEMS = [
       { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
     ]
   },
-  { label: "Warehouse Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
+  {
+    label: "Warehouse Inventory",
+    to: routes.inventory,
+    icon: <Package size={20} />,
+    color: "#8B5CF6",
+    children: [
+      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
+      { label: "Vegetables", to: routes.inventory_vegetables, icon: <Sprout size={16} />, color: "#10B981" },
+    ]
+  },
   { label: "Reports & Analytics", to: routes.reports, icon: <BarChart3 size={20} />, color: "#10B981" },
   { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" },
   {

@@ -79,7 +79,11 @@ export function VegetableRecommendationSection({
                   ₹{price}
                 </span>
 
-                {inCart ? (
+                {rec.in_stock === false || rec.max_quantity === 0 ? (
+                  <div className="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-extrabold text-[10px] border border-slate-200 select-none uppercase tracking-wider">
+                    OUT OF STOCK
+                  </div>
+                ) : inCart ? (
                   <div className="flex items-center gap-1 bg-emerald-600 text-white rounded-lg px-2 py-1 text-[11px] font-extrabold shadow-2xs">
                     <Check className="w-3 h-3" />
                     <span>In Cart</span>

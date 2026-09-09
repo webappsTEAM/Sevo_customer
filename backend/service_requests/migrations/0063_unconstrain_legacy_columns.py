@@ -52,8 +52,7 @@ def relax_legacy_columns(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("service_requests", "0058_alter_addon_options_addon_addon_type_and_more"),
-        ("service_requests", "0058_recipeingredient_is_catalog_vegetable_and_more"),
+        ("service_requests", "0062_merge_20260902_1401"),
     ]
 
     operations = [

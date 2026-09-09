@@ -61,6 +61,10 @@ const InventoryPage = lazy(() =>
   import("./pages/InventoryPage.jsx").then(m => ({ default: m.InventoryPage || m.default }))
 )
 
+const VegetableStockAdminPage = lazy(() =>
+  import("./pages/inventory/VegetableStockAdminPage.jsx").then(m => ({ default: m.VegetableStockAdminPage || m.default }))
+)
+
 const CatalogDashboardPage = lazy(() =>
   import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
@@ -499,6 +503,8 @@ export function App() {
               <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />
               <Route path={routes.admin_service_requests} element={<RequireModule module="service_requests"><ServiceRequestsPage /></RequireModule>} />
               <Route path={routes.admin_feedback} element={<RequireModule module="reviews"><FeedbackManagementPage /></RequireModule>} />
+              <Route path={routes.inventory_vegetables} element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
+              <Route path="/admin/vegetable-stock" element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
             </Route>
 
             {/* Homepage Builder edits Customer Web content that is public to

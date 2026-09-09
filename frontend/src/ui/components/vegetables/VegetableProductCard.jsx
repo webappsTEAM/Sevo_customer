@@ -164,7 +164,11 @@ export function VegetableProductCard({
           </div>
 
           {/* Add / Qty CTA */}
-          {hasOptions ? (
+          {item.in_stock === false || item.max_quantity === 0 ? (
+            <div className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-extrabold text-[11px] border border-slate-200 select-none uppercase tracking-wider">
+              OUT OF STOCK
+            </div>
+          ) : hasOptions ? (
             cartCount > 0 ? (
               <button
                 type="button"

@@ -1107,8 +1107,8 @@ const VEGETABLE_ITEMS = [
   { name: "Green Pumpkin (Pusanikkai)", unit: "400 g", price: 40, mrp: 48, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Pumpkin Yellow (Cut)", unit: "200 g", price: 42, mrp: 50, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
   { name: "Disco Pumpkin", unit: "500 g", price: 48, mrp: 58, discount: "17% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
-  { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
   { name: "Brinjal - Bharta", unit: "500 g", price: 26, mrp: 31, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Pointed Gourd", unit: "250 g", price: 48, mrp: 56, discount: "14% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
   { name: "Assorted Capsicum (R/Y/G)", unit: "3 pcs", price: 59, mrp: 70, discount: "16% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
 ]
 
@@ -3334,6 +3334,7 @@ export function LandingPage() {
 
   const goToLogin = () => setShowCustomerEntryModal(true)
   const goToCategoryServices = (serviceCategoryId, subTabName) => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     let url = serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services;
     if (subTabName) {
       const encoded = encodeURIComponent(subTabName);
@@ -3353,6 +3354,13 @@ export function LandingPage() {
       c.id === `${activeCategoryId}_cleaning`
     ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
+
+  // Always reset scroll to top when category changes
+  useEffect(() => {
+    if (activeCategoryId) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+  }, [activeCategoryId]);
 
   // Hot reload services catalog when category choice becomes active
   useEffect(() => {
@@ -6601,6 +6609,7 @@ export function LandingPage() {
                           }
                           setIsHomeServicesCombinedModalOpen(false)
                           document.body.style.overflow = "unset"
+                          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                           if (label === "Goods & Transports") {
                             setIsGoodsModalOpen(true)
                           } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
@@ -8406,6 +8415,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsHomeServicesCombinedModalOpen(false)
                       document.body.style.overflow = "unset"
+                      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                       if (label === "Goods & Transports") {
                         setIsGoodsModalOpen(true)
                       } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
