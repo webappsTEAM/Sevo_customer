@@ -2346,6 +2346,12 @@ export function LandingPage() {
   // packages first, so adding/marking a package "Popular" in the catalog
   // admin surfaces it here automatically.
   const [recommendedItems, setRecommendedItems] = useState([])
+  // Live catalog categories (Service Catalog admin > Categories) -- the
+  // source of truth for the "5 Core Specialized Pillars" combined modal
+  // below, so whatever the admin adds/removes/renames or uploads an image
+  // for in Categories shows up here automatically, with no separate
+  // homepage config to keep in sync.
+  const [catalogCategories, setCatalogCategories] = useState([])
   useEffect(() => {
     Promise.all([
       apiRequest("/settings/catalog/public/packages/").catch(() => ({ success: false, data: [] })),
@@ -2368,6 +2374,16 @@ export function LandingPage() {
         categoryJobs: catBySlug[p.category_slug]?.jobs_count_str,
         serviceName: p.service_name,
       })))
+      setCatalogCategories(
+        [...cats]
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((c) => ({
+            id: c.id,
+            label: c.name,
+            photo: c.image,
+            serviceCategoryId: c.slug,
+          }))
+      )
     }).catch((err) => console.error("Failed to load recommended items:", err))
   }, [])
 
@@ -3353,6 +3369,25 @@ export function LandingPage() {
       c.id === `${activeCategoryId}_cleaning`
     ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
+
+  // "Farm-Fresh Vegetables & Groceries" is a quick-commerce grocery module,
+  // not an on-demand service booking category -- it has its own dedicated
+  // page (VegetableFullScreenPage at /vegetables) with real cart/checkout.
+  // If it's ever reached via the generic ?category=... booking route (e.g.
+  // an admin-added catalog category, an old link, or browser back/forward),
+  // redirect to the real page instead of falling through to the booking
+  // modal's appliance-repair tab logic, which has no matching branch for it.
+  useEffect(() => {
+    if (!activeCategoryId) return
+    const idLower = activeCategoryId.toLowerCase()
+    const nameLower = (activeCategory?.name || "").toLowerCase()
+    const isVegetablesCategory =
+      idLower.includes("vegetable") || idLower.includes("grocery") || idLower.includes("groceries") ||
+      nameLower.includes("vegetable") || nameLower.includes("grocery") || nameLower.includes("groceries")
+    if (isVegetablesCategory) {
+      navigate(routes.vegetables, { replace: true })
+    }
+  }, [activeCategoryId])
 
   // Hot reload services catalog when category choice becomes active
   useEffect(() => {
@@ -6565,7 +6600,7 @@ export function LandingPage() {
 
                 {/* 5 Combined Services Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                  {(homeConfig.pillarModal?.pillars && homeConfig.pillarModal.pillars.length > 0 ? homeConfig.pillarModal.pillars : CATEGORIES).map((catItem, pIdx) => {
+                  {(catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
                     const defaultCat = CATEGORIES[pIdx] || {}
                     const label = catItem.label || defaultCat.label || ""
                     const photo = catItem.photo || catItem.image || defaultCat.photo
@@ -6577,20 +6612,21 @@ export function LandingPage() {
                       <div
                         key={catItem.id || label || pIdx}
                         onClick={() => {
-                          if (homeEditMode) return
                           if (!isAvailable) {
                             showUnavailableServiceAlert(label)
                             return
                           }
                           setIsHomeServicesCombinedModalOpen(false)
                           document.body.style.overflow = "unset"
-                          if (label === "Goods & Transports") {
+                          if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
+                            navigate(routes.vegetables)
+                          } else if (label.includes("Goods") || label.includes("Transport")) {
                             setIsGoodsModalOpen(true)
                           } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
                             setIsElecModalOpen(true)
                           } else if (label.includes("AC") || label.includes("Appliance")) {
                             setIsAcModalOpen(true)
-                          } else if (label === "Home Services & Pest Control") {
+                          } else if (label.includes("Pest") || label.includes("Home Services")) {
                             setIsHomePestModalOpen(true)
                           } else {
                             goToCategoryServices(serviceCategoryId)
@@ -6600,30 +6636,16 @@ export function LandingPage() {
                       >
                         {photo ? (
                           <div className="h-24 w-full overflow-hidden bg-slate-100 relative">
-                            {homeEditMode ? (
-                              <EditableImage
-                                active={true}
-                                value={photo}
-                                defaultFallback={defaultCat.photo || "/mockups/service_cleaning.png"}
-                                assetType="services"
-                                title={`Edit ${label} Photo`}
-                                alt={label}
-                                className="w-full h-full"
-                                imgClassName="w-full h-full object-cover"
-                                onSave={(url) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.photo`, url)}
-                              />
-                            ) : (
-                              <img
-                                src={photo}
-                                alt={label}
-                                onError={(e) => {
-                                  if (defaultCat.photo && e.currentTarget.src !== defaultCat.photo) {
-                                    e.currentTarget.src = defaultCat.photo
-                                  }
-                                }}
-                                className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
-                              />
-                            )}
+                            <img
+                              src={photo}
+                              alt={label}
+                              onError={(e) => {
+                                if (defaultCat.photo && e.currentTarget.src !== defaultCat.photo) {
+                                  e.currentTarget.src = defaultCat.photo
+                                }
+                              }}
+                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
+                            />
                             {!isAvailable && (
                               <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -6641,12 +6663,7 @@ export function LandingPage() {
                           </div>
                         )}
                         <span className={`text-xs font-extrabold leading-snug p-3 transition-colors ${isAvailable ? 'text-slate-700 group-hover:text-teal-800' : 'text-slate-400'}`}>
-                          <HomeEditableText
-                            active={homeEditMode}
-                            value={label}
-                            placeholder={label}
-                            onSave={(v) => saveHomeConfigField(`pillarModal.pillars.${pIdx}.label`, v)}
-                          />
+                          {label}
                         </span>
                       </div>
                     )
@@ -8368,59 +8385,121 @@ export function LandingPage() {
 
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                  ⚡ 5 Core Specialized Pillars
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={homeConfig.pillarModal?.badge}
+                    placeholder="⚡ 5 Core Specialized Pillars"
+                    onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
+                  />
                 </div>
                 <h3
                   id="home-combined-modal-title"
                   className="text-xl sm:text-2xl font-extrabold text-slate-900"
                 >
-                  Home &amp; Repair Services
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={homeConfig.pillarModal?.title}
+                    placeholder="Home & Repair Services"
+                    onSave={(v) => saveHomeConfigField("pillarModal.title", v)}
+                  />
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
-                  Select any service below to explore specific options, verified technicians, and transparent pricing.
+                  <HomeEditableText
+                    active={homeEditMode}
+                    value={homeConfig.pillarModal?.subtitle}
+                    placeholder="Select any service below to explore specific options, verified technicians, and transparent pricing."
+                    onSave={(v) => saveHomeConfigField("pillarModal.subtitle", v)}
+                  />
                 </p>
               </div>
 
+              {/* Service Alert Message (When clicking unavailable service) */}
+              {serviceAlertMessage && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>{serviceAlertMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setServiceAlertMessage("")}
+                    className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {/* 5 Combined Services Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
-                  <button
-                    key={label}
-                    onClick={() => {
-                      setIsHomeServicesCombinedModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      if (label === "Goods & Transports") {
-                        setIsGoodsModalOpen(true)
-                      } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                        setIsElecModalOpen(true)
-                      } else if (label.includes("AC") || label.includes("Appliance")) {
-                        setIsAcModalOpen(true)
-                      } else if (label === "Home Services & Pest Control") {
-                        setIsHomePestModalOpen(true)
-                      } else {
-                        goToCategoryServices(serviceCategoryId)
-                      }
-                    }}
-                    className="group flex flex-col bg-white rounded-2xl border-2 border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer"
-                  >
-                    {photo ? (
-                      <div className="h-24 w-full overflow-hidden bg-slate-100">
-                        <img
-                          src={photo}
-                          alt={label}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-24 w-full bg-teal-50 flex items-center justify-center">
-                        <Icon className="w-8 h-8 text-teal-600" strokeWidth={1.5} />
-                      </div>
-                    )}
-                    <span className="text-xs font-extrabold text-slate-700 leading-snug p-3 group-hover:text-teal-800 transition-colors">
-                      {label}
-                    </span>
-                  </button>
-                ))}
+                {(catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
+                  const defaultCat = CATEGORIES[pIdx] || {}
+                  const label = catItem.label || defaultCat.label || ""
+                  const photo = catItem.photo || catItem.image || defaultCat.photo
+                  const Icon = defaultCat.icon || Wrench
+                  const serviceCategoryId = catItem.serviceCategoryId || defaultCat.serviceCategoryId
+                  const isAvailable = isServiceAvailableInZone(label)
+
+                  return (
+                    <div
+                      key={catItem.id || label || pIdx}
+                      onClick={() => {
+                        if (!isAvailable) {
+                          showUnavailableServiceAlert(label)
+                          return
+                        }
+                        setIsHomeServicesCombinedModalOpen(false)
+                        document.body.style.overflow = "unset"
+                        if (label.includes("Vegetable") || label.includes("Grocery") || label.includes("Groceries")) {
+                          navigate(routes.vegetables)
+                        } else if (label.includes("Goods") || label.includes("Transport")) {
+                          setIsGoodsModalOpen(true)
+                        } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
+                          setIsElecModalOpen(true)
+                        } else if (label.includes("AC") || label.includes("Appliance")) {
+                          setIsAcModalOpen(true)
+                        } else if (label.includes("Pest") || label.includes("Home Services")) {
+                          setIsHomePestModalOpen(true)
+                        } else {
+                          goToCategoryServices(serviceCategoryId)
+                        }
+                      }}
+                      className={`group flex flex-col bg-white rounded-2xl border-2 ${isAvailable ? 'border-slate-100 hover:border-teal-500' : 'border-slate-200/60 opacity-60'} overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer relative`}
+                    >
+                      {photo ? (
+                        <div className="h-24 w-full overflow-hidden bg-slate-100 relative">
+                          <img
+                            src={photo}
+                            alt={label}
+                            onError={(e) => {
+                              if (defaultCat.photo && e.currentTarget.src !== defaultCat.photo) {
+                                e.currentTarget.src = defaultCat.photo
+                              }
+                            }}
+                            className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
+                          />
+                          {!isAvailable && (
+                            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="h-24 w-full bg-teal-50 flex items-center justify-center relative">
+                          <Icon className={`w-8 h-8 ${isAvailable ? 'text-teal-600' : 'text-slate-400'}`} strokeWidth={1.5} />
+                          {!isAvailable && (
+                            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <span className={`text-xs font-extrabold leading-snug p-3 transition-colors ${isAvailable ? 'text-slate-700 group-hover:text-teal-800' : 'text-slate-400'}`}>
+                        {label}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>,

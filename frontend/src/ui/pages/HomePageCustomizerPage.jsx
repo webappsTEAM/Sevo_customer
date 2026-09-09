@@ -206,19 +206,6 @@ export default function HomePageCustomizerPage() {
     })
   }
 
-  const updatePillarItem = (idx, field, value) => {
-    setConfig(prev => {
-      const currentPillars = [...(prev.pillarModal?.pillars || DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars)]
-      currentPillars[idx] = { ...currentPillars[idx], [field]: value }
-      const next = {
-        ...prev,
-        pillarModal: { ...(prev.pillarModal || DEFAULT_HOME_PAGE_CONFIG.pillarModal), pillars: currentPillars }
-      }
-      saveHomePageConfig(next)
-      return next
-    })
-  }
-
   const updateSubServicesModal = (field, value) => {
     setConfig(prev => {
       const next = {
@@ -1923,52 +1910,13 @@ export default function HomePageCustomizerPage() {
                           />
                         </div>
 
-                        <div className="pt-2 border-t border-slate-800 space-y-2">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            5 Pillar Service Cards
-                          </span>
-                          {(config.pillarModal?.pillars || DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars).map((pillar, pIdx) => (
-                            <div key={pillar.id || pIdx} className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-teal-400">Pillar #{pIdx + 1}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => updatePillarItem(pIdx, "enabled", !pillar.enabled)}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                    pillar.enabled !== false ? "bg-emerald-900 text-emerald-300" : "bg-slate-700 text-slate-400"
-                                  }`}
-                                >
-                                  {pillar.enabled !== false ? "Active" : "Disabled"}
-                                </button>
-                              </div>
-
-                              <input
-                                type="text"
-                                value={pillar.label}
-                                onChange={(e) => updatePillarItem(pIdx, "label", e.target.value)}
-                                placeholder="Pillar Name"
-                                className="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs outline-none font-bold"
-                              />
-
-                              <div>
-                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Photo URL or Path</label>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={pillar.photo || pillar.image || ""}
-                                    onChange={(e) => updatePillarItem(pIdx, "photo", e.target.value)}
-                                    placeholder="/mockups/service_cleaning.png"
-                                    className="flex-1 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 text-[11px] font-mono outline-none"
-                                  />
-                                  {pillar.photo && (
-                                    <div className="w-7 h-7 rounded overflow-hidden bg-slate-950 shrink-0 border border-slate-700">
-                                      <img src={pillar.photo} alt="" className="w-full h-full object-cover" />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                        <div className="pt-2 border-t border-slate-800">
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            The 5 service cards shown in this popup are now pulled directly from{" "}
+                            <span className="text-teal-400 font-bold">Service Catalog &rarr; Categories</span>
+                            {" "}&mdash; add, rename, reorder or upload an image for a category there and it updates
+                            here automatically. This panel only controls the badge, title and subtitle text above.
+                          </p>
                         </div>
                       </div>
                     )}

@@ -44,6 +44,47 @@ def _delete_or_raise(instance, label):
         raise ValidationError({"detail": f"Cannot delete {label}: still referenced elsewhere ({exc})."})
 
 
+def _create_or_raise(model_cls, data, label):
+    """
+    Mirror of _delete_or_raise for creation: turns a DB-level IntegrityError
+    (a duplicate slug DRF's UniqueValidator didn't catch because of a race,
+    a bad/stale FK id, a DB-level NOT NULL a form field left out, etc.) into
+    a clean ValidationError the view can turn into a 400 with the real
+    reason, instead of an unhandled 500 with no message the admin can act
+    on -- same category of bug as the delete-side crashes fixed earlier.
+    """
+    try:
+        return model_cls.objects.create(**data)
+    except IntegrityError as exc:
+        logger.exception("IntegrityError creating %s", label)
+        raise ValidationError({"detail": f"Could not create {label}: {exc}"})
+
+
+def _detach_workforce_service_assignments(service_id):
+    """
+    workforce_employee_service is a real table with a hard FK to
+    service_requests_service(id) -- but it belongs to the separate
+    workforce/staffing system and has no Django model anywhere in this
+    project, so the ORM has no idea it exists and can't cascade through it
+    the way it does for AddOn/VegetableRecipe (both declared on_delete=CASCADE
+    against Package). Without this, deleting a Service that any employee is
+    assigned to fails with a raw Postgres IntegrityError -- that's exactly
+    what _delete_or_raise above started surfacing instead of crashing with
+    an unhandled 500, which is how this table was found in the first place.
+
+    Best-effort by design, same convention as the ServiceTier cleanup in
+    delete_package below: if the table doesn't exist in this environment
+    (e.g. a dev DB without the workforce integration set up), this is a
+    silent no-op rather than blocking the delete on an unrelated system.
+    """
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM workforce_employee_service WHERE service_id = %s", [service_id])
+    except Exception:
+        logger.exception("Could not detach workforce assignments for service #%s", service_id)
+
+
 class LogisticsPricingPermissionError(PermissionError):
     """
     Raised by update_package() when a caller tries to change the base_price
@@ -147,7 +188,7 @@ def _apply_updates(instance, data, entity_type, actor, reason=None, version_fiel
 # ── Category ──────────────────────────────────────────────────────────────
 
 def create_category(data, actor):
-    category = CatalogCategory.objects.create(**data)
+    category = _create_or_raise(CatalogCategory, data, f'category "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.CREATE, actor)
     return category
 
@@ -185,7 +226,7 @@ def delete_category(category, actor=None, cascade=False):
 # ── Service ───────────────────────────────────────────────────────────────
 
 def create_service(data, actor):
-    service = Service.objects.create(**data)
+    service = _create_or_raise(Service, data, f'service "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.CREATE, actor)
     return service
 
@@ -212,9 +253,11 @@ def delete_service(service, actor=None, cascade=False):
                 delete_package(package, actor=actor)
             _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor,
                  reason="Cascade delete: removed with all child packages.")
+            _detach_workforce_service_assignments(service.pk)
             _delete_or_raise(service, f'service "{service.name}"')
         return
     _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor)
+    _detach_workforce_service_assignments(service.pk)
     _delete_or_raise(service, f'service "{service.name}"')
 
 
@@ -284,7 +327,7 @@ def _package_for_logistics_tier(tier):
 # ── Package ───────────────────────────────────────────────────────────────
 
 def create_package(data, actor):
-    package = Package.objects.create(**data)
+    package = _create_or_raise(Package, data, f'package "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
     try:
         from django.core.cache import cache
@@ -618,7 +661,7 @@ def delete_package(package, actor=None):
 # ── AddOn ─────────────────────────────────────────────────────────────────
 
 def create_addon(data, actor):
-    addon = AddOn.objects.create(**data)
+    addon = _create_or_raise(AddOn, data, f'add-on "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.ADDON, addon.pk, addon.name, CatalogChangeLog.Action.CREATE, actor)
     return addon
 

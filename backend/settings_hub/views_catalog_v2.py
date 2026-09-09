@@ -34,17 +34,33 @@ def _validation_error_response(exc):
 
 
 def clear_catalog_cache():
+    """
+    Best-effort cache invalidation, called AFTER a catalog row is already
+    committed to the DB (create/update/delete all call this once the write
+    succeeded). Every step here must be defensive: this function running
+    into a cache-backend hiccup (a Redis blip, a missing key, whatever)
+    must never turn into an unhandled 500 for a request whose actual save
+    already succeeded -- that's exactly what causes a "failed" create that
+    silently duplicates on the retry a user reasonably makes after seeing
+    an error. Previously only some of the lines below were wrapped; the
+    first cache.delete() and the final sweep loop were not, so a cache
+    error there could crash a request whose Package/Service/Category row
+    was already saved.
+    """
     from django.core.cache import cache
-    # Clear categories list
-    cache.delete("catalog_categories_list")
-    
+
+    try:
+        cache.delete("catalog_categories_list")
+    except Exception:
+        pass
+
     # Try deleting patterns
     try:
         if hasattr(cache, "delete_pattern"):
             cache.delete_pattern("*catalog_services_list*")
     except Exception:
         pass
-        
+
     try:
         if hasattr(cache, "_cache"):
             # LocMemCache keys
@@ -55,18 +71,21 @@ def clear_catalog_cache():
         pass
 
     # Standard loop to be absolutely sure
-    from service_requests.models import CatalogCategory
     try:
-        cat_ids = [""] + list(CatalogCategory.objects.values_list("id", flat=True))
+        from service_requests.models import CatalogCategory
+        try:
+            cat_ids = [""] + list(CatalogCategory.objects.values_list("id", flat=True))
+        except Exception:
+            cat_ids = [""]
+
+        cache.delete("catalog_services_list___")
+        for cid in cat_ids:
+            cache.delete(f"catalog_services_list_{cid}__")
+            for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
+                cache.delete(f"catalog_services_list_{cid}_{status}")
+                cache.delete(f"catalog_services_list_{cid}__{status}")
     except Exception:
-        cat_ids = [""]
-        
-    cache.delete("catalog_services_list___")
-    for cid in cat_ids:
-        cache.delete(f"catalog_services_list_{cid}__")
-        for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
-            cache.delete(f"catalog_services_list_{cid}_{status}")
-            cache.delete(f"catalog_services_list_{cid}__{status}")
+        pass
 
 
 # ── Public (no-auth) read-only catalog endpoints ─────────────────────────────
@@ -119,7 +138,10 @@ class AdminCategoryListView(APIView):
         serializer = CatalogCategorySerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
-        category = catalog_service.create_category(serializer.validated_data, request.user)
+        try:
+            category = catalog_service.create_category(serializer.validated_data, request.user)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
         clear_catalog_cache()
         return Response({"success": True, "data": CatalogCategorySerializer(category).data})
 
@@ -178,7 +200,10 @@ class AdminServiceListView(APIView):
         serializer = ServiceSerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
-        service = catalog_service.create_service(serializer.validated_data, request.user)
+        try:
+            service = catalog_service.create_service(serializer.validated_data, request.user)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
         clear_catalog_cache()
         return Response({"success": True, "data": ServiceSerializer(service).data})
 
@@ -256,7 +281,10 @@ class AdminPackageListView(APIView):
         serializer = PackageSerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
-        package = catalog_service.create_package(serializer.validated_data, request.user)
+        try:
+            package = catalog_service.create_package(serializer.validated_data, request.user)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
         clear_catalog_cache()
         return Response({"success": True, "data": PackageSerializer(package).data})
 
@@ -376,7 +404,10 @@ class AdminAddOnListView(APIView):
         serializer = AddOnSerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
-        addon = catalog_service.create_addon(serializer.validated_data, request.user)
+        try:
+            addon = catalog_service.create_addon(serializer.validated_data, request.user)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
         clear_catalog_cache()
         return Response({"success": True, "data": AddOnSerializer(addon).data})
 

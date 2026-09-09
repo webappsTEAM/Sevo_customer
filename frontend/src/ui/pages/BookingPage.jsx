@@ -16630,7 +16630,7 @@ export function CustomCleaningPackageModal({
       { name: "Texture Decor", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
     ],
     mason: [
-      { name: "Minor Masonry / Small Construction Work", image: "/mockups/brick_wall_construction_red.jpg" },
+      // { name: "Minor Masonry / Small Construction Work", image: "/mockups/brick_wall_construction_red.jpg" },
       { name: "Bathroom Tile Fixing", image: "/mockups/aac_block_wall_construction.jpg" }
     ],
     pest_control: [
@@ -16729,7 +16729,7 @@ export function CustomCleaningPackageModal({
     "Furniture Repair"
   ];
   const masonSubtabs = [
-    "Minor Masonry / Small Construction Work",
+    // "Minor Masonry / Small Construction Work",
     "Bathroom Tile Fixing"
   ];
   const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
@@ -16854,15 +16854,33 @@ export function CustomCleaningPackageModal({
         }
       })
       .catch((err) => console.warn("Public catalog packages unavailable, using local catalog fallback:", err?.message || err));
-
-    apiRequest("/catalog/services/")
-      .then((res) => {
-        if (res?.success && Array.isArray(res.data)) {
-          setDbServicesList(res.data);
-        }
-      })
-      .catch((err) => console.warn("Catalog services unavailable, using local services fallback:", err?.message || err));
   }, []);
+
+  // Real sub-services (the CatalogService/"Services Catalog" records an
+  // admin creates -- e.g. "Home Cleaning" under Cleaning) drive the sub-tab
+  // bar directly, independent of whether any package has been added under
+  // them yet. This is fetched per-category (not once for everything) since
+  // the /catalog/sub-services/ payload has no category_slug field to filter
+  // on client-side.
+  const dbCategorySlugForEffectiveKey = getDbCategorySlugForKey(effectiveKey);
+  useEffect(() => {
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(dbCategorySlugForEffectiveKey)}`)
+      .then((res) => {
+        setDbServicesList(res?.success && Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable, using local fallback:", err?.message || err);
+        setDbServicesList([]);
+      });
+  }, [dbCategorySlugForEffectiveKey]);
+
+  // Once the catalog admin has created ANY real sub-service under this
+  // category -- even with zero packages under it yet -- that's the single
+  // source of truth for the sub-tab bar and its package list. Nothing
+  // hardcoded should linger next to (or instead of) what's actually in the
+  // catalog.
+  const categoryHasRealServices = Array.isArray(dbServicesList) &&
+    dbServicesList.some(s => s.is_active !== false);
 
   const subCategories = React.useMemo(() => {
     const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
@@ -16871,30 +16889,36 @@ export function CustomCleaningPackageModal({
       ? staticList
       : staticList.map(tab => ({ ...tab, image: resolveImageUrl(tab.image, tab.image) }));
 
-    // Sitewide DB-first: grow this sub-tab bar automatically as the catalog
-    // admin adds new services under this category, instead of requiring a
-    // code change to CATEGORY_SUBCATEGORIES above. The hardcoded list stays
-    // as the bootstrap/default set for categories/tabs nobody has (re)built
-    // in the catalog yet; anything new that shows up in the DB is appended
-    // here so it reaches customers on their next page load.
-    if (!Array.isArray(dbCatalogPackages) || dbCatalogPackages.length === 0) {
+    // Fully admin-driven: the moment the catalog admin has created ANY real
+    // sub-service under this category -- even with zero packages under it
+    // yet -- the sub-tab bar is built entirely from that real data (in the
+    // admin's own sort order) instead of the old hardcoded set. The
+    // hardcoded `CATEGORY_SUBCATEGORIES` list is only a bootstrap/default
+    // for a category nobody has populated in the catalog yet.
+    if (!categoryHasRealServices) {
       return baseList;
     }
-    const targetDbCategory = getDbCategorySlugForKey(effectiveKey);
-    const existingNames = new Set(baseList.map(t => (t.name || "").toLowerCase().trim()));
     const seen = new Set();
-    const dynamicExtras = [];
-    dbCatalogPackages.forEach(p => {
-      const pCatSlug = (p.category_slug || "").toLowerCase();
-      if (pCatSlug !== targetDbCategory) return;
-      const sName = (p.service_name || "").trim();
+    const dbTabs = [];
+    dbServicesList.forEach(s => {
+      if (s.is_active === false) return;
+      const sName = (s.name || "").trim();
+      if (!sName) return;
       const key = sName.toLowerCase();
-      if (!sName || existingNames.has(key) || seen.has(key)) return;
+      if (seen.has(key)) return;
       seen.add(key);
-      dynamicExtras.push({ name: sName, image: resolveImageUrl(p.service_image, baseList[0]?.image || "") });
+      const staticMatch = staticList.find(t => (t.name || "").toLowerCase().trim() === key);
+      dbTabs.push({ name: sName, image: resolveImageUrl(s.image, staticMatch?.image || baseList[0]?.image || ""), db_service_id: s.id, slug: s.slug });
     });
-    return dynamicExtras.length > 0 ? [...baseList, ...dynamicExtras] : baseList;
-  }, [effectiveKey, dbCatalogPackages]);
+    return dbTabs.length > 0 ? dbTabs : baseList;
+  }, [effectiveKey, categoryHasRealServices, dbServicesList]);
+
+  // Once the catalog admin has created real sub-service structure under the
+  // Cleaning category, stop forcing customers into the old hardcoded
+  // BHK-based FullHouseCleaningModal below and let this component's own
+  // DB-driven sub-tab bar + package grid (subCategories/finalPlans above)
+  // take over, same as every other category.
+  const cleaningHasRealCatalogData = categoryHasRealServices && dbCategorySlugForEffectiveKey === "deep-cleaning";
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -16903,7 +16927,7 @@ export function CustomCleaningPackageModal({
     if (param === "Full apartment" || param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") param = "Occupied Apartment";
     if (param === "Full bungalow/duplex") param = "Occupied Bungalow/duplex";
 
-    const currentSubCategories = CATEGORY_SUBCATEGORIES[effectiveKey] || [];
+    const currentSubCategories = subCategories || [];
     const isValidTabForCategory = currentSubCategories.some(c => c.name === param);
 
     if (param && isValidTabForCategory) {
@@ -16914,7 +16938,7 @@ export function CustomCleaningPackageModal({
         setActiveSubTab(currentSubCategories[0].name);
       }
     }
-  }, [normalizedKey, effectiveKey, searchParams]);
+  }, [normalizedKey, effectiveKey, searchParams, subCategories]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -17738,19 +17762,19 @@ export function CustomCleaningPackageModal({
       ]
     },
     mason: {
-      "Minor Masonry / Small Construction Work": [
-        {
-          id: "minor-masonry",
-          name: "Minor Masonry / Small Construction Work",
-          price: 0,
-          duration: "Flexible",
-          badge: "Popular",
-          badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
-          description: "Combined material & labour rate for small construction, brickwork, and plastering (minimum 500 sq.ft).",
-          includes: ["Cement, sand, and bricks", "Labour for laying and alignment", "Curing guidance"],
-          image: "/mockups/brick_wall_construction_red.jpg"
-        }
-      ],
+      // "Minor Masonry / Small Construction Work": [
+      //   {
+      //     id: "minor-masonry",
+      //     name: "Minor Masonry / Small Construction Work",
+      //     price: 0,
+      //     duration: "Flexible",
+      //     badge: "Popular",
+      //     badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
+      //     description: "Combined material & labour rate for small construction, brickwork, and plastering (minimum 500 sq.ft).",
+      //     includes: ["Cement, sand, and bricks", "Labour for laying and alignment", "Curing guidance"],
+      //     image: "/mockups/brick_wall_construction_red.jpg"
+      //   }
+      // ],
       "Bathroom Tile Fixing": [
         {
           id: "bathroom-tile-fixing",
@@ -18174,7 +18198,13 @@ export function CustomCleaningPackageModal({
         }
       });
     } else {
-      finalPlans = filteredRawPlans;
+      // If this category has real catalog structure (an admin-created
+      // sub-service), an empty match means the admin genuinely hasn't added
+      // a package here yet -- show nothing rather than a hardcoded plan
+      // that doesn't actually exist in the catalog. Only categories still
+      // fully in bootstrap mode (no real sub-services at all) fall back to
+      // the hardcoded placeholder plans.
+      finalPlans = categoryHasRealServices ? [] : filteredRawPlans;
     }
 
     // Guarantee that AC Inspection tab always displays ONLY ONE single service card
@@ -18203,7 +18233,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -18244,7 +18274,7 @@ export function CustomCleaningPackageModal({
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
-  if (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") {
+  if (!cleaningHasRealCatalogData && (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning")) {
     const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
     return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
