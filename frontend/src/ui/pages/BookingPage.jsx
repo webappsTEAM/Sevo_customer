@@ -12506,7 +12506,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   </h3>
 
                   <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                    {filteredServices.map(service => {
+                    {filteredServices.map((service, idx) => {
                       const cartId = `serv-paint-estimate-${service.id}`;
                       const count = getCartCount(cartId);
                       return (
@@ -12523,6 +12523,38 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
                           }}
                         >
+                          {/* Subcategory Big Hero Banner Image inside the white rounded card */}
+                          {idx === 0 && !searchQuery && (
+                            <div style={{
+                              width: "100%",
+                              height: "220px",
+                              borderRadius: "16px",
+                              overflow: "hidden",
+                              marginBottom: "1.25rem",
+                              border: "1px solid #e2e8f0",
+                              background: "#f8fafc",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            }}>
+                              <img
+                                src={resolveImageUrl((() => {
+                                  const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
+                                  if (activeTab === "paint-interior") return customB.interior || customB["paint-interior"] || "/assets/Painting/Interior.webp";
+                                  if (activeTab === "paint-exterior") return customB.exterior || customB["paint-exterior"] || "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=1000&q=80&fit=crop";
+                                  if (activeTab === "paint-waterproofing") return customB.waterproofing || customB["paint-waterproofing"] || "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=1000&q=80&fit=crop";
+                                  if (activeTab === "paint-wood-metal") return customB.wood_metal || customB["paint-wood-metal"] || "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=1000&q=80&fit=crop";
+                                  if (activeTab === "paint-texture") return customB.texture || customB["paint-texture"] || "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=1000&q=80&fit=crop";
+                                  const catObj = PAINTING_CATEGORIES.find(c => c.id === activeTab);
+                                  return catObj?.image || "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=1000&q=80&fit=crop";
+                                })(), "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=1000&q=80&fit=crop")}
+                                alt={PAINTING_CATEGORIES.find(c => c.id === activeTab)?.name || "Painting"}
+                                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=1000&q=80&fit=crop";
+                                }}
+                              />
+                            </div>
+                          )}
                           <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
@@ -15100,7 +15132,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   )}
 
                   <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                    {filteredServices.map(service => {
+                    {filteredServices.map((service, idx) => {
                       const count = getCartCount("serv-mason-" + service.id);
                       return (
                         <div
@@ -15116,6 +15148,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
                           }}
                         >
+                          {/* Subcategory Big Hero Banner Image inside the white rounded card */}
+                          {idx === 0 && !searchQuery && (
+                            <div style={{
+                              width: "100%",
+                              height: "220px",
+                              borderRadius: "16px",
+                              overflow: "hidden",
+                              marginBottom: "1.25rem",
+                              border: "1px solid #e2e8f0",
+                              background: "#f8fafc",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            }}>
+                              <img
+                                src={resolveImageUrl((() => {
+                                  const catObj = MASON_CATEGORIES.find(c => c.id === activeTab);
+                                  return catObj?.image || "/mockups/brick_wall_construction_red.jpg";
+                                })(), "/mockups/brick_wall_construction_red.jpg")}
+                                alt={MASON_CATEGORIES.find(c => c.id === activeTab)?.name || "Masonry"}
+                                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "/mockups/brick_wall_construction_red.jpg";
+                                }}
+                              />
+                            </div>
+                          )}
                           <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
