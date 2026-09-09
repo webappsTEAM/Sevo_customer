@@ -287,8 +287,8 @@ class EstimationSystemTestCase(TestCase):
             )
 
         # Count queries for 5 bookings
-        with self.assertNumQueries(8):
-            # 8 bounded queries: User/Session + ServiceRequest + Prefetches
+        with self.assertNumQueries(9):
+            # 9 bounded queries: User/Session + ServiceRequest + Prefetches + Batched OTPs
             resp = self.client.get("/api/booking/my-bookings/")
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             self.assertGreaterEqual(len(resp.data["data"]), 5)

@@ -523,6 +523,12 @@ LOGGING = {
     },
 }
 
+if "test" in sys.argv:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
+    }
+
+
 
 
 

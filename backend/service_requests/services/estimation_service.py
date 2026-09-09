@@ -64,8 +64,14 @@ class EstimationService:
         if ac_capacity not in ALLOWED_AC_CAPACITIES:
             raise ValidationError({"ac_capacity": f"Invalid AC capacity '{ac_capacity}'. Allowed: {', '.join(sorted(ALLOWED_AC_CAPACITIES))}."})
 
+        raw_qty = ac_details.get("ac_quantity")
+        if raw_qty is None:
+            raw_qty = ac_details.get("quantity")
+        if raw_qty is None:
+            raw_qty = 1
+
         try:
-            ac_quantity = int(ac_details.get("ac_quantity") or ac_details.get("quantity") or 1)
+            ac_quantity = int(raw_qty)
         except (ValueError, TypeError):
             raise ValidationError({"ac_quantity": "AC quantity must be a valid integer."})
 
@@ -108,8 +114,6 @@ class EstimationService:
                     address=booking_data.get("address", ""),
                     latitude=booking_data.get("latitude"),
                     longitude=booking_data.get("longitude"),
-                    saved_address_id=booking_data.get("saved_address_id"),
-                    service_location_snapshot=booking_data.get("service_location_snapshot", {}),
                     preferred_date=booking_data.get("preferred_date"),
                     preferred_time=booking_data.get("preferred_time", ""),
                     job_type=ServiceRequest.JobType.ESTIMATION,
