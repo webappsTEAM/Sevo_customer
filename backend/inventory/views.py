@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsAdminRole, RequireModuleAccess
 from common.drf import VisibilityQuerysetMixin
-from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer
+from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer, StockMovement
 from inventory.serializers import (
     InventoryItemSerializer, InventoryAlertSerializer, InventoryTransferSerializer
 )
@@ -103,9 +103,11 @@ from inventory.serializers import (
     VegetableRestockActionSerializer,
     VegetableAdjustActionSerializer,
     VegetableSetDefaultActionSerializer,
+    VegetableDetailsUpdateSerializer,
 )
 from inventory.services import vegetable_stock_service
 from inventory.selectors import vegetable_stock_selectors
+from inventory.utils.unit_conversion import to_grams
 
 
 def _get_request_company(request):
@@ -279,4 +281,126 @@ class VegetableStockHistoryView(APIView):
             "end_date": end_date.strftime("%Y-%m-%d"),
             "data": history,
         })
+
+
+class VegetableDetailsUpdateView(APIView):
+    """
+    PATCH /api/inventory/vegetable-stock/<product_id>/update-details/
+    Updates price, offer_price, offer_percentage, vegetable_gram, opening/default stock,
+    current stock, reorder level, and restock level.
+    """
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def patch(self, request, product_id):
+        company = _get_request_company(request)
+        product = get_object_or_404(Package.objects.select_related("stock_item", "service"), id=product_id)
+
+        serializer = VegetableDetailsUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+
+        # 1. Update Package fields: price (selling price), offer_price (MRP), tag, vegetable_gram (duration)
+        pkg_update_fields = []
+        if "price" in data:
+            product.base_price = data["price"]
+            pkg_update_fields.append("base_price")
+
+        selling_price = float(data.get("price", product.base_price) or 0)
+        mrp_val = None
+
+        if "mrp" in data and data["mrp"] is not None and float(data["mrp"]) > 0:
+            mrp_val = float(data["mrp"])
+        elif "offer_price" in data and data["offer_price"] is not None and float(data["offer_price"]) > 0:
+            mrp_val = float(data["offer_price"])
+        elif "offer_percentage" in data and data["offer_percentage"] is not None:
+            pct = float(data["offer_percentage"])
+            if pct > 0 and selling_price > 0 and pct < 100:
+                mrp_val = round(selling_price / (1.0 - (pct / 100.0)), 2)
+
+        if mrp_val and mrp_val > selling_price:
+            product.offer_price = mrp_val
+            pct = round(((mrp_val - selling_price) / mrp_val) * 100)
+            product.tag = f"{pct}% OFF"
+            pkg_update_fields.extend(["offer_price", "tag"])
+        else:
+            product.offer_price = None
+            product.tag = ""
+            pkg_update_fields.extend(["offer_price", "tag"])
+
+        if "vegetable_gram" in data:
+            product.duration = str(data["vegetable_gram"]).strip()
+            pkg_update_fields.append("duration")
+
+        if pkg_update_fields:
+            product.save(update_fields=pkg_update_fields)
+
+        # 2. Resolve / Create InventoryItem
+        item = product.stock_item
+        if not item:
+            item = InventoryItem.objects.create(
+                org=company,
+                name=f"{product.name} (Produce)",
+                category=InventoryItem.Category.CONSUMABLE,
+                sku=f"VEG-{product.slug.upper()[:20]}",
+                unit="g",
+                stock_quantity_grams=None,
+                default_daily_quantity_grams=None,
+                total_quantity=0,
+                available_quantity=0,
+            )
+            product.stock_item = item
+            product.save(update_fields=["stock_item"])
+
+        item_update_fields = []
+
+        # Reorder Level (Threshold)
+        if "reorder_level_quantity" in data and data["reorder_level_quantity"] is not None:
+            r_grams = to_grams(data["reorder_level_quantity"], data.get("reorder_level_unit", "kg"), allow_zero=True)
+            item.reorder_threshold = r_grams
+            item_update_fields.append("reorder_threshold")
+
+        # Restock Level
+        if "restock_level_quantity" in data and data["restock_level_quantity"] is not None:
+            rstk_grams = to_grams(data["restock_level_quantity"], data.get("restock_level_unit", "kg"), allow_zero=True)
+            item.reorder_quantity = rstk_grams
+            item.default_daily_quantity_grams = rstk_grams
+            item_update_fields.extend(["reorder_quantity", "default_daily_quantity_grams"])
+
+        # Opening Stock (Set default daily quantity)
+        if "opening_stock_quantity" in data and data["opening_stock_quantity"] is not None:
+            op_grams = to_grams(data["opening_stock_quantity"], data.get("opening_stock_unit", "kg"), allow_zero=True)
+            item.default_daily_quantity_grams = op_grams
+            if "default_daily_quantity_grams" not in item_update_fields:
+                item_update_fields.append("default_daily_quantity_grams")
+
+        # Current Live Stock
+        if "current_stock_quantity" in data and data["current_stock_quantity"] is not None:
+            curr_grams = to_grams(data["current_stock_quantity"], data.get("current_stock_unit", "kg"), allow_zero=True)
+            old_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
+            delta = curr_grams - old_stock
+            item.stock_quantity_grams = curr_grams
+            item_update_fields.append("stock_quantity_grams")
+            StockMovement.objects.create(
+                org=company,
+                item=item,
+                movement_type=StockMovement.MovementType.ADJUSTMENT,
+                delta_grams=delta,
+                balance_after_grams=curr_grams,
+                reason="Updated from inventory table details",
+                entered_by=request.user,
+            )
+
+        if item_update_fields:
+            item.save(update_fields=list(set(item_update_fields)))
+
+        product.refresh_from_db()
+        status_data = vegetable_stock_selectors.get_admin_stock_status(product)
+        return Response({
+            "success": True,
+            "message": f"Successfully updated {product.name} details.",
+            "data": status_data,
+        })
+
 

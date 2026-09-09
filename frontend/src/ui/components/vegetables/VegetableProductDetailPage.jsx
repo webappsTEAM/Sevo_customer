@@ -368,11 +368,11 @@ export function VegetableProductDetailPage({
                       <div className="text-xs font-black text-slate-900">
                         Standard Pack ({baseUnit})
                       </div>
-                      <div className="text-base font-black text-emerald-800 mt-1">
-                        ₹{standardPrice}{" "}
+                      <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                        <span>₹{standardPrice}</span>
                         {standardMrp && standardMrp > standardPrice && (
-                          <span className="text-xs text-slate-400 line-through font-normal">
-                            ₹{standardMrp}
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            MRP <span className="line-through">₹{standardMrp}</span>
                           </span>
                         )}
                       </div>
@@ -396,11 +396,13 @@ export function VegetableProductDetailPage({
                       <div className="text-xs font-black text-slate-900">
                         2 × {baseUnit}
                       </div>
-                      <div className="text-base font-black text-slate-900 mt-1">
-                        ₹{doublePrice}{" "}
-                        <span className="text-xs text-slate-400 line-through font-normal">
-                          ₹{doubleMrp}
-                        </span>
+                      <div className="text-base font-black text-slate-900 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                        <span>₹{doublePrice}</span>
+                        {doubleMrp && doubleMrp > doublePrice && (
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            MRP <span className="line-through">₹{doubleMrp}</span>
+                          </span>
+                        )}
                       </div>
                     </button>
                   )}
@@ -431,11 +433,11 @@ export function VegetableProductDetailPage({
                         <div className="text-xs font-black text-slate-900">
                           {cp.title || `Pack (${cp.unit})`}
                         </div>
-                        <div className="text-base font-black text-emerald-800 mt-1">
-                          ₹{cpPrice}{" "}
+                        <div className="text-base font-black text-emerald-800 mt-1 flex items-baseline gap-1.5 flex-wrap">
+                          <span>₹{cpPrice}</span>
                           {cpMrp && cpMrp > cpPrice && (
-                            <span className="text-xs text-slate-400 line-through font-normal">
-                              ₹{cpMrp}
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              MRP <span className="line-through">₹{cpMrp}</span>
                             </span>
                           )}
                         </div>
@@ -453,8 +455,8 @@ export function VegetableProductDetailPage({
                       ₹{activePrice}
                     </span>
                     {activeMrp && activeMrp > activePrice && (
-                      <span className="text-sm text-slate-400 line-through font-semibold">
-                        ₹{activeMrp}
+                      <span className="text-xs sm:text-sm text-slate-400 font-semibold">
+                        MRP <span className="line-through">₹{activeMrp}</span>
                       </span>
                     )}
                   </div>
@@ -507,35 +509,41 @@ export function VegetableProductDetailPage({
 
             {/* Calservices Freshness & Quality Promise */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Leaf className="w-4 h-4" />
+              {(vegetable.customization?.promise_farm !== false) && (
+                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Leaf className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">{vegetable.customization?.promise_farm_title || "Direct From Farm"}</h5>
+                    <p className="text-[10px] text-slate-500">{vegetable.customization?.promise_farm_sub || "Zero cold storage"}</p>
+                  </div>
                 </div>
-                <div>
-                  <h5 className="text-xs font-bold text-slate-900">Direct From Farm</h5>
-                  <p className="text-[10px] text-slate-500">Zero cold storage</p>
-                </div>
-              </div>
+              )}
 
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <Clock className="w-4 h-4" />
+              {(vegetable.customization?.promise_express !== false) && (
+                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">{vegetable.customization?.promise_express_title || "Express Delivery"}</h5>
+                    <p className="text-[10px] text-slate-500">{vegetable.customization?.promise_express_sub || "Guaranteed slot"}</p>
+                  </div>
                 </div>
-                <div>
-                  <h5 className="text-xs font-bold text-slate-900">Express Delivery</h5>
-                  <p className="text-[10px] text-slate-500">Guaranteed slot</p>
-                </div>
-              </div>
+              )}
 
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
+              {(vegetable.customization?.promise_quality !== false) && (
+                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">{vegetable.customization?.promise_quality_title || "100% Quality"}</h5>
+                    <p className="text-[10px] text-slate-500">{vegetable.customization?.promise_quality_sub || "Instant replacement"}</p>
+                  </div>
                 </div>
-                <div>
-                  <h5 className="text-xs font-bold text-slate-900">100% Quality</h5>
-                  <p className="text-[10px] text-slate-500">Instant replacement</p>
-                </div>
-              </div>
+              )}
             </div>
 
           </div>
@@ -554,15 +562,21 @@ export function VegetableProductDetailPage({
               </p>
             </div>
             <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-4 text-xs font-semibold text-slate-600">
-              <span className="flex items-center gap-1 text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" /> 100% Pesticide Screened
-              </span>
-              <span className="flex items-center gap-1 text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Washed with Clean RO Water
-              </span>
-              <span className="flex items-center gap-1 text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Handpicked Daily
-              </span>
+              {(vegetable.customization?.pesticide_free !== false) && (
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> 100% Pesticide Screened
+                </span>
+              )}
+              {(vegetable.customization?.ro_washed !== false) && (
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Washed with Clean RO Water
+                </span>
+              )}
+              {(vegetable.customization?.handpicked !== false) && (
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Handpicked Daily
+                </span>
+              )}
             </div>
           </div>
         </div>

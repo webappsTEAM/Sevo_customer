@@ -16,6 +16,9 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 
 import { getVegetableProducePhoto } from "../../utils/vegetablePhotoMap.js"
 
+import { useAuth } from "../../state/auth/useAuth.js"
+import { getCustomerSelectedAddress, getCustomerLocation } from "../../utils/customerLocationStorage.js"
+
 // Quick categories mapping
 const VEG_CATEGORY_FILTERS = [
   "All",
@@ -29,6 +32,7 @@ const VEG_CATEGORY_FILTERS = [
 export function VegetableFullScreenPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const vegTiming = getVegetableTimingInfo()
 
   const [vegetables, setVegetables] = useState([])
@@ -53,10 +57,47 @@ export function VegetableFullScreenPage() {
   const [selectedRecipeVegetable, setSelectedRecipeVegetable] = useState(null)
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false)
 
-  // Location label
+  // Active address & Location label
+  const [activeAddressObj, setActiveAddressObj] = useState(null)
   const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
     return localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu"
   })
+
+  // Customer-scoped address synchronization
+  useEffect(() => {
+    let isMounted = true
+    const syncAddress = async () => {
+      if (user?.id) {
+        const storedSelected = getCustomerSelectedAddress(user.id)
+        const storedLoc = getCustomerLocation(user.id)
+        if (storedSelected && isMounted) {
+          setActiveAddressObj(storedSelected)
+          setActiveLocationLabel(storedSelected.formatted_address || storedSelected.address || storedLoc || "Hosur, Tamil Nadu")
+        } else if (storedLoc && isMounted) {
+          setActiveLocationLabel(storedLoc)
+        }
+        try {
+          const res = await apiRequest("/auth/customer/addresses/")
+          const addresses = res?.data || (Array.isArray(res) ? res : [])
+          if (Array.isArray(addresses) && addresses.length > 0 && isMounted) {
+            let activeAddr = null
+            if (storedSelected?.id) {
+              activeAddr = addresses.find((a) => Number(a.id) === Number(storedSelected.id))
+            }
+            if (!activeAddr) {
+              activeAddr = addresses.find((a) => a.is_default) || addresses[0]
+            }
+            if (activeAddr) {
+              setActiveAddressObj(activeAddr)
+              setActiveLocationLabel(activeAddr.formatted_address || activeAddr.address || activeAddr.address_line1 || "Hosur, Tamil Nadu")
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    syncAddress()
+    return () => { isMounted = false }
+  }, [user?.id])
 
   // Sync foodCart with localStorage
   useEffect(() => {
@@ -78,6 +119,7 @@ export function VegetableFullScreenPage() {
               const price = Math.round(Number(pkg.price || pkg.base_price) || 0)
               const mrp = pkg.offer_price ? Math.round(Number(pkg.offer_price)) : null
               const discount = pkg.tag || (mrp && mrp > price ? `${Math.round(((mrp - price) / mrp) * 100)}% OFF` : "")
+              const customPhoto = pkg.image && pkg.image.trim() ? pkg.image : getVegetableProducePhoto(pkg.name)
               return {
                 id: pkg.id,
                 name: pkg.name,
@@ -87,10 +129,17 @@ export function VegetableFullScreenPage() {
                 discount: discount,
                 delivery: "8 MINS",
                 category: getCategoryFromName(pkg.name),
-                image: getVegetableProducePhoto(pkg.name),
+                image: customPhoto,
                 description: pkg.description || "",
                 in_stock: pkg.in_stock !== false,
                 max_quantity: typeof pkg.max_quantity === "number" ? pkg.max_quantity : null,
+                custom_packs: Array.isArray(pkg.custom_packs) ? pkg.custom_packs : [],
+                customization: pkg.customization || {},
+                tag: pkg.tag || "",
+                standard_pack_enabled: pkg.customization?.standard_pack_enabled !== false,
+                enable_family_saver: pkg.customization?.enable_family_saver !== false,
+                show_net_price_bar: pkg.customization?.show_net_price_bar !== false,
+                show_add_to_basket_cta: pkg.customization?.show_add_to_basket_cta !== false,
               }
             })
             setVegetables(items)
@@ -459,7 +508,12 @@ export function VegetableFullScreenPage() {
         onClose={() => setShowCartDrawer(false)}
         foodCart={foodCart}
         setFoodCart={setFoodCart}
-        deliveryAddress={activeLocationLabel}
+        deliveryAddress={activeAddressObj?.formatted_address || activeAddressObj?.address || activeLocationLabel}
+        deliveryAddressType={activeAddressObj?.address_type || activeAddressObj?.type || "Home"}
+        onChangeAddress={() => {
+          setShowCartDrawer(false)
+          navigate(routes.booking_checkout)
+        }}
         selectedFoodSubModule={{
           id: "vegetables",
           name: "Farm-Fresh Vegetables",

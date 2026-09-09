@@ -8324,28 +8324,21 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 /* ─────────────────────────────────────────────────────────────
    ───────────────────────────────────────────────────────────── */
 
-// ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
+// ── Quick Commerce Pricing Configuration (Consistent ₹10 delivery & ₹2 handling) ──
 const QUICK_COMMERCE_PRICING = {
-  FREE_DELIVERY_THRESHOLD: 200,
   HANDLING_FEE: 2,
-  SMALL_CART_FEE: 5,
-  SMALL_CART_THRESHOLD: 100,
-  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
-  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
+  DELIVERY_FEE: 10,
   getDeliveryFee: (subtotal) => {
-    if (subtotal <= 0 || subtotal >= 200) return 0
-    if (subtotal >= 100) return 10
-    return 15
+    return subtotal > 0 ? 10 : 0
   },
   getSmallCartFee: (subtotal) => {
-    if (subtotal > 0 && subtotal < 100) return 5
     return 0
   },
   getHandlingFee: (subtotal) => {
     return subtotal > 0 ? 2 : 0
   },
-  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
-    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
+  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 0) => {
+    return 0
   }
 }
 
@@ -8365,21 +8358,52 @@ function QuickCommerceCartCheckout({
   }, [])
 
   const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
-  const [savedAddresses, setSavedAddresses] = useState([
-    {
-      id: "addr_home",
-      type: "Home",
-      address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
-      icon: "home"
-    },
-    {
-      id: "addr_work",
-      type: "Work",
-      address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
-      icon: "work"
+  const [savedAddresses, setSavedAddresses] = useState(() => {
+    let initialSelected = null
+    let coords = null
+    try {
+      initialSelected = getCustomerSelectedAddress(user?.id)
+      coords = getCustomerCoordinates(user?.id)
+    } catch (_) {}
+
+    const defaultList = [
+      {
+        id: "addr_home",
+        type: "Home",
+        address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
+        latitude: 12.7409,
+        longitude: 77.8253,
+        icon: "home"
+      },
+      {
+        id: "addr_work",
+        type: "Work",
+        address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
+        latitude: 12.7409,
+        longitude: 77.8253,
+        icon: "work"
+      }
+    ]
+
+    if (initialSelected) {
+      const fullAddr = typeof initialSelected === "string" ? initialSelected : (initialSelected.formatted_address || initialSelected.address || "")
+      if (fullAddr) {
+        return [
+          {
+            id: initialSelected.id || "addr_current",
+            type: initialSelected.address_type || "Home",
+            address: fullAddr,
+            latitude: Number(initialSelected.latitude || coords?.lat || 12.7409),
+            longitude: Number(initialSelected.longitude || coords?.lng || 77.8253),
+            icon: "home"
+          },
+          ...defaultList
+        ]
+      }
     }
-  ])
-  const [selectedAddressId, setSelectedAddressId] = useState("addr_home")
+    return defaultList
+  })
+  const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
   const [selectedTip, setSelectedTip] = useState(null)
   const [customTip, setCustomTip] = useState("")
@@ -8458,10 +8482,21 @@ function QuickCommerceCartCheckout({
     e?.preventDefault()
     if (!newAddressText.trim()) return
     const newId = `addr_${Date.now()}`
+    let fallbackLat = 12.7409
+    let fallbackLng = 77.8253
+    try {
+      const storedCoords = getCustomerCoordinates(user?.id)
+      if (storedCoords?.lat && storedCoords?.lng) {
+        fallbackLat = Number(storedCoords.lat)
+        fallbackLng = Number(storedCoords.lng)
+      }
+    } catch (_) {}
     const newObj = {
       id: newId,
       type: newAddressType,
       address: newAddressText.trim(),
+      latitude: fallbackLat,
+      longitude: fallbackLng,
       icon: newAddressType.toLowerCase() === "work" ? "work" : "home"
     }
     setSavedAddresses(prev => [newObj, ...prev])
@@ -8493,20 +8528,37 @@ function QuickCommerceCartCheckout({
     setIsSubmitting(true)
     setErrorMsg("")
     try {
+      let resolvedLat = activeAddressObj?.latitude
+      let resolvedLng = activeAddressObj?.longitude
+      if (resolvedLat == null || resolvedLng == null) {
+        try {
+          const storedCoords = getCustomerCoordinates(user?.id)
+          if (storedCoords?.lat && storedCoords?.lng) {
+            resolvedLat = Number(storedCoords.lat)
+            resolvedLng = Number(storedCoords.lng)
+          }
+        } catch (_) {}
+      }
+      if (resolvedLat == null || resolvedLng == null) {
+        resolvedLat = 12.7409
+        resolvedLng = 77.8253
+      }
+
       const deliveryDate = vegTiming.deliveryDateStr
       const payload = {
         customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
         phone: user.phone,
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
-        description: `Quick Commerce Vegetable Order
-Delivery Slot: 6:00 PM – 8:00 PM on ${deliveryDate} (${vegTiming.deliveryDay})
-Delivering to: ${activeAddressObj?.address || "Hosur"}`,
+        description: `Quick Commerce Vegetable Order\nDelivery Slot: 6:00 PM – 8:00 PM on ${deliveryDate} (${vegTiming.deliveryDay})\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address || "Hosur, Tamil Nadu",
+        latitude: parseFloat(Number(resolvedLat).toFixed(6)),
+        longitude: parseFloat(Number(resolvedLng).toFixed(6)),
         preferred_date: deliveryDate,
         preferred_time_slot: "6:00 PM - 8:00 PM",
         total_amount: grandTotal,
-        payment_method: "COD",
+        payment_method: "ONLINE",
+        payment_status: "paid",
         cart_data: cart.map(c => ({
           name: c.name || c.displayName,
           displayName: c.displayName,
@@ -8532,6 +8584,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
           itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
           deliveryDayText: vegTiming.deliveryDay,
           deliverySlot: vegTiming.deliverySlot,
+          paymentStatus: "Paid",
           deliveryNotice: vegTiming.afterTwelveNotice
             ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
             : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
@@ -8588,9 +8641,11 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
               <span>Items Total ({orderConfirmedData.itemsCount} items):</span>
               <span className="font-bold text-slate-900">₹{orderConfirmedData.total}</span>
             </div>
-            <div className="flex justify-between text-slate-600 font-semibold">
-              <span>Payment Mode:</span>
-              <span className="font-bold text-slate-900">Cash on Delivery (COD)</span>
+            <div className="flex justify-between items-center text-slate-600 font-semibold">
+              <span>Payment Status:</span>
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-300 px-2.5 py-0.5 rounded-full text-[11px]">
+                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-700" /> Paid (Online)
+              </span>
             </div>
             <div className="pt-2 border-t border-slate-200 text-slate-500 text-[11px]">
               <span>📍 Delivering to: </span>
@@ -8678,38 +8733,6 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
               </div>
             )}
 
-            {/* Free Delivery Incentive Card */}
-            {itemsTotal > 0 && (
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-bold text-slate-800">
-                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
-                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
-                      ) : (
-                        <span>
-                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
-                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
-                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
-                    </span>
-                  )}
-                </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
-                    }}
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
@@ -8973,7 +8996,14 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             if (locObj) {
               const fullAddr = typeof locObj === "string" ? locObj : (locObj.formatted_address || locObj.address || "")
               setSavedAddresses(prev => [
-                { id: `addr_${Date.now()}`, type: locObj.address_type || "Home", address: fullAddr, icon: "home" },
+                {
+                  id: `addr_${Date.now()}`,
+                  type: locObj.address_type || "Home",
+                  address: fullAddr,
+                  latitude: locObj.latitude ? Number(locObj.latitude) : 12.7409,
+                  longitude: locObj.longitude ? Number(locObj.longitude) : 77.8253,
+                  icon: "home"
+                },
                 ...prev
               ])
               setSelectedAddressId(`addr_${Date.now()}`)
@@ -24570,3 +24600,4 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
       onCheckout={onCheckout}
     />
   );
+}

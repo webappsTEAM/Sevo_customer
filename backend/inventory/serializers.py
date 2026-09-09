@@ -57,12 +57,25 @@ class VegetableStockAdminListSerializer(serializers.Serializer):
     name = serializers.CharField()
     slug = serializers.CharField()
     image = serializers.CharField(allow_blank=True, allow_null=True)
-    price = serializers.DecimalField(source="base_price", max_digits=10, decimal_places=2)
+    price = serializers.SerializerMethodField()
+    mrp = serializers.SerializerMethodField()
+    offer_price = serializers.SerializerMethodField()
+    offer_percentage = serializers.SerializerMethodField()
+    vegetable_gram = serializers.SerializerMethodField()
     state = serializers.SerializerMethodField()
     today_available_grams = serializers.SerializerMethodField()
     default_daily_grams = serializers.SerializerMethodField()
     today_available_display = serializers.SerializerMethodField()
     default_daily_display = serializers.SerializerMethodField()
+    opening_stock_display = serializers.SerializerMethodField()
+    opening_stock_grams = serializers.SerializerMethodField()
+    consumed_stock_display = serializers.SerializerMethodField()
+    consumed_stock_grams = serializers.SerializerMethodField()
+    consumed_date = serializers.SerializerMethodField()
+    restock_level_display = serializers.SerializerMethodField()
+    restock_level_grams = serializers.SerializerMethodField()
+    reorder_level_display = serializers.SerializerMethodField()
+    reorder_level_grams = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
 
     def get_status_info(self, obj):
@@ -86,6 +99,48 @@ class VegetableStockAdminListSerializer(serializers.Serializer):
     def get_default_daily_display(self, obj):
         return self.get_status_info(obj)["default_daily_display"]
 
+    def get_opening_stock_display(self, obj):
+        return self.get_status_info(obj)["opening_stock_display"]
+
+    def get_opening_stock_grams(self, obj):
+        return self.get_status_info(obj)["opening_stock_grams"]
+
+    def get_consumed_stock_display(self, obj):
+        return self.get_status_info(obj)["consumed_stock_display"]
+
+    def get_consumed_stock_grams(self, obj):
+        return self.get_status_info(obj)["consumed_stock_grams"]
+
+    def get_consumed_date(self, obj):
+        return self.get_status_info(obj)["consumed_date"]
+
+    def get_restock_level_display(self, obj):
+        return self.get_status_info(obj)["restock_level_display"]
+
+    def get_restock_level_grams(self, obj):
+        return self.get_status_info(obj)["restock_level_grams"]
+
+    def get_reorder_level_display(self, obj):
+        return self.get_status_info(obj)["reorder_level_display"]
+
+    def get_reorder_level_grams(self, obj):
+        return self.get_status_info(obj)["reorder_level_grams"]
+
+    def get_price(self, obj):
+        return self.get_status_info(obj)["price"]
+
+    def get_mrp(self, obj):
+        return self.get_status_info(obj)["mrp"]
+
+    def get_offer_price(self, obj):
+        return self.get_status_info(obj)["offer_price"]
+
+    def get_offer_percentage(self, obj):
+        return self.get_status_info(obj)["offer_percentage"]
+
+    def get_vegetable_gram(self, obj):
+        return self.get_status_info(obj)["vegetable_gram"]
+
     def get_unit(self, obj):
         return self.get_status_info(obj)["unit"]
 
@@ -105,4 +160,20 @@ class VegetableSetDefaultActionSerializer(serializers.Serializer):
     quantity = serializers.FloatField(required=False, allow_null=True)
     unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg")
     apply_now = serializers.BooleanField(default=False)
+
+
+class VegetableDetailsUpdateSerializer(serializers.Serializer):
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    mrp = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    offer_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    offer_percentage = serializers.FloatField(required=False, allow_null=True)
+    vegetable_gram = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    opening_stock_quantity = serializers.FloatField(required=False, allow_null=True)
+    opening_stock_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    current_stock_quantity = serializers.FloatField(required=False, allow_null=True)
+    current_stock_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    restock_level_quantity = serializers.FloatField(required=False, allow_null=True)
+    restock_level_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    reorder_level_quantity = serializers.FloatField(required=False, allow_null=True)
+    reorder_level_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
 
