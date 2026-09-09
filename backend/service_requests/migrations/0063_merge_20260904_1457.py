@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("service_requests", "0059_unconstrain_legacy_columns"),
+        ("service_requests", "0063_unconstrain_legacy_columns"),
         ("service_requests", "0062_merge_20260902_1401"),
     ]
 
