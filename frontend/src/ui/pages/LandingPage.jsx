@@ -3973,8 +3973,12 @@ export function LandingPage() {
                 type="button"
                 id="landing-user-profile-btn"
                 onClick={() => {
-                  setActiveAccountTab(estimationRepository.hasActiveEstimationSync() ? "My Bookings" : "My Profile")
-                  setShowAccountPortal(true)
+                  if (!user) {
+                    goToLogin()
+                  } else {
+                    setActiveAccountTab(estimationRepository.hasActiveEstimationSync() ? "My Bookings" : "My Profile")
+                    setShowAccountPortal(true)
+                  }
                 }}
                 className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
               >
