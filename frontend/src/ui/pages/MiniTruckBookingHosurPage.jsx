@@ -7,7 +7,7 @@ import {
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -579,29 +579,10 @@ export function MiniTruckBookingHosurPage() {
   const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
   const isSignedIn = Boolean(user) || localIsSignedIn
 
-  // Goods Type & Looking for Partner Flow State (Matching Porter Application)
-  const GOODS_TYPES = [
-    "Timbers / Plywoods / Papers",
-    "Electronics / Consumer Durables",
-    "General Goods",
-    "Building Materials",
-    "Event Management / Hospitality",
-    "Machines / Equipments / Spare Parts",
-    "Textiles / Garments / Fashion Accessories",
-    "Furnitures / Home Furnishings",
-    "House Shifting / Packers and Movers",
-    "Ceramic / Sanitary Wares",
-    "Rubber Products",
-    "Paints / Chemicals (Non-Hazardous)",
-    "Homemade / Prepared Fresh Items",
-    "Pharmaceutical / Healthcare Products",
-    "FMCG Products",
-    "Plastic Products",
-    "Stationery / Gifts / Toys",
-    "Hardwares",
-    "Electrical",
-  ]
+  // Goods Type & Looking for Partner Flow State (Database-Backed Catalog)
   const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
+  const [dynamicCategories, setDynamicCategories] = useState([])
+  const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
   const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
   const [partnerCountdown, setPartnerCountdown] = useState(598) // 9:58 mins
@@ -629,7 +610,10 @@ export function MiniTruckBookingHosurPage() {
     return `${m}:${s < 10 ? "0" : ""}${s}`
   }
 
-  // Prefill user details if signed in
+  // Inline phone error state
+  const [phoneError, setPhoneError] = useState("")
+
+  // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
     try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
@@ -637,7 +621,7 @@ export function MiniTruckBookingHosurPage() {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
       const ph = user?.phone || user?.mobile || user?.mobile_number || savedPhone
-      if (ph && !phone) setPhone(ph)
+      if (ph && !phone) setPhone(ph.replace(/\D/g, "").slice(0, 10))
     }
   }, [user])
 
@@ -801,28 +785,33 @@ export function MiniTruckBookingHosurPage() {
   useEffect(() => {
     let cancelled = false
     async function loadCatalog() {
+      setCatalogLoading(true)
+      setCatalogError("")
       try {
-        const [tiers, lanes, areas] = await Promise.all([
-          // The catalogue category is "truck" -- LogisticsCategory.TRUCK in
-          // logistics/models.py, and what seed_logistics_hosur writes. This
-          // asked for "mini_truck", which is not a category the backend
-          // defines anywhere, so ServiceTierListView's filter(category=...)
-          // matched nothing that a correctly seeded database contains. Any
-          // tier that did come back was therefore a row whose category is not
-          // "truck", and quoting it as goods_transport_truck is exactly what
-          // assert_catalog_matches_category rejects with
-          // TIER_CATEGORY_MISMATCH -- which then also fails the booking,
-          // because both paths call the same guard.
+        const [tiers, lanes, areas, categories] = await Promise.all([
           fetchServiceTiers("truck", LOGISTICS_CITY),
           fetchLanes("truck", LOGISTICS_CITY),
           fetchServiceAreas(LOGISTICS_CITY),
+          fetchGoodsCategories(),
         ])
         if (cancelled) return
         if (Array.isArray(tiers) && tiers.length) setTruckTiers(tiers)
         if (Array.isArray(lanes) && lanes.length) setTruckLanes(lanes)
         if (Array.isArray(areas) && areas.length) setServiceAreas(areas)
+        if (Array.isArray(categories) && categories.length) {
+          const truckCats = categories.filter((c) => !c.is_prohibited)
+          setDynamicCategories(truckCats)
+          if (truckCats.length > 0) {
+            setSelectedGoodsType((prev) => (prev && truckCats.some(c => c.name === prev)) ? prev : truckCats[0].name)
+          }
+        } else {
+          setCatalogError("Goods catalog temporarily unavailable. Please retry.")
+        }
       } catch (err) {
-        console.warn("Failed to load logistics catalog, falling back to static data:", err)
+        console.warn("Failed to load logistics catalog:", err)
+        if (!cancelled) {
+          setCatalogError("Goods catalog temporarily unavailable. Please retry.")
+        }
       } finally {
         if (!cancelled) setCatalogLoading(false)
       }
@@ -1275,8 +1264,9 @@ export function MiniTruckBookingHosurPage() {
       }
 
       const cleanPhone = (phone || "").replace(/\D/g, "")
-      if (!cleanPhone || cleanPhone.length < 10) {
+      if (!cleanPhone || cleanPhone.length !== 10) {
         setBookingSubmitting(false)
+        setPhoneError("Please enter a valid 10-digit mobile number.")
         setBookingError("Please enter a valid 10-digit mobile number.")
         return
       }
@@ -1892,19 +1882,45 @@ export function MiniTruckBookingHosurPage() {
 
             {/* Phone */}
             <div className="flex flex-col text-left">
-              <div className="h-5 mb-1.5 flex items-center">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+              <div className="h-5 mb-1.5 flex items-center justify-between">
+                <label className={`text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${phoneError ? "text-red-500" : "text-slate-500"}`}>
                   Mobile Number *
                 </label>
+                <span className={`text-[10px] font-semibold tabular-nums ml-2 ${phone.length === 10 ? "text-emerald-600" : phone.length > 0 ? "text-amber-500" : "text-slate-400"}`}>
+                  {phone.length}/10
+                </span>
               </div>
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
                 placeholder="10-digit mobile number"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
+                  setPhone(digits)
+                  if (phoneError && digits.length === 10) setPhoneError("")
+                }}
+                onBlur={() => {
+                  const digits = phone.replace(/\D/g, "")
+                  if (digits.length > 0 && digits.length !== 10) {
+                    setPhoneError("Mobile number must be exactly 10 digits.")
+                  } else {
+                    setPhoneError("")
+                  }
+                }}
+                onFocus={() => setPhoneError("")}
+                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
+                  phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
+                }`}
                 required
               />
+              {phoneError && (
+                <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠</span> {phoneError}
+                </p>
+              )}
             </div>
 
             {/* Describe You Best */}
@@ -3189,31 +3205,65 @@ export function MiniTruckBookingHosurPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 px-2 py-1">
-              {GOODS_TYPES.map((type) => {
-                const isSelected = selectedGoodsType === type
-                return (
+              {catalogLoading ? (
+                <div className="py-8 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                  <span>Loading goods catalog...</span>
+                </div>
+              ) : catalogError || dynamicCategories.length === 0 ? (
+                <div className="py-8 px-4 text-center text-slate-500 text-xs flex flex-col items-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-amber-500" />
+                  <p className="font-semibold text-slate-700">Goods catalog temporarily unavailable. Please retry.</p>
                   <button
-                    key={type}
                     type="button"
                     onClick={() => {
-                      setSelectedGoodsType(type)
-                      setGoodsTypeModalOpen(false)
+                      setCatalogLoading(true)
+                      fetchGoodsCategories()
+                        .then((categories) => {
+                          if (Array.isArray(categories) && categories.length > 0) {
+                            const truckCats = categories.filter((c) => !c.is_prohibited)
+                            setDynamicCategories(truckCats)
+                            setCatalogError("")
+                          } else {
+                            setCatalogError("Goods catalog temporarily unavailable. Please retry.")
+                          }
+                        })
+                        .catch(() => setCatalogError("Goods catalog temporarily unavailable. Please retry."))
+                        .finally(() => setCatalogLoading(false))
                     }}
-                    className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${
-                      isSelected
-                        ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
-                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
                   >
-                    <span>{type}</span>
-                    {isSelected && (
-                      <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                        <Check className="w-2.5 h-2.5 stroke-[3]" />
-                      </div>
-                    )}
+                    Retry
                   </button>
-                )
-              })}
+                </div>
+              ) : (
+                dynamicCategories.map((cat) => {
+                  const type = cat.name
+                  const isSelected = selectedGoodsType === type
+                  return (
+                    <button
+                      key={cat.slug || type}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGoodsType(type)
+                        setGoodsTypeModalOpen(false)
+                      }}
+                      className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${
+                        isSelected
+                          ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
+                          : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>{type}</span>
+                      {isSelected && (
+                        <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  )
+                })
+              )}
             </div>
 
             <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">

@@ -1078,7 +1078,7 @@ export function PackersMoversBookingHosurPage() {
     }
   }, [lookingForPartnerOpen])
 
-  // Prefill user details if signed in
+  // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
     try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
@@ -1086,7 +1086,7 @@ export function PackersMoversBookingHosurPage() {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
       const ph = user?.phone || user?.mobile || user?.mobile_number || savedPhone
-      if (ph && !phone) setPhone(ph)
+      if (ph && !phone) setPhone(ph.replace(/\D/g, "").slice(0, 10))
     }
   }, [user])
 
@@ -1449,7 +1449,7 @@ export function PackersMoversBookingHosurPage() {
       }
 
       const cleanPhone = (phone || "").replace(/\D/g, "")
-      if (!cleanPhone || cleanPhone.length < 10) {
+      if (!cleanPhone || cleanPhone.length !== 10) {
         setBookingSubmitting(false)
         setShowCustomerEntryModal(true)
         setBookingError("Please enter a valid 10-digit mobile number.")

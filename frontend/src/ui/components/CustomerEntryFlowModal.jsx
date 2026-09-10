@@ -568,7 +568,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                         maxLength={10}
                         value={mobileNumber}
                         onChange={e => {
-                          setMobileNumber(e.target.value.replace(/\D/g, ""))
+                          setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))
                           if (errorMsg) setErrorMsg("")
                         }}
                         onKeyDown={e => { if (e.key === "Enter" && isIdentifierValid) handleRequestOTP() }}
@@ -766,9 +766,13 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   <input
                     type={secondChannel === "EMAIL" ? "email" : "tel"}
                     className="cef-single-field"
+                    maxLength={secondChannel === "EMAIL" ? undefined : 10}
                     value={secondIdentifier}
                     onChange={e => {
-                      setSecondIdentifier(e.target.value)
+                      const val = secondChannel === "EMAIL"
+                        ? e.target.value
+                        : e.target.value.replace(/\D/g, "").slice(0, 10)
+                      setSecondIdentifier(val)
                       if (errorMsg) setErrorMsg("")
                     }}
                     placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com (optional)" : "10-digit mobile (optional)"}

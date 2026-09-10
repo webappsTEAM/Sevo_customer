@@ -1616,7 +1616,7 @@ function StepLogin({ category, onVerified, onBack }) {
   }, [cooldown])
 
   const nameOk = name.trim().length >= 2
-  const phoneOk = phone.replace(/[\s\-\(\)\+]/g, "").length >= 7
+  const phoneOk = phone.replace(/\D/g, "").length === 10
 
   const sendOtp = async () => {
     if (!nameOk || !phoneOk) return

@@ -181,6 +181,12 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
                         {"detail": f"Cannot transition to '{new_status}'. The required 50% advance payment of ₹{float(quote.advance_amount):.2f} is not successfully recorded for this Masonry work."}
                     )
 
+    if str(new_status).lower() in [S.COMPLETED, "completed"]:
+        if hasattr(service_request, "is_ready_to_complete") and not service_request.is_ready_to_complete():
+            raise ValidationError(
+                {"detail": "Cannot transition to 'completed': Incomplete dependencies (work extensions or multi-stop waypoints) remain uncompleted."}
+            )
+
     allowed = ALLOWED_TRANSITIONS.get(current_status, set())
 
     if new_status != current_status and new_status not in allowed:

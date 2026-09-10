@@ -61,15 +61,26 @@ def _haversine_km(lat1, lon1, lat2, lon2):
         return None
 
 
+# S-06: Explicit, configurable road curvature factor for estimated fallback.
+# When Google Maps API is unreachable or not configured, straight-line distance
+# is multiplied by this factor to approximate actual urban road driving distance.
+# Defaults to 1.00 (raw straight-line Haversine), or configurable via
+# settings.LOGISTICS_ROAD_CURVATURE_FACTOR (e.g. 1.30 for 30% urban detour allowance).
+DEFAULT_ROAD_CURVATURE_FACTOR = 1.00
+
+
 def _straight_line_estimate(origin_lat, origin_lng, dest_lat, dest_lng):
-    distance_km = _haversine_km(origin_lat, origin_lng, dest_lat, dest_lng)
-    if distance_km is None:
+    raw_distance_km = _haversine_km(origin_lat, origin_lng, dest_lat, dest_lng)
+    if raw_distance_km is None:
         return None
+    factor = float(getattr(settings, "LOGISTICS_ROAD_CURVATURE_FACTOR", DEFAULT_ROAD_CURVATURE_FACTOR))
+    distance_km = raw_distance_km * factor
     duration_seconds = int(round((distance_km / _ASSUMED_URBAN_SPEED_KMH) * 3600.0))
     return {
         "distance_km": round(distance_km, 2),
         "duration_seconds": max(60, duration_seconds),
         "source": "straight_line_estimate",
+        "curvature_factor": factor,
     }
 
 

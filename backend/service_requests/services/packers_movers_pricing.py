@@ -186,12 +186,51 @@ VEHICLE_SIZING_TABLE = [
 
 
 def match_catalog_item(item_name: str) -> Dict[str, Any]:
-    """Finds catalog attributes for item_name with fuzzy / keyword fallback."""
+    """
+    Finds catalog attributes for item_name.
+    Queries the database-backed GoodsItem first (allowing live Admin edits),
+    falling back to CANONICAL_INVENTORY_CATALOG and keyword heuristics.
+    """
     key = str(item_name or "").strip().lower()
+    if not key:
+        return {
+            "category": "Uncataloged",
+            "cft": None,
+            "weight_kg": None,
+            "fragile": False,
+            "dismantle": False,
+            "dismantle_charge": 0.0,
+            "is_known": False,
+            "requires_review": True,
+        }
+
+    try:
+        from logistics.models import GoodsItem
+        db_item = GoodsItem.objects.filter(name__iexact=key, is_active=True).select_related("category").first()
+        if not db_item:
+            slug_key = key.replace(" ", "-").replace("/", "-")
+            db_item = GoodsItem.objects.filter(slug__iexact=slug_key, is_active=True).select_related("category").first()
+        if db_item:
+            dismantle_val = float(db_item.special_handling_charge or 0.0)
+            return {
+                "category": db_item.category.name if db_item.category else "Miscellaneous",
+                "cft": float(db_item.default_cft or 1.0),
+                "weight_kg": float(db_item.default_weight_kg or 5.0),
+                "fragile": bool(db_item.is_fragile),
+                "dismantle": bool(db_item.requires_special_handling or dismantle_val > 0),
+                "dismantle_charge": dismantle_val,
+                "is_known": True,
+                "requires_review": False,
+                "source": "database",
+            }
+    except Exception as e:
+        logger.debug("Database GoodsItem lookup fallback: %s", e)
+
     if key in CANONICAL_INVENTORY_CATALOG:
         res = dict(CANONICAL_INVENTORY_CATALOG[key])
         res["is_known"] = True
         res["requires_review"] = False
+        res["source"] = "canonical_catalog"
         return res
 
     # Keyword heuristics
@@ -391,6 +430,29 @@ def compute_packers_movers_quote(
     distance_charge = _money(chargeable_km * per_km_rate)
     transport_total = _money(base_fare + distance_charge)
 
+    # 4.5 Dynamic Admin Pricing Configuration (Database-Backed)
+    standard_packing_rate = Decimal("3.50")
+    premium_packing_rate = Decimal("6.00")
+    premium_fragile_fee = Decimal("200.00")
+    rate_per_floor_block = Decimal("120.00")
+    unpacking_rate = Decimal("2.00")
+    gst_percentage = Decimal("0.1800")
+    survey_cft_limit = 800.0
+
+    try:
+        from logistics.models import PackersMoversConfig
+        pm_conf = PackersMoversConfig.objects.filter(is_active=True).first()
+        if pm_conf:
+            standard_packing_rate = pm_conf.standard_packing_rate_cft
+            premium_packing_rate = pm_conf.premium_packing_rate_cft
+            premium_fragile_fee = pm_conf.premium_fragile_addon
+            rate_per_floor_block = pm_conf.floor_rate_no_lift_per_100cft
+            unpacking_rate = pm_conf.unpacking_rate_cft
+            gst_percentage = pm_conf.gst_rate
+            survey_cft_limit = float(pm_conf.survey_cft_threshold)
+    except Exception as e:
+        logger.debug("PackersMoversConfig dynamic lookup fallback: %s", e)
+
     # 5. Packing Charges
     packing_clean = (packing_tier or "standard").lower().strip()
     if packing_clean in ("no_packing", "none", "customer_packed"):
@@ -398,14 +460,14 @@ def compute_packers_movers_quote(
         packing_rate_per_cft = Decimal("0.00")
         packing_label = "No Packing (Customer Packed)"
     elif packing_clean == "premium":
-        packing_rate_per_cft = Decimal("6.00")
-        fragile_addon = Decimal("200.00") * metrics["fragile_count"]
+        packing_rate_per_cft = premium_packing_rate
+        fragile_addon = premium_fragile_fee * metrics["fragile_count"]
         packing_charge = _money((Decimal(str(effective_cft)) * packing_rate_per_cft) + fragile_addon)
         packing_label = "Premium 4-Layer Fragile Packing"
     else:
         # Standard
         packing_clean = "standard"
-        packing_rate_per_cft = Decimal("3.50")
+        packing_rate_per_cft = standard_packing_rate
         packing_charge = _money(Decimal(str(effective_cft)) * packing_rate_per_cft)
         packing_label = "Standard Multi-Layer Protective Packing"
 
@@ -413,9 +475,8 @@ def compute_packers_movers_quote(
     base_labor = vehicle["base_labor"]
     crew_size = vehicle["crew_size"]
 
-    # Floor charge: ₹120 per floor without lift per 100 CFT block (minimum 1 block)
+    # Floor charge: per floor without lift per 100 CFT block (minimum 1 block)
     cft_blocks = max(1, math.ceil(effective_cft / 100.0))
-    rate_per_floor_block = Decimal("120.00")
 
     pickup_floor_charge = Decimal("0.00")
     if not pickup_has_lift and pickup_floor > 0:
@@ -436,7 +497,7 @@ def compute_packers_movers_quote(
     # 8. Unpacking
     unpacking_charge = Decimal("0.00")
     if unpacking_required:
-        unpacking_charge = _money(Decimal(str(effective_cft)) * Decimal("2.00"))
+        unpacking_charge = _money(Decimal(str(effective_cft)) * unpacking_rate)
 
     # 9. Subtotal & GST
     subtotal = _money(
@@ -446,14 +507,14 @@ def compute_packers_movers_quote(
         + dismantle_total
         + unpacking_charge
     )
-    gst = _money(subtotal * Decimal("0.18"))
+    gst = _money(subtotal * gst_percentage)
     total = _money(subtotal + gst)
 
     # 10. Service Tier Floor Guard, Uncataloged Items & Road Routing Policy
     has_unrecognized = bool(metrics.get("requires_review", False))
     requires_volume_survey = (
-        (total_cft > 800.0)
-        or ("between" in relocation_type.lower() and total_cft > 600.0)
+        (total_cft > survey_cft_limit)
+        or ("between" in relocation_type.lower() and total_cft > (survey_cft_limit * 0.75))
     )
     requires_survey = requires_volume_survey or has_unrecognized or is_distance_estimated
 

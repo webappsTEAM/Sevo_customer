@@ -58,6 +58,8 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
             "id", "category", "category_display", "city", "slug", "name",
             "weight_class", "capacity_label", "dimensions_label", "description",
             "currency", "order", "is_active", "is_distance_priced",
+            # capacity
+            "max_weight_kg", "max_cft",
             # pricing
             "starting_price", "base_fare", "per_km_rate", "free_km",
             "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
@@ -94,3 +96,75 @@ class ServiceTierChangeLogSerializer(serializers.Serializer):
             return "System"
         full = (user.get_full_name() or "").strip()
         return full or getattr(user, "username", None) or getattr(user, "email", "") or "Unknown"
+
+
+class GoodsCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import GoodsCategory
+        model = GoodsCategory
+        fields = [
+            "id", "slug", "name", "icon", "description",
+            "allows_two_wheeler", "min_vehicle_class", "order", "is_prohibited",
+            "is_active",
+        ]
+
+
+class AdminGoodsCategorySerializer(serializers.ModelSerializer):
+    item_count = serializers.IntegerField(source="items.count", read_only=True)
+
+    class Meta:
+        from .models import GoodsCategory
+        model = GoodsCategory
+        fields = [
+            "id", "slug", "name", "icon", "description",
+            "allows_two_wheeler", "min_vehicle_class", "order", "is_prohibited",
+            "is_active", "item_count", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "item_count", "created_at", "updated_at"]
+
+
+class GoodsItemSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
+
+    class Meta:
+        from .models import GoodsItem
+        model = GoodsItem
+        fields = [
+            "id", "category", "category_name", "category_slug", "slug", "name", "unit",
+            "default_weight_kg", "default_cft", "is_fragile", "is_heavy",
+            "is_oversized", "is_prohibited", "requires_special_handling", "special_handling_charge",
+            "is_two_wheeler_compatible", "order", "is_active",
+        ]
+
+
+class AdminGoodsItemSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
+
+    class Meta:
+        from .models import GoodsItem
+        model = GoodsItem
+        fields = [
+            "id", "category", "category_name", "category_slug", "slug", "name", "unit",
+            "default_weight_kg", "default_cft", "is_fragile", "is_heavy",
+            "is_oversized", "is_prohibited", "requires_special_handling", "special_handling_charge",
+            "is_two_wheeler_compatible", "order", "is_active", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "category_name", "category_slug", "created_at", "updated_at"]
+
+
+class PackersMoversConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import PackersMoversConfig
+        model = PackersMoversConfig
+        fields = [
+            "id", "city", "standard_packing_rate_cft", "premium_packing_rate_cft",
+            "premium_fragile_addon", "floor_rate_no_lift_per_100cft",
+            "unpacking_rate_cft", "gst_rate", "survey_cft_threshold",
+            "is_active", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+

@@ -234,23 +234,13 @@ def quote_logistics_fare(
     drop_lat,
     drop_lng,
     stop_count=STANDARD_STOP_COUNT,
+    cargo_summary=None,
+    waypoints=None,
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
-    booking, per CALTRACK_PHASE_14 H.1.
-
-    Returns a LogisticsFareBreakdown, or None when this tier isn't
-    configured for distance pricing (no per_km_rate) or the coordinates
-    needed to measure a distance aren't available. Returning None is the
-    signal to fall back to the existing flat lookup -- it is never a
-    reason to trust a client-supplied amount.
-
-    Distance comes from services/routing.get_route_eta(), which uses the
-    Google Maps Distance Matrix road network when it can and a
-    straight-line estimate when it can't. Which one was used is reported
-    in `distance_source` and stored on the booking, so a fare computed
-    from an estimate is auditable as such rather than silently
-    indistinguishable from a real road distance.
+    booking, per CALTRACK_PHASE_14 H.1. Supports multi-stop ordered routes
+    via waypoints=[(lat, lng), ...].
     """
     if tier is None:
         return None
@@ -260,14 +250,44 @@ def quote_logistics_fare(
     if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
         return None
 
-    # Imported here rather than at module import time: this module is
-    # imported by views.py at startup, and routing.py pulls in `requests`
-    # plus the cache framework, which the flat-pricing path never needs.
     from .routing import get_route_eta
 
-    route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
-    if route is None:
-        return None
+    if waypoints and isinstance(waypoints, list) and len(waypoints) > 0:
+        points = [(pickup_lat, pickup_lng)]
+        for wp in waypoints:
+            if isinstance(wp, (list, tuple)) and len(wp) >= 2:
+                points.append((wp[0], wp[1]))
+            elif isinstance(wp, dict) and "lat" in wp and "lng" in wp:
+                points.append((wp["lat"], wp["lng"]))
+            elif isinstance(wp, dict) and "latitude" in wp and "longitude" in wp:
+                points.append((wp["latitude"], wp["longitude"]))
+        points.append((drop_lat, drop_lng))
+
+        total_distance = Decimal("0.00")
+        total_duration = 0
+        all_sources = []
+        for i in range(len(points) - 1):
+            p1 = points[i]
+            p2 = points[i + 1]
+            leg = get_route_eta(p1[0], p1[1], p2[0], p2[1])
+            if leg is None:
+                return None
+            total_distance += _money(str(leg["distance_km"]))
+            total_duration += leg.get("duration_seconds", 0)
+            all_sources.append(leg.get("source"))
+
+        overall_source = "google_maps" if all(s == "google_maps" for s in all_sources) else "straight_line_estimate"
+        route = {
+            "distance_km": float(total_distance),
+            "duration_seconds": total_duration,
+            "source": overall_source,
+        }
+        if stop_count == STANDARD_STOP_COUNT or stop_count < len(points):
+            stop_count = len(points)
+    else:
+        route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
+        if route is None:
+            return None
 
     distance_km = _money(str(route["distance_km"]))
     free_km = _money(getattr(tier, "free_km", 0) or 0)
@@ -277,10 +297,6 @@ def quote_logistics_fare(
 
     base_fare = getattr(tier, "base_fare", None)
     if base_fare is None:
-        # Documented fallback: a tier that has a per-km rate but no explicit
-        # base keeps using its existing starting_price as the fixed
-        # component, so switching a tier to distance pricing is a one-field
-        # change rather than a required re-entry of every price.
         base_fare = tier.starting_price
     base_fare = _money(base_fare)
 
@@ -295,14 +311,19 @@ def quote_logistics_fare(
     per_stop = _money(getattr(tier, "additional_stop_charge", 0) or 0)
     stop_charge = _money(per_stop * additional_stops)
 
-    subtotal = _money(base_fare + distance_charge + loading + stop_charge)
+    special_handling = Decimal("0.00")
+    is_cargo_fit = True
+    cargo_fit_reason = "Cargo fits safely within vehicle capacity."
+    if cargo_summary:
+        from .cargo_fitment import evaluate_vehicle_fitment
+        is_cargo_fit, cargo_fit_reason = evaluate_vehicle_fitment(tier, cargo_summary)
+        special_handling = _money(cargo_summary.get("special_handling_charge", 0) or 0)
+
+    subtotal = _money(base_fare + distance_charge + loading + stop_charge + special_handling)
 
     surge = getattr(tier, "surge_multiplier", None)
     surge = _money(surge) if surge is not None else Decimal("1.00")
     if surge <= 0:
-        # A zero/negative multiplier would zero out or invert the fare;
-        # treat a misconfigured value as "no surge" rather than charging
-        # nothing.
         surge = Decimal("1.00")
     total = _money(subtotal * surge)
 
@@ -329,23 +350,16 @@ def quote_logistics_fare(
         chargeable_km=chargeable_km,
         distance_charge=distance_charge,
         loading_unloading=loading,
+        stops=stops,
         additional_stops=additional_stops,
         additional_stop_charge=stop_charge,
+        special_handling=special_handling,
+        is_cargo_fit=is_cargo_fit,
+        cargo_fit_reason=cargo_fit_reason,
+        cargo_summary=cargo_summary,
         subtotal=subtotal,
         surge_multiplier=surge,
         minimum_fare_applied=minimum_applied,
-        # ── rates as they stood when this quote was made ──────────────────
-        # The breakdown recorded what was CHARGED but not what it was charged
-        # AT, which forced fare reconciliation to go back to the live tier
-        # for anything the quote had not already spent money on -- so an
-        # admin changing a rate silently re-priced bookings taken before the
-        # change. These three lock the rate card into the quote itself.
-        #
-        # `rate_minimum_fare` is the per-trip floor, distinct from
-        # `minimum_fare_applied` above, which only says whether it bit.
-        # `rate_per_km` is stored even though it can usually be recovered
-        # from distance_charge / chargeable_km, because that division is
-        # undefined for a trip entirely inside free_km.
         rate_per_km=_money(per_km_rate),
         rate_additional_stop=per_stop,
         rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
@@ -370,37 +384,52 @@ def resolve_logistics_fare_v2(
     drop_lng=None,
     stop_count=STANDARD_STOP_COUNT,
     cart_data=None,
+    waypoints=None,
 ):
     """
     GT-B-01. Returns (fare, breakdown_or_None).
-
-    Resolution order, most specific first:
-      1. A distance-based quote, when the category is distance-priced,
-         the selected tier has a per_km_rate, and we have real pickup and
-         drop coordinates. This is the Porter-style path.
-      2. A Packers & Movers relocation quote, based on inventory volume (CFT),
-         vehicle sizing, packing tiers, floor labor, and dismantling/reassembly.
-      3. A selected Lane's fixed fare (a pre-agreed point-to-point route
-         price -- deliberately still wins over a tier's flat starting
-         price, unchanged from before).
-      4. The tier's flat starting_price.
-      5. Nothing resolvable -> UnresolvedLogisticsFareError.
-
-    submitted_amount is still never trusted for a logistics category --
-    it is only ever passed through for non-logistics bookings, exactly as
-    before.
     """
     if service_category not in LOGISTICS_CATEGORIES:
         return submitted_amount, None
 
-    # Same gate as the flat resolver, applied before the quote formulas
-    # too -- otherwise a mismatched tier would be caught only on the flat
-    # fall-through path and would sail through distance pricing.
     assert_catalog_matches_category(
         service_category, tier=logistics_tier, lane=logistics_lane
     )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
+        cargo_summary = None
+        extracted_waypoints = waypoints
+        if cart_data:
+            from .cargo_fitment import resolve_cargo_payload
+            raw_items = []
+            goods_type = None
+            if isinstance(cart_data, list) and len(cart_data) > 0:
+                first = cart_data[0] if isinstance(cart_data[0], dict) else {}
+                if "cargo_items" in first or "items" in first or "goods_type" in first:
+                    raw_items = first.get("cargo_items") or first.get("items") or []
+                    goods_type = first.get("goods_type") or first.get("category")
+                elif any("item_id" in it or "item_slug" in it or "slug" in it for it in cart_data if isinstance(it, dict)):
+                    raw_items = cart_data
+                    goods_type = first.get("goods_type") or first.get("category")
+                if not extracted_waypoints and "waypoints" in first:
+                    extracted_waypoints = first.get("waypoints")
+            elif isinstance(cart_data, dict):
+                raw_items = cart_data.get("cargo_items") or cart_data.get("items") or []
+                goods_type = cart_data.get("goods_type") or cart_data.get("category")
+                if not extracted_waypoints and "waypoints" in cart_data:
+                    extracted_waypoints = cart_data.get("waypoints")
+
+            if raw_items or goods_type:
+                cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type)
+
+        if cargo_summary and not cargo_summary.get("is_valid", True):
+            errs = cargo_summary.get("validation_errors") or [{}]
+            first_err = errs[0]
+            raise UnresolvedLogisticsFareError(f"{first_err.get('code', 'CARGO_VALIDATION_ERROR')}: {first_err.get('error', 'Invalid cargo payload.')}")
+
+        if cargo_summary and cargo_summary.get("has_prohibited", False):
+            raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
+
         breakdown = quote_logistics_fare(
             tier=logistics_tier,
             pickup_lat=pickup_lat,
@@ -408,8 +437,13 @@ def resolve_logistics_fare_v2(
             drop_lat=drop_lat,
             drop_lng=drop_lng,
             stop_count=stop_count,
+            cargo_summary=cargo_summary,
+            waypoints=extracted_waypoints,
         )
         if breakdown is not None:
+            if not breakdown.get("is_cargo_fit", True):
+                reason = breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
+                raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
             return breakdown["total"], breakdown
 
     if service_category == "packers_movers":

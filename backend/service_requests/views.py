@@ -305,32 +305,69 @@ class BookingCreateView(APIView):
         # bookings from the same customer being wrongly deduplicated.
         idem_key = (request.headers.get("Idempotency-Key") or request.data.get("idempotency_key") or "").strip()
         idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
+        req_payload_hash = None
         if idem_cache_key:
-            import time
+            import time, hashlib, json
             from django.core.cache import cache
+            try:
+                norm_data = {k: v for k, v in request.data.items() if k not in ("idempotency_key", "Idempotency-Key")} if isinstance(request.data, dict) else request.data
+                req_payload_hash = hashlib.sha256(json.dumps(norm_data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+            except Exception:
+                req_payload_hash = hashlib.sha256(str(request.data).encode("utf-8")).hexdigest()
+
             cached = cache.get(idem_cache_key)
             if cached is not None:
+                cached_hash = cached.get("payload_hash")
+                if cached_hash and cached_hash != req_payload_hash:
+                    return Response(
+                        {
+                            "success": False,
+                            "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                            "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
                 if not cached.get("in_progress"):
                     return Response(cached["body"], status=cached["status"])
                 # Wait briefly for in-progress concurrent request
                 for _ in range(20):
                     time.sleep(0.1)
                     cached = cache.get(idem_cache_key)
-                    if cached and not cached.get("in_progress"):
-                        return Response(cached["body"], status=cached["status"])
+                    if cached:
+                        if cached.get("payload_hash") and cached["payload_hash"] != req_payload_hash:
+                            return Response(
+                                {
+                                    "success": False,
+                                    "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                                    "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                                },
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                        if not cached.get("in_progress"):
+                            return Response(cached["body"], status=cached["status"])
                 return Response(
                     {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
                     status=status.HTTP_409_CONFLICT,
                 )
 
             # Atomically claim idempotency key in-flight
-            claimed = cache.add(idem_cache_key, {"in_progress": True}, timeout=60)
+            claimed = cache.add(idem_cache_key, {"in_progress": True, "payload_hash": req_payload_hash}, timeout=60)
             if not claimed:
                 for _ in range(20):
                     time.sleep(0.1)
                     cached = cache.get(idem_cache_key)
-                    if cached and not cached.get("in_progress"):
-                        return Response(cached["body"], status=cached["status"])
+                    if cached:
+                        if cached.get("payload_hash") and cached["payload_hash"] != req_payload_hash:
+                            return Response(
+                                {
+                                    "success": False,
+                                    "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                                    "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                                },
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                        if not cached.get("in_progress"):
+                            return Response(cached["body"], status=cached["status"])
                 return Response(
                     {"success": False, "message": "Booking request is already being processed."},
                     status=status.HTTP_409_CONFLICT,
@@ -751,7 +788,12 @@ class BookingCreateView(APIView):
         )
         if idem_cache_key:
             from django.core.cache import cache
-            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code, "in_progress": False}, timeout=86400)
+            cache.set(idem_cache_key, {
+                "body": response.data,
+                "status": response.status_code,
+                "in_progress": False,
+                "payload_hash": req_payload_hash,
+            }, timeout=86400)
         return response
 
 
@@ -1065,17 +1107,19 @@ def _build_logistics_progress(sr):
 
 def _jsonable_fare_breakdown(breakdown):
     """
-    GT-B-01: JSONField can't store Decimal. Convert the fare breakdown's
-    Decimals to strings (not floats -- money must not go through binary
-    floating point, even one-way) so the stored quote is exact and
-    round-trips for reconciliation later. None/empty -> {}.
+    GT-B-01: JSONField can't store Decimal. Recursively convert all Decimals
+    to strings (not floats -- money and physical quantities must not go through
+    binary floating point) so the stored quote is exact and safely serialized.
     """
-    if not breakdown:
+    if breakdown is None:
         return {}
-    out = {}
-    for key, value in breakdown.items():
-        out[key] = str(value) if isinstance(value, Decimal) else value
-    return out
+    if isinstance(breakdown, Decimal):
+        return str(breakdown)
+    if isinstance(breakdown, dict):
+        return {k: _jsonable_fare_breakdown(v) for k, v in breakdown.items()}
+    if isinstance(breakdown, (list, tuple)):
+        return [_jsonable_fare_breakdown(v) for v in breakdown]
+    return breakdown
 
 
 def _haversine_meters(lat1, lon1, lat2, lon2):

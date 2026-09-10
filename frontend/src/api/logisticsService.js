@@ -33,6 +33,27 @@ export async function fetchServiceAreas(city) {
   return unwrapResults(res)
 }
 
+export async function fetchGoodsCategories() {
+  const res = await apiRequest("/logistics/goods-categories/")
+  return unwrapResults(res)
+}
+
+export async function fetchGoodsItems(category) {
+  const params = {}
+  if (category && category !== "undefined") params.category = category
+  const qs = new URLSearchParams(params).toString()
+  const res = await apiRequest(`/logistics/goods-items/${qs ? `?${qs}` : ""}`)
+  return unwrapResults(res)
+}
+
+export async function evaluateCargoFitment(payload) {
+  const res = await apiRequest("/logistics/evaluate-cargo/", {
+    method: "POST",
+    body: payload,
+  })
+  return res?.data || res
+}
+
 /**
  * GT-B-01: ask the SERVER what this trip costs.
  *

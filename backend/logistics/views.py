@@ -131,7 +131,24 @@ class LogisticsQuoteView(APIView):
         )
 
         data = request.data if isinstance(request.data, dict) else {}
-        category = str(data.get("service_category") or "").strip()
+        tier = ServiceTier.objects.filter(id=data.get("tier_id"), is_active=True).first()
+        if tier is None:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": "TIER_NOT_FOUND",
+                    "message": "Select a vehicle type to get a fare.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_category = str(data.get("service_category") or "").strip()
+        if raw_category in ("two_wheeler", "goods_transport_two_wheeler") or (not raw_category and tier and tier.category == "two_wheeler"):
+            category = "goods_transport_two_wheeler"
+        elif raw_category in ("truck", "goods_transport_truck") or (not raw_category and tier and tier.category == "truck"):
+            category = "goods_transport_truck"
+        else:
+            category = raw_category
 
         if category not in DISTANCE_PRICED_CATEGORIES:
             return Response(
@@ -146,10 +163,10 @@ class LogisticsQuoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        pickup_lat = _coord(data.get("pickup_latitude"))
-        pickup_lng = _coord(data.get("pickup_longitude"))
-        drop_lat = _coord(data.get("drop_latitude"))
-        drop_lng = _coord(data.get("drop_longitude"))
+        pickup_lat = _coord(data.get("pickup_latitude") or data.get("pickup_lat"))
+        pickup_lng = _coord(data.get("pickup_longitude") or data.get("pickup_lng"))
+        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat"))
+        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng"))
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
             return Response(
                 {
@@ -159,17 +176,6 @@ class LogisticsQuoteView(APIView):
                         "Select both the pickup and drop locations from the "
                         "suggestions so we can measure the route."
                     ),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        tier = ServiceTier.objects.filter(id=data.get("tier_id"), is_active=True).first()
-        if tier is None:
-            return Response(
-                {
-                    "success": False,
-                    "error_code": "TIER_NOT_FOUND",
-                    "message": "Select a vehicle type to get a fare.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -196,23 +202,85 @@ class LogisticsQuoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        waypoints = data.get("waypoints") or data.get("intermediate_stops") or None
         try:
-            stop_count = int(data.get("stop_count") or 2)
+            stop_count = int(data.get("stop_count") or (len(waypoints) + 2 if (waypoints and isinstance(waypoints, list)) else 2))
         except (TypeError, ValueError):
             stop_count = 2
+
+        # Cargo evaluation & Vehicle fitment enforcement (Porter-like safety protection)
+        cargo_items = data.get("cargo_items") or data.get("items")
+        goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
+        declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        cargo_summary = None
+
+        if cargo_items or goods_category or declared_weight is not None:
+            from service_requests.services.cargo_fitment import (
+                resolve_cargo_payload, evaluate_vehicle_fitment, recommend_vehicles_for_cargo
+            )
+            category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+            category_slug = str(goods_category) if category_id is None and goods_category else None
+
+            cargo_summary = resolve_cargo_payload(
+                cargo_items=cargo_items,
+                goods_category_id=category_id,
+                goods_category_slug=category_slug,
+                declared_weight_kg=declared_weight,
+            )
+
+            # Cargo validation error gate (unknown item, invalid quantity, etc.)
+            if not cargo_summary.get("is_valid", True):
+                errs = cargo_summary.get("validation_errors") or [{}]
+                first_err = errs[0]
+                return Response(
+                    {
+                        "success": False,
+                        "error_code": first_err.get("code", "CARGO_VALIDATION_ERROR"),
+                        "message": first_err.get("error", "Invalid cargo details."),
+                        "validation_errors": errs,
+                        "cargo_summary": cargo_summary,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Prohibited cargo safety gate
+            if cargo_summary.get("has_prohibited"):
+                return Response(
+                    {
+                        "success": False,
+                        "error_code": "PROHIBITED_CARGO",
+                        "message": cargo_summary.get("prohibited_reason") or "Cargo contains prohibited or hazardous goods.",
+                        "cargo_summary": cargo_summary,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Fitment safety gate: reject if vehicle cannot safely carry the cargo
+            is_fit, fit_reason = evaluate_vehicle_fitment(tier, cargo_summary)
+            if not is_fit:
+                recommendations = recommend_vehicles_for_cargo(cargo_summary, city=tier.city or "Hosur")
+                return Response(
+                    {
+                        "success": False,
+                        "error_code": "VEHICLE_CAPACITY_EXCEEDED",
+                        "message": fit_reason,
+                        "cargo_summary": recommendations["cargo_summary"],
+                        "recommended_vehicle": recommendations.get("recommended_tier"),
+                        "suitable_vehicles": recommendations.get("suitable_tiers", []),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         breakdown = quote_logistics_fare(
             tier=tier,
             pickup_lat=pickup_lat, pickup_lng=pickup_lng,
             drop_lat=drop_lat, drop_lng=drop_lng,
             stop_count=stop_count,
+            cargo_summary=cargo_summary,
+            waypoints=waypoints,
         )
 
         if breakdown is None:
-            # This tier is not configured for distance pricing (no per-km
-            # rate), so its flat starting price is the authoritative fare.
-            # Still answered by the server -- the frontend must not decide
-            # this for itself.
             return success_response(data={
                 "quotable": True,
                 "pricing_mode": "flat",
@@ -223,7 +291,6 @@ class LogisticsQuoteView(APIView):
                 "breakdown": None,
             })
 
-        # Decimals as strings: money must not round-trip through JSON floats.
         payload = {k: (str(v) if isinstance(v, Decimal) else v) for k, v in breakdown.items()}
         return success_response(data={
             "quotable": True,
@@ -236,8 +303,74 @@ class LogisticsQuoteView(APIView):
             "currency": payload.get("currency", tier.currency),
             "tier_id": tier.id,
             "tier_name": tier.name,
+            "cargo_summary": payload.get("cargo_summary"),
+            "special_handling": payload.get("special_handling", "0.00"),
             "breakdown": payload,
         })
+
+
+class GoodsCategoryListView(APIView):
+    """GET /api/logistics/goods-categories/"""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import GoodsCategory
+        from .serializers import GoodsCategorySerializer
+        qs = GoodsCategory.objects.filter(is_active=True).order_by("order", "name")
+        data = GoodsCategorySerializer(qs, many=True).data
+        return success_response(data=data)
+
+
+class GoodsItemListView(APIView):
+    """GET /api/logistics/goods-items/?category=furniture"""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import GoodsItem
+        from .serializers import GoodsItemSerializer
+        qs = GoodsItem.objects.filter(is_active=True)
+        cat = request.query_params.get("category")
+        if cat:
+            if cat.isdigit():
+                qs = qs.filter(category_id=int(cat))
+            else:
+                qs = qs.filter(category__slug__iexact=cat)
+        qs = qs.order_by("category", "order", "name")
+        data = GoodsItemSerializer(qs, many=True).data
+        return success_response(data=data)
+
+
+class CargoFitmentEvaluationView(APIView):
+    """
+    POST /api/logistics/evaluate-cargo/
+    Evaluates cargo items against all vehicle classes and returns:
+    - cargo summary (weights, volumes, fragile/heavy flags)
+    - recommended vehicle tier
+    - suitable vehicle tiers
+    - incompatible vehicle tiers with explanations
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from service_requests.services.cargo_fitment import resolve_cargo_payload, recommend_vehicles_for_cargo
+        data = request.data if isinstance(request.data, dict) else {}
+        cargo_items = data.get("cargo_items") or data.get("items") or []
+        goods_category = data.get("goods_category_id") or data.get("goods_category") or data.get("goods_type")
+        declared_weight = data.get("declared_weight_kg") or data.get("weight_kg")
+        city = str(data.get("city") or "Hosur").strip()
+
+        category_id = int(goods_category) if isinstance(goods_category, int) or (isinstance(goods_category, str) and goods_category.isdigit()) else None
+        category_slug = str(goods_category) if category_id is None and goods_category else None
+
+        cargo_summary = resolve_cargo_payload(
+            cargo_items=cargo_items,
+            goods_category_id=category_id,
+            goods_category_slug=category_slug,
+            declared_weight_kg=declared_weight,
+        )
+
+        recommendations = recommend_vehicles_for_cargo(cargo_summary, city=city)
+        return success_response(data=recommendations)
 
 
 class PackersMoversQuoteView(APIView):
@@ -346,4 +479,46 @@ class PackersMoversQuoteView(APIView):
             "pricing": quote["pricing"],
             "signature_token": quote.get("signature_token"),
         })
+
+
+class PackersMoversInventoryView(APIView):
+    """
+    GET /api/logistics/packers-movers/inventory/
+
+    Returns database-backed P&M inventory categories and items for the dynamic
+    inventory builder in the customer web app.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import GoodsCategory, GoodsItem
+        pm_cats = GoodsCategory.objects.filter(slug__startswith="pm-", is_active=True).order_by("order", "name")
+        categories_data = []
+
+        for cat in pm_cats:
+            items = GoodsItem.objects.filter(category=cat, is_active=True).order_by("order", "name")
+            cat_payload = {
+                "id": cat.id,
+                "name": cat.name,
+                "slug": cat.slug,
+                "icon": cat.icon,
+                "description": cat.description,
+                "items": [
+                    {
+                        "id": it.id,
+                        "name": it.name,
+                        "slug": it.slug,
+                        "cft": float(it.default_cft or 1.0),
+                        "weight_kg": float(it.default_weight_kg or 5.0),
+                        "is_fragile": it.is_fragile,
+                        "can_dismantle": it.requires_special_handling or it.special_handling_charge > 0,
+                        "dismantle_charge": str(it.special_handling_charge or "0.00"),
+                    }
+                    for it in items
+                ],
+            }
+            categories_data.append(cat_payload)
+
+        return success_response(data={"categories": categories_data})
+
 

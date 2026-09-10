@@ -574,14 +574,30 @@ class ServiceRequest(models.Model):
         Computed completion engine.
         Returns True if:
         1. All work extensions are RESOLVED, CUSTOMER_DECLINED, or ADMIN_REJECTED.
+        2. All required multi-stop trip stops have completed_at IS NOT NULL.
+        Fails closed on any error.
         """
-        for ext in self.work_extensions.all():
-            if ext.status not in [
-                WorkExtension.Status.RESOLVED,
-                WorkExtension.Status.CUSTOMER_DECLINED,
-                WorkExtension.Status.ADMIN_REJECTED,
-            ]:
-                return False
+        try:
+            for ext in self.work_extensions.all():
+                if ext.status not in [
+                    WorkExtension.Status.RESOLVED,
+                    WorkExtension.Status.CUSTOMER_DECLINED,
+                    WorkExtension.Status.ADMIN_REJECTED,
+                ]:
+                    return False
+        except Exception:
+            return False
+
+        try:
+            from .models import TripStop
+            stops = TripStop.objects.filter(booking=self)
+            if stops.exists():
+                incomplete_stops = [s for s in stops if s.completed_at is None]
+                if incomplete_stops:
+                    return False
+        except Exception:
+            return False
+
         return True
 
     def __str__(self):
