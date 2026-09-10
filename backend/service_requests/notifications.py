@@ -6,12 +6,147 @@ In dev: prints to console (matches EMAIL_BACKEND = console).
 In prod: sends via the configured SMTP backend.
 """
 import logging
+import os
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail as _django_send_mail
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+# ── Canonical Customer Tracking URL Generator ─────────────────────────────────
+
+def build_customer_tracking_url(service_request_or_token) -> str:
+    """
+    Construct the canonical public customer live tracking URL.
+    - Resolves the unguessable UUID tracking_token (never sequential ServiceRequest IDs).
+    - Respects settings.FRONTEND_URL.
+    - Handles production base paths (/Caltrack) gracefully whether FRONTEND_URL
+      already includes it or whether it's configured via FRONTEND_BASE_PATH / FRONTEND_SUBPATH.
+    - Guaranteed to point to the existing public tracking page and work after reload.
+    """
+    if hasattr(service_request_or_token, "tracking_token"):
+        token = str(service_request_or_token.tracking_token or "").strip()
+        if not token:
+            import uuid
+            new_token = uuid.uuid4()
+            service_request_or_token.tracking_token = new_token
+            if getattr(service_request_or_token, "pk", None):
+                service_request_or_token.save(update_fields=["tracking_token"])
+            token = str(new_token)
+    else:
+        token = str(service_request_or_token or "").strip()
+
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    subpath = os.getenv("FRONTEND_SUBPATH", "").strip().rstrip("/")
+    if not subpath:
+        # In production, Vite builds with base '/Caltrack/' and main.jsx uses basename '/Caltrack'
+        if not getattr(settings, "DEBUG", False) and "/Caltrack" not in frontend_url and "localhost" not in frontend_url:
+            subpath = os.getenv("FRONTEND_BASE_PATH", "/Caltrack").strip().rstrip("/")
+    if subpath and not subpath.startswith("/"):
+        subpath = f"/{subpath}"
+    if subpath and frontend_url.endswith(subpath):
+        subpath = ""
+
+    return f"{frontend_url}{subpath}/tracking/{token}"
+
+
+# ── Canonical SMS Notification Dispatcher ─────────────────────────────────────
+
+def send_sms_notification(
+    mobile_number: str,
+    message: str,
+    event_key: str = "",
+    service_request=None,
+    preference_field: str = None,
+) -> bool:
+    """
+    Dispatches a transactional SMS using the configured SMS provider.
+
+    Guarantees:
+    - Never raises an unhandled exception into the caller.
+    - Deterministic idempotency: checks NotificationOutbox for 'SMS:{event_key}'.
+      Repeated webhook or retry attempts will NOT cause duplicate SMS messages.
+    - Records persistent outbox record in NotificationOutbox with status SENT, FAILED, or SKIPPED.
+    - Gracefully handles missing/invalid numbers or unconfigured provider credentials.
+    - Respects customer notification preferences if customer exists and preference_field is specified.
+    """
+    clean_phone = (mobile_number or "").strip()
+    if not clean_phone:
+        logger.info("[SMS] No phone number provided for event '%s' -- SMS skipped.", event_key)
+        return False
+
+    if service_request and preference_field:
+        if not _customer_wants(getattr(service_request, "customer", None), preference_field):
+            logger.info("[SMS] Customer opted out of %s -- skipping SMS for '%s'.", preference_field, event_key)
+            return False
+
+    outbox_subject = f"SMS:{event_key}" if event_key else f"SMS:adhoc:{clean_phone}"
+
+    from .models import NotificationOutbox
+
+    # Idempotency check: fast cache + persistent database outbox
+    if event_key:
+        cache_key = f"sms_sent_{event_key}"
+        if cache.get(cache_key):
+            logger.info("[SMS] Duplicate SMS prevented by cache for key '%s'", event_key)
+            return True
+
+        try:
+            if NotificationOutbox.objects.filter(subject=outbox_subject, status="SENT").exists():
+                logger.info("[SMS] Duplicate SMS prevented by persistent outbox for key '%s'", event_key)
+                cache.set(cache_key, True, timeout=86400)
+                return True
+        except Exception as db_err:
+            logger.warning("[SMS] Could not check persistent outbox for '%s': %s", event_key, db_err)
+
+    from accounts.services import get_sms_provider
+    try:
+        provider = get_sms_provider()
+    except Exception as prov_err:
+        logger.error("[SMS] Failed to initialize SMS provider: %s", prov_err)
+        return False
+
+    success = False
+    outbox_status = "SKIPPED"
+    outbox_error = ""
+
+    try:
+        success = bool(provider.send_sms(clean_phone, message))
+        if success:
+            outbox_status = "SENT"
+            outbox_error = ""
+            logger.info("[SMS] SMS for '%s' successfully sent to %s", event_key, clean_phone[-4:])
+        else:
+            outbox_status = "SKIPPED"
+            outbox_error = "SMS provider returned False or credentials unconfigured"
+            logger.info("[SMS] SMS for '%s' skipped (provider unconfigured or unavailable).", event_key)
+    except Exception as exc:
+        success = False
+        outbox_status = "FAILED"
+        outbox_error = str(exc)
+        logger.warning("[SMS] Error sending SMS for key '%s' to %s: %s", event_key, clean_phone[-4:], exc)
+
+    # Persist outbox delivery record
+    try:
+        NotificationOutbox.objects.create(
+            recipient=clean_phone,
+            subject=outbox_subject,
+            body_text=message,
+            body_html="",
+            from_email=getattr(settings, "TWILIO_FROM_NUMBER", "") or "SMS",
+            status=outbox_status,
+            error=outbox_error,
+        )
+    except Exception as outbox_err:
+        logger.error("[NotificationOutbox] Failed to persist SMS outbox record: %s", outbox_err)
+
+    if success and event_key:
+        cache.set(f"sms_sent_{event_key}", True, timeout=86400)
+
+    return success
 
 
 def send_mail(subject, message, from_email, recipient_list, fail_silently=False, html_message=None, **kwargs):
@@ -177,9 +312,28 @@ def _render_html_template(title, greeting, intro_text, details_dict, cta_url=Non
 
 def send_completion_and_feedback_email(service_request, feedback_token: str) -> None:
     """
-    Single combined email sent automatically when employee marks job complete.
+    Single combined email and SMS sent automatically when employee marks job complete.
     Includes: work completion summary + unique feedback link button.
     """
+    tracking_url = build_customer_tracking_url(service_request)
+
+    # 1. Transactional SMS with tracking/completion URL
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_body = f"SEVO: Booking {service_request.request_id} completed. View details: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:booking-completed"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_body,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="completion_feedback",
+            )
+        except Exception as sms_err:
+            logger.warning("[ServiceRequests] Failed to send completion SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email completion & feedback
     recipient = service_request.email
     if not recipient:
         logger.info(
@@ -400,8 +554,32 @@ def notify_account_created(customer_user, service_request) -> None:
 
 
 def send_booking_confirmation(service_request) -> None:
-    """Send a booking confirmation email to the customer."""
+    """Send a booking confirmation email and SMS to the customer."""
     category_name = _get_category_display_name(service_request)
+    tracking_url = build_customer_tracking_url(service_request)
+
+    # 1. SMS notification with public tracking URL
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: Booking {service_request.request_id} confirmed. Track your driver live: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:booking-confirmed"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[ServiceRequests] Failed to send booking confirmation SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email notification
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- booking confirmation email skipped.", service_request.request_id)
+        return
+
     subject = f"Booking Confirmation [{service_request.request_id}]"
     body = (
         f"Dear {service_request.customer_name},\n\n"
@@ -411,6 +589,7 @@ def send_booking_confirmation(service_request) -> None:
         f"- Service Category: {category_name}\n"
         f"- Issue Title: {service_request.issue_title}\n"
         f"- Preferred Date: {service_request.preferred_date}\n\n"
+        f"Track your booking live: {tracking_url}\n\n"
         f"We will review your request and assign a technician shortly.\n\n"
         f"Best regards,\n"
         f"The Service Team\n"
@@ -428,13 +607,10 @@ def send_booking_confirmation(service_request) -> None:
         greeting=f"Dear {service_request.customer_name},",
         intro_text="Thank you for submitting a service booking request with us. Our team is currently reviewing the details and will assign a technician shortly.",
         details_dict=details,
+        cta_url=tracking_url,
+        cta_text="Track Your Booking",
         footer_note="We will send you another update as soon as a technician is assigned to your ticket."
     )
-
-    recipient = service_request.email
-    if not recipient:
-        logger.info("[ServiceRequests] No email for %s -- booking confirmation skipped.", service_request.request_id)
-        return
 
     try:
         send_mail(
@@ -452,15 +628,40 @@ def send_booking_confirmation(service_request) -> None:
 
 def notify_technician_assigned(service_request, technician_name="") -> None:
     """
-    Fixes HS-D-06 (partial): the job lifecycle had notifications for
-    'booking confirmed' and 'completed', with nothing in between --
-    a customer got no email when a technician was actually assigned to
-    their job. Called from WorkforceWebhookView on employee_accepted.
+    Fixes HS-D-06 (partial): customer notification when a technician/driver
+    accepts their booking. Called from WorkforceWebhookView on employee_accepted.
+    Sends both SMS (with live tracking link) and email.
     """
     category_name = _get_category_display_name(service_request)
     tech_display = technician_name or service_request.technician_name or "Your assigned professional"
-    subject = f"A technician has been assigned [{service_request.request_id}]"
+    tracking_url = build_customer_tracking_url(service_request)
 
+    # 1. SMS notification with public tracking URL
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: Your driver has accepted booking {service_request.request_id}. Track live: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:driver-accepted"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="technician_updates",
+            )
+        except Exception as sms_err:
+            logger.warning("[ServiceRequests] Failed to send driver-accepted SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email notification
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- technician-assigned notification skipped.", service_request.request_id)
+        return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping technician-assigned notification for %s.", service_request.request_id)
+        return
+
+    subject = f"A technician has been assigned [{service_request.request_id}]"
     details = {
         "Request ID"      : service_request.request_id,
         "Service Category": category_name,
@@ -473,21 +674,15 @@ def notify_technician_assigned(service_request, technician_name="") -> None:
         greeting=f"Dear {service_request.customer_name},",
         intro_text=f"{tech_display} has been assigned to your booking and will be in touch shortly.",
         details_dict=details,
+        cta_url=tracking_url,
+        cta_text="Track Live",
         footer_note="We'll notify you again once they're on the way."
     )
-
-    recipient = service_request.email
-    if not recipient:
-        logger.info("[ServiceRequests] No email for %s -- technician-assigned notification skipped.", service_request.request_id)
-        return
-    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
-        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping technician-assigned notification for %s.", service_request.request_id)
-        return
 
     try:
         _sent = send_mail(
             subject=subject,
-            message=f"{tech_display} has been assigned to your booking {service_request.request_id}.",
+            message=f"{tech_display} has been assigned to your booking {service_request.request_id}. Track live: {tracking_url}",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[recipient],
             html_message=html_body,
@@ -502,11 +697,37 @@ def notify_technician_assigned(service_request, technician_name="") -> None:
 
 
 def notify_technician_on_the_way(service_request, technician_name="") -> None:
-    """Fixes HS-D-06 (partial): email when the technician starts heading over."""
+    """Fixes HS-D-06 (partial): email and SMS when the technician starts heading over."""
     category_name = _get_category_display_name(service_request)
     tech_display = technician_name or service_request.technician_name or "Your assigned professional"
-    subject = f"Your technician is on the way [{service_request.request_id}]"
+    tracking_url = build_customer_tracking_url(service_request)
 
+    # 1. SMS notification with public tracking URL
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: Your driver is on the way for booking {service_request.request_id}. Track live: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:driver-on-the-way"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="technician_updates",
+            )
+        except Exception as sms_err:
+            logger.warning("[ServiceRequests] Failed to send driver-on-the-way SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email notification
+    recipient = service_request.email
+    if not recipient:
+        logger.info("[ServiceRequests] No email for %s -- on-the-way notification skipped.", service_request.request_id)
+        return
+    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
+        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping on-the-way notification for %s.", service_request.request_id)
+        return
+
+    subject = f"Your technician is on the way [{service_request.request_id}]"
     details = {
         "Request ID"      : service_request.request_id,
         "Service Category": category_name,
@@ -518,22 +739,15 @@ def notify_technician_on_the_way(service_request, technician_name="") -> None:
         greeting=f"Dear {service_request.customer_name},",
         intro_text=f"{tech_display} is now on the way to your location.",
         details_dict=details,
-        cta_url=None,
+        cta_url=tracking_url,
+        cta_text="Track Live",
         footer_note="You can track their live location from your booking's tracking link."
     )
-
-    recipient = service_request.email
-    if not recipient:
-        logger.info("[ServiceRequests] No email for %s -- on-the-way notification skipped.", service_request.request_id)
-        return
-    if not _customer_wants(getattr(service_request, "customer", None), "technician_updates"):
-        logger.info("[ServiceRequests] Customer opted out of technician_updates -- skipping on-the-way notification for %s.", service_request.request_id)
-        return
 
     try:
         _sent = send_mail(
             subject=subject,
-            message=f"{tech_display} is on the way for your booking {service_request.request_id}.",
+            message=f"{tech_display} is on the way for your booking {service_request.request_id}. Track live: {tracking_url}",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[recipient],
             html_message=html_body,
@@ -551,17 +765,33 @@ def notify_delivery_recipient(service_request, technician_name="") -> None:
     """
     Fixes GT-D-03: the person receiving a Goods & Transport delivery had no
     way to be notified -- no contact info was even captured for them
-    before this pass. Now that ServiceRequest.drop_contact_email exists
-    (see migration 0053), tell them a delivery is on the way once we have
-    it. No-ops quietly if the booking has no recipient contact info yet
-    (frontend hasn't been updated to collect it, or the customer left it
-    blank) -- this is additive, not a hard requirement.
+    before this pass. Now that ServiceRequest.drop_contact_email and
+    drop_contact_phone exist, notify the consignee via SMS and/or email.
     """
+    tracking_url = build_customer_tracking_url(service_request)
+    tech_display = technician_name or service_request.technician_name or "Our delivery partner"
+
+    # 1. Consignee SMS notification
+    drop_phone = (getattr(service_request, "drop_contact_phone", "") or "").strip()
+    if drop_phone:
+        sms_msg = f"SEVO: Your delivery is on the way. Track live: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:consignee-on-the-way"
+        try:
+            send_sms_notification(
+                mobile_number=drop_phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field=None,
+            )
+        except Exception as sms_err:
+            logger.warning("[ServiceRequests] Failed to send consignee SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Consignee Email notification
     recipient = (getattr(service_request, "drop_contact_email", "") or "").strip()
     if not recipient:
         return
 
-    tech_display = technician_name or service_request.technician_name or "Our delivery partner"
     subject = f"A delivery is on the way to you [{service_request.request_id}]"
     details = {
         "Reference"        : service_request.request_id,
@@ -573,13 +803,15 @@ def notify_delivery_recipient(service_request, technician_name="") -> None:
         greeting=f"Hello {service_request.drop_contact_name or ''},".strip() or "Hello,",
         intro_text=f"{service_request.customer_name} has a delivery on the way to you, handled by {tech_display}.",
         details_dict=details,
+        cta_url=tracking_url,
+        cta_text="Track Delivery Live",
         footer_note="This is an automated notice -- please have someone available to receive the delivery."
     )
 
     try:
         _sent = send_mail(
             subject=subject,
-            message=f"A delivery ({service_request.request_id}) is on the way to {service_request.drop_address or 'your address'}, handled by {tech_display}.",
+            message=f"A delivery ({service_request.request_id}) is on the way to {service_request.drop_address or 'your address'}, handled by {tech_display}. Track live: {tracking_url}",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[recipient],
             html_message=html_body,
@@ -911,25 +1143,28 @@ def notify_painting_quote_sent(quote) -> None:
 
 def notify_customer_cancelled(service_request, reason="") -> None:
     """
-    Notify the customer that their booking has been cancelled.
-
-    Bug found (gap): unlike assignment, reschedule, refund, and complaint
-    events, booking cancellation had no customer-facing notification at
-    all -- CustomerBookingCancelView updated the booking's status and
-    optionally auto-created a refund request, but never told the customer
-    anything happened, even when an admin or the system (not the customer
-    themselves) initiated the cancellation.
-
-    Gated on booking_confirmations rather than a new preference field --
-    this app's CustomerNotificationPreference groups booking_confirmations,
-    reschedule_updates, technician_updates, and completion_feedback under
-    one "Booking lifecycle" section, and a cancellation is a booking
-    lifecycle event in that same sense. Adding a dedicated field would
-    require a new migration, which this fix deliberately avoids (see the
-    file-upload-validation fix in workforce_api/views.py for the same
-    reasoning).
+    Notify the customer that their booking has been cancelled (via SMS and email).
     """
     customer = getattr(service_request, "customer", None)
+    tracking_url = build_customer_tracking_url(service_request)
+
+    # 1. SMS cancellation notification with tracking URL
+    phone = (getattr(service_request, "phone", "") or "").strip()
+    if phone:
+        sms_msg = f"SEVO: Booking {service_request.request_id} has been cancelled. Details: {tracking_url}"
+        event_key = f"booking:{service_request.request_id}:booking-cancelled"
+        try:
+            send_sms_notification(
+                mobile_number=phone,
+                message=sms_msg,
+                event_key=event_key,
+                service_request=service_request,
+                preference_field="booking_confirmations",
+            )
+        except Exception as sms_err:
+            logger.warning("[Cancellation] Failed to send cancellation SMS for %s: %s", service_request.request_id, sms_err)
+
+    # 2. Email cancellation notification
     customer_email = getattr(customer, "email", None) or service_request.email
     if not customer_email:
         return
@@ -947,11 +1182,19 @@ def notify_customer_cancelled(service_request, reason="") -> None:
             "Service": service_request.issue_title,
             "Reason": reason or "Not specified",
         },
+        cta_url=tracking_url,
+        cta_text="View Booking Details",
         footer_note="If a payment was made for this booking, any applicable refund will be processed separately and you will be notified of its status.",
     )
     try:
-        _sent = send_mail(subject, f"Your booking {service_request.request_id} has been cancelled.",
-                  settings.DEFAULT_FROM_EMAIL, [customer_email], html_message=body, fail_silently=True)
+        _sent = send_mail(
+            subject,
+            f"Your booking {service_request.request_id} has been cancelled. Details: {tracking_url}",
+            settings.DEFAULT_FROM_EMAIL,
+            [customer_email],
+            html_message=body,
+            fail_silently=True,
+        )
         if _sent:
             logger.info("[Cancellation] Customer cancellation notification sent to %s", customer_email)
         else:

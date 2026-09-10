@@ -333,9 +333,7 @@ _default_cors_origins = [
     "http://127.0.0.1:3000",
     # Production VPS
     "https://caldimproducts.com",
-    "http://caldimproducts.com",
     "https://www.caldimproducts.com",
-    "http://www.caldimproducts.com",
 ]
 
 _env_cors = os.getenv("CORS_ALLOWED_ORIGINS")
@@ -373,9 +371,7 @@ _default_csrf_origins = [
     "http://*.127.0.0.1:5176",
     # Production VPS
     "https://caldimproducts.com",
-    "http://caldimproducts.com",
     "https://www.caldimproducts.com",
-    "http://www.caldimproducts.com",
 ]
 
 _env_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")

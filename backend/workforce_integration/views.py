@@ -634,6 +634,21 @@ class WorkforceWebhookView(APIView):
 
                         transaction.on_commit(lambda: self._broadcast_event(sr, "job_rescheduled"))
 
+                # ── 14. DISPATCH DELAYED NOTIFICATION (GT Phase 23) ──────────────────
+                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed"]:
+                    failed_cycles = payload.get("failed_offer_cycles", 0)
+                    delay_note = f"High demand: Dispatch matching taking longer than usual ({failed_cycles} search cycles completed)."
+                    if hasattr(sr, "notes") and sr.notes:
+                        if "Dispatch matching taking longer" not in sr.notes:
+                            sr.notes = f"{sr.notes}\n{delay_note}"
+                    elif hasattr(sr, "notes"):
+                        sr.notes = delay_note
+                    try:
+                        sr.save(update_fields=["updated_at"] + (["notes"] if hasattr(sr, "notes") else []))
+                    except Exception as note_err:
+                        logger.warning("Could not update notes on booking %s for dispatch_delayed: %s", sr.id, note_err)
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_dispatch_delayed"))
+
                 webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
                 webhook_event.processed_at = timezone.now()
                 webhook_event.save()
@@ -1123,6 +1138,22 @@ class WorkforceBookingFromQuoteView(APIView):
             )
         except Exception as analytic_err:
             logger.warning(f"Failed to record booking status event: {analytic_err}")
+
+        # Trigger booking confirmation notification (SMS with live tracking URL + Email)
+        try:
+            from service_requests.notifications import send_booking_confirmation
+            from django.conf import settings
+            if getattr(settings, "TESTING", False):
+                send_booking_confirmation(new_sr)
+            else:
+                import threading
+                threading.Thread(
+                    target=send_booking_confirmation,
+                    args=(new_sr,),
+                    daemon=True,
+                ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start booking confirmation notification for quote booking {new_sr.id}: {notify_err}")
 
         return Response({
             "success": True,

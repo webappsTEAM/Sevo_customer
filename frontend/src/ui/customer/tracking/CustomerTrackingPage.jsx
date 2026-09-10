@@ -510,6 +510,13 @@ export function CustomerTrackingPage({
                       ? `${new Date(data.preferred_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}${data.preferred_time ? ` · ${data.preferred_time}` : ""}`
                       : null,
                   ],
+                  [
+                    "Total Amount",
+                    data.total_amount != null
+                      ? `₹${Number(data.total_amount).toLocaleString("en-IN")}`
+                      : null,
+                    true,
+                  ],
                 ].map(([label, val, bold]) =>
                   val ? (
                     <div key={label} className="ltp-ref-row">

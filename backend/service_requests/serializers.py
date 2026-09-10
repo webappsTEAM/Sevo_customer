@@ -326,12 +326,22 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Preferred date cannot be in the past.")
         return value
 
+    def validate_customer_name(self, value):
+        val = (value or "").strip()
+        if not val or len(val) < 2:
+            raise serializers.ValidationError("Please provide your real name to complete the booking.")
+        if val.lower() in {"thejaa t", "fake customer", "test customer", "dummy customer", "customer"}:
+            raise serializers.ValidationError("Valid customer name is required. Please provide your real name.")
+        return val
+
     def validate_phone(self, value):
         import re
-        cleaned = re.sub(r"[\s\-\(\)\+]", "", value)
-        if not cleaned.isdigit() or len(cleaned) < 7:
-            raise serializers.ValidationError("Enter a valid phone number.")
-        return value
+        cleaned = re.sub(r"[\s\-\(\)\+]", "", value or "")
+        if not cleaned.isdigit() or len(cleaned) < 10:
+            raise serializers.ValidationError("Enter a valid 10-digit phone number.")
+        if cleaned in {"6379222691", "0000000000", "1234567890", "9999999999"}:
+            raise serializers.ValidationError("Valid customer phone number is required.")
+        return cleaned
 
     def validate(self, attrs):
         # Booking window: same-day requests are refused after the configured
@@ -344,6 +354,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         slot_error = validate_booking_slot(
             attrs.get("preferred_date"),
             attrs.get("preferred_time"),
+            service_category=attrs.get("service_category"),
         )
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
@@ -361,6 +372,19 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "description": "Please describe what you're moving (items, approximate weight, "
                                  "and any fragile/special-handling notes) so the driver knows what to expect."
+            })
+
+        # Prohibited Cargo Safety Gate: reject dangerous, illegal, or restricted goods
+        from .services.prohibited_goods import validate_cargo_safety
+        is_safe, safety_msg, safety_cat = validate_cargo_safety(
+            description=attrs.get("description", ""),
+            goods_type=attrs.get("issue_title", ""),
+            cart_data=attrs.get("cart_data"),
+            service_category=category,
+        )
+        if not is_safe:
+            raise serializers.ValidationError({
+                "description": f"Prohibited Cargo: {safety_msg}"
             })
 
         # Fixes GT-A-03 (partial): "identity requirement scaled to declared

@@ -34,7 +34,18 @@ DEFAULT_MIN_LEAD_MINUTES = 60
 _TIME_FORMATS = ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I %p", "%I:%M%p")
 
 
-def get_cutoff_hour():
+ON_DEMAND_LOGISTICS_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler"}
+DEFAULT_LOGISTICS_CUTOFF_HOUR = 22
+
+
+def get_cutoff_hour(service_category=None):
+    clean_cat = (service_category or "").strip().lower()
+    if clean_cat in ON_DEMAND_LOGISTICS_CATEGORIES:
+        try:
+            hour = int(getattr(settings, "LOGISTICS_SAME_DAY_CUTOFF_HOUR", DEFAULT_LOGISTICS_CUTOFF_HOUR))
+        except (TypeError, ValueError):
+            return DEFAULT_LOGISTICS_CUTOFF_HOUR
+        return hour if 0 <= hour <= 23 else DEFAULT_LOGISTICS_CUTOFF_HOUR
     try:
         hour = int(getattr(settings, "BOOKING_SAME_DAY_CUTOFF_HOUR", DEFAULT_CUTOFF_HOUR))
     except (TypeError, ValueError):
@@ -72,27 +83,27 @@ def parse_slot_time(preferred_time):
     return None
 
 
-def is_same_day_closed(now=None):
+def is_same_day_closed(now=None, service_category=None):
     """True once today's booking window has passed."""
     now = now or timezone.localtime()
-    return now.hour >= get_cutoff_hour()
+    return now.hour >= get_cutoff_hour(service_category)
 
 
-def next_bookable_date(now=None):
+def next_bookable_date(now=None, service_category=None):
     """The earliest date a customer can still book, in local time."""
     now = now or timezone.localtime()
     today = now.date()
-    return today + datetime.timedelta(days=1) if is_same_day_closed(now) else today
+    return today + datetime.timedelta(days=1) if is_same_day_closed(now, service_category) else today
 
 
-def cutoff_label():
-    hour = get_cutoff_hour()
+def cutoff_label(service_category=None):
+    hour = get_cutoff_hour(service_category)
     suffix = "AM" if hour < 12 else "PM"
     display = hour % 12 or 12
     return f"{display}:00 {suffix}"
 
 
-def validate_booking_slot(preferred_date, preferred_time=None, now=None):
+def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None):
     """
     Validate a requested date/slot against the booking window.
 
@@ -113,10 +124,10 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None):
     if preferred_date > today:
         return None
 
-    if is_same_day_closed(now):
+    if is_same_day_closed(now, service_category):
         return (
-            f"Same-day bookings close at {cutoff_label()}. "
-            f"Please choose {next_bookable_date(now).strftime('%d %b %Y')} or a later date."
+            f"Same-day bookings close at {cutoff_label(service_category)}. "
+            f"Please choose {next_bookable_date(now, service_category).strftime('%d %b %Y')} or a later date."
         )
 
     slot_time = parse_slot_time(preferred_time)

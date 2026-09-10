@@ -476,7 +476,7 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
               id="adf-receiver-phone"
               value={state.receiver_phone}
               onChange={(e) => {
-                const digitsOnly = e.target.value.replace(/\D/g, "");
+                const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
                 dispatch({ type: "FIELD", name: "receiver_phone", value: digitsOnly });
               }}
               onBlur={touch("receiver_phone")}

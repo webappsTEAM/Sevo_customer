@@ -49,20 +49,25 @@ class Command(BaseCommand):
         for row in candidates:
             retried += 1
             try:
-                sent = send_mail(
-                    subject=row.subject,
-                    message=row.body_text,
-                    from_email=row.from_email or None,
-                    recipient_list=[row.recipient],
-                    html_message=row.body_html or None,
-                    fail_silently=False,
-                )
+                if row.subject.startswith("SMS:"):
+                    from accounts.services import get_sms_provider
+                    provider = get_sms_provider()
+                    sent = bool(provider.send_sms(row.recipient, row.body_text))
+                else:
+                    sent = send_mail(
+                        subject=row.subject,
+                        message=row.body_text,
+                        from_email=row.from_email or None,
+                        recipient_list=[row.recipient],
+                        html_message=row.body_html or None,
+                        fail_silently=False,
+                    )
                 if sent:
                     row.status = NotificationOutbox.Status.SENT
                     row.error = ""
                     succeeded += 1
                 else:
-                    row.error = "send_mail returned 0 messages sent."
+                    row.error = "SMS send failed or send_mail returned 0 messages sent."
                     still_failed += 1
             except Exception as exc:
                 row.error = str(exc)

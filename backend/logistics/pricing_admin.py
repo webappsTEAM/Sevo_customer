@@ -48,6 +48,12 @@ PRICING_FIELDS = (
     "starting_price",
 )
 
+# Vehicle capacity limits for physical fitment and cargo safety
+CAPACITY_FIELDS = (
+    "max_weight_kg",
+    "max_cft",
+)
+
 # Fields an operator may change with plain `pricing:edit`. Identity and
 # availability, not money.
 DESCRIPTIVE_FIELDS = (
@@ -57,7 +63,7 @@ DESCRIPTIVE_FIELDS = (
     "dimensions_label",
     "description",
     "order",
-)
+) + CAPACITY_FIELDS
 
 EDITABLE_FIELDS = PRICING_FIELDS + DESCRIPTIVE_FIELDS
 
@@ -110,13 +116,16 @@ def changed_fields(tier, data):
             continue
         new = data[field]
         old = getattr(tier, field)
-        if field in PRICING_FIELDS:
+        if field in PRICING_FIELDS or field in CAPACITY_FIELDS:
             if new is None or (isinstance(new, str) and new.strip() == ""):
                 new_dec = None
             else:
                 new_dec = _dec(new)
                 if new_dec is None:
                     invalid[field] = ["Enter a valid number."]
+                    continue
+                if field in CAPACITY_FIELDS and new_dec <= Decimal("0"):
+                    invalid[field] = ["Capacity value must be greater than zero."]
                     continue
             old_dec = None if old is None else _dec(old)
             if new_dec == old_dec:

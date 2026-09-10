@@ -33,6 +33,27 @@ export async function fetchServiceAreas(city) {
   return unwrapResults(res)
 }
 
+export async function fetchGoodsCategories() {
+  const res = await apiRequest("/logistics/goods-categories/")
+  return unwrapResults(res)
+}
+
+export async function fetchGoodsItems(category) {
+  const params = {}
+  if (category && category !== "undefined") params.category = category
+  const qs = new URLSearchParams(params).toString()
+  const res = await apiRequest(`/logistics/goods-items/${qs ? `?${qs}` : ""}`)
+  return unwrapResults(res)
+}
+
+export async function evaluateCargoFitment(payload) {
+  const res = await apiRequest("/logistics/evaluate-cargo/", {
+    method: "POST",
+    body: payload,
+  })
+  return res?.data || res
+}
+
 /**
  * GT-B-01: ask the SERVER what this trip costs.
  *
@@ -78,6 +99,10 @@ export async function fetchLogisticsQuote({
       total: data.total,
       currency: data.currency || "INR",
       pricingMode: data.pricing_mode,
+      isAuthoritative: Boolean(data.is_authoritative),
+      isEstimate: Boolean(data.is_estimate),
+      distanceSource: data.distance_source || data.breakdown?.distance_source,
+      estimateNotice: data.estimate_notice || data.breakdown?.estimate_notice,
       breakdown: data.breakdown || null,
       tierId: data.tier_id,
     }

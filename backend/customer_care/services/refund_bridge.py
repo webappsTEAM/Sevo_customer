@@ -27,13 +27,12 @@ def request_refund_via_ticket(ticket, actor, refund_type, requested_amount, reas
         raise ValidationError({"detail": "Could not resolve a customer for this ticket. Please link the ticket to a registered customer account."})
 
     refund_req = create_refund_request(
+        booking=ticket.booking,
         customer=customer,
-        booking_id=ticket.booking.id,
-        refund_type=refund_type,
-        requested_amount=requested_amount,
+        amount=requested_amount,
         reason=reason,
         additional_notes=additional_notes,
-        evidence_files=evidence_files,
+        refund_type=refund_type,
     )
 
     ticket.linked_refund_request = refund_req
