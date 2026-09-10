@@ -43,7 +43,7 @@ import {
   clearCustomerLocation,
   clearLegacyLocationStorage
 } from "../../utils/customerLocationStorage.js"
-import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, getCategorySafeImage, getOfferSafeImage } from "../../config/homePageConfig.js"
+import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, getCategorySafeImage, getOfferSafeImage, STORAGE_KEY, mergeWithDefaultConfig } from "../../config/homePageConfig.js"
 import { isSuperAdmin } from "../../auth/authorization.js"
 import { EditableImage, ImageEditModal } from "../components/SuperAdminEditControls.jsx"
 import acServiceImg from "../../assets/ac service.png"
@@ -2381,9 +2381,9 @@ export function LandingPage() {
     window.addEventListener("calservices:homepage_updated", handleHomepageUpdate)
 
     const handleStorageChange = (e) => {
-      if (e.key === "calservices_home_page_config" && e.newValue) {
+      if ((e.key === STORAGE_KEY || e.key === "calservices_homepage_config_v1" || e.key === "calservices_home_page_config") && e.newValue) {
         try {
-          setHomeConfig(JSON.parse(e.newValue))
+          setHomeConfig(mergeWithDefaultConfig(JSON.parse(e.newValue)))
         } catch { }
       }
     }
@@ -2626,9 +2626,36 @@ export function LandingPage() {
   // just falls back to the normal booking flow.
   const goToBannerLink = (link) => {
     if (!link) { goToBooking(); return }
-    if (/^https?:\/\//i.test(link)) {
+    const trimmed = String(link).trim()
+    if (
+      trimmed === "/logistics" ||
+      trimmed === "/logistics/" ||
+      trimmed === "/goods" ||
+      trimmed === "/transport" ||
+      trimmed === "/goods-and-transport" ||
+      trimmed === "/goods-and-transports" ||
+      trimmed === "?openModal=goods" ||
+      trimmed === "?openModal=transport" ||
+      trimmed === "?openModal=logistics"
+    ) {
+      setIsGoodsModalOpen(true)
+      return
+    }
+    if (trimmed === "?openModal=ac") {
+      setIsAcModalOpen(true)
+      return
+    }
+    if (trimmed === "?openModal=homepest" || trimmed === "?openModal=subcategories") {
+      setIsHomePestModalOpen(true)
+      return
+    }
+    if (trimmed === "?openModal=pillars") {
+      setIsHomeServicesCombinedModalOpen(true)
+      return
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
       try {
-        const url = new URL(link)
+        const url = new URL(trimmed)
         if (url.origin === window.location.origin) {
           navigate(url.pathname + url.search + url.hash)
           return
@@ -2636,9 +2663,9 @@ export function LandingPage() {
       } catch {
         // Malformed URL -- fall through and let the browser handle it.
       }
-      window.open(link, "_blank", "noopener,noreferrer")
+      window.open(trimmed, "_blank", "noopener,noreferrer")
     } else {
-      navigate(link)
+      navigate(trimmed)
     }
   }
 
@@ -2668,7 +2695,13 @@ export function LandingPage() {
       console.error("Failed to save modalCart to localStorage:", e);
     }
   }, [modalCart]);
-  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
+  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(
+    () => location.state?.openGoodsModal ||
+          searchParams.get("openModal") === "goods" ||
+          searchParams.get("openModal") === "transport" ||
+          searchParams.get("openModal") === "logistics" ||
+          false
+  )
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(() => location.state?.openAcModal || searchParams.get("openModal") === "ac" || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(() => location.state?.openHomePestModal || searchParams.get("openModal") === "homepest" || searchParams.get("openModal") === "subcategories" || false)
@@ -2686,6 +2719,8 @@ export function LandingPage() {
       setIsHomeServicesCombinedModalOpen(false)
     } else if (modalParam === "ac") {
       setIsAcModalOpen(true)
+    } else if (modalParam === "goods" || modalParam === "transport" || modalParam === "logistics") {
+      setIsGoodsModalOpen(true)
     }
   }, [searchParams])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
@@ -3813,17 +3848,24 @@ export function LandingPage() {
                 <img
                   src="/assets/sevo_emblem_transparent.png"
                   alt="SEVO Emblem"
-                  className="h-8 sm:h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                  className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                  style={{ height: '36px', width: 'auto' }}
                 />
-                <div className="flex flex-col">
-                  <span className="text-lg sm:text-xl font-black tracking-tight text-[#0f172a] dark:text-white leading-none">
-                    SEVO
-                  </span>
-                  <span className="text-[9px] font-bold tracking-widest text-[#0B8F7A] uppercase leading-none mt-0.5">
-                    Home Services
-                  </span>
-                </div>
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain dark:hidden"
+                  style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+                />
+                <img
+                  src="/assets/sevo_text_logo_white.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain hidden dark:block"
+                  style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+                />
               </div>
+
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
               {/* Location Selector Pill with Auto-detected Badge */}
               <div className="flex items-center gap-1.5">
@@ -4384,7 +4426,7 @@ export function LandingPage() {
                         loading="lazy"
                         className="w-full h-full object-contain drop-shadow-2xs rounded-xl"
                         onError={(e) => {
-                          const fallbackImg = getCategorySafeImage(cat, cat.idx >= 0 ? cat.idx : 0)
+                          const fallbackImg = getCategorySafeImage({ ...cat, image: "" }, cat.idx >= 0 ? cat.idx : 0)
                           if (fallbackImg && e.currentTarget.src !== fallbackImg && !e.currentTarget.dataset.failed) {
                             e.currentTarget.dataset.failed = "true"
                             e.currentTarget.src = fallbackImg
@@ -4518,7 +4560,7 @@ export function LandingPage() {
                       alt={offer.title || "Offer"}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        const fallback = getOfferSafeImage(offer, idx)
+                        const fallback = getOfferSafeImage({ ...offer, image: "" }, idx)
                         if (fallback && e.currentTarget.src !== fallback && !e.currentTarget.dataset.failed) {
                           e.currentTarget.dataset.failed = "true"
                           e.currentTarget.src = fallback
@@ -4716,14 +4758,14 @@ export function LandingPage() {
         <section id="testimonials" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4 scroll-mt-24">
           <div className="flex items-center justify-between">
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              What Our Customers Say
+              {homeConfig.testimonials?.title || "What Our Customers Say"}
             </h2>
             <div className="flex items-center gap-3">
               <a
                 href="#testimonials"
                 className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] transition-colors"
               >
-                Read All Reviews →
+                {homeConfig.testimonials?.viewAllText || "Read All Reviews →"}
               </a>
               <div className="hidden sm:flex items-center gap-1.5">
                 <button
@@ -4747,56 +4789,37 @@ export function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                name: "Priya Sharma",
-                city: "Bengaluru",
-                avatar: "PS",
-                rating: 5,
-                review: "Excellent AC service! The technician was professional, on time, and did a fantastic job. Highly recommended!"
-              },
-              {
-                name: "Rahul Mehta",
-                city: "Mumbai",
-                avatar: "RM",
-                rating: 5,
-                review: "Booked deep cleaning for my apartment. Amazing service and very thorough. Will definitely book again!"
-              },
-              {
-                name: "Anjali Desai",
-                city: "Pune",
-                avatar: "AD",
-                rating: 5,
-                review: "Very prompt plumbing service. Fixed the issue quickly. Great experience overall."
-              }
-            ].map((testi, idx) => (
-              <div
-                key={idx}
-                className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-2xs flex flex-col justify-between gap-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                    {testi.avatar}
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900 dark:text-white">
-                      {testi.name}
+            {(homeConfig.testimonials?.reviews?.length ? homeConfig.testimonials.reviews : DEFAULT_HOME_PAGE_CONFIG.testimonials.reviews).slice(0, 3).map((testi, idx) => {
+              const avatarInitials = testi.initials || testi.avatar || (testi.name ? testi.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "SE")
+              return (
+                <div
+                  key={testi.id || idx}
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-2xs flex flex-col justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full ${testi.badgeColor || "bg-teal-600"} text-white font-black text-xs flex items-center justify-center shrink-0`}>
+                      {avatarInitials}
                     </div>
-                    <div className="text-[10px] text-slate-500 font-medium">
-                      {testi.city}
+                    <div>
+                      <div className="text-xs font-black text-slate-900 dark:text-white">
+                        {testi.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        {testi.city || testi.cat || "Verified Customer"}
+                      </div>
+                    </div>
+                    <div className="ml-auto flex items-center gap-0.5">
+                      {Array.from({ length: Math.min(5, Math.max(1, testi.rating || 5)) }).map((_, si) => (
+                        <Star key={si} className="w-3 h-3 fill-amber-400 text-amber-500" />
+                      ))}
                     </div>
                   </div>
-                  <div className="ml-auto flex items-center gap-0.5">
-                    {Array.from({ length: testi.rating }).map((_, si) => (
-                      <Star key={si} className="w-3 h-3 fill-amber-400 text-amber-500" />
-                    ))}
-                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                    &ldquo;{testi.text || testi.review}&rdquo;
+                  </p>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                  &ldquo;{testi.review}&rdquo;
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Testimonial indicator dots */}
@@ -4862,15 +4885,20 @@ export function LandingPage() {
                   src="/assets/sevo_emblem_transparent.png"
                   alt="SEVO Emblem"
                   className="h-8 w-auto shrink-0 object-contain"
+                  style={{ height: '32px', width: 'auto' }}
                 />
-                <div className="flex flex-col">
-                  <span className="text-lg font-black tracking-tight text-[#0f172a] dark:text-white leading-none">
-                    SEVO
-                  </span>
-                  <span className="text-[8px] font-bold tracking-widest text-[#0B8F7A] uppercase leading-none mt-0.5">
-                    Home Services
-                  </span>
-                </div>
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain dark:hidden"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
+                <img
+                  src="/assets/sevo_text_logo_white.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain hidden dark:block"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
               </div>
               <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
                 Your trusted partner for all home services. Professional, reliable and on-time.
