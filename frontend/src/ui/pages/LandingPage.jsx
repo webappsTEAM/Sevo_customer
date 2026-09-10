@@ -23,6 +23,7 @@ import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { VegetableRecipeModal } from "../components/vegetables/VegetableRecipeModal.jsx"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
@@ -2352,6 +2353,14 @@ export function LandingPage() {
   // for in Categories shows up here automatically, with no separate
   // homepage config to keep in sync.
   const [catalogCategories, setCatalogCategories] = useState([])
+  // Tracks whether the real /catalog/public/categories/ fetch below has
+  // settled. While it's still in flight, the "Home & Repair Services"
+  // pillar grid shows a loading skeleton instead of the hardcoded CATEGORIES
+  // fallback -- rendering that fallback immediately and then swapping it
+  // for the real (differently-ordered, differently-sized) live list once
+  // the fetch resolves a couple seconds later is what showed as one popup's
+  // content "popping" over the other.
+  const [catalogCategoriesLoading, setCatalogCategoriesLoading] = useState(true)
   useEffect(() => {
     Promise.all([
       apiRequest("/settings/catalog/public/packages/").catch(() => ({ success: false, data: [] })),
@@ -2384,7 +2393,11 @@ export function LandingPage() {
             serviceCategoryId: c.slug,
           }))
       )
-    }).catch((err) => console.error("Failed to load recommended items:", err))
+      setCatalogCategoriesLoading(false)
+    }).catch((err) => {
+      console.error("Failed to load recommended items:", err)
+      setCatalogCategoriesLoading(false)
+    })
   }, [])
 
   useEffect(() => {
@@ -2688,7 +2701,151 @@ export function LandingPage() {
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(() => location.state?.openAcModal || searchParams.get("openModal") === "ac" || false)
+
+  // Real admin-added sub-services for the "AC & Appliance" pillar's popup.
+  // The popup used to show a hardcoded 5-item "choose an appliance type"
+  // grid (Air Conditioner / Refrigerator / Washing Machine / TV & Display /
+  // Microwave Oven) that never reflected what's actually in the catalog
+  // admin -- whatever sub-service the admin adds under "AC & Appliance"
+  // (shown there as e.g. "Fridge", "AC Service & Cleaning", "AC Repair &
+  // Diagnostics"...) should be exactly what shows up here instead.
+  // Resolved by matching the category NAME against the live categories list
+  // (same approach as BookingPage.jsx's getDbCategorySlugForKey) rather
+  // than guessing the DB slug.
+  const [acModalServices, setAcModalServices] = useState([])
+  const [acModalServicesLoading, setAcModalServicesLoading] = useState(true)
+  useEffect(() => {
+    if (!isAcModalOpen) return
+    setAcModalServicesLoading(true)
+    const hints = ["ac & appliance", "ac and appliance", "appliance"]
+    const match = catalogCategories.find((c) => {
+      const label = (c.label || "").toLowerCase()
+      return hints.some((h) => label.includes(h))
+    })
+    const slug = match?.serviceCategoryId || "ac_appliance"
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(slug)}`)
+      .then((res) => {
+        setAcModalServices(res?.success && Array.isArray(res.data) ? res.data.filter((s) => s.is_active !== false) : [])
+        setAcModalServicesLoading(false)
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable for AC & Appliance modal:", err?.message || err)
+        setAcModalServices([])
+        setAcModalServicesLoading(false)
+      })
+  }, [isAcModalOpen, catalogCategories])
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(() => location.state?.openHomePestModal || searchParams.get("openModal") === "homepest" || searchParams.get("openModal") === "subcategories" || false)
+
+  // Same live-catalog-lookup pattern as the AC & Appliance modal above,
+  // applied to the other pillar popups that still showed a hardcoded item
+  // list: Electrician/Plumbing/Carpentry, Home Services & Pest Control, and
+  // Goods & Transport. Each resolves its real CatalogCategory by matching
+  // on category NAME (not a guessed slug), then fetches that category's
+  // real sub-services so "whatever the admin adds shows up here" holds for
+  // every pillar, not just AC & Appliance.
+  const [elecModalServices, setElecModalServices] = useState([])
+  const [elecModalServicesLoading, setElecModalServicesLoading] = useState(true)
+  useEffect(() => {
+    if (!isElecModalOpen) return
+    setElecModalServicesLoading(true)
+    const hints = ["electrician", "plumb", "carpentry", "home services"]
+    const match = catalogCategories.find((c) => hints.some((h) => (c.label || "").toLowerCase().includes(h)))
+    const slug = match?.serviceCategoryId
+    if (!slug) { setElecModalServices([]); setElecModalServicesLoading(false); return }
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(slug)}`)
+      .then((res) => {
+        setElecModalServices(res?.success && Array.isArray(res.data) ? res.data.filter((s) => s.is_active !== false) : [])
+        setElecModalServicesLoading(false)
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable for Electrician/Plumbing/Carpentry modal:", err?.message || err)
+        setElecModalServices([])
+        setElecModalServicesLoading(false)
+      })
+  }, [isElecModalOpen, catalogCategories])
+
+  const [homePestModalServices, setHomePestModalServices] = useState([])
+  const [homePestModalServicesLoading, setHomePestModalServicesLoading] = useState(true)
+  useEffect(() => {
+    if (!isHomePestModalOpen) return
+    setHomePestModalServicesLoading(true)
+    const hints = ["home services", "pest control"]
+    const match = catalogCategories.find((c) => hints.some((h) => (c.label || "").toLowerCase().includes(h)))
+    const slug = match?.serviceCategoryId
+    if (!slug) { setHomePestModalServices([]); setHomePestModalServicesLoading(false); return }
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(slug)}`)
+      .then((res) => {
+        setHomePestModalServices(res?.success && Array.isArray(res.data) ? res.data.filter((s) => s.is_active !== false) : [])
+        setHomePestModalServicesLoading(false)
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable for Home Services & Pest Control modal:", err?.message || err)
+        setHomePestModalServices([])
+        setHomePestModalServicesLoading(false)
+      })
+  }, [isHomePestModalOpen, catalogCategories])
+
+  const [goodsModalServices, setGoodsModalServices] = useState([])
+  const [goodsModalServicesLoading, setGoodsModalServicesLoading] = useState(true)
+  useEffect(() => {
+    if (!isGoodsModalOpen) return
+    setGoodsModalServicesLoading(true)
+    const hints = ["goods & transport", "goods and transport", "transport"]
+    const match = catalogCategories.find((c) => hints.some((h) => (c.label || "").toLowerCase().includes(h)))
+    const slug = match?.serviceCategoryId
+    if (!slug) { setGoodsModalServices([]); setGoodsModalServicesLoading(false); return }
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(slug)}`)
+      .then((res) => {
+        setGoodsModalServices(res?.success && Array.isArray(res.data) ? res.data.filter((s) => s.is_active !== false) : [])
+        setGoodsModalServicesLoading(false)
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable for Goods & Transport modal:", err?.message || err)
+        setGoodsModalServices([])
+        setGoodsModalServicesLoading(false)
+      })
+  }, [isGoodsModalOpen, catalogCategories])
+
+  // Admin-editable display overrides for the 3 fixed Goods & Transport
+  // tiles (Mini Truck / 2-Wheeler / Packers & Movers). Those 3 keep routing
+  // to their dedicated, purpose-built Hosur booking pages no matter what --
+  // only their NAME and IMAGE become admin-driven here, matched by keyword
+  // against whatever Service the admin adds under the Goods & Transport
+  // category via the normal Catalog > Services admin screen. This is
+  // deliberately display-only: these Service rows should carry no Packages,
+  // since real pricing/booking for these 3 stays in the separate
+  // `logistics` app (see seed_customer_facing_services.py's note on why
+  // Goods & Transport was excluded from the generic catalog pricing path).
+  // Any OTHER sub-service the admin adds beyond these 3 keywords still
+  // appends as a brand-new tile through the existing logic below.
+  const goodsTileOverrides = useMemo(() => {
+    const find = (keywords) => goodsModalServices.find((s) => {
+      const n = (s.name || "").toLowerCase()
+      const sl = (s.slug || "").toLowerCase()
+      return keywords.some((k) => n.includes(k) || sl.includes(k))
+    })
+    return {
+      truck: find(["truck"]),
+      two_wheeler: find(["wheeler"]),
+      packers_movers: find(["packers", "movers"]),
+    }
+  }, [goodsModalServices])
+
+  // The Home Services & Pest Control popup keeps its two-section layout
+  // (Cleaning / Pest Control), so split the real catalog sub-services
+  // between them by a simple keyword match on the name -- the DB has no
+  // separate grouping field for this single combined category.
+  const homePestSplit = useMemo(() => {
+    const pestKeywords = /pest|termite|cockroach|\bant\b|ants|bug|rodent|mosquito/i
+    const cleaning = []
+    const pest = []
+    homePestModalServices.forEach((s) => {
+      if (pestKeywords.test(s.name || "")) pest.push(s)
+      else cleaning.push(s)
+    })
+    return { cleaning, pest }
+  }, [homePestModalServices])
+
   const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
   const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
   const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(() => searchParams.get("openModal") === "pillars" || false)
@@ -2966,6 +3123,23 @@ export function LandingPage() {
       "refrigerator": ["refrigerator"],
       "refrigerator-repair": ["refrigerator"],
       "refrigerator-service-and-repair": ["refrigerator"],
+      // The admin's real AC & Appliance catalog now has each appliance as
+      // its own flat Service (e.g. "Fridge", "AC Repair & Diagnostics"),
+      // which slugify to names this zone-availability list was never built
+      // around ("fridge" shares no characters with "refrigerator", so the
+      // substring/token matching below silently blocks it). Map each real
+      // service slug (both with and without "and", since slugify strips
+      // "&" without a word substitute) back to the legacy service slug the
+      // zone's available_services list actually contains.
+      "fridge": ["refrigerator"],
+      "ac-repair-diagnostics": ["ac-repair"],
+      "ac-repair-and-diagnostics": ["ac-repair"],
+      "ac-gas-refrigerant": ["ac-gas-refill"],
+      "ac-gas-and-refrigerant": ["ac-gas-refill"],
+      "ac-installation-uninstallation": ["ac-installation"],
+      "ac-installation-and-uninstallation": ["ac-installation"],
+      "ac-service-cleaning": ["ac-service-cleaning"],
+      "microwave-oven-repair": ["microwave"],
       "washing-machine": ["washing-machine"],
       "washing-machine-repair": ["washing-machine"],
       "washing-machine-jet-service": ["washing-machine"],
@@ -5125,9 +5299,19 @@ export function LandingPage() {
                     />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {(homeConfig.subServicesModal?.cleaningItems || HOME_SERVICES_SUB).map((item, cIdx) => {
-                      const isAvailable = isServiceAvailableInZone(item.name)
-                      const GraphicComponent = item.graphic || HOME_SERVICES_SUB[cIdx]?.graphic || Sparkles
+                    {homePestModalServicesLoading
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <div key={`homepest-clean-skel-${i}`} className="flex flex-col items-center w-full animate-pulse">
+                            <div className="w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100" />
+                            <div className="h-2.5 w-14 mt-2.5 bg-slate-100 rounded" />
+                          </div>
+                        ))
+                      : (homePestSplit.cleaning.length > 0
+                      ? homePestSplit.cleaning.map((s) => ({ name: s.name, image: s.image, categoryId: "cleaning", dbSlug: s.slug }))
+                      : (homeConfig.subServicesModal?.cleaningItems || HOME_SERVICES_SUB)
+                    ).map((item, cIdx) => {
+                      const isAvailable = isServiceAvailableInZone(item.dbSlug || item.name)
+                      const GraphicComponent = item.graphic || HOME_SERVICES_SUB[cIdx]?.graphic
                       return (
                         <button
                           key={item.name || cIdx}
@@ -5153,8 +5337,18 @@ export function LandingPage() {
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
-                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all overflow-hidden`}>
+                            {GraphicComponent ? (
+                              <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            ) : item.image ? (
+                              <img
+                                src={resolveImageUrl(item.image, item.image)}
+                                alt={item.name}
+                                className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`}
+                              />
+                            ) : (
+                              <Sparkles className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                            )}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -5166,12 +5360,14 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            <HomeEditableText
-                              active={homeEditMode}
-                              value={item.name}
-                              placeholder={item.name}
-                              onSave={(v) => saveHomeConfigField(`subServicesModal.cleaningItems.${cIdx}.name`, v)}
-                            />
+                            {homePestSplit.cleaning.length > 0 ? item.name : (
+                              <HomeEditableText
+                                active={homeEditMode}
+                                value={item.name}
+                                placeholder={item.name}
+                                onSave={(v) => saveHomeConfigField(`subServicesModal.cleaningItems.${cIdx}.name`, v)}
+                              />
+                            )}
                           </span>
                         </button>
                       )
@@ -5190,9 +5386,19 @@ export function LandingPage() {
                     />
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {(homeConfig.subServicesModal?.pestItems || PEST_CONTROL_SUB).map((item, pIdx) => {
-                      const isAvailable = isServiceAvailableInZone(item.name)
-                      const GraphicComponent = item.graphic || PEST_CONTROL_SUB[pIdx]?.graphic || Sparkles
+                    {homePestModalServicesLoading
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <div key={`homepest-pest-skel-${i}`} className="flex flex-col items-center w-full animate-pulse">
+                            <div className="w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100" />
+                            <div className="h-2.5 w-14 mt-2.5 bg-slate-100 rounded" />
+                          </div>
+                        ))
+                      : (homePestSplit.pest.length > 0
+                      ? homePestSplit.pest.map((s) => ({ name: s.name, image: s.image, categoryId: "pest_control", dbSlug: s.slug }))
+                      : (homeConfig.subServicesModal?.pestItems || PEST_CONTROL_SUB)
+                    ).map((item, pIdx) => {
+                      const isAvailable = isServiceAvailableInZone(item.dbSlug || item.name)
+                      const GraphicComponent = item.graphic || PEST_CONTROL_SUB[pIdx]?.graphic
                       return (
                         <button
                           key={item.name || pIdx}
@@ -5208,8 +5414,18 @@ export function LandingPage() {
                           }}
                           className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                         >
-                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                            {GraphicComponent && <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />}
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all overflow-hidden`}>
+                            {GraphicComponent ? (
+                              <GraphicComponent className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            ) : item.image ? (
+                              <img
+                                src={resolveImageUrl(item.image, item.image)}
+                                alt={item.name}
+                                className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`}
+                              />
+                            ) : (
+                              <Sparkles className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                            )}
                             {!isAvailable ? (
                               <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                                 Not Available
@@ -5221,12 +5437,14 @@ export function LandingPage() {
                             )}
                           </div>
                           <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
-                            <HomeEditableText
-                              active={homeEditMode}
-                              value={item.name}
-                              placeholder={item.name}
-                              onSave={(v) => saveHomeConfigField(`subServicesModal.pestItems.${pIdx}.name`, v)}
-                            />
+                            {homePestSplit.pest.length > 0 ? item.name : (
+                              <HomeEditableText
+                                active={homeEditMode}
+                                value={item.name}
+                                placeholder={item.name}
+                                onSave={(v) => saveHomeConfigField(`subServicesModal.pestItems.${pIdx}.name`, v)}
+                              />
+                            )}
                           </span>
                         </button>
                       )
@@ -5293,13 +5511,32 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
+                {/* Items Grid for Electrician, Plumbing & Carpentry -- real
+                    admin-added sub-services when the catalog has them,
+                    otherwise the legacy bootstrap list */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                  {[
-                    { key: "electrician", name: "Electrician", slug: "electrician", cat: "electrical", graphic: ElectricianGraphic },
-                    { key: "plumber", name: "Plumber", slug: "plumbing", cat: "plumbing", graphic: PlumberGraphic },
-                    { key: "carpenter", name: "Carpenter", slug: "carpentry", cat: "carpentry", graphic: CarpentryGraphic },
-                  ].map((item) => {
+                  {elecModalServicesLoading
+                    ? Array.from({ length: 3 }).map((_, i) => (
+                        <div key={`elec-skel-${i}`} className="flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200/60 animate-pulse">
+                          <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100" />
+                          <div className="h-3 w-3/4 mt-2 bg-slate-100 rounded" />
+                        </div>
+                      ))
+                    : (elecModalServices.length > 0
+                    ? elecModalServices.map((s) => ({
+                        key: `db-${s.id}`,
+                        name: s.name,
+                        slug: s.slug || s.name,
+                        cat: "electrical",
+                        subTab: s.name,
+                        image: s.image,
+                      }))
+                    : [
+                        { key: "electrician", name: "Electrician", slug: "electrician", cat: "electrical", subTab: "Electrician Services", graphic: ElectricianGraphic },
+                        { key: "plumber", name: "Plumber", slug: "plumbing", cat: "plumbing", subTab: "Plumber Services", graphic: PlumberGraphic },
+                        { key: "carpenter", name: "Carpenter", slug: "carpentry", cat: "carpentry", subTab: "Carpenter Services", graphic: CarpentryGraphic },
+                      ]
+                  ).map((item) => {
                     const isAvailable = isServiceAvailableInZone(item.slug)
                     const Graphic = item.graphic
                     return (
@@ -5313,15 +5550,25 @@ export function LandingPage() {
                           }
                           setIsElecModalOpen(false)
                           document.body.style.overflow = "unset"
-                          goToCategoryServices(item.cat, `${item.name} Services`)
+                          goToCategoryServices(item.cat, item.subTab)
                         }}
                         className={`group relative flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
                           ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                           : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
-                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
-                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                          {Graphic ? (
+                            <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          ) : item.image ? (
+                            <img
+                              src={resolveImageUrl(item.image, item.image)}
+                              alt={item.name}
+                              className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                            />
+                          ) : (
+                            <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                          )}
                           {!isAvailable && (
                             <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                               Not Available
@@ -5395,15 +5642,34 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* Items Grid for AC & Appliance Repair (5 options) */}
+                {/* Items Grid for AC & Appliance Repair -- real admin-added
+                    sub-services when the catalog has them, otherwise the
+                    legacy bootstrap list (e.g. before catalog data loads) */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
-                  {[
-                    { key: "ac", name: "Air Conditioner", slug: "air-conditioner", cat: "hvac", subTab: "AC Service & Cleaning", graphic: AcGraphic },
-                    { key: "refrigerator", name: "Refrigerator", slug: "refrigerator", cat: "refrigerator", subTab: "Refrigerator Service & Repair", graphic: FridgeGraphic },
-                    { key: "washing_machine", name: "Washing Machine", slug: "washing-machine", cat: "washing_machine", subTab: "Washing Machine Jet Service", graphic: WashingMachineGraphic },
-                    { key: "tv", name: "TV & Display", slug: "tv-display", cat: "tv_display", subTab: "TV Service & Repair", graphic: TvGraphic },
-                    { key: "microwave", name: "Microwave Oven", slug: "microwave-oven", cat: "microwave", subTab: "Microwave Repair", graphic: MicrowaveGraphic },
-                  ].map((item) => {
+                  {acModalServicesLoading
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`ac-skel-${i}`} className="flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl border-2 border-slate-200/60 animate-pulse">
+                          <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100" />
+                          <div className="h-3 w-3/4 mt-2 bg-slate-100 rounded" />
+                        </div>
+                      ))
+                    : (acModalServices.length > 0
+                    ? acModalServices.map((s) => ({
+                        key: `db-${s.id}`,
+                        name: s.name,
+                        slug: s.slug || s.name,
+                        cat: "hvac",
+                        subTab: s.name,
+                        image: s.image,
+                      }))
+                    : [
+                        { key: "ac", name: "Air Conditioner", slug: "air-conditioner", cat: "hvac", subTab: "AC Service & Cleaning", graphic: AcGraphic },
+                        { key: "refrigerator", name: "Refrigerator", slug: "refrigerator", cat: "refrigerator", subTab: "Refrigerator Service & Repair", graphic: FridgeGraphic },
+                        { key: "washing_machine", name: "Washing Machine", slug: "washing-machine", cat: "washing_machine", subTab: "Washing Machine Jet Service", graphic: WashingMachineGraphic },
+                        { key: "tv", name: "TV & Display", slug: "tv-display", cat: "tv_display", subTab: "TV Service & Repair", graphic: TvGraphic },
+                        { key: "microwave", name: "Microwave Oven", slug: "microwave-oven", cat: "microwave", subTab: "Microwave Repair", graphic: MicrowaveGraphic },
+                      ]
+                  ).map((item) => {
                     const isAvailable = isServiceAvailableInZone(item.slug)
                     const Graphic = item.graphic
                     return (
@@ -5424,8 +5690,18 @@ export function LandingPage() {
                           : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
-                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
-                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                          {Graphic ? (
+                            <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          ) : item.image ? (
+                            <img
+                              src={resolveImageUrl(item.image, item.image)}
+                              alt={item.name}
+                              className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                            />
+                          ) : (
+                            <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                          )}
                           {!isAvailable && (
                             <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                               Not Available
@@ -5444,7 +5720,6 @@ export function LandingPage() {
             document.body
           )}
 
-        {/* ── 4. Goods & Transports Modal Popup ── */}
         {isGoodsModalOpen &&
           typeof document !== "undefined" &&
           createPortal(
@@ -5499,12 +5774,24 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* Items Grid */}
+                {/* Items Grid -- the 3 known transport types keep their
+                    dedicated, purpose-built booking pages; any OTHER real
+                    sub-service the admin adds under Goods & Transport (beyond
+                    these 3) is appended here too, routed through the generic
+                    booking flow so it isn't silently dropped */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
                   {[
-                    { key: "truck", name: "Mini Truck (Hosur)", slug: "truck", route: routes.truck_booking_hosur, graphic: TruckGraphic },
-                    { key: "two_wheeler", name: "2-Wheeler (Hosur)", slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: TwoWheelerGraphic },
-                    { key: "packers_movers", name: "Packers & Movers", slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: PackersMoversGraphic },
+                    { key: "truck", name: goodsTileOverrides.truck?.name || "Mini Truck (Hosur)", image: goodsTileOverrides.truck?.image, slug: "truck", route: routes.truck_booking_hosur, graphic: goodsTileOverrides.truck?.image ? undefined : TruckGraphic },
+                    { key: "two_wheeler", name: goodsTileOverrides.two_wheeler?.name || "2-Wheeler (Hosur)", image: goodsTileOverrides.two_wheeler?.image, slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: goodsTileOverrides.two_wheeler?.image ? undefined : TwoWheelerGraphic },
+                    { key: "packers_movers", name: goodsTileOverrides.packers_movers?.name || "Packers & Movers", image: goodsTileOverrides.packers_movers?.image, slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: goodsTileOverrides.packers_movers?.image ? undefined : PackersMoversGraphic },
+                    ...goodsModalServices
+                      .filter((s) => {
+                        const n = (s.name || "").toLowerCase()
+                        const sl = (s.slug || "").toLowerCase()
+                        return !(n.includes("truck") || n.includes("wheeler") || n.includes("packers") || n.includes("movers") ||
+                          sl.includes("truck") || sl.includes("wheeler") || sl.includes("packers") || sl.includes("movers"))
+                      })
+                      .map((s) => ({ key: `db-${s.id}`, name: s.name, slug: s.slug || s.name, cat: "goods_transport", subTab: s.name, image: s.image })),
                   ].map((item) => {
                     const isAvailable = isServiceAvailableInZone(item.slug)
                     const Graphic = item.graphic
@@ -5519,15 +5806,26 @@ export function LandingPage() {
                           }
                           setIsGoodsModalOpen(false)
                           document.body.style.overflow = "unset"
-                          navigate(item.route)
+                          if (item.route) navigate(item.route)
+                          else goToCategoryServices(item.cat, item.subTab)
                         }}
                         className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
                           ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                           : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
-                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
-                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                          {Graphic ? (
+                            <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          ) : item.image ? (
+                            <img
+                              src={resolveImageUrl(item.image, item.image)}
+                              alt={item.name}
+                              className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                            />
+                          ) : (
+                            <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                          )}
                           {!isAvailable && (
                             <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                               Not Available
@@ -6556,7 +6854,7 @@ export function LandingPage() {
                     <HomeEditableText
                       active={homeEditMode}
                       value={homeConfig.pillarModal?.badge}
-                      placeholder="⚡ 5 Core Specialized Pillars"
+                      placeholder="⚡Core Specialized Pillars"
                       onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
                     />
                   </div>
@@ -6600,7 +6898,16 @@ export function LandingPage() {
 
                 {/* 5 Combined Services Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                  {(catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
+                  {catalogCategoriesLoading
+                    ? Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`cat-skel-${i}`} className="flex flex-col bg-white rounded-2xl border-2 border-slate-100 overflow-hidden animate-pulse">
+                          <div className="h-24 w-full bg-slate-100" />
+                          <div className="p-3 space-y-1.5">
+                            <div className="h-3 w-3/4 mx-auto bg-slate-100 rounded" />
+                          </div>
+                        </div>
+                      ))
+                    : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
                     const defaultCat = CATEGORIES[pIdx] || {}
                     const label = catItem.label || defaultCat.label || ""
                     const photo = catItem.photo || catItem.image || defaultCat.photo
@@ -6836,14 +7143,25 @@ export function LandingPage() {
                 </div>
               )}
 
-              {/* Cleaning Section */}
+              {/* Cleaning Section -- real admin-added sub-services when the
+                  catalog has them, otherwise the legacy bootstrap list */}
               <div className="mb-6">
                 <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
                   Home Cleaning
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {HOME_SERVICES_SUB.map((item) => {
-                    const isAvailable = isServiceAvailableInZone(item.name)
+                  {homePestModalServicesLoading
+                    ? Array.from({ length: 4 }).map((_, i) => (
+                        <div key={`homepest-clean-skel2-${i}`} className="flex flex-col items-center w-full animate-pulse">
+                          <div className="w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100" />
+                          <div className="h-2.5 w-14 mt-2.5 bg-slate-100 rounded" />
+                        </div>
+                      ))
+                    : (homePestSplit.cleaning.length > 0
+                    ? homePestSplit.cleaning.map((s) => ({ name: s.name, image: s.image, categoryId: "cleaning", dbSlug: s.slug }))
+                    : HOME_SERVICES_SUB
+                  ).map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.dbSlug || item.name)
                     return (
                       <button
                         key={item.name}
@@ -6869,8 +7187,18 @@ export function LandingPage() {
                         }}
                         className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                       >
-                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all overflow-hidden`}>
+                          {item.graphic ? (
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          ) : item.image ? (
+                            <img
+                              src={resolveImageUrl(item.image, item.image)}
+                              alt={item.name}
+                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`}
+                            />
+                          ) : (
+                            <Sparkles className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                          )}
                           {!isAvailable ? (
                             <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                               Not Available
@@ -6890,14 +7218,24 @@ export function LandingPage() {
                 </div>
               </div>
 
-              {/* Pest Control Section */}
+              {/* Pest Control Section -- same live/legacy pattern */}
               <div>
                 <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
                   Pest Control
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {PEST_CONTROL_SUB.map((item) => {
-                    const isAvailable = isServiceAvailableInZone(item.name)
+                  {homePestModalServicesLoading
+                    ? Array.from({ length: 4 }).map((_, i) => (
+                        <div key={`homepest-pest-skel2-${i}`} className="flex flex-col items-center w-full animate-pulse">
+                          <div className="w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100" />
+                          <div className="h-2.5 w-14 mt-2.5 bg-slate-100 rounded" />
+                        </div>
+                      ))
+                    : (homePestSplit.pest.length > 0
+                    ? homePestSplit.pest.map((s) => ({ name: s.name, image: s.image, categoryId: "pest_control", dbSlug: s.slug }))
+                    : PEST_CONTROL_SUB
+                  ).map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.dbSlug || item.name)
                     return (
                       <button
                         key={item.name}
@@ -6913,8 +7251,18 @@ export function LandingPage() {
                         }}
                         className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
                       >
-                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
-                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all overflow-hidden`}>
+                          {item.graphic ? (
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          ) : item.image ? (
+                            <img
+                              src={resolveImageUrl(item.image, item.image)}
+                              alt={item.name}
+                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`}
+                            />
+                          ) : (
+                            <Sparkles className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                          )}
                           {!isAvailable ? (
                             <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
                               Not Available
@@ -6976,63 +7324,78 @@ export function LandingPage() {
                 </p>
               </div>
 
-              {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
+              {/* Items Grid -- the 3 known transport types keep their
+                  dedicated, purpose-built booking pages; any OTHER real
+                  sub-service the admin adds under Goods & Transport (beyond
+                  these 3) is appended here too, routed through the generic
+                  booking flow so it isn't silently dropped */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: Truck */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.truck_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TruckGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
-                    Mini Truck<br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">(Hosur)</span>
-                  </span>
-                </button>
+                {[
+                  goodsTileOverrides.truck
+                    ? { key: "truck", name: goodsTileOverrides.truck.name, sub: "", image: goodsTileOverrides.truck.image, slug: "truck", route: routes.truck_booking_hosur, graphic: goodsTileOverrides.truck.image ? undefined : TruckGraphic }
+                    : { key: "truck", name: "Mini Truck", sub: "(Hosur)", slug: "truck", route: routes.truck_booking_hosur, graphic: TruckGraphic },
+                  goodsTileOverrides.two_wheeler
+                    ? { key: "two_wheeler", name: goodsTileOverrides.two_wheeler.name, sub: "", image: goodsTileOverrides.two_wheeler.image, slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: goodsTileOverrides.two_wheeler.image ? undefined : TwoWheelerGraphic }
+                    : { key: "two_wheeler", name: "2-Wheeler", sub: "(Hosur)", slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: TwoWheelerGraphic },
+                  goodsTileOverrides.packers_movers
+                    ? { key: "packers_movers", name: goodsTileOverrides.packers_movers.name, sub: "", image: goodsTileOverrides.packers_movers.image, slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: goodsTileOverrides.packers_movers.image ? undefined : PackersMoversGraphic }
+                    : { key: "packers_movers", name: "Packers &", sub: "Movers", slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: PackersMoversGraphic },
+                  ...goodsModalServices
+                    .filter((s) => {
+                      const n = (s.name || "").toLowerCase()
+                      const sl = (s.slug || "").toLowerCase()
+                      return !(n.includes("truck") || n.includes("wheeler") || n.includes("packers") || n.includes("movers") ||
+                        sl.includes("truck") || sl.includes("wheeler") || sl.includes("packers") || sl.includes("movers"))
+                    })
+                    .map((s) => ({ key: `db-${s.id}`, name: s.name, sub: "", slug: s.slug || s.name, cat: "goods_transport", subTab: s.name, image: s.image })),
+                ].map((item) => {
+                  const isAvailable = isServiceAvailableInZone(item.slug)
+                  const Graphic = item.graphic
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        if (!isAvailable) {
+                          showUnavailableServiceAlert(item.name)
+                          return
+                        }
+                        setIsGoodsModalOpen(false)
+                        document.body.style.overflow = "unset"
+                        if (item.route) navigate(item.route)
+                        else goToCategoryServices(item.cat, item.subTab)
+                      }}
+                      className={`group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                        ? "border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                        : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                        }`}
+                    >
+                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                        {Graphic ? (
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        ) : item.image ? (
+                          <img
+                            src={resolveImageUrl(item.image, item.image)}
+                            alt={item.name}
+                            className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                          />
+                        ) : (
+                          <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                        )}
+                        {!isAvailable && (
+                          <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                            Not Available
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
+                        {item.name}{item.sub ? <><br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">{item.sub}</span></> : null}
+                      </span>
+                    </button>
+                  )
+                })}
 
-                {/* Option 2: Two Wheeler */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.two_wheeler_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TwoWheelerGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
-                    2-Wheeler<br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">(Hosur)</span>
-                  </span>
-                </button>
-
-                {/* Option 3: Packers & Movers */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.packers_movers_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <PackersMoversGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
-                    Packers &amp;<br />Movers
-                  </span>
-                </button>
-
-                {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
+                {/* Option: Get an Estimate card/button in Landing Page Emerald theme */}
                 <button
                   type="button"
                   onClick={() => {
@@ -7098,61 +7461,76 @@ export function LandingPage() {
                 </p>
               </div>
 
-              {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
+              {/* Items Grid for Electrician, Plumbing & Carpentry -- real
+                  admin-added sub-services when the catalog has them,
+                  otherwise the legacy bootstrap list */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: Electrician */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("electrical")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <ElectricianGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Electrician
-                  </span>
-                </button>
-
-                {/* Option 2: Plumber */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("plumbing")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <PlumberGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Plumber
-                  </span>
-                </button>
-
-                {/* Option 3: Carpentry */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("carpentry")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <CarpentryGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Carpentry
-                  </span>
-                </button>
+                {elecModalServicesLoading
+                  ? Array.from({ length: 3 }).map((_, i) => (
+                      <div key={`elec-skel2-${i}`} className="flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl border-2 border-slate-200/60 animate-pulse">
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100" />
+                        <div className="h-3 w-3/4 mt-2 bg-slate-100 rounded" />
+                      </div>
+                    ))
+                  : (elecModalServices.length > 0
+                  ? elecModalServices.map((s) => ({
+                      key: `db-${s.id}`,
+                      name: s.name,
+                      slug: s.slug || s.name,
+                      cat: "electrical",
+                      subTab: s.name,
+                      image: s.image,
+                    }))
+                  : [
+                      { key: "electrician", name: "Electrician", slug: "electrician", cat: "electrical", subTab: undefined, graphic: ElectricianGraphic },
+                      { key: "plumber", name: "Plumber", slug: "plumbing", cat: "plumbing", subTab: undefined, graphic: PlumberGraphic },
+                      { key: "carpenter", name: "Carpenter", slug: "carpentry", cat: "carpentry", subTab: undefined, graphic: CarpentryGraphic },
+                    ]
+                ).map((item) => {
+                  const isAvailable = isServiceAvailableInZone(item.slug)
+                  const Graphic = item.graphic
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        if (!isAvailable) {
+                          showUnavailableServiceAlert(item.name)
+                          return
+                        }
+                        setIsElecModalOpen(false)
+                        document.body.style.overflow = "unset"
+                        goToCategoryServices(item.cat, item.subTab)
+                      }}
+                      className={`group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                        ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                        : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                        }`}
+                    >
+                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                        {Graphic ? (
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        ) : item.image ? (
+                          <img
+                            src={resolveImageUrl(item.image, item.image)}
+                            alt={item.name}
+                            className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                          />
+                        ) : (
+                          <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                        )}
+                        {!isAvailable && (
+                          <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                            Not Available
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                        {item.name}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>,
@@ -7197,97 +7575,78 @@ export function LandingPage() {
                 </p>
               </div>
 
-              {/* Items Grid for AC & Appliance Repair (5 options) */}
+              {/* Items Grid for AC & Appliance Repair -- real admin-added
+                  sub-services when the catalog has them, otherwise the
+                  legacy bootstrap list (e.g. before catalog data loads) */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: AC Service */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "AC Service & Cleaning")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <AcGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Air Conditioner
-                  </span>
-                </button>
-
-                {/* Option 2: Refrigerator */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("refrigerator", "Refrigerator Service & Repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <FridgeGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Refrigerator
-                  </span>
-                </button>
-
-                {/* Option 3: Washing Machine */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("washing_machine", "Washing Machine Jet Service")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <WashingMachineGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Washing Machine
-                  </span>
-                </button>
-
-                {/* Option 4: TV & Home Theatre */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("tv_display", "TV Service & Repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TvGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    TV &amp; Display
-                  </span>
-                </button>
-
-                {/* Option 5: Microwave Oven */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("microwave", "Microwave Repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <MicrowaveGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Microwave Oven
-                  </span>
-                </button>
+                {acModalServicesLoading
+                  ? Array.from({ length: 5 }).map((_, i) => (
+                      <div key={`ac-skel2-${i}`} className="flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl border-2 border-slate-200/60 animate-pulse">
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100" />
+                        <div className="h-3 w-3/4 mt-2 bg-slate-100 rounded" />
+                      </div>
+                    ))
+                  : (acModalServices.length > 0
+                  ? acModalServices.map((s) => ({
+                      key: `db-${s.id}`,
+                      name: s.name,
+                      slug: s.slug || s.name,
+                      cat: "hvac",
+                      subTab: s.name,
+                      image: s.image,
+                    }))
+                  : [
+                      { key: "ac", name: "Air Conditioner", slug: "air-conditioner", cat: "hvac", subTab: "AC Service & Cleaning", graphic: AcGraphic },
+                      { key: "refrigerator", name: "Refrigerator", slug: "refrigerator", cat: "refrigerator", subTab: "Refrigerator Service & Repair", graphic: FridgeGraphic },
+                      { key: "washing_machine", name: "Washing Machine", slug: "washing-machine", cat: "washing_machine", subTab: "Washing Machine Jet Service", graphic: WashingMachineGraphic },
+                      { key: "tv", name: "TV & Display", slug: "tv-display", cat: "tv_display", subTab: "TV Service & Repair", graphic: TvGraphic },
+                      { key: "microwave", name: "Microwave Oven", slug: "microwave-oven", cat: "microwave", subTab: "Microwave Repair", graphic: MicrowaveGraphic },
+                    ]
+                ).map((item) => {
+                  const isAvailable = isServiceAvailableInZone(item.slug)
+                  const Graphic = item.graphic
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        if (!isAvailable) {
+                          showUnavailableServiceAlert(item.name)
+                          return
+                        }
+                        setIsAcModalOpen(false)
+                        document.body.style.overflow = "unset"
+                        goToCategoryServices(item.cat, item.subTab)
+                      }}
+                      className={`group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                        ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                        : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                        }`}
+                    >
+                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
+                        {Graphic ? (
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                        ) : item.image ? (
+                          <img
+                            src={resolveImageUrl(item.image, item.image)}
+                            alt={item.name}
+                            className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
+                          />
+                        ) : (
+                          <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
+                        )}
+                        {!isAvailable && (
+                          <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                            Not Available
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-sm font-bold mt-2.5 transition-colors ${isAvailable ? 'text-slate-800 group-hover:text-slate-900' : 'text-slate-400'}`}>
+                        {item.name}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>,
@@ -8388,7 +8747,7 @@ export function LandingPage() {
                   <HomeEditableText
                     active={homeEditMode}
                     value={homeConfig.pillarModal?.badge}
-                    placeholder="⚡ 5 Core Specialized Pillars"
+                    placeholder="⚡Core Specialized Pillars"
                     onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
                   />
                 </div>
@@ -8432,7 +8791,16 @@ export function LandingPage() {
 
               {/* 5 Combined Services Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                {(catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
+                {catalogCategoriesLoading
+                  ? Array.from({ length: 6 }).map((_, i) => (
+                      <div key={`cat-skel-${i}`} className="flex flex-col bg-white rounded-2xl border-2 border-slate-100 overflow-hidden animate-pulse">
+                        <div className="h-24 w-full bg-slate-100" />
+                        <div className="p-3 space-y-1.5">
+                          <div className="h-3 w-3/4 mx-auto bg-slate-100 rounded" />
+                        </div>
+                      </div>
+                    ))
+                  : (catalogCategories.length > 0 ? catalogCategories : CATEGORIES).map((catItem, pIdx) => {
                   const defaultCat = CATEGORIES[pIdx] || {}
                   const label = catItem.label || defaultCat.label || ""
                   const photo = catItem.photo || catItem.image || defaultCat.photo

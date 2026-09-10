@@ -26,7 +26,8 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck,
+  Layers
 } from "lucide-react"
 
 const SUPER_ADMIN_NAV_ITEMS = [
@@ -80,9 +81,11 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#3B82F6" },
       { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#3B82F6" },
       { label: "Services", to: routes.catalog_services, icon: <Wrench size={16} />, color: "#3B82F6" },
+      { label: "Sub-Services", to: routes.catalog_sub_services, icon: <Layers size={16} />, color: "#3B82F6" },
       { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#3B82F6" },
       { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
+      { label: "Vendor Approvals", to: routes.catalog_vendor_approvals, icon: <UserCheck size={16} />, color: "#3B82F6" },
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
       { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
     ]

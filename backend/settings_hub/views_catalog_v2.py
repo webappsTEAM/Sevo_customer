@@ -15,15 +15,19 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole, RequireModuleAccess
+from django.utils import timezone
+
 from service_requests.models import (
     CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
-    VegetableRecipe, RecipeIngredient, VegetableRecommendation, PackageStatus
+    VegetableRecipe, RecipeIngredient, VegetableRecommendation, PackageStatus,
+    VendorCapabilityRequest, VendorCapabilityRequestStatus,
 )
 from service_requests.serializers import (
     CatalogCategorySerializer, ServiceSerializer, PackageSerializer,
     AddOnSerializer, CatalogChangeLogSerializer,
     VegetableRecipeListSerializer, VegetableRecipeDetailSerializer,
-    RecipeIngredientSerializer, VegetableRecommendationSerializer
+    RecipeIngredientSerializer, VegetableRecommendationSerializer,
+    VendorCapabilityRequestSerializer,
 )
 from service_requests.services import catalog as catalog_service
 
@@ -579,4 +583,50 @@ class AdminRecommendationDetailView(APIView):
         rec.delete()
         clear_catalog_cache()
         return Response({"success": True, "message": "Recommendation deleted"})
+
+
+# ── Vendor Skill/Service Approvals ────────────────────────────────────────────
+#
+# The Workforce (vendor) app lets its vendors browse this app's catalog and
+# submit a request to serve a given Service (see workforce_integration's
+# WorkforceCatalogListView / WorkforceCapabilityRequestListCreateView for
+# that vendor-facing half). This admin half is where staff review and
+# decide those requests -- approving here is the single flag the Workforce
+# app checks before letting that vendor accept jobs under the Service.
+
+class AdminVendorCapabilityRequestListView(APIView):
+    """GET /api/settings/catalog/v2/vendor-capabilities/?status=PENDING"""
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        qs = VendorCapabilityRequest.objects.select_related("service", "service__category").all()
+        status_filter = (request.GET.get("status") or "").strip().upper()
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        vendor_id = request.GET.get("vendor_id")
+        if vendor_id:
+            qs = qs.filter(vendor_id=vendor_id)
+        data = VendorCapabilityRequestSerializer(qs, many=True).data
+        return Response({"success": True, "data": data})
+
+
+class AdminVendorCapabilityRequestDecisionView(APIView):
+    """
+    POST /api/settings/catalog/v2/vendor-capabilities/<pk>/decide/
+    body: {"status": "APPROVED" | "REJECTED", "decision_note": "..."}
+    """
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        req_obj = get_object_or_404(VendorCapabilityRequest, pk=pk)
+        new_status = str(request.data.get("status") or "").strip().upper()
+        if new_status not in (VendorCapabilityRequestStatus.APPROVED, VendorCapabilityRequestStatus.REJECTED):
+            return Response({"success": False, "message": "status must be APPROVED or REJECTED"}, status=400)
+
+        req_obj.status = new_status
+        req_obj.decision_note = str(request.data.get("decision_note") or "").strip()
+        req_obj.decided_by = getattr(request.user, "email", "") or getattr(request.user, "username", "") or str(request.user)
+        req_obj.decided_at = timezone.now()
+        req_obj.save(update_fields=["status", "decision_note", "decided_by", "decided_at", "updated_at"])
+        return Response({"success": True, "data": VendorCapabilityRequestSerializer(req_obj).data})
 

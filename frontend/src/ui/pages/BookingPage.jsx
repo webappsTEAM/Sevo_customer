@@ -10289,7 +10289,50 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
 // category page and to grow that category's sub-tab bar automatically as
 // the catalog admin adds new services, instead of each category page
 // keeping its own private copy of this mapping.
-function getDbCategorySlugForKey(nk) {
+// Frontend route keys (from CATEGORY_SUBCATEGORIES / pillar clicks) do not
+// necessarily match the real admin-created CatalogCategory.slug -- e.g. the
+// "Cleaning" pillar's real category slug is "deep-cleaning", confirmed by
+// testing, not "cleaning". Hardcoding each of these as they were discovered
+// doesn't scale to every pillar (Goods & Transport, Home Services & Pest
+// Control, Paintings, etc. all need the same treatment, and any admin
+// rename/re-slug would silently break the hardcoded value again). Instead,
+// resolve the DB slug live from the same "/settings/catalog/public/categories/"
+// list already fetched for the pillar tiles (see `categoriesData`), by
+// matching on the category NAME -- which is what the admin UI shows and
+// edits, so it's what stays true. A small set of name hints covers the
+// known frontend keys that don't literally equal their category's name; a
+// key with no hint just tries itself. If nothing matches (categoriesData not
+// loaded yet, or a genuinely new key), falls back to the raw key so behavior
+// degrades to the old hardcoded-content path rather than breaking.
+const CATEGORY_NAME_HINTS = {
+  hvac: ["ac & appliance", "ac and appliance", "appliance"],
+  appliance_repair: ["ac & appliance", "ac and appliance", "appliance"],
+  microwave: ["ac & appliance", "ac and appliance", "appliance"],
+  refrigerator: ["ac & appliance", "ac and appliance", "appliance"],
+  washing_machine: ["ac & appliance", "ac and appliance", "appliance"],
+  tv_display: ["ac & appliance", "ac and appliance", "appliance"],
+  water_purifier: ["ac & appliance", "ac and appliance", "appliance"],
+  cleaning: ["cleaning"],
+  mason: ["mason"],
+  electrical: ["home services", "pest control", "electrician"],
+  plumbing: ["home services", "pest control", "electrician"],
+  carpentry: ["home services", "pest control", "electrician"],
+  pest_control: ["home services", "pest control"],
+  painting: ["paint"],
+  goods_transport: ["goods & transport", "goods and transport", "transport"],
+};
+
+function getDbCategorySlugForKey(nk, categoriesData) {
+  if (Array.isArray(categoriesData) && categoriesData.length > 0) {
+    const hints = CATEGORY_NAME_HINTS[nk] || [nk.replace(/_/g, " ")];
+    const match = categoriesData.find((c) => {
+      const name = (c.name || "").toLowerCase();
+      return hints.some((h) => name.includes(h));
+    });
+    if (match?.slug) return match.slug;
+  }
+  // Legacy hardcoded fallbacks -- kept only for the window before
+  // categoriesData has loaded, or if the live lookup above finds nothing.
   if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
     return "ac_appliance";
   }
@@ -10638,6 +10681,7 @@ export function BookingPage() {
           const cats = catRes.data.map((c, i) => ({
             id: c.id.toString(),
             name: c.name,
+            slug: c.slug || "",
             desc: c.description || "Expert " + c.name + " service",
             rating: c.rating || "4.8",
             jobs: c.jobs_count_str || "10K+",
@@ -16630,7 +16674,7 @@ export function CustomCleaningPackageModal({
       { name: "Texture Decor", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
     ],
     mason: [
-      // { name: "Minor Masonry / Small Construction Work", image: "/mockups/brick_wall_construction_red.jpg" },
+      { name: "Minor Masonry / Small Construction Work", image: "/mockups/brick_wall_construction_red.jpg" },
       { name: "Bathroom Tile Fixing", image: "/mockups/aac_block_wall_construction.jpg" }
     ],
     pest_control: [
@@ -16729,7 +16773,7 @@ export function CustomCleaningPackageModal({
     "Furniture Repair"
   ];
   const masonSubtabs = [
-    // "Minor Masonry / Small Construction Work",
+    "Minor Masonry / Small Construction Work",
     "Bathroom Tile Fixing"
   ];
   const applianceSubtabs = ["Microwave Oven", "Washing Machine", "Refrigerator & Fridge", "Water Purifier & RO", "TV & Display", "AC & Heating"];
@@ -16845,6 +16889,12 @@ export function CustomCleaningPackageModal({
 
   const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
   const [dbServicesList, setDbServicesList] = useState([]);
+  // Real category name+slug list, needed so getDbCategorySlugForKey can
+  // resolve each frontend key's real DB slug live instead of a hardcoded
+  // guess -- this modal is a separate component from BookingPage() itself
+  // (it doesn't share BookingPage's own categoriesData), so it fetches its
+  // own copy here, same endpoint the pillar tiles already use.
+  const [categoriesData, setCategoriesData] = useState([]);
 
   useEffect(() => {
     apiRequest("/settings/catalog/public/packages/")
@@ -16856,13 +16906,23 @@ export function CustomCleaningPackageModal({
       .catch((err) => console.warn("Public catalog packages unavailable, using local catalog fallback:", err?.message || err));
   }, []);
 
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/categories/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setCategoriesData(res.data.map((c) => ({ id: c.id?.toString(), name: c.name, slug: c.slug || "" })));
+        }
+      })
+      .catch((err) => console.warn("Public catalog categories unavailable:", err?.message || err));
+  }, []);
+
   // Real sub-services (the CatalogService/"Services Catalog" records an
   // admin creates -- e.g. "Home Cleaning" under Cleaning) drive the sub-tab
   // bar directly, independent of whether any package has been added under
   // them yet. This is fetched per-category (not once for everything) since
   // the /catalog/sub-services/ payload has no category_slug field to filter
   // on client-side.
-  const dbCategorySlugForEffectiveKey = getDbCategorySlugForKey(effectiveKey);
+  const dbCategorySlugForEffectiveKey = getDbCategorySlugForKey(effectiveKey, categoriesData);
   useEffect(() => {
     apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(dbCategorySlugForEffectiveKey)}`)
       .then((res) => {
@@ -16912,6 +16972,32 @@ export function CustomCleaningPackageModal({
     });
     return dbTabs.length > 0 ? dbTabs : baseList;
   }, [effectiveKey, categoryHasRealServices, dbServicesList]);
+
+  // Deeper, OPTIONAL layer below a Service: some services (e.g. "Full House
+  // Cleaning" -> "Occupied Apartment"/"Unoccupied Apartment", or "Fridge" ->
+  // "Fridge Gas Filling") are split into admin-managed Sub-Services
+  // (Service.customization.subtabs, see the admin's dedicated Sub-Services
+  // page). Not every service has these -- most don't -- so this stays an
+  // empty list for the common case and no extra tab row renders.
+  const activeServiceForSubTab = React.useMemo(() => {
+    if (!Array.isArray(dbServicesList)) return null;
+    const key = (activeSubTab || "").trim().toLowerCase();
+    if (!key) return null;
+    return dbServicesList.find(s => (s.name || "").trim().toLowerCase() === key) || null;
+  }, [dbServicesList, activeSubTab]);
+
+  const activeServiceSubtabs = React.useMemo(() => {
+    const tabs = activeServiceForSubTab?.customization?.subtabs;
+    return Array.isArray(tabs) ? tabs.filter(t => t.enabled !== false) : [];
+  }, [activeServiceForSubTab]);
+
+  const [activeSubServiceId, setActiveSubServiceId] = useState("");
+  // Reset the Sub-Service filter whenever the parent Service tab changes, so
+  // switching from "Fridge" to "AC Service & Cleaning" doesn't silently keep
+  // a stale sub-service selection filtering out everything.
+  useEffect(() => {
+    setActiveSubServiceId("");
+  }, [activeSubTab]);
 
   // Once the catalog admin has created real sub-service structure under the
   // Cleaning category, stop forcing customers into the old hardcoded
@@ -17762,19 +17848,19 @@ export function CustomCleaningPackageModal({
       ]
     },
     mason: {
-      // "Minor Masonry / Small Construction Work": [
-      //   {
-      //     id: "minor-masonry",
-      //     name: "Minor Masonry / Small Construction Work",
-      //     price: 0,
-      //     duration: "Flexible",
-      //     badge: "Popular",
-      //     badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
-      //     description: "Combined material & labour rate for small construction, brickwork, and plastering (minimum 500 sq.ft).",
-      //     includes: ["Cement, sand, and bricks", "Labour for laying and alignment", "Curing guidance"],
-      //     image: "/mockups/brick_wall_construction_red.jpg"
-      //   }
-      // ],
+      "Minor Masonry / Small Construction Work": [
+        {
+          id: "minor-masonry",
+          name: "Minor Masonry / Small Construction Work",
+          price: 0,
+          duration: "Flexible",
+          badge: "Popular",
+          badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
+          description: "Combined material & labour rate for small construction, brickwork, and plastering (minimum 500 sq.ft).",
+          includes: ["Cement, sand, and bricks", "Labour for laying and alignment", "Curing guidance"],
+          image: "/mockups/brick_wall_construction_red.jpg"
+        }
+      ],
       "Bathroom Tile Fixing": [
         {
           id: "bathroom-tile-fixing",
@@ -17855,6 +17941,31 @@ export function CustomCleaningPackageModal({
       const explicitSubtab = (p.service_customization && p.service_customization.subtab) || p.subtab;
       if (explicitSubtab && activeSubTab && explicitSubtab === activeSubTab) {
         return true;
+      }
+      // Admin explicitly scoped this package to one Sub-Service via the
+      // Sub-Services admin page (Package.sub_service_key -> one entry's id
+      // inside the parent Service's customization.subtabs list). Resolve
+      // that id back to its label and compare against the active tab, since
+      // activeSubTab here holds the tab's display label, not its id.
+      if (p.sub_service_key && p.service_customization && Array.isArray(p.service_customization.subtabs)) {
+        const matchedSubtab = p.service_customization.subtabs.find((t) => t.id === p.sub_service_key);
+        if (matchedSubtab && activeSubTab && (matchedSubtab.label === activeSubTab || matchedSubtab.id === activeSubTab)) {
+          return true;
+        }
+      }
+
+      // 3. Once this category is entirely catalog-driven (the admin has
+      //    added real Services under it -- see subCategories/categoryHasRealServices
+      //    above) AND this tab is one of those real Services, that mapping
+      //    is authoritative: stop here rather than falling through to the
+      //    legacy keyword heuristics below. Those heuristics predate the
+      //    admin's Services/Sub-Services catalog and use loose substring
+      //    matches (e.g. a service slug "ac-gas-refill" containing "ref")
+      //    that were never meant to judge a brand-new flat Service tab like
+      //    "Fridge" -- without this guard they leak unrelated packages from
+      //    other real Services (like "AC Gas & Refrigerant") into it.
+      if (categoryHasRealServices && activeServiceForSubTab) {
+        return false;
       }
 
       if (normalizedKey === "mason") {
@@ -18146,7 +18257,7 @@ export function CustomCleaningPackageModal({
       return normSName.includes(normTab) || normTab.includes(normSName) || pName.includes(normTab) || normTab.includes(pName);
     };
 
-    const targetDbCategory = getDbCategorySlugForKey(normalizedKey);
+    const targetDbCategory = getDbCategorySlugForKey(normalizedKey, categoriesData);
     // Filter database packages to only include those matching the target category and subtab
     const filteredDbPackages = dbCatalogPackages.filter(p => {
       const pCatSlug = (p.category_slug || "").toLowerCase();
@@ -18156,6 +18267,12 @@ export function CustomCleaningPackageModal({
       const isRefDrainCleaning = (targetDbCategory === "ac_appliance") &&
         (p.slug === "ref-cln-4" || p.name === "Drain Cleaning" || p.name === "Refrigerator Drain Cleaning");
       if (isRefDrainCleaning) return false;
+
+      // A Sub-Service chip is selected above (e.g. "Fridge Gas Filling")
+      // -- narrow down to only packages explicitly scoped to it.
+      if (activeSubServiceId) {
+        return p.sub_service_key === activeSubServiceId;
+      }
 
       return doesPackageMatchTab(p);
     });
@@ -18233,7 +18350,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -18458,6 +18575,39 @@ export function CustomCleaningPackageModal({
             );
           })}
         </div>
+
+        {/* Sub-Service Chip Row -- only appears when the selected Service has
+            admin-managed Sub-Services (Service.customization.subtabs). Most
+            services don't have these, so this row is absent for them. */}
+        {activeServiceSubtabs.length > 0 && (
+          <div className="flex overflow-x-auto gap-2 pb-2 pt-0.5 justify-start scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setActiveSubServiceId("")}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                activeSubServiceId === ""
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
+              }`}
+            >
+              All {activeSubTab}
+            </button>
+            {activeServiceSubtabs.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveSubServiceId(t.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                  activeSubServiceId === t.id
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {/* End of sticky header+tabs */}
 
@@ -18470,7 +18620,9 @@ export function CustomCleaningPackageModal({
           <div className="pt-2">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
               <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-              {activeSubTab} Packages
+              {activeSubServiceId
+                ? `${(activeServiceSubtabs.find(t => t.id === activeSubServiceId)?.label) || activeSubTab} Packages`
+                : `${activeSubTab} Packages`}
             </h3>
           </div>
 
@@ -24652,7 +24804,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getActiveServices = () => {
     const isKnownStaticTab = activeTab === "packages" || activeTab === "appliance" || activeTab === "cabinet_tile" || activeTab === "addons";
-    const dbItemsForActiveTab = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
+    const dbItemsForActiveTab = dbPackages.filter(p => p.sub_service_key === activeTab || p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
     const mapDbPkgToCard = (p) => ({
       id: p.slug || String(p.id),
       db_id: p.id,

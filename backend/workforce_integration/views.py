@@ -1130,3 +1130,109 @@ class WorkforceBookingFromQuoteView(APIView):
             "tracking_token": str(new_sr.tracking_token) if new_sr.tracking_token else None
         }, status=status.HTTP_201_CREATED)
 
+
+class WorkforceCatalogListView(APIView):
+    """
+    GET /api/workforce-integration/catalog/
+    Read-only categories + services (the "skills" a vendor can request to
+    serve), for the Workforce app to show its vendors a picker when they
+    apply. Same shared-secret auth as the rest of this module -- the
+    Workforce app has no user session to send.
+
+    Deliberately reuses CatalogCategory/Service directly rather than going
+    through the customer-facing public endpoints (those exclude inactive
+    rows and don't nest services under categories) -- a vendor should be
+    able to see (and request) a Service even while admin is still setting
+    it up, since the approval step below is the actual gate.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import CatalogCategory
+        from service_requests.serializers import ServiceSerializer
+
+        categories = CatalogCategory.objects.filter(is_active=True).order_by("sort_order", "name").prefetch_related("services")
+        data = []
+        for cat in categories:
+            services = ServiceSerializer(cat.services.filter(is_active=True).order_by("sort_order", "name"), many=True).data
+            data.append({
+                "id": cat.id,
+                "name": cat.name,
+                "slug": cat.slug,
+                "services": services,
+            })
+        return Response({"success": True, "data": data})
+
+
+class WorkforceCapabilityRequestListCreateView(APIView):
+    """
+    GET  /api/workforce-integration/vendor-capabilities/?vendor_id=<id>
+      -> that vendor's own requests (any status), so the Workforce app can
+         show "pending" / "approved" / "rejected" against each skill.
+    POST /api/workforce-integration/vendor-capabilities/
+      body: {"vendor_id": "...", "vendor_name": "...", "service_ids": [1, 2, ...], "note": "..."}
+      -> creates a PENDING request per service_id not already requested by
+         this vendor. Idempotent: re-submitting a service_id that already
+         has a row (any status) leaves that row untouched rather than
+         resetting an already-decided one back to PENDING.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import VendorCapabilityRequest
+        from service_requests.serializers import VendorCapabilityRequestSerializer
+
+        vendor_id = (request.GET.get("vendor_id") or "").strip()
+        if not vendor_id:
+            return Response({"error": "vendor_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = VendorCapabilityRequest.objects.select_related("service", "service__category").filter(vendor_id=vendor_id)
+        status_filter = (request.GET.get("status") or "").strip().upper()
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response({"success": True, "data": VendorCapabilityRequestSerializer(qs, many=True).data})
+
+    def post(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import VendorCapabilityRequest, Service
+        from service_requests.serializers import VendorCapabilityRequestSerializer
+
+        data = request.data
+        vendor_id = str(data.get("vendor_id") or "").strip()
+        vendor_name = str(data.get("vendor_name") or "").strip()
+        service_ids = data.get("service_ids") or ([data["service_id"]] if data.get("service_id") else [])
+        note = str(data.get("note") or "").strip()
+
+        if not vendor_id:
+            return Response({"error": "vendor_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not service_ids:
+            return Response({"error": "service_ids (or service_id) is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        created, already_existing = [], []
+        for service_id in service_ids:
+            service = Service.objects.filter(pk=service_id).first()
+            if not service:
+                continue
+            row, was_created = VendorCapabilityRequest.objects.get_or_create(
+                vendor_id=vendor_id,
+                service=service,
+                defaults={"vendor_name": vendor_name, "note": note},
+            )
+            (created if was_created else already_existing).append(row)
+
+        all_rows = created + already_existing
+        return Response({
+            "success": True,
+            "data": VendorCapabilityRequestSerializer(all_rows, many=True).data,
+            "created_count": len(created),
+            "already_existing_count": len(already_existing),
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+

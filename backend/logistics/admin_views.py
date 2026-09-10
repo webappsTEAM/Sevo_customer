@@ -144,64 +144,33 @@ class AdminServiceTierDetailView(APIView):
         return _ok(ServiceTierPricingSerializer(tier).data)
 
     def patch(self, request, pk):
+        # Goods & Transport unification, Phase 2: Package is now the single
+        # place admins edit GT pricing (see the "Goods & Transport Distance
+        # Pricing" section on the Package edit modal, Catalog > Packages).
+        # ServiceTier is kept only as an auto-synced mirror written by the
+        # Package save bridge (service_requests/services/catalog.py) so the
+        # live fare engine, existing bookings' logistics_tier FK, and this
+        # rate card's read/history views keep working unchanged. Editing a
+        # tier directly here would silently diverge from its Package and get
+        # overwritten by the next Package save, so it's refused outright
+        # rather than left as a trap. GET and the history view are untouched
+        # -- this screen is still useful as a read-only rate-card reference.
+        #
+        # update_tier_pricing/changed_fields (pricing_admin.py) are kept as
+        # dead code below this cutover rather than deleted, since they are
+        # still the exact logic a future, deliberate schema migration (full
+        # ServiceTier retirement, explicitly deferred) would want to reuse
+        # or delete outright -- not resurrected here.
         tier = self._tier(pk)
         if not tier:
             return _fail("Service tier not found.", "TIER_NOT_FOUND", status.HTTP_404_NOT_FOUND)
-
-        data = request.data if isinstance(request.data, dict) else {}
-        reason = str(data.get("reason") or "").strip()
-
-        from .pricing_admin import changed_fields
-        try:
-            pending = changed_fields(tier, data)
-        except DjangoValidationError as exc:
-            # An unparseable rate. Reported as a field error rather than
-            # accepted as "clear this field" -- see changed_fields().
-            return _fail(
-                "Some values were rejected.", "VALIDATION_ERROR",
-                status.HTTP_400_BAD_REQUEST,
-                errors=exc.message_dict if hasattr(exc, "message_dict") else {"__all__": exc.messages},
-            )
-
-        if not pending:
-            return _ok(
-                ServiceTierPricingSerializer(tier).data,
-                changed=[], message="No changes to save.",
-            )
-
-        # A rate change without a reason is not auditable after the fact --
-        # "who changed it" answers half the question operations actually asks.
-        if any(f in PRICING_FIELDS for f in pending) and not reason:
-            return _fail(
-                "A reason is required when changing rates. It is recorded in the "
-                "pricing history alongside the old and new values.",
-                "REASON_REQUIRED", status.HTTP_400_BAD_REQUEST,
-                fields=[f for f in pending if f in PRICING_FIELDS],
-            )
-
-        try:
-            tier, rows = update_tier_pricing(
-                tier, data, request.user,
-                reason=reason,
-                expected_updated_at=data.get("expected_updated_at"),
-            )
-        except PricingPermissionError as exc:
-            return _fail(str(exc), "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
-                         fields=exc.fields)
-        except PricingConflictError as exc:
-            return _fail(str(exc), "TIER_CHANGED_ELSEWHERE", status.HTTP_409_CONFLICT,
-                         current=ServiceTierPricingSerializer(self._tier(pk)).data)
-        except DjangoValidationError as exc:
-            return _fail(
-                "Some values were rejected.", "VALIDATION_ERROR",
-                status.HTTP_400_BAD_REQUEST,
-                errors=exc.message_dict if hasattr(exc, "message_dict") else {"__all__": exc.messages},
-            )
-
-        return _ok(
-            ServiceTierPricingSerializer(tier).data,
-            changed=[r.field_name for r in rows],
-            message="Rates updated. %s" % PRICE_LOCK_NOTICE,
+        return _fail(
+            "Goods & Transport pricing is now managed from Catalog > Packages "
+            "(open the package and edit its “Goods & Transport Distance "
+            "Pricing” section). This rate card is read-only and no longer "
+            "accepts edits directly, so a change made here would just be "
+            "overwritten the next time the linked package is saved.",
+            "PRICING_MANAGED_VIA_PACKAGE", status.HTTP_409_CONFLICT,
         )
 
 

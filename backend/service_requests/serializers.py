@@ -21,6 +21,7 @@ from .models import (
     EstimationQuotation, EstimationQuotationItem,
     BookingSeries,
     BookingMessage,
+    VendorCapabilityRequest,
     _generate_secure_start_otp,
 )
 
@@ -121,6 +122,23 @@ class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
         fields = '__all__'
+
+
+class VendorCapabilityRequestSerializer(serializers.ModelSerializer):
+    """
+    Vendor app <-> CalServices: a vendor asks to be approved to serve one
+    catalog Service, an admin approves/rejects it here. See
+    VendorCapabilityRequest's own docstring in models.py for why this has
+    no FK to the Workforce app's own vendor identity.
+    """
+    service_name  = serializers.CharField(source="service.name", read_only=True)
+    category_id   = serializers.IntegerField(source="service.category_id", read_only=True)
+    category_name = serializers.CharField(source="service.category.name", read_only=True)
+
+    class Meta:
+        model = VendorCapabilityRequest
+        fields = '__all__'
+        read_only_fields = ["status", "decision_note", "decided_by", "decided_at", "requested_at", "updated_at"]
 
 
 class AddOnSerializer(serializers.ModelSerializer):

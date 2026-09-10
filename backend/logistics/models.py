@@ -159,6 +159,15 @@ class ServiceTier(models.Model):
 
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
     icon = models.CharField(max_length=100, blank=True, default="")  # lucide-react icon name used by frontend
+    # Mirrors service_requests.Package.image (the "Package Image" an admin
+    # uploads on the catalog Package screen). Blank means the booking page
+    # falls back to its built-in technical line-drawing for this vehicle
+    # class -- see MiniTruckBookingHosurPage.jsx / TwoWheelerBookingHosurPage.jsx
+    # tierToVehicle(). Written by the sync bridge in
+    # service_requests/services/catalog.py, same as every other gt_*-mirrored
+    # field; never set directly here now that the rate card admin screen is
+    # read-only.
+    image = models.CharField(max_length=500, blank=True, default="")
     duration = models.CharField(max_length=50, blank=True, default="")
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)

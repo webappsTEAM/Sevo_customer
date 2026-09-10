@@ -1474,7 +1474,7 @@ export default function HomePageCustomizerPage() {
                   className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
                     previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
                   }`}
-                  title="Preview & Edit 5 Core Specialized Pillars Modal"
+                  title="Preview & Edit Core Specialized Pillars Modal"
                 >
                   <span>⚡ 5 Pillars</span>
                 </button>
