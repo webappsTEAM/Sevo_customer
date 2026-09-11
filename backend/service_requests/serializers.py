@@ -538,6 +538,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "workforce_job_id", "external_assignment_id",
             "start_otp", "payment_confirmation_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
             "parent_request", "request_kind", "quote_number", "child_requests",
+            "job_type", "estimation",
             # GT-C-03: so the customer-facing bookings list can tell which
             # completed bookings are eligible to file an insurance claim
             # against, without a second per-booking API call.
@@ -890,6 +891,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "logistics_leg", "logistics_leg_updated_at",
             "start_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
+            "job_type", "estimation",
             "created_at", "updated_at",
         )
 
