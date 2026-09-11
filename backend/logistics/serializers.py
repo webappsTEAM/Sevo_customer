@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from .models import Lane, ServiceArea, ServiceTier
@@ -133,6 +134,10 @@ class GoodsItemSerializer(serializers.ModelSerializer):
             "is_oversized", "is_prohibited", "requires_special_handling", "special_handling_charge",
             "is_two_wheeler_compatible", "order", "is_active",
         ]
+        extra_kwargs = {
+            "default_weight_kg": {"required": True, "min_value": Decimal("0.01")},
+            "default_cft": {"required": True, "min_value": Decimal("0.01")},
+        }
 
 
 class AdminGoodsItemSerializer(serializers.ModelSerializer):
@@ -149,6 +154,10 @@ class AdminGoodsItemSerializer(serializers.ModelSerializer):
             "is_two_wheeler_compatible", "order", "is_active", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "category_name", "category_slug", "created_at", "updated_at"]
+        extra_kwargs = {
+            "default_weight_kg": {"required": True, "min_value": Decimal("0.01")},
+            "default_cft": {"required": True, "min_value": Decimal("0.01")},
+        }
 
 
 class PackersMoversConfigSerializer(serializers.ModelSerializer):

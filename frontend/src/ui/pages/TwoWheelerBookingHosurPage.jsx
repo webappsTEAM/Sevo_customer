@@ -698,8 +698,8 @@ export function TwoWheelerBookingHosurPage() {
       ? { lat: Number(coords.lat), lng: Number(coords.lng) }
       : null
 
-  const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")
+  const pickupAddressValue = pickup || ""
+  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
   const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
   const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
@@ -1223,8 +1223,32 @@ export function TwoWheelerBookingHosurPage() {
 
   const handleBookNow = () => {
     // Instant Booking: sets bookingMode to IMMEDIATE, clears any stale slot/date, moves to Step 4 Summary
-    if (!pickup) setPickup("Hosur, Tamil Nadu")
-    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!pickup || !pickup.trim()) {
+      setBookingError("Please enter your pickup location.")
+      const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+      if (pickupEl) {
+        pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        pickupEl.focus?.()
+      }
+      return
+    }
+    if (!drop || !drop.trim()) {
+      if (selectedRoute?.to) {
+        const exactDrop = formatExactLocation(selectedRoute.to)
+        setDrop(exactDrop)
+        resolveLocationCoords(exactDrop).then((c) => {
+          if (c) setDropCoords({ ...c, forAddress: exactDrop })
+        })
+      } else {
+        setBookingError("Please enter your delivery destination.")
+        const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+        if (dropEl) {
+          dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+          dropEl.focus?.()
+        }
+        return
+      }
+    }
     if (!selectedVehicle) {
       setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
     }
@@ -1238,8 +1262,32 @@ export function TwoWheelerBookingHosurPage() {
 
   const handleScheduleBooking = () => {
     // Schedule Booking: sets bookingMode to SCHEDULED, initializes default date/slot if unset, opens Step 3 Slot selection
-    if (!pickup) setPickup("Hosur, Tamil Nadu")
-    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!pickup || !pickup.trim()) {
+      setBookingError("Please enter your pickup location.")
+      const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+      if (pickupEl) {
+        pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        pickupEl.focus?.()
+      }
+      return
+    }
+    if (!drop || !drop.trim()) {
+      if (selectedRoute?.to) {
+        const exactDrop = formatExactLocation(selectedRoute.to)
+        setDrop(exactDrop)
+        resolveLocationCoords(exactDrop).then((c) => {
+          if (c) setDropCoords({ ...c, forAddress: exactDrop })
+        })
+      } else {
+        setBookingError("Please enter your delivery destination.")
+        const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+        if (dropEl) {
+          dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+          dropEl.focus?.()
+        }
+        return
+      }
+    }
     if (!selectedVehicle) {
       setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
     }
@@ -2003,9 +2051,16 @@ export function TwoWheelerBookingHosurPage() {
                         }
                         return
                       }
+                      if (!pickup || !pickup.trim()) {
+                        const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+                        if (pickupEl) {
+                          pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                          pickupEl.focus?.()
+                        }
+                        return
+                      }
                       setDestinationError("")
                       setSelectedVehicle(vehicle)
-                      if (!pickup) setPickup("Hosur, Tamil Nadu")
                       setNoServiceRoute(false)
                       setVehicleSelectorOpen(true)
                     }}
@@ -2039,10 +2094,22 @@ export function TwoWheelerBookingHosurPage() {
                 <div
                   key={idx}
                   onClick={() => {
-                    setDrop(route.to)
+                    const destination = route.to || ""
+                    if (destination) {
+                      const exactDrop = formatExactLocation(destination)
+                      setDrop(exactDrop)
+                      setDropCoords(null)
+                      resolveLocationCoords(exactDrop).then((c) => {
+                        if (c) setDropCoords({ ...c, forAddress: exactDrop })
+                      })
+                    }
                     setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
                     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    if (!pickup) {
+                      const pickupEl = document.getElementById("pickup-input")
+                      if (pickupEl) pickupEl.focus?.()
+                    }
                   }}
                   className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
@@ -2081,7 +2148,12 @@ export function TwoWheelerBookingHosurPage() {
               key={i}
               type="button"
               onClick={() => {
-                setPickup(`${area}, Hosur`)
+                const formatted = formatExactLocation(`${area}, Hosur`)
+                setPickup(formatted)
+                setPickupCoords(null)
+                resolveLocationCoords(formatted).then((c) => {
+                  if (c) setPickupCoords({ ...c, forAddress: formatted })
+                })
                 const bar = document.getElementById("estimate-bar")
                 if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
               }}
@@ -2284,7 +2356,7 @@ export function TwoWheelerBookingHosurPage() {
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Bengaluru, Karnataka, India"}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                   </div>
                   <button
                     type="button"
@@ -2323,7 +2395,7 @@ export function TwoWheelerBookingHosurPage() {
                     <p className="text-[11px] font-bold text-slate-800 truncate">
                       {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
                     </p>
-                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
@@ -2831,7 +2903,7 @@ export function TwoWheelerBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Bengaluru, Karnataka, India"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                         </div>
                       </div>
                       <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
@@ -2840,7 +2912,7 @@ export function TwoWheelerBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                         </div>
                       </div>
                       {/* Goods Type */}

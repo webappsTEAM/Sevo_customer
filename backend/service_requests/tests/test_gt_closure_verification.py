@@ -54,6 +54,7 @@ class GTClosureProductionVerificationTests(TestCase):
         # Active Service Tiers
         self.truck_tier = ServiceTier.objects.create(
             category=LogisticsCategory.TRUCK,
+            vehicle_class=ServiceTier.VehicleClass.TRUCK,
             city="hosur",
             slug=f"ace-closure-{uid}",
             name="Tata Ace Pro",
@@ -71,6 +72,7 @@ class GTClosureProductionVerificationTests(TestCase):
 
         self.tw_tier = ServiceTier.objects.create(
             category=LogisticsCategory.TWO_WHEELER,
+            vehicle_class=ServiceTier.VehicleClass.TWO_WHEELER,
             city="hosur",
             slug=f"tw-closure-{uid}",
             name="Bike Express",

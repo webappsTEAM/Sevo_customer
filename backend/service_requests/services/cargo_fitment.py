@@ -270,6 +270,21 @@ def resolve_cargo_payload(
                     "selected_category": category_obj.name,
                 })
 
+            # Unconfigured cargo item safety gate: items with unconfigured dimensions (None or <= 0)
+            # cannot participate in instant authoritative pricing or vehicle fitment.
+            if (
+                item.default_weight_kg is None
+                or item.default_weight_kg <= Decimal("0.00")
+                or item.default_cft is None
+                or item.default_cft <= Decimal("0.00")
+            ):
+                validation_errors.append({
+                    "error": f"Cargo item '{item.name}' does not have configured physical dimensions (weight and volume required).",
+                    "code": "UNCONFIGURED_CARGO_ITEM",
+                    "item": item.slug,
+                })
+                continue
+
             item_weight = item.default_weight_kg * quantity
             item_cft = item.default_cft * quantity
             item_sp_handling = (item.special_handling_charge * quantity) if item.requires_special_handling else Decimal("0.00")
@@ -557,6 +572,7 @@ def recommend_vehicles_for_cargo(
             "special_handling_charge": str(cargo_summary.get("special_handling_charge", "0.00")),
             "requires_special_handling": cargo_summary.get("requires_special_handling", False),
             "is_valid": cargo_summary.get("is_valid", True),
+            "is_two_wheeler_compatible": cargo_summary.get("is_two_wheeler_compatible", True),
             "validation_errors": cargo_summary.get("validation_errors", []),
         },
         "recommended_tier": recommended,

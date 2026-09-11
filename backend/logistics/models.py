@@ -306,8 +306,14 @@ class GoodsItem(models.Model):
     slug = models.SlugField(max_length=100, unique=True)
     name = models.CharField(max_length=150)
     unit = models.CharField(max_length=30, default="piece")
-    default_weight_kg = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("5.00"))
-    default_cft = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("1.00"))
+    default_weight_kg = models.DecimalField(
+        max_digits=7, decimal_places=2,
+        help_text="Explicit item weight in kg. Must be explicitly configured; zero indicates unconfigured."
+    )
+    default_cft = models.DecimalField(
+        max_digits=7, decimal_places=2,
+        help_text="Explicit item volume in CFT. Must be explicitly configured; zero indicates unconfigured."
+    )
 
     is_fragile = models.BooleanField(default=False)
     is_heavy = models.BooleanField(default=False)

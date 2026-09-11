@@ -48,6 +48,7 @@ from service_requests.services.logistics_pricing import (
     resolve_logistics_fare_v2,
     UnresolvedLogisticsFareError,
 )
+from service_requests.serializers import ServiceRequestPublicCreateSerializer
 
 
 class GTPackersMoversClosureTests(TestCase):
@@ -2241,5 +2242,186 @@ class GTPackersMoversClosureTests(TestCase):
         finally:
             self.tier_truck_1.crew_size = orig_crew
             self.tier_truck_1.save()
+
+    def test_pm_validity_metadata(self):
+        """
+        Verify server-provided validity windows:
+        - Instant authoritative quote: valid for 30 minutes.
+        - Non-binding survey estimate: valid for 48 hours for survey scheduling.
+        """
+        inv = [{"goods_item_id": self.item_double_bed.id, "quantity": 1}]
+        # 1. Authoritative Instant Quote (30 mins validity)
+        instant_quote = compute_packers_movers_quote(
+            pickup_lat=12.734, pickup_lng=77.828,
+            drop_lat=12.850, drop_lng=77.780,
+            inventory=inv,
+            city="Hosur",
+            packing_tier="standard",
+            dismantling_required=False,
+            unpacking_required=False,
+            service_tier_id=self.tier_truck_1.id,
+        )
+        self.assertTrue(instant_quote["is_authoritative"])
+        self.assertFalse(instant_quote["is_estimate"])
+        self.assertEqual(instant_quote["survey_status"], "INSTANT_ESTIMATE_APPROVED")
+        valid_until_instant = timezone.datetime.fromisoformat(instant_quote["valid_until"])
+        delta_instant = valid_until_instant - timezone.now()
+        # Should be approximately 30 minutes (between 25 and 31 mins)
+        self.assertGreaterEqual(delta_instant.total_seconds(), 25 * 60)
+        self.assertLessEqual(delta_instant.total_seconds(), 31 * 60)
+
+        # 2. Survey Required Estimate (48h scheduling validity)
+        survey_quote = compute_packers_movers_quote(
+            pickup_lat=12.734, pickup_lng=77.828,
+            drop_lat=12.850, drop_lng=77.780,
+            inventory=[{"name": "Completely Uncataloged Random Piano Item", "quantity": 1}],
+            city="Hosur",
+            service_tier_id=self.tier_truck_1.id,
+        )
+        self.assertFalse(survey_quote["is_authoritative"])
+        self.assertTrue(survey_quote["is_estimate"])
+        self.assertEqual(survey_quote["survey_status"], "MANUAL_REVIEW_REQUIRED")
+        valid_until_survey = timezone.datetime.fromisoformat(survey_quote["valid_until"])
+        delta_survey = valid_until_survey - timezone.now()
+        # Should be approximately 48 hours (between 47 and 49 hours)
+        self.assertGreaterEqual(delta_survey.total_seconds(), 47 * 3600)
+        self.assertLessEqual(delta_survey.total_seconds(), 49 * 3600)
+
+    def test_pm_insurance_disallowed_on_booking(self):
+        """
+        Verify that self-service P&M bookings cannot opt into transit insurance online.
+        P&M transit insurance requires on-site pre-move survey appraisal.
+        Attempting to submit insurance_opted_in=True on packers_movers must be rejected with 400.
+        Ensures customer-visible quoted amount and stored booking amount cannot diverge.
+        """
+        payload = {
+            "customer_name": "Ramesh Kumar",
+            "phone": "9876543210",
+            "email": "cust@example.com",
+            "service_category": "packers_movers",
+            "issue_title": "Packers & Movers Shifting",
+            "description": "Moving 1 BHK household items with king double bed and wardrobe.",
+            "address": "123 Main St, Hosur",
+            "latitude": "12.734200",
+            "longitude": "77.828100",
+            "drop_address": "456 Cross Rd, Hosur",
+            "drop_latitude": "12.850100",
+            "drop_longitude": "77.780200",
+            "preferred_date": (timezone.now() + timezone.timedelta(days=2)).strftime("%Y-%m-%d"),
+            "preferred_time": "10:00 - 12:00",
+            "payment_method": "COD",
+            "total_amount": "2500.00",
+            "logistics_tier": self.tier_truck_1.id,
+            "drop_contact_name": "Suresh Kumar",
+            "drop_contact_phone": "9123456780",
+            "consignee_relationship": "Self",
+            "insurance_opted_in": True,
+            "declared_value": "50000.00",
+        }
+        serializer = ServiceRequestPublicCreateSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("insurance_opted_in", serializer.errors)
+        err_msg = str(serializer.errors["insurance_opted_in"])
+        self.assertIn("not available for instant online Packers & Movers booking", err_msg)
+
+    def test_pm_missing_rate_configuration_fails_closed(self):
+        """
+        ServiceTier rate configuration audit:
+        If required pricing fields (base_fare, per_km_rate, loading_unloading_charge)
+        are missing (None), the tier must NOT silently convert them to ₹0 free services.
+        Instead, it must fail closed:
+        - survey_status = MANUAL_REVIEW_REQUIRED
+        - is_authoritative = False
+        - is_estimate = True
+        - total = None
+        """
+        uid = uuid.uuid4().hex[:6]
+        # Create an incomplete tier with per_km_rate=None (missing rate!)
+        incomplete_tier = ServiceTier.objects.create(
+            category=LogisticsCategory.PACKERS_MOVERS,
+            city="Hosur",
+            slug=f"incomplete-tier-{uid}",
+            name="Incomplete Rate Tier",
+            vehicle_class=ServiceTier.VehicleClass.TRUCK,
+            starting_price=Decimal("1800.00"),
+            base_fare=Decimal("1500.00"),
+            per_km_rate=None,  # Missing rate!
+            free_km=Decimal("3.00"),
+            loading_unloading_charge=Decimal("400.00"),
+            max_weight_kg=Decimal("1000.00"),
+            max_cft=Decimal("300.00"),
+            is_active=True,
+        )
+
+        inv = [{"goods_item_id": self.item_double_bed.id, "quantity": 1}]
+        quote = compute_packers_movers_quote(
+            pickup_lat=12.734, pickup_lng=77.828,
+            drop_lat=12.850, drop_lng=77.780,
+            inventory=inv,
+            city="Hosur",
+            service_tier_id=incomplete_tier.id,
+        )
+        self.assertFalse(quote["is_authoritative"])
+        self.assertTrue(quote["is_estimate"])
+        self.assertEqual(quote["survey_status"], "MANUAL_REVIEW_REQUIRED")
+        self.assertIsNone(quote["total"])
+        self.assertIsNone(quote["subtotal"])
+        self.assertIsNone(quote["pricing"]["total"])
+        self.assertIn("incompletely configured", quote["estimate_notice"])
+
+    def test_pm_starting_price_vs_base_fare_semantics(self):
+        """
+        Explicit distinction between starting_price and base_fare:
+        - starting_price is purely a customer-facing "Starts at" marketing baseline.
+        - base_fare is the actual pricing engine input.
+        - If base_fare is absent (None), starting_price does NOT silently become base_fare.
+          Instead, instant pricing requires explicit base_fare and fails closed to manual review.
+        - When explicit base_fare is set, it is accurately used as the transport base.
+        """
+        uid = uuid.uuid4().hex[:6]
+        # Tier with starting_price configured but base_fare=None
+        tier_no_base_fare = ServiceTier.objects.create(
+            category=LogisticsCategory.PACKERS_MOVERS,
+            city="Hosur",
+            slug=f"no-base-fare-{uid}",
+            name="Marketing Baseline Only Tier",
+            vehicle_class=ServiceTier.VehicleClass.TRUCK,
+            starting_price=Decimal("1499.00"),  # "Starts at ₹1,499" marketing price
+            base_fare=None,                     # No transport base fare configured
+            per_km_rate=Decimal("25.00"),
+            free_km=Decimal("3.00"),
+            loading_unloading_charge=Decimal("400.00"),
+            max_weight_kg=Decimal("1000.00"),
+            max_cft=Decimal("300.00"),
+            is_active=True,
+        )
+
+        inv = [{"goods_item_id": self.item_double_bed.id, "quantity": 1}]
+        quote = compute_packers_movers_quote(
+            pickup_lat=12.734, pickup_lng=77.828,
+            drop_lat=12.850, drop_lng=77.780,
+            inventory=inv,
+            city="Hosur",
+            service_tier_id=tier_no_base_fare.id,
+        )
+        # Must NOT silently use starting_price (1499) as base_fare to generate an instant quote
+        self.assertFalse(quote["is_authoritative"])
+        self.assertEqual(quote["survey_status"], "MANUAL_REVIEW_REQUIRED")
+        self.assertIsNone(quote["total"])
+        self.assertIsNone(quote["base_fare"])
+
+        # Once base_fare is explicitly set, instant quote succeeds using that explicit base_fare
+        tier_no_base_fare.base_fare = Decimal("1200.00")
+        tier_no_base_fare.save()
+        quote_valid = compute_packers_movers_quote(
+            pickup_lat=12.734, pickup_lng=77.828,
+            drop_lat=12.850, drop_lng=77.780,
+            inventory=inv,
+            city="Hosur",
+            service_tier_id=tier_no_base_fare.id,
+        )
+        self.assertTrue(quote_valid["is_authoritative"])
+        self.assertEqual(quote_valid["base_fare"], Decimal("1200.00"))
+        self.assertIsNotNone(quote_valid["total"])
 
 

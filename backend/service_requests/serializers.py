@@ -368,6 +368,15 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
                 "description": f"Prohibited Cargo: {safety_msg}"
             })
 
+        # GT-C-03: Transit insurance is not available for instant self-service Packers & Movers
+        if attrs.get("insurance_opted_in") and category == "packers_movers":
+            raise serializers.ValidationError({
+                "insurance_opted_in": (
+                    "Transit insurance is not available for instant online Packers & Movers booking. "
+                    "Full-value transit insurance is arranged via pre-move survey."
+                )
+            })
+
         # Fixes GT-A-03 (partial): "identity requirement scaled to declared
         # value". Below the threshold this is a no-op -- most bookings don't
         # even set declared_value. Above it, require both a receiver contact

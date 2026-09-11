@@ -33,10 +33,11 @@ SERVICE_AREAS = [
 # alone, because this command is re-run on deploys and silently reverting
 # live pricing would be the worst possible thing for it to do. Use
 # --force-pricing to deliberately reset every tier back to this card.
-#
-# Packers & Movers is deliberately absent: it stays survey/quotation priced
-# (CALTRACK_PHASE_14 H.2), and DISTANCE_PRICED_CATEGORIES excludes it, so a
-# per-km rate there would be data the fare engine never reads.
+# P&M supports instant authoritative estimates when all required
+# catalog, vehicle, city configuration and routing inputs are available.
+# Moves requiring survey/review remain non-payable estimates until final
+# quotation. DISTANCE_PRICED_CATEGORIES excludes it from the simple distance
+# card because it uses dedicated volume/inventory/crew configuration.
 #
 # surge_multiplier is not in the card and is left at its default of 1.00 --
 # no surge value was supplied, and inventing one would change every fare.

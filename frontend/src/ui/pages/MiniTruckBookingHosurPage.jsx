@@ -952,8 +952,8 @@ export function MiniTruckBookingHosurPage() {
       ? { lat: Number(coords.lat), lng: Number(coords.lng) }
       : null
 
-  const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")
+  const pickupAddressValue = pickup || ""
+  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
   const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
   const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
@@ -1223,11 +1223,22 @@ export function MiniTruckBookingHosurPage() {
   ]
 
   const handleRouteSelect = (route) => {
-    setPickup("Sipcot Industrial Area, Hosur")
-    setDrop(`${route.to}, Tamil Nadu`)
+    const destination = route.to || route.destination_label || ""
+    if (destination) {
+      const exactDrop = formatExactLocation(destination)
+      setDrop(exactDrop)
+      setDropCoords(null)
+      resolveLocationCoords(exactDrop).then((c) => {
+        if (c) setDropCoords({ ...c, forAddress: exactDrop })
+      })
+    }
     setSelectedRoute(route)
     const bar = document.getElementById("estimate-bar")
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+    if (!pickup) {
+      const pickupEl = document.getElementById("pickup-input")
+      if (pickupEl) pickupEl.focus?.()
+    }
   }
 
   const isRouteServed = (pickupVal, dropVal) => {
@@ -1545,8 +1556,32 @@ export function MiniTruckBookingHosurPage() {
 
   const handleBookNow = () => {
     // Instant Booking: sets bookingMode to IMMEDIATE, clears any stale slot/date, moves to Step 4 Summary
-    if (!pickup) setPickup("Hosur, Tamil Nadu")
-    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!pickup || !pickup.trim()) {
+      setBookingError("Please enter your pickup location.")
+      const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+      if (pickupEl) {
+        pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        pickupEl.focus?.()
+      }
+      return
+    }
+    if (!drop || !drop.trim()) {
+      if (selectedRoute?.to) {
+        const exactDrop = formatExactLocation(selectedRoute.to)
+        setDrop(exactDrop)
+        resolveLocationCoords(exactDrop).then((c) => {
+          if (c) setDropCoords({ ...c, forAddress: exactDrop })
+        })
+      } else {
+        setBookingError("Please enter your delivery destination.")
+        const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+        if (dropEl) {
+          dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+          dropEl.focus?.()
+        }
+        return
+      }
+    }
     if (!selectedVehicle) {
       setSelectedVehicle(LIGHT_VEHICLES[0])
     }
@@ -1560,8 +1595,32 @@ export function MiniTruckBookingHosurPage() {
 
   const handleScheduleBooking = () => {
     // Schedule Booking: sets bookingMode to SCHEDULED, initializes default date/slot if unset, opens Step 3 Slot selection
-    if (!pickup) setPickup("Hosur, Tamil Nadu")
-    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!pickup || !pickup.trim()) {
+      setBookingError("Please enter your pickup location.")
+      const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+      if (pickupEl) {
+        pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        pickupEl.focus?.()
+      }
+      return
+    }
+    if (!drop || !drop.trim()) {
+      if (selectedRoute?.to) {
+        const exactDrop = formatExactLocation(selectedRoute.to)
+        setDrop(exactDrop)
+        resolveLocationCoords(exactDrop).then((c) => {
+          if (c) setDropCoords({ ...c, forAddress: exactDrop })
+        })
+      } else {
+        setBookingError("Please enter your delivery destination.")
+        const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+        if (dropEl) {
+          dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+          dropEl.focus?.()
+        }
+        return
+      }
+    }
     if (!selectedVehicle) {
       setSelectedVehicle(LIGHT_VEHICLES[0])
     }
@@ -2306,9 +2365,16 @@ export function MiniTruckBookingHosurPage() {
                           }
                           return
                         }
+                        if (!pickup || !pickup.trim()) {
+                          const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+                          if (pickupEl) {
+                            pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                            pickupEl.focus?.()
+                          }
+                          return
+                        }
                         setDestinationError("")
                         setSelectedVehicle(vehicle)
-                        if (!pickup) setPickup("Hosur, Tamil Nadu")
                         setNoServiceRoute(false)
                         setEstimateModalOpen(false)
                         setVehicleSelectorOpen(true)
@@ -2328,6 +2394,52 @@ export function MiniTruckBookingHosurPage() {
       </section>
 
 
+      {/* ── Section: Popular Routes from Hosur ────────────────────── */}
+      {LONG_DISTANCE_ROUTES.length > 0 && (
+        <section className="py-8 sm:py-12 max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              Popular Mini Truck Delivery Routes from Hosur
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+              Guaranteed lowest freight rates with live tracking across Hosur, SIPCOT &amp; industrial corridors
+            </p>
+          </div>
+
+          <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {LONG_DISTANCE_ROUTES.map((route, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleRouteSelect(route)}
+                  className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                      to {route.to} {route.distance && <span className="text-xs font-semibold text-slate-400">({route.distance})</span>}
+                    </span>
+                    {route.time && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                        {route.time}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Book Now &rarr;
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
           Areas We Serve in Hosur
@@ -2338,7 +2450,12 @@ export function MiniTruckBookingHosurPage() {
               key={i}
               type="button"
               onClick={() => {
-                setPickup(`${area}, Hosur`)
+                const formatted = formatExactLocation(`${area}, Hosur`)
+                setPickup(formatted)
+                setPickupCoords(null)
+                resolveLocationCoords(formatted).then((c) => {
+                  if (c) setPickupCoords({ ...c, forAddress: formatted })
+                })
                 const bar = document.getElementById("estimate-bar")
                 if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
               }}
@@ -2554,7 +2671,7 @@ export function MiniTruckBookingHosurPage() {
             <div className="bg-slate-50 p-4 rounded-2xl space-y-2 text-xs mb-4">
               <div className="flex justify-between">
                 <span className="text-slate-500">Pickup:</span>
-                <span className="font-bold text-slate-800">{pickup || "Hosur, Tamil Nadu"}</span>
+                <span className="font-bold text-slate-800">{pickup || "Not specified"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Drop:</span>
@@ -3013,7 +3130,7 @@ export function MiniTruckBookingHosurPage() {
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                   </div>
                   <button
                     type="button"
@@ -3052,7 +3169,7 @@ export function MiniTruckBookingHosurPage() {
                     <p className="text-[11px] font-bold text-slate-800 truncate">
                       {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
                     </p>
-                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
@@ -3646,7 +3763,7 @@ export function MiniTruckBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                         </div>
                       </div>
                       <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
@@ -3655,7 +3772,7 @@ export function MiniTruckBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                         </div>
                       </div>
                       {/* Goods Type */}

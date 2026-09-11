@@ -226,6 +226,7 @@ class LogisticsQuoteView(APIView):
                 goods_category_id=category_id,
                 goods_category_slug=category_slug,
                 declared_weight_kg=declared_weight,
+                city=tier.city,
             )
 
             # Cargo validation error gate (unknown item, invalid quantity, etc.)

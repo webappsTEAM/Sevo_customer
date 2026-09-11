@@ -328,15 +328,27 @@ def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
 def _tier_to_vehicle_dict(tier) -> Dict[str, Any]:
     """
     Maps an authoritative ServiceTier model record into a vehicle pricing descriptor.
-    SEVO Part 6 Rule: NO hardcoded pricing fallbacks (25.00, 3.00, 400/700/1100).
-    Everything derives from the database ServiceTier.
+    SEVO Rule: NO hardcoded pricing fallbacks. Everything derives from database ServiceTier.
+    starting_price is the customer-facing marketing entry baseline ("Starts at ₹X").
+    base_fare is the explicit pricing-engine transport input.
+    Instant authoritative pricing requires explicit base_fare, per_km_rate, free_km, and loading_unloading_charge.
     """
     max_cft = float(tier.get_max_cft())
     payload_kg = float(tier.get_max_weight_kg())
-    base_fare = tier.base_fare if tier.base_fare is not None else tier.starting_price
-    per_km = tier.per_km_rate if tier.per_km_rate is not None else Decimal("0.00")
-    free_km = tier.free_km if tier.free_km is not None else Decimal("0.00")
-    base_labor = tier.loading_unloading_charge if (tier.loading_unloading_charge and tier.loading_unloading_charge > 0) else Decimal("0.00")
+    base_fare = tier.base_fare
+    per_km = tier.per_km_rate
+    free_km = tier.free_km
+    base_labor = tier.loading_unloading_charge
+
+    # Require explicit pricing inputs for instant authoritative pricing.
+    # A missing required input must never silently become a free ₹0 service.
+    has_incomplete_rates = (
+        base_fare is None
+        or per_km is None
+        or free_km is None
+        or base_labor is None
+    )
+
     db_crew = getattr(tier, "crew_size", None)
     if db_crew:
         crew_size = int(db_crew)
@@ -348,12 +360,16 @@ def _tier_to_vehicle_dict(tier) -> Dict[str, Any]:
         "name": tier.name,
         "max_cft": max_cft,
         "payload_kg": payload_kg,
+        "starting_price": tier.starting_price,
         "base_fare": base_fare,
         "per_km_rate": per_km,
         "free_km": free_km,
         "base_labor": base_labor,
         "crew_size": crew_size,
         "tier_id": tier.id,
+        "minimum_fare": tier.minimum_fare,
+        "surge_multiplier": getattr(tier, "surge_multiplier", None) or Decimal("1.00"),
+        "has_incomplete_rates": has_incomplete_rates,
         "is_custom": False,
     }
 
@@ -505,14 +521,15 @@ def compute_packers_movers_quote(
             "is_custom": True,
         }
 
-    # 4. Pricing Calculation: Fail Closed if No Vehicle Available, Empty Inventory, Missing Config, or Uncataloged Items
+    # 4. Pricing Calculation: Fail Closed if No Vehicle Available, Empty Inventory, Missing Config, Incomplete Rates, or Uncataloged Items
     from logistics.models import PackersMoversConfig
     pm_conf = PackersMoversConfig.objects.filter(is_active=True, city__iexact=city).first()
     city_config_missing = pm_conf is None
     has_unrecognized = bool(metrics.get("requires_review", False))
+    has_incomplete_rates = bool(vehicle.get("has_incomplete_rates", False))
 
-    if (no_vehicle_available or is_empty_inventory) and not has_unrecognized:
-        # SEVO: No vehicle or empty inventory must NEVER produce ₹0 quote.
+    if (no_vehicle_available or is_empty_inventory or has_incomplete_rates) and not has_unrecognized:
+        # SEVO: Incomplete rates, no vehicle, or empty inventory must NEVER produce a fake or partially free ₹0 quote.
         # Total, subtotal, GST, transport_total, distance_charge, and labor_total must all be None.
         free_km = Decimal("0.00")
         chargeable_km = Decimal("0.00")
@@ -535,10 +552,14 @@ def compute_packers_movers_quote(
         packing_label = (
             "Pricing Unavailable (Inventory Survey Required)"
             if is_empty_inventory
-            else "Pricing Unavailable (Vehicle Required)"
+            else (
+                "Pricing Unavailable (Rate Configuration Incomplete)"
+                if has_incomplete_rates
+                else "Pricing Unavailable (Vehicle Required)"
+            )
         )
         base_labor = None
-        crew_size = 0
+        crew_size = vehicle.get("crew_size", 0)
         pickup_floor_charge = None
         drop_floor_charge = None
         floor_labor_total = None
@@ -549,14 +570,20 @@ def compute_packers_movers_quote(
         gst = None
         total = None
 
-        survey_status = "SURVEY_REQUIRED"
+        survey_status = "MANUAL_REVIEW_REQUIRED" if has_incomplete_rates else "SURVEY_REQUIRED"
         requires_survey = True
+        requires_review = True
         is_authoritative = False
         is_estimate = True
         if is_empty_inventory:
             estimate_notice = (
                 "Empty or zero-volume relocation inventory provided. "
                 "Inventory catalog configuration or a pre-move physical survey is required."
+            )
+        elif has_incomplete_rates:
+            estimate_notice = (
+                f"Selected vehicle tier '{vehicle.get('name')}' pricing is incompletely configured in the database. "
+                "A pre-move survey or manual review is required before pricing confirmation."
             )
         elif capacity_exceeded and service_tier_id:
             estimate_notice = (
@@ -640,8 +667,14 @@ def compute_packers_movers_quote(
             + dismantle_total
             + unpacking_charge
         )
+        surge = vehicle.get("surge_multiplier") or Decimal("1.00")
+        if surge > 0 and surge != Decimal("1.00"):
+            subtotal = _money(subtotal * surge)
         gst = _money(subtotal * gst_percentage)
         total = _money(subtotal + gst)
+        min_fare = vehicle.get("minimum_fare")
+        if min_fare is not None and total < min_fare:
+            total = _money(min_fare)
 
         requires_volume_survey = bool(
             survey_cft_limit > 0 and (

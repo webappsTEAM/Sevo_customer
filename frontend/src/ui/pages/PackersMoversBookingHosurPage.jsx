@@ -813,6 +813,30 @@ export function PackersMoversBookingHosurPage() {
     )
   )
 
+  const formatQuoteValidity = (validUntilIso, isSurvey) => {
+    if (isSurvey) {
+      return "Non-binding estimate (Subject to pre-move survey verification)"
+    }
+    if (!validUntilIso) {
+      return "Authoritative quote"
+    }
+    try {
+      const validDate = new Date(validUntilIso)
+      if (isNaN(validDate.getTime())) {
+        return "Authoritative quote"
+      }
+      const now = new Date()
+      const diffMinutes = Math.round((validDate.getTime() - now.getTime()) / 60000)
+      if (diffMinutes <= 0) {
+        return "Authoritative quote • Expired"
+      }
+      const timeStr = validDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      return `Authoritative quote • Valid until ${timeStr} (${diffMinutes}m remaining)`
+    } catch {
+      return "Authoritative quote"
+    }
+  }
+
   useEffect(() => {
     bookingAttemptKeyRef.current = null
   }, [pickup, drop, inventoryItems, packingTier, pickupFloor, dropFloor, dismantlingRequired, unpackingRequired])
@@ -1339,7 +1363,7 @@ export function PackersMoversBookingHosurPage() {
         capacity: tier.description || "Complete shifting package with professional crew",
         crew: "Professional packing crew + dedicated vehicle",
         materials: "Bubble wrap, corrugated boxes, stretch film & tape included",
-        baseFare: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })} (Includes packing, loading & transport)`,
+        baseFare: `Starts at ₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
         suitableFor: suitableList,
       },
       _tierId: tier.id,
@@ -1374,7 +1398,7 @@ export function PackersMoversBookingHosurPage() {
     },
     {
       q: "Is transit insurance covered for fragile and high-value items?",
-      a: "Yes, full transit insurance coverage is available for household goods and electronics with swift claim settlement support."
+      a: "Transit insurance coverage is available through our pre-move survey / eligible survey flow, where our survey expert verifies item valuations and policy options prior to movement (instant online bookings intentionally exclude direct insurance add-ons)."
     }
   ]
 
@@ -1418,8 +1442,8 @@ export function PackersMoversBookingHosurPage() {
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
 
-      const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-      const dropAddressValue = drop || "Bengaluru, Karnataka, India"
+      const pickupAddressValue = pickup || ""
+      const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
       // Only use a stored coordinate if it was resolved for the address
       // being submitted right now -- see the pickupCoords/dropCoords
       // declaration above for why.
@@ -2121,7 +2145,7 @@ export function PackersMoversBookingHosurPage() {
                 <div className="mt-3">
                   <h3 className="text-lg font-bold text-slate-900">{pkg.name}</h3>
                   <p className="text-sm text-slate-600 mt-1">
-                    Starting from <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
+                    Starts at <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
                   </p>
                   <p className="text-[11px] text-slate-500 leading-relaxed mt-2 line-clamp-2">
                     {pkg.details.capacity}
@@ -2175,10 +2199,22 @@ export function PackersMoversBookingHosurPage() {
                 <div
                   key={idx}
                   onClick={() => {
-                    setDrop(route.to)
+                    const destination = route.to || ""
+                    if (destination) {
+                      const exactDrop = formatExactLocation(destination)
+                      setDrop(exactDrop)
+                      setDropCoords(null)
+                      resolveLocationCoords(exactDrop).then((c) => {
+                        if (c) setDropCoords({ ...c, forAddress: exactDrop })
+                      })
+                    }
                     setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
                     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    if (!pickup) {
+                      const pickupEl = document.getElementById("pickup-input")
+                      if (pickupEl) pickupEl.focus?.()
+                    }
                   }}
                   className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
@@ -2217,7 +2253,12 @@ export function PackersMoversBookingHosurPage() {
               key={i}
               type="button"
               onClick={() => {
-                setPickup(`${area}, Hosur`)
+                const formatted = formatExactLocation(`${area}, Hosur`)
+                setPickup(formatted)
+                setPickupCoords(null)
+                resolveLocationCoords(formatted).then((c) => {
+                  if (c) setPickupCoords({ ...c, forAddress: formatted })
+                })
                 const bar = document.getElementById("estimate-bar")
                 if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
               }}
@@ -2280,7 +2321,7 @@ export function PackersMoversBookingHosurPage() {
               <MessageSquare className="w-8 h-8 text-rose-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Receive Instant Quote</h3>
-            <p className="text-xs text-slate-500">Get a firm, transparent estimate instantly. Our fixed-rate model has no surprise additions.</p>
+            <p className="text-xs text-slate-500">Transparent pricing based on your move details. Larger or complex moves may require a pre-move survey.</p>
           </div>
           
           <div className="flex flex-col items-center text-center relative z-10">
@@ -2519,7 +2560,7 @@ export function PackersMoversBookingHosurPage() {
 
             {/* Base Fare */}
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Estimated Base Rate:</span>
+              <span className="text-xs font-semibold text-slate-500">Starts at:</span>
               <span className="text-base font-extrabold text-emerald-700">{activePackageDetails.price}</span>
             </div>
 
@@ -2584,7 +2625,7 @@ export function PackersMoversBookingHosurPage() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-[10px] text-slate-500 font-medium">Starting from</div>
+                      <div className="text-[10px] text-slate-500 font-medium">Starts at</div>
                       <div className="text-base font-extrabold text-slate-900">{pkg.price}</div>
                     </div>
                   </div>
@@ -3231,8 +3272,13 @@ export function PackersMoversBookingHosurPage() {
                               </span>
                             </div>
                             <p className="text-[10px] text-slate-400 pt-1">
-                              Quote Reference: {pmServerQuote.quote_id} • {isSurveyRequired ? "Estimated fare (Subject to pre-move survey verification)" : "Authoritative quote valid for 48 hours"}
+                              Quote Reference: {pmServerQuote.quote_id} • {formatQuoteValidity(pmServerQuote.valid_until, isSurveyRequired)}
                             </p>
+                            {!isSurveyRequired && (
+                              <p className="text-[10px] text-slate-500 pt-0.5">
+                                This fare is calculated from your selected inventory, vehicle, route and service options.
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <p className="text-xs text-rose-500">{pmQuoteError || "Unable to retrieve price calculation."}</p>
@@ -3496,7 +3542,7 @@ export function PackersMoversBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                         </div>
                       </div>
                       <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
@@ -3505,7 +3551,7 @@ export function PackersMoversBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Bengaluru, Karnataka, India")}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                         </div>
                       </div>
                       {/* Service / Relocation Type */}

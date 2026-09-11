@@ -53,14 +53,12 @@ LOGISTICS_CATEGORIES = {
 }
 
 # GT-B-01: which categories get real distance-based pricing.
-#
-# Packers & Movers is deliberately excluded. CALTRACK_PHASE_14 PART H
-# splits pricing in two: H.1 "Goods Transport - deterministic" is the
-# distance formula implemented below, while H.2 "Relocation -
-# survey-driven" is volume/inventory/crew-based and starts with a
-# physical survey booking. Pricing a relocation by road distance would
-# be wrong, not merely incomplete, so packers_movers stays on the
-# existing flat tier price until H.2 is actually built.
+# Packers & Movers is excluded from DISTANCE_PRICED_CATEGORIES because
+# it is volume/inventory/crew-based.
+# P&M supports instant authoritative estimates when all required
+# catalog, vehicle, city configuration and routing inputs are available.
+# Moves requiring survey/review remain non-payable estimates until final
+# quotation. Dedicated logic is implemented in packers_movers_pricing.py.
 DISTANCE_PRICED_CATEGORIES = {
     "goods_transport_truck",
     "goods_transport_two_wheeler",
