@@ -42,6 +42,41 @@ const HERO_ILLUSTRATION_PRESETS = [
   }
 ]
 
+// Pages the admin's Edit Preview tool can point its embedded iframe at.
+// Only routes confirmed to exist in App.jsx are listed here -- anything else
+// (e.g. a specific category's catalog page, such as
+// /booking/services?category=hvac) can be reached via the free-text "Go to
+// path" field next to this dropdown, since category slugs live in the
+// database and aren't safe to hardcode here.
+const PREVIEW_PAGES = [
+  { id: "home", label: "🏠 Home Page", path: "/home" },
+  { id: "services", label: "🛒 Browse Services / Checkout", path: "/booking/services" },
+  { id: "ac_inspection", label: "❄️ AC Inspection & Estimation", path: "/ac-inspection" },
+  { id: "trucks", label: "🚚 Mini Truck Booking (Hosur)", path: "/booking/trucks" },
+  { id: "two_wheelers", label: "🏍️ Two-Wheeler Booking (Hosur)", path: "/booking/two-wheelers" },
+  { id: "packers_movers", label: "📦 Packers & Movers (Hosur)", path: "/booking/packers-and-movers" },
+]
+
+// Builds the iframe's src for whichever page is currently selected in the
+// Edit Preview tool. `path` may already contain its own query string (e.g.
+// "/booking/services?category=hvac" typed into the custom path field), so
+// this appends preview/edit params with the correct separator either way.
+// The home-only screen shortcuts (pillars/subcategories/kitchen) only make
+// sense when previewing the Home Page itself.
+function buildPreviewSrc(path, screen, editMode) {
+  const hasQuery = path.includes("?")
+  const sep = hasQuery ? "&" : "?"
+  let screenExtra = ""
+  if (path === "/home") {
+    screenExtra =
+      screen === "pillars" ? "&openModal=pillars"
+      : screen === "subcategories" ? "&openModal=homepest"
+      : screen === "kitchen" ? "&category=kitchen_cleaning"
+      : ""
+  }
+  return `${path}${sep}preview=true${screenExtra}${editMode ? "&edit=true" : ""}`
+}
+
 export default function HomePageCustomizerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTabParam = searchParams.get("tab") || "hero"
@@ -51,7 +86,9 @@ export default function HomePageCustomizerPage() {
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewViewport, setPreviewViewport] = useState("full") // "full", "desktop", "tablet", "mobile"
   const [previewEditMode, setPreviewEditMode] = useState(false)
-  const [previewScreen, setPreviewScreen] = useState("home") // "home", "pillars", "subcategories", "kitchen"
+  const [previewPath, setPreviewPath] = useState("/home") // which page the iframe currently points at
+  const [customPathInput, setCustomPathInput] = useState("")
+  const [previewScreen, setPreviewScreen] = useState("home") // "home", "pillars", "subcategories", "kitchen" -- only meaningful when previewPath === "/home"
   const [showPreviewQuickEdit, setShowPreviewQuickEdit] = useState(false)
   const [previewQuickEditTab, setPreviewQuickEditTab] = useState("hero")
   const [showLegacyCollage, setShowLegacyCollage] = useState(false)
@@ -1446,69 +1483,125 @@ export default function HomePageCustomizerPage() {
                 </button>
               </div>
 
-              {/* Screen Quick Switcher (Home, 5 Pillars, Subcategories, Kitchen Packages) */}
-              <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
-                <button
-                  type="button"
-                  onClick={() => {
+              {/* Page Picker -- points the whole preview iframe at any page of the
+                  site, not just the homepage. Dropdown covers confirmed routes;
+                  the free-text field next to it accepts anything else (e.g. a
+                  specific category's catalog page). */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={PREVIEW_PAGES.some(p => p.path === previewPath) ? previewPath : "__custom__"}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") return
+                    setPreviewPath(e.target.value)
                     setPreviewScreen("home")
-                    if (iframeRef.current?.contentWindow) {
-                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "home" }, "*")
-                    }
+                    setCustomPathInput("")
+                    setIframeKey(k => k + 1)
                   }}
-                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    previewScreen === "home" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Preview Live Homepage"
+                  className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-white border border-slate-700/60 cursor-pointer outline-none"
+                  title="Jump the preview to a different page of the site"
                 >
-                  <span>🏠 Home</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewScreen("pillars")
-                    if (iframeRef.current?.contentWindow) {
-                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "pillars" }, "*")
-                    }
+                  {PREVIEW_PAGES.map(p => (
+                    <option key={p.id} value={p.path}>{p.label}</option>
+                  ))}
+                  {!PREVIEW_PAGES.some(p => p.path === previewPath) && (
+                    <option value="__custom__">✏️ Custom: {previewPath}</option>
+                  )}
+                </select>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (!customPathInput.trim()) return
+                    let p = customPathInput.trim()
+                    if (!p.startsWith("/")) p = "/" + p
+                    setPreviewPath(p)
+                    setPreviewScreen("home")
+                    setIframeKey(k => k + 1)
                   }}
-                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Preview & Edit Core Specialized Pillars Modal"
+                  className="flex items-center gap-1"
                 >
-                  <span>⚡ 5 Pillars</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewScreen("subcategories")
-                    if (iframeRef.current?.contentWindow) {
-                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "subcategories" }, "*")
-                    }
-                  }}
-                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    previewScreen === "subcategories" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Preview & Edit Subcategories Modal"
-                >
-                  <span>🧹 Subcategories</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewScreen("kitchen")
-                    if (iframeRef.current?.contentWindow) {
-                      iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "kitchen" }, "*")
-                    }
-                  }}
-                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    previewScreen === "kitchen" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Preview & Edit Kitchen Cleaning Packages Details Page"
-                >
-                  <span>🍽️ Kitchen Packages</span>
-                </button>
+                  <input
+                    type="text"
+                    value={customPathInput}
+                    onChange={(e) => setCustomPathInput(e.target.value)}
+                    placeholder="/booking/services?category=hvac"
+                    className="w-44 hidden lg:block px-2 py-1 rounded-lg text-xs bg-slate-800 text-slate-200 border border-slate-700/60 outline-none placeholder:text-slate-500"
+                    title="Type any route to preview, including query params"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2 py-1 rounded-lg text-xs font-bold bg-teal-600 text-white hover:bg-teal-500 cursor-pointer hidden lg:block"
+                    title="Load this path in the preview"
+                  >
+                    Go
+                  </button>
+                </form>
               </div>
+
+              {/* Screen Quick Switcher (Home, 5 Pillars, Subcategories, Kitchen Packages) -- only applies while previewing the Home Page itself */}
+              {previewPath === "/home" && (
+                <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/60">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewScreen("home")
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "home" }, "*")
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                      previewScreen === "home" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Preview Live Homepage"
+                  >
+                    <span>🏠 Home</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewScreen("pillars")
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "pillars" }, "*")
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                      previewScreen === "pillars" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Preview & Edit 5 Core Specialized Pillars Modal"
+                  >
+                    <span>⚡ 5 Pillars</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewScreen("subcategories")
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "subcategories" }, "*")
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                      previewScreen === "subcategories" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Preview & Edit Subcategories Modal"
+                  >
+                    <span>🧹 Subcategories</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewScreen("kitchen")
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage({ type: "NAVIGATE_PREVIEW_SCREEN", screen: "kitchen" }, "*")
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                      previewScreen === "kitchen" ? "bg-teal-600 text-white shadow-xs font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Preview & Edit Kitchen Cleaning Packages Details Page"
+                  >
+                    <span>🍽️ Kitchen Packages</span>
+                  </button>
+                </div>
+              )}
 
               {/* In-Page Edit Mode Toggle & Quick Edit Panel Buttons */}
               <div className="flex items-center gap-1.5">
@@ -1562,11 +1655,11 @@ export default function HomePageCustomizerPage() {
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
                 <a
-                  href="/home?preview=true"
+                  href={buildPreviewSrc(previewPath, previewScreen, previewEditMode)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                  title="Open live homepage in a new tab"
+                  title="Open this page in a new tab"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Tab</span>
@@ -2225,16 +2318,16 @@ export default function HomePageCustomizerPage() {
                   <iframe
                     ref={iframeRef}
                     key={iframeKey}
-                    src={`/home?preview=true${previewScreen === 'pillars' ? '&openModal=pillars' : previewScreen === 'subcategories' ? '&openModal=homepest' : previewScreen === 'kitchen' ? '&category=kitchen_cleaning' : ''}${previewEditMode ? '&edit=true' : ''}`}
+                    src={buildPreviewSrc(previewPath, previewScreen, previewEditMode)}
                     className="w-full h-full border-none bg-white"
-                    title="Home Page Preview"
+                    title="Page Preview"
                     onLoad={() => {
                       if (iframeRef.current?.contentWindow) {
                         iframeRef.current.contentWindow.postMessage({
                           type: "TOGGLE_EDIT_MODE",
                           enabled: previewEditMode
                         }, "*")
-                        if (previewScreen !== "home") {
+                        if (previewPath === "/home" && previewScreen !== "home") {
                           iframeRef.current.contentWindow.postMessage({
                             type: "NAVIGATE_PREVIEW_SCREEN",
                             screen: previewScreen

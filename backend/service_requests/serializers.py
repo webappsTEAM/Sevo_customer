@@ -48,7 +48,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Package
         fields = [
-            "id", "category", "category_slug", "name", "slug", "description", "price", "base_price", "offer_price", "duration",
+            "id", "category", "category_slug", "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
             "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",

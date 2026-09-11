@@ -4,7 +4,8 @@ import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
-import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import { useEditMode } from "../../state/editMode/useEditMode.js";
 import { SOFA_DETAIL_DATA } from "./catalog/sofaDetailData.js";
 import sofaCleaningImg from "../../assets/cleaning/sofa_cleaning.png";
 import mattressCleaningImg from "../../assets/cleaning/mattress_cleaning.png";
@@ -266,8 +267,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   // matched a real DB package (item.db_id set above) are editable -- a
   // customer never sees this, canEnterServiceEditMode is false unless
   // isSuperAdmin(user).
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
 
   const handleSaveServiceField = async (item, field, value) => {

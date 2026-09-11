@@ -1581,6 +1581,7 @@ const EMPTY_PACKAGE = {
   slug: "",
   description: "",
   base_price: "",
+  offer_price: "",
   duration: "",
   image: "",
   popular: false,
@@ -2631,7 +2632,18 @@ export function CatalogPackagesPage() {
               .map(r => typeof r === "string" ? { text: r.trim(), enabled: true } : { text: (r?.text || "").trim(), enabled: r?.enabled !== false })
               .filter(r => r.text)
           : [],
-        offer_price: null,
+        // Was hardcoded to `null` here, which silently wiped out any offer
+        // price on every save -- that's why the customer catalog page could
+        // never show a real MRP/discount and fell back to inventing a fake
+        // strike price. Now sent from the Offer Price field below (blank/
+        // equal-or-above MRP both mean "no discount", so store null rather
+        // than a meaningless offer price).
+        offer_price: (() => {
+          const op = editing.offer_price
+          if (op === "" || op === null || op === undefined || isNaN(Number(op))) return null
+          const opNum = Number(op)
+          return opNum > 0 && opNum < basePrice ? opNum : null
+        })(),
         // Goods & Transport unification Phase 1: only sent as real values
         // when the admin actually typed something -- an empty string is
         // normalized to null so it never overwrites the tier-side default
@@ -5920,6 +5932,66 @@ export function CatalogPackagesPage() {
                   />
                 </div>
 
+                {/* Offer Price / Discount -- the customer page strikes the
+                    Base Price above and shows this as the real selling price,
+                    with the % off computed live. Leave blank for no discount. */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+                  <div className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">
+                    Discount (optional)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Offer / Selling Price (₹)"
+                      type="number"
+                      placeholder="Leave blank for no discount"
+                      value={quickPriceEditing.offer_price ?? ""}
+                      onChange={(e) =>
+                        setQuickPriceEditing({ ...quickPriceEditing, offer_price: e.target.value })
+                      }
+                    />
+                    <Input
+                      label="Discount % (auto-fills Offer Price)"
+                      type="number"
+                      placeholder="e.g. 20"
+                      value={(() => {
+                        const base = Number(quickPriceEditing.base_price)
+                        const offer = Number(quickPriceEditing.offer_price)
+                        if (!base || !quickPriceEditing.offer_price || isNaN(offer) || offer <= 0 || offer >= base) return ""
+                        return Math.round((1 - offer / base) * 100)
+                      })()}
+                      onChange={(e) => {
+                        const pct = Number(e.target.value)
+                        const base = Number(quickPriceEditing.base_price)
+                        if (!e.target.value || isNaN(pct) || pct <= 0 || !base) {
+                          setQuickPriceEditing({ ...quickPriceEditing, offer_price: "" })
+                          return
+                        }
+                        const clamped = Math.min(pct, 99)
+                        setQuickPriceEditing({ ...quickPriceEditing, offer_price: Math.round(base * (1 - clamped / 100)) })
+                      }}
+                    />
+                  </div>
+                  {(() => {
+                    const base = Number(quickPriceEditing.base_price)
+                    const offer = Number(quickPriceEditing.offer_price)
+                    if (!base || !quickPriceEditing.offer_price || isNaN(offer) || offer <= 0 || offer >= base) {
+                      return (
+                        <p className="text-[11px] text-emerald-700/70">
+                          No discount set -- the customer page will show just ₹{base || "0"} with no strike-through.
+                        </p>
+                      )
+                    }
+                    const pct = Math.round((1 - offer / base) * 100)
+                    return (
+                      <p className="text-xs font-semibold text-emerald-800 flex items-center gap-2">
+                        <span className="line-through text-slate-400 font-medium">₹{base}</span>
+                        <span>₹{offer}</span>
+                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black">{pct}% OFF</span>
+                      </p>
+                    )
+                  })()}
+                </div>
+
                 {/* GST & Platform Fee Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
@@ -6511,20 +6583,11 @@ export function CatalogPackagesPage() {
               }}
             />
 
-            {Array.isArray(selectedService?.customization?.subtabs) && selectedService.customization.subtabs.length > 0 && (
-              <Select
-                label="Sub-Service (optional)"
-                options={[
-                  { value: "", label: "None -- sits directly under the service" },
-                  ...selectedService.customization.subtabs.map((t) => ({
-                    value: t.id,
-                    label: t.label || t.id,
-                  })),
-                ]}
-                value={editing.sub_service_key || ""}
-                onChange={(e) => setEditing({ ...editing, sub_service_key: e.target.value })}
-              />
-            )}
+            {/* Sub-Service picker removed -- packages now always connect directly
+                under their Service (no optional deeper sub-service layer). Any
+                pre-existing sub_service_key on older packages is left untouched
+                (still cleared to "" whenever the Parent Service is changed above),
+                it just can't be set from this form anymore. */}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -6558,10 +6621,10 @@ export function CatalogPackagesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
-                label="Price / Starting Fare (₹)"
+                label="MRP / Original Price (₹)"
                 type="number"
                 required
-                placeholder="e.g. 300"
+                placeholder="e.g. 1689"
                 value={editing.base_price}
                 onChange={(e) => setEditing({ ...editing, base_price: e.target.value })}
               />
@@ -6571,6 +6634,63 @@ export function CatalogPackagesPage() {
                 value={editing.duration || ""}
                 onChange={(e) => setEditing({ ...editing, duration: e.target.value })}
               />
+            </div>
+
+            {/* Offer Price / Discount -- customer page strikes MRP and shows
+                the % off computed from these two values (no invented pricing). */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+              <div className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">
+                Discount (optional)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Offer / Selling Price (₹)"
+                  type="number"
+                  placeholder="Leave blank for no discount"
+                  value={editing.offer_price ?? ""}
+                  onChange={(e) => setEditing({ ...editing, offer_price: e.target.value })}
+                />
+                <Input
+                  label="Discount % (auto-fills Offer Price)"
+                  type="number"
+                  placeholder="e.g. 20"
+                  value={(() => {
+                    const base = Number(editing.base_price)
+                    const offer = Number(editing.offer_price)
+                    if (!base || !editing.offer_price || isNaN(offer) || offer <= 0 || offer >= base) return ""
+                    return Math.round((1 - offer / base) * 100)
+                  })()}
+                  onChange={(e) => {
+                    const pct = Number(e.target.value)
+                    const base = Number(editing.base_price)
+                    if (!e.target.value || isNaN(pct) || pct <= 0 || !base) {
+                      setEditing({ ...editing, offer_price: "" })
+                      return
+                    }
+                    const clamped = Math.min(pct, 99)
+                    setEditing({ ...editing, offer_price: Math.round(base * (1 - clamped / 100)) })
+                  }}
+                />
+              </div>
+              {(() => {
+                const base = Number(editing.base_price)
+                const offer = Number(editing.offer_price)
+                if (!base || !editing.offer_price || isNaN(offer) || offer <= 0 || offer >= base) {
+                  return (
+                    <p className="text-[11px] text-emerald-700/70">
+                      No discount set -- the customer page will show just ₹{base || "0"} with no strike-through.
+                    </p>
+                  )
+                }
+                const pct = Math.round((1 - offer / base) * 100)
+                return (
+                  <p className="text-xs font-semibold text-emerald-800 flex items-center gap-2">
+                    <span className="line-through text-slate-400 font-medium">₹{base}</span>
+                    <span>₹{offer}</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black">{pct}% OFF</span>
+                  </p>
+                )
+              })()}
             </div>
 
             {isGoodsTransportService && (

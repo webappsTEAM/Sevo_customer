@@ -80,7 +80,6 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#3B82F6" },
       { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#3B82F6" },
       { label: "Services", to: routes.catalog_services, icon: <Wrench size={16} />, color: "#3B82F6" },
-      { label: "Sub-Services", to: routes.catalog_sub_services, icon: <Layers size={16} />, color: "#3B82F6" },
       { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#3B82F6" },
       { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
