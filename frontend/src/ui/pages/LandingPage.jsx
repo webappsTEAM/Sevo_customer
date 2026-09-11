@@ -2110,6 +2110,40 @@ export function LandingPage() {
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const [isAllServicesOpen, setIsAllServicesOpen] = useState(false)
 
+  // Listen for global mobile bottom nav events & query params
+  useEffect(() => {
+    const onOpenServices = () => setIsHomeServicesCombinedModalOpen(true)
+    const onOpenCart = () => setShowCartDrawer(true)
+    const onOpenAccount = () => {
+      if (user) {
+        setActiveAccountTab("My Profile")
+        setShowAccountPortal(true)
+      } else {
+        goToLogin()
+      }
+    }
+
+    window.addEventListener("calservices_open_services_modal", onOpenServices)
+    window.addEventListener("calservices_open_cart_drawer", onOpenCart)
+    window.addEventListener("calservices_open_account_portal", onOpenAccount)
+
+    if (searchParams.get("openAccount") === "1") {
+      if (user) {
+        setActiveAccountTab("My Profile")
+        setShowAccountPortal(true)
+      }
+    }
+    if (searchParams.get("openServices") === "1") {
+      setIsHomeServicesCombinedModalOpen(true)
+    }
+
+    return () => {
+      window.removeEventListener("calservices_open_services_modal", onOpenServices)
+      window.removeEventListener("calservices_open_cart_drawer", onOpenCart)
+      window.removeEventListener("calservices_open_account_portal", onOpenAccount)
+    }
+  }, [user, searchParams])
+
   // ── Flash Sale Countdown Timer (Live Ticking 02:45:18) ──────────────────
   const [flashSaleTime, setFlashSaleTime] = useState({ hours: 2, minutes: 45, seconds: 18 })
   useEffect(() => {
@@ -2774,6 +2808,7 @@ export function LandingPage() {
   useEffect(() => {
     try {
       localStorage.setItem("calservices_customer_cart", JSON.stringify(modalCart));
+      window.dispatchEvent(new CustomEvent("calservices_cart_updated"));
     } catch (e) {
       console.error("Failed to save modalCart to localStorage:", e);
     }
@@ -5413,69 +5448,6 @@ export function LandingPage() {
             © 2024 Sevo Home Services Pvt. Ltd. All rights reserved.
           </div>
         </footer>
-
-        {/* ── Mobile Sticky Bottom Navigation (Touch-optimized 44px+ tap targets) ──── */}
-        <nav
-          aria-label="Mobile Bottom Navigation"
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--sevo-surface-glass)] backdrop-blur-lg border-t border-[var(--sevo-border)] shadow-[var(--sevo-shadow-lg)] px-3 pt-1.5 transition-colors duration-200"
-          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}
-        >
-          <div className="flex items-center justify-around">
-            <button
-              type="button"
-              onClick={() => {
-                window.scrollTo({ top: 0, behavior: "smooth" })
-                setActiveNav("home")
-              }}
-              className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold transition-colors cursor-pointer ${activeNav === "home" ? "text-[var(--sevo-primary)]" : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-                }`}
-            >
-              <Home className="w-5 h-5" />
-              <span>Home</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
-            >
-              <SlidersHorizontal className="w-5 h-5" />
-              <span>Services</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowCartDrawer(true)}
-              className="relative flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
-            >
-              <div className="relative">
-                <ShoppingCart className="w-5 h-5" />
-                {modalCart && modalCart.length > 0 && (
-                  <span className="absolute -top-1.5 -right-2 bg-[var(--sevo-primary)] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
-                    {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
-                  </span>
-                )}
-              </div>
-              <span>Cart</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (user) {
-                  setActiveAccountTab("My Profile")
-                  setShowAccountPortal(true)
-                } else {
-                  goToLogin()
-                }
-              }}
-              className="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 gap-1 text-[11px] font-bold text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)] transition-colors cursor-pointer"
-            >
-              <User className="w-5 h-5" />
-              <span>{user ? "Account" : "Login"}</span>
-            </button>
-          </div>
-        </nav>
 
         {/* ── 1. Home Services & Pest Control Modal Popup ── */}
         {isHomePestModalOpen &&
@@ -9312,7 +9284,7 @@ export function LandingPage() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[9995] w-[92%] max-w-lg bg-slate-900 text-white rounded-2xl p-3.5 shadow-2xl border border-slate-800 flex items-center justify-between gap-4 backdrop-blur-lg"
+          className="fixed bottom-[calc(4.25rem+var(--safe-area-bottom))] sm:bottom-5 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-slate-900 text-white rounded-2xl p-3.5 shadow-2xl border border-slate-800 flex items-center justify-between gap-4 backdrop-blur-lg"
         >
           {/* Cart Item Count & Total Price */}
           <div className="flex items-center gap-3 pl-1">

@@ -10583,7 +10583,10 @@ export function BookingPage() {
   // Sync cart to local storage
   useEffect(() => {
     if (Array.isArray(cart)) {
-      try { localStorage.setItem("calservices_customer_cart", JSON.stringify(cart)) } catch (e) { }
+      try {
+        localStorage.setItem("calservices_customer_cart", JSON.stringify(cart))
+        window.dispatchEvent(new CustomEvent("calservices_cart_updated"))
+      } catch (e) { }
     }
   }, [cart])
 
@@ -11227,7 +11230,7 @@ export function BookingPage() {
   }
 
   return (
-    <div className="uc-root">
+    <div className="uc-root pb-24 lg:pb-0">
       <BkStyles />
 
 

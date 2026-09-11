@@ -5,6 +5,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Native Mobile Feel & Gesture Rules */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scroll-momentum {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* --- Google Fonts --- */
 
 @keyframes fadeUp {

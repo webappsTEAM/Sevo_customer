@@ -19,7 +19,7 @@ export function GlobalEditModeToggle() {
       <button
         type="button"
         onClick={toggleEditMode}
-        className={`fixed bottom-5 right-5 z-[9990] flex items-center gap-2 px-4 py-3 rounded-full shadow-xl font-black text-xs transition-all cursor-pointer ${
+        className={`fixed bottom-[calc(4.5rem+var(--safe-area-bottom))] lg:bottom-5 right-5 z-[9990] flex items-center gap-2 px-4 py-3 rounded-full shadow-xl font-black text-xs transition-all cursor-pointer ${
           isEditMode
             ? "bg-indigo-600 text-white ring-4 ring-indigo-300/60 hover:bg-indigo-700"
             : "bg-slate-900 text-white hover:bg-slate-800"

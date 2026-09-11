@@ -414,7 +414,7 @@ export function VegetableFullScreenPage() {
   }, [vegetables, searchQuery, categoryFilter])
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#fafaf9] text-slate-900 flex flex-col font-sans pb-24 lg:pb-0">
       {/* ── Top Navigation Bar ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
