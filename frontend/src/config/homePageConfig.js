@@ -58,28 +58,28 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   // tile (opens the All Services drawer) is always appended after these
   // by the homepage itself -- it isn't part of this editable list.
   categories: [
-    { id: "cat-1", name: "AC Service", image: "/assets/icon_3d_ac.jpg", link: "?category=hvac", enabled: true },
-    { id: "cat-2", name: "Cleaning", image: "/assets/icon_3d_cleaning.jpg", link: "?category=cleaning", enabled: true },
-    { id: "cat-3", name: "Plumbing", image: "/assets/icon_3d_plumbing.jpg", link: "?category=plumbing", enabled: true },
-    { id: "cat-4", name: "Electrical", image: "/assets/icon_3d_electrical.jpg", link: "?category=electrical", enabled: true },
-    { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?category=hvac", enabled: true },
-    { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?category=pest_control", enabled: true },
-    { id: "cat-7", name: "Salon & Spa", image: "", link: "?category=cleaning", enabled: true },
-    { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=painting", enabled: true },
-    { id: "cat-9", name: "Carpentry", image: "", link: "?category=carpentry", enabled: true },
+    { id: "cat-1", name: "AC Service", image: "/assets/icon_3d_ac.jpg", link: "?category=ac_appliance&subtab=ac-service-cleaning", enabled: true },
+    { id: "cat-2", name: "Cleaning", image: "/assets/icon_3d_cleaning.jpg", link: "?category=home_pest_control&subtab=full-house-cleaning", enabled: true },
+    { id: "cat-3", name: "Kitchen Cleaning", image: "/mockups/kitchen_tiles_slabs_clean.png", link: "?category=home_pest_control&subtab=kitchen-cleaning", enabled: true },
+    { id: "cat-4", name: "Bathroom Cleaning", image: "/mockups/bathroom_cleaning.png", link: "?category=home_pest_control&subtab=bathroom-cleaning", enabled: true },
+    { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?category=ac_appliance&subtab=fridge", enabled: true },
+    { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?category=home_pest_control&subtab=termite-control", enabled: true },
+    { id: "cat-7", name: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", link: "?category=home_pest_control&subtab=sofa-cleaning", enabled: true },
+    { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
+    { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
     { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
-    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "/logistics", enabled: true }
+    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true }
   ],
   pillarModal: {
     badge: "⚡Core Specialized Pillars",
     title: "Home & Repair Services",
     subtitle: "Select any service below to explore specific options, verified technicians, and transparent pricing.",
     pillars: [
-      { id: "pillar-1", label: "Home Services & Pest Control", photo: "/mockups/service_cleaning.png", serviceCategoryId: "pest_control", enabled: true },
-      { id: "pillar-2", label: "Paintings", photo: "/mockups/service_maintenance.png", serviceCategoryId: "painting", enabled: true },
+      { id: "pillar-1", label: "Home Services & Pest Control", photo: "/mockups/service_cleaning.png", serviceCategoryId: "home_pest_control", enabled: true },
+      { id: "pillar-2", label: "Paintings", photo: "/mockups/service_maintenance.png", serviceCategoryId: "paintings", enabled: true },
       { id: "pillar-3", label: "Mason", photo: "/mockups/service_building.png", serviceCategoryId: "mason", enabled: true },
-      { id: "pillar-4", label: "AC & Appliance", photo: "/mockups/service_hvac.png", serviceCategoryId: "hvac", enabled: true },
-      { id: "pillar-5", label: "Electrician, Plumbing & Carpentry", photo: "/mockups/service_electrical.png", serviceCategoryId: "electrical", enabled: true }
+      { id: "pillar-4", label: "AC & Appliance", photo: "/mockups/service_hvac.png", serviceCategoryId: "ac_appliance", enabled: true },
+      { id: "pillar-5", label: "Goods & Transport", photo: "/assets/cat_goods_transport.jpg", serviceCategoryId: "goods_transports", enabled: true }
     ]
   },
   subServicesModal: {

@@ -172,6 +172,43 @@ export function ModernServiceCatalogView({
   // display name) all normalize to the same "acappliance" key.
   const normKey = (v) => (v || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
 
+  const CATEGORY_ALIASES = {
+    hvac: "ac_appliance",
+    ac: "ac_appliance",
+    ac_heating: "ac_appliance",
+    appliance: "ac_appliance",
+    appliance_repair: "ac_appliance",
+    ac_appliance: "ac_appliance",
+    cleaning: "home_pest_control",
+    home_cleaning: "home_pest_control",
+    pest_control: "home_pest_control",
+    pest: "home_pest_control",
+    home_pest_control: "home_pest_control",
+    home_services: "home_pest_control",
+    sofa_cleaning: "home_pest_control",
+    kitchen_cleaning: "home_pest_control",
+    bathroom_cleaning: "home_pest_control",
+    plumbing: "home_pest_control",
+    electrical: "home_pest_control",
+    carpentry: "home_pest_control",
+    painting: "paintings",
+    paintings: "paintings",
+    paint: "paintings",
+    mason: "mason",
+    masonry: "mason",
+    goods: "goods_transports",
+    transport: "goods_transports",
+    logistics: "goods_transports",
+    goods_transport: "goods_transports",
+    goods_transports: "goods_transports",
+    trucks: "goods_transports",
+    two_wheelers: "goods_transports",
+    packers_movers: "goods_transports",
+    vegetables: "vegetables_groceries",
+    groceries: "vegetables_groceries",
+    vegetables_groceries: "vegetables_groceries",
+  }
+
   // AC & Appliance has a special, not-from-admin "Book AC Inspection /
   // Estimation" flow (a real standalone booking page at /ac-inspection,
   // built around ACDetailsForm + estimationRepository) that isn't a normal
@@ -179,7 +216,7 @@ export function ModernServiceCatalogView({
   // fetch below -- it's shown as an extra hardcoded entry in the Services
   // sidebar only for this one category, same as before ModernServiceCatalogView
   // replaced the old catalog page.
-  const isAcApplianceCategory = ["acappliance", "hvac", "ac"].includes(normKey(category?.slug || category?.name || category?.id))
+  const isAcApplianceCategory = ["acappliance", "hvac", "ac", "appliance", "appliancerepair"].includes(normKey(category?.slug || category?.name || category?.id))
 
   // Goods & Transport gets a purely visual "vehicle card" treatment for its
   // package list (image, capacity badge, spec lines, "Starting from ₹X",
@@ -187,7 +224,7 @@ export function ModernServiceCatalogView({
   // MiniTruckBookingHosurPage.jsx (routed at /trucks) -- same underlying
   // data/handlers as every other category (real packages, same See-details
   // modal, same add-to-cart/stepper), just re-skinned for this one category.
-  const isGoodsTransportCategory = ["goodstransports", "goodstransport", "logistics"].includes(normKey(category?.slug || category?.name || category?.id))
+  const isGoodsTransportCategory = ["goodstransports", "goodstransport", "goods", "transport", "logistics", "trucks"].includes(normKey(category?.slug || category?.name || category?.id))
 
   // 1. Fetch live sub-services and catalog packages for this category
   useEffect(() => {
@@ -222,15 +259,51 @@ export function ModernServiceCatalogView({
           allCats = catRes.data
         }
 
-        // Resolve the real category by normalized slug/name/id match against
-        // the raw url-derived key (rawCatKey, e.g. "ac_appliance"). Falls
-        // back to the prop unresolved if nothing matches (keeps prior
-        // behaviour rather than breaking).
-        const realCat = allCats.find(c =>
+        const aliasTarget = CATEGORY_ALIASES[rawCatKey] || CATEGORY_ALIASES[normKey(rawCatKey)] || rawCatKey
+
+        // 1. Direct match on slug, name, or id (including normalized and alias)
+        let realCat = allCats.find(c =>
+          normKey(c.slug) === normKey(aliasTarget) ||
+          normKey(c.name) === normKey(aliasTarget) ||
+          String(c.id) === String(aliasTarget) ||
           normKey(c.slug) === normKey(rawCatKey) ||
           normKey(c.name) === normKey(rawCatKey) ||
-          normKey(c.id) === normKey(rawCatKey)
+          String(c.id) === String(rawCatKey)
         ) || null
+
+        // 2. If not matched, check if rawCatKey matches a service (e.g. "kitchen_cleaning", "fridge", "bathroom-cleaning")
+        let initialSubFromCatKey = null
+        if (!realCat && allSubs.length > 0) {
+          const matchedService = allSubs.find(s =>
+            normKey(s.slug) === normKey(rawCatKey) ||
+            normKey(s.name) === normKey(rawCatKey) ||
+            (rawCatKey.length > 3 && normKey(s.slug).includes(normKey(rawCatKey))) ||
+            (rawCatKey.length > 3 && normKey(rawCatKey).includes(normKey(s.slug)))
+          )
+          if (matchedService) {
+            initialSubFromCatKey = matchedService
+            realCat = allCats.find(c =>
+              String(c.id) === String(matchedService.category) ||
+              (matchedService.category_slug && normKey(c.slug) === normKey(matchedService.category_slug))
+            ) || null
+          }
+        }
+
+        // 3. Substring / fuzzy match on category name or slug (e.g. "painting" matches "paintings", "pest" matches "home_pest_control")
+        if (!realCat) {
+          realCat = allCats.find(c =>
+            (normKey(c.slug).length > 3 && normKey(rawCatKey).includes(normKey(c.slug))) ||
+            (normKey(rawCatKey).length > 3 && normKey(c.slug).includes(normKey(rawCatKey))) ||
+            (normKey(c.name).length > 3 && normKey(rawCatKey).includes(normKey(c.name))) ||
+            (normKey(rawCatKey).length > 3 && normKey(c.name).includes(normKey(rawCatKey)))
+          ) || null
+        }
+
+        // 4. If still not matched, fallback to first category so user NEVER gets an empty screen
+        if (!realCat && allCats.length > 0) {
+          realCat = allCats[0]
+        }
+
         if (!cancelled && realCat) setLiveCategory(realCat)
         const effectiveCat = realCat || category
 
@@ -238,16 +311,6 @@ export function ModernServiceCatalogView({
         const categoryId = effectiveCat?.id?.toString()
         const categorySlug = (effectiveCat?.slug || "").toLowerCase()
 
-        // Match strictly on the service's real category id/slug -- the admin
-        // catalog already tags every service with the correct category (see
-        // Catalog > Services), so this is reliable. The old fallback here
-        // used keyword substring checks (e.g. "name contains ac") which
-        // wrongly matched unrelated services whose name just happened to
-        // contain the substring -- e.g. "Packers & Movers" (Goods &
-        // Transport) matched the AC & Appliance category because "Packers"
-        // contains "ac". Removed rather than patched: category id/slug
-        // matching is exact and covers every category, so no per-category
-        // keyword list is needed at all.
         let matchedSubs = allSubs.filter(s => {
           const sCatId = s.category?.toString()
           const sCatSlug = (s.category_slug || "").toLowerCase()
@@ -294,12 +357,13 @@ export function ModernServiceCatalogView({
 
         // Set initial active sub-service, respecting url subtab if provided
         const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab")
-        let initialSub = matchedSubs[0]
+        let initialSub = initialSubFromCatKey || matchedSubs[0]
         if (urlSubTab) {
           const found = matchedSubs.find(s =>
-            s.name?.toLowerCase() === urlSubTab.toLowerCase() ||
-            s.slug?.toLowerCase() === urlSubTab.toLowerCase() ||
-            s.name?.toLowerCase().includes(urlSubTab.toLowerCase())
+            normKey(s.name) === normKey(urlSubTab) ||
+            normKey(s.slug) === normKey(urlSubTab) ||
+            normKey(s.name).includes(normKey(urlSubTab)) ||
+            normKey(urlSubTab).includes(normKey(s.slug))
           )
           if (found) initialSub = found
         }
@@ -307,9 +371,9 @@ export function ModernServiceCatalogView({
 
         // Find packages for initial sub-service
         const initialPkgs = allPkgs.filter(p =>
-          p.service_id === initialSub.id ||
-          p.service_name === initialSub.name ||
-          p.service_slug === initialSub.slug
+          String(p.service_id) === String(initialSub?.id) ||
+          (initialSub?.name && p.service_name?.toLowerCase() === initialSub.name.toLowerCase()) ||
+          (initialSub?.slug && p.service_slug?.toLowerCase() === initialSub.slug.toLowerCase())
         )
 
         if (initialPkgs.length > 0) {
@@ -339,17 +403,17 @@ export function ModernServiceCatalogView({
     const subSlug = activeSubService.slug
 
     const matched = packages.filter(p =>
-      p.service_id === subId ||
-      p.service_name === subName ||
-      (subSlug && p.service_slug === subSlug)
+      String(p.service_id) === String(subId) ||
+      (subName && p.service_name?.toLowerCase() === subName.toLowerCase()) ||
+      (subSlug && p.service_slug?.toLowerCase() === subSlug.toLowerCase())
     )
 
     if (matched.length > 0) return matched
 
     // Fallback: match by category if no service-specific packages
     return packages.filter(p =>
-      p.category?.toString() === category?.id?.toString() ||
-      (category?.slug && p.category_slug === category.slug)
+      String(p.category) === String(category?.id) ||
+      (category?.slug && p.category_slug?.toLowerCase() === category.slug.toLowerCase())
     )
   }, [activeSubService, packages, category?.id, category?.slug])
 

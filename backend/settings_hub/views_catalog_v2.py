@@ -58,55 +58,47 @@ def clear_catalog_cache():
     except Exception:
         pass
 
-    # Try deleting patterns
+    # Try deleting patterns if supported by backend (e.g. django-redis)
     try:
         if hasattr(cache, "delete_pattern"):
             cache.delete_pattern("*catalog_services_list*")
+            cache.delete_pattern("*catalog*")
     except Exception:
         pass
 
     try:
-        if hasattr(cache, "_cache"):
+        if hasattr(cache, "_cache") and hasattr(cache._cache, "keys"):
             # LocMemCache keys
-            keys_to_del = [k for k in cache._cache.keys() if "catalog_services_list" in k or "catalog_categories_list" in k]
+            keys_to_del = [k for k in cache._cache.keys() if "catalog" in str(k)]
             for k in keys_to_del:
                 cache._cache.pop(k, None)
     except Exception:
         pass
 
-    from service_requests.models import CatalogCategory, Service
-    from companies.models import Company
+    # Direct redis client scan_iter for fast batch deletion (takes < 5ms instead of 115s)
     try:
-        from service_requests.models import CatalogCategory
+        client_pool = getattr(cache, "_cache", None) or getattr(cache, "client", None)
+        if client_pool:
+            r = client_pool.get_client() if hasattr(client_pool, "get_client") else client_pool
+            if hasattr(r, "scan_iter"):
+                keys = list(r.scan_iter(match="*catalog*", count=1000))
+                if keys:
+                    r.delete(*keys)
+    except Exception:
+        pass
+
+    # Direct common keys fallback
+    for key in [
+        "catalog_categories_list",
+        "catalog_services_list___",
+        "catalog_services_list",
+        "public_catalog_categories",
+        "public_catalog_packages",
+    ]:
         try:
-            cat_ids = [""] + list(CatalogCategory.objects.values_list("id", flat=True))
+            cache.delete(key)
         except Exception:
-            cat_ids = [""]
-
-        cache.delete("catalog_services_list___")
-        for cid in cat_ids:
-            cache.delete(f"catalog_services_list_{cid}__")
-            for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
-                cache.delete(f"catalog_services_list_{cid}_{status}")
-                cache.delete(f"catalog_services_list_{cid}__{status}")
-    except Exception:
-        cat_ids = [""]
-
-    try:
-        company_ids = [""] + list(Company.objects.values_list("id", flat=True))
-    except Exception:
-        company_ids = [""]
-
-    try:
-        slugs = ["", "vegetables"] + list(Service.objects.values_list("slug", flat=True))
-    except Exception:
-        slugs = ["", "vegetables"]
-        
-    for comp_id in company_ids:
-        for cid in cat_ids:
-            for s_slug in slugs:
-                for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
-                    cache.delete(f"catalog_services_list_{comp_id}_{cid}_{s_slug}_{status}")
+            pass
 
 
 

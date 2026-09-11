@@ -3606,36 +3606,32 @@ export function LandingPage() {
   // Hot reload services catalog when category choice becomes active
   useEffect(() => {
     if (activeCategory) {
-      const rawCatKey = (activeCategory.id || activeCategory.slug || "").toLowerCase();
-      if (rawCatKey.includes("painting") || rawCatKey.includes("mason") || rawCatKey === "11" || rawCatKey === "17") {
-        console.log("DEBUG: [LandingPage] Hot-reloading catalog services for category:", rawCatKey);
-        apiRequest("/catalog/services/")
-          .then(svcRes => {
-            if (svcRes && svcRes.success) {
-              const pkgs = {}
-              svcRes.data.forEach(s => {
-                const cid = s.category.toString()
-                if (!pkgs[cid]) pkgs[cid] = []
-                pkgs[cid].push({
-                  ...s,
-                  id: s.id.toString(),
-                  category: s.category.toString(),
-                  price: parseFloat(s.price),
-                  priceStr: "₹" + s.price,
-                  duration: s.duration || "1 hr",
-                  payment_policy: s.payment_policy,
-                  image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-                  includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
-                  excludes: Array.isArray(s.excludes) ? s.excludes : [],
-                  popular: !!s.popular,
-                  tag: s.tag || ""
-                })
+      apiRequest("/catalog/services/")
+        .then(svcRes => {
+          if (svcRes && svcRes.success) {
+            const pkgs = {}
+            svcRes.data.forEach(s => {
+              const cid = s.category.toString()
+              if (!pkgs[cid]) pkgs[cid] = []
+              pkgs[cid].push({
+                ...s,
+                id: s.id.toString(),
+                category: s.category.toString(),
+                price: parseFloat(s.price),
+                priceStr: "₹" + s.price,
+                duration: s.duration || "1 hr",
+                payment_policy: s.payment_policy,
+                image: s.image || "",
+                includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
+                excludes: Array.isArray(s.excludes) ? s.excludes : [],
+                popular: !!s.popular,
+                tag: s.tag || ""
               })
-              setPackagesData(pkgs)
-            }
-          })
-          .catch(err => console.error("Failed to hot-reload services:", err));
-      }
+            })
+            setPackagesData(pkgs)
+          }
+        })
+        .catch(err => console.error("Failed to hot-reload services:", err));
     }
   }, [activeCategory]);
 
