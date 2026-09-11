@@ -470,7 +470,7 @@ export function ModernServiceCatalogView({
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-16">
+    <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
       {/* ── 1. Top Breadcrumb & Category Hero Banner ── */}
       <div className="bg-white border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
@@ -553,85 +553,128 @@ export function ModernServiceCatalogView({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
-          {/* ════ SERVICES SIDEBAR (vertical list) ════
-              Goods & Transport skips this in favor of a full-width layout
-              with a horizontal pill row instead (see below), closer to the
-              uncluttered, no-sidebar look of MiniTruckBookingHosurPage. */}
+          {/* ════ SERVICES SUBTABS (Mobile Horizontal Bar + Desktop Vertical Sidebar) ════ */}
           {services.length > 0 && !isGoodsTransportCategory && (
-            <div className="w-full lg:w-[240px] shrink-0 flex flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 pb-1">
-                Services
-              </h3>
-              {services.map(sub => {
-                const isSelected = activeSubService?.id === sub.id
-                const IconComp = resolveServiceIcon(sub.name)
-
-                return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveSubService(sub)
-                      setSearchParams((prev) => {
-                        const next = new URLSearchParams(prev)
-                        next.set("subtab", sub.name)
-                        next.set("subTab", sub.name)
-                        return next
-                      }, { replace: true })
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
-                      isSelected
-                        ? "bg-emerald-50/90 border-emerald-600 shadow-xs"
-                        : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
-                      isSelected ? "bg-white text-emerald-700 shadow-xs border border-emerald-200" : "bg-slate-50 text-slate-600"
-                    }`}>
-                      {sub.image ? (
+            <>
+              {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile) */}
+              <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-2 -mx-4 px-4 sm:mx-0 sm:px-0 flex items-center gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
+                {services.map(sub => {
+                  const isSelected = activeSubService?.id === sub.id
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSubService(sub)
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev)
+                          next.set("subtab", sub.name)
+                          next.set("subTab", sub.name)
+                          return next
+                        }, { replace: true })
+                      }}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {sub.image && (
                         <img
                           src={resolveImageUrl(sub.image)}
                           alt={sub.name}
-                          className="w-6 h-6 object-contain"
+                          className="w-4 h-4 object-contain rounded-full bg-white/80"
                         />
-                      ) : (
-                        <IconComp className="w-5 h-5" />
                       )}
-                    </div>
-                    <span className={`flex-1 min-w-0 text-xs leading-snug ${
-                      isSelected ? "font-black text-emerald-900" : "font-bold text-slate-700"
-                    }`}>
-                      {sub.name}
-                    </span>
-                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                      <span>{sub.name}</span>
+                    </button>
+                  )
+                })}
+                {isAcApplianceCategory && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/ac-inspection")}
+                    className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shrink-0 shadow-xs cursor-pointer"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Book Inspection</span>
                   </button>
-                )
-              })}
+                )}
+              </div>
 
-              {/* Special, not-from-admin "AC Inspection / Estimation" entry --
-                  see isAcApplianceCategory above. Navigates straight to the
-                  dedicated booking page instead of switching the active
-                  service tab like a normal catalog service would. */}
-              {isAcApplianceCategory && (
-                <button
-                  type="button"
-                  onClick={() => navigate("/ac-inspection")}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
-                >
-                  <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
-                    <AlertCircle className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="block text-xs font-black text-amber-900 leading-snug">
-                      Not Sure? Book Inspection
-                    </span>
-                    <span className="block text-[10px] font-semibold text-amber-700">
-                      Certified diagnostic visit
-                    </span>
-                  </div>
-                </button>
-              )}
-            </div>
+              {/* Desktop Vertical Services Sidebar */}
+              <div className="hidden lg:flex lg:w-[240px] shrink-0 flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 pb-1">
+                  Services
+                </h3>
+                {services.map(sub => {
+                  const isSelected = activeSubService?.id === sub.id
+                  const IconComp = resolveServiceIcon(sub.name)
+
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSubService(sub)
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev)
+                          next.set("subtab", sub.name)
+                          next.set("subTab", sub.name)
+                          return next
+                        }, { replace: true })
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
+                        isSelected
+                          ? "bg-emerald-50/90 border-emerald-600 shadow-xs"
+                          : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? "bg-white text-emerald-700 shadow-xs border border-emerald-200" : "bg-slate-50 text-slate-600"
+                      }`}>
+                        {sub.image ? (
+                          <img
+                            src={resolveImageUrl(sub.image)}
+                            alt={sub.name}
+                            className="w-6 h-6 object-contain"
+                          />
+                        ) : (
+                          <IconComp className="w-5 h-5" />
+                        )}
+                      </div>
+                      <span className={`flex-1 min-w-0 text-xs leading-snug ${
+                        isSelected ? "font-black text-emerald-900" : "font-bold text-slate-700"
+                      }`}>
+                        {sub.name}
+                      </span>
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                    </button>
+                  )
+                })}
+
+                {/* Special, not-from-admin "AC Inspection / Estimation" entry */}
+                {isAcApplianceCategory && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/ac-inspection")}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
+                  >
+                    <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-xs font-black text-amber-900 leading-snug">
+                        Not Sure? Book Inspection
+                      </span>
+                      <span className="block text-[10px] font-semibold text-amber-700">
+                        Certified diagnostic visit
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </>
           )}
 
           {/* ════ CONTENT + BOOKING SUMMARY ════ */}
@@ -645,7 +688,7 @@ export function ModernServiceCatalogView({
                 to whichever package was last clicked/added (see the
                 onClick on each package row below, and the cart actions,
                 both of which call setSelectedPackage). */}
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 shadow-xs min-h-[280px] sm:min-h-[320px] flex items-end">
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[190px] sm:min-h-[300px] flex items-end">
               <img
                 key={selectedPackage?.image || activeSubService?.image || category?.image}
                 src={resolveImageUrl(selectedPackage?.image || activeSubService?.image || category?.image)}
@@ -1123,7 +1166,7 @@ export function ModernServiceCatalogView({
           {/* ════ RIGHT COLUMN (~32% width / 4 cols, sticky sidebar) ════ */}
           <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
             {/* Booking Summary Card */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+            <div id="booking-summary-card" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 Booking Summary
                 {cartTotalQty > 0 && (
@@ -1570,6 +1613,37 @@ export function ModernServiceCatalogView({
           </div>,
           document.body
         )}
+      {/* ── Mobile Floating Cart Bar (Appears when items are in cart) ── */}
+      {cartTotalQty > 0 && (
+        <div className="lg:hidden fixed bottom-4 left-3 right-3 z-40 animate-in slide-in-from-bottom-3 duration-300">
+          <div className="bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-3 shadow-2xl flex items-center justify-between border border-slate-700/80">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-xs">
+                {cartTotalQty}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cart Total</div>
+                <div className="text-sm font-black text-white truncate">₹{Number(cartTotal).toLocaleString("en-IN")}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const summaryEl = document.getElementById("booking-summary-card");
+                if (summaryEl) {
+                  summaryEl.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  handleProceedToCheckout();
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
+            >
+              <span>View Summary</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

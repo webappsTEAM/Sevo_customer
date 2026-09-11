@@ -115,7 +115,7 @@ class WorkforceIntegrationService:
 
         try:
             url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
-            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=10)
             if response.status_code in [200, 201]:
                 data = response.json()
                 workforce_job_id = data.get("workforce_job_id") or data.get("job_id")

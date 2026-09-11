@@ -494,6 +494,7 @@ class BookingCreateView(APIView):
         # wildly-wrong/corrupted totals without false-positiving on normal
         # tax/fee/delivery-charge/tip overhead.
         _cart_for_check = serializer.validated_data.get("cart_data") or []
+        cart_data = _cart_for_check
         if (
             serializer.validated_data.get("service_category", "") not in LOGISTICS_CATEGORIES
             and isinstance(_cart_for_check, list)
