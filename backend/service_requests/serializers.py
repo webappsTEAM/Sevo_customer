@@ -305,6 +305,25 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Valid customer phone number is required.")
         return cleaned
 
+    def validate_drop_contact_phone(self, value):
+        if not value:
+            return value
+        import re
+        cleaned = re.sub(r"[\s\-\(\)\+]", "", str(value))
+        if not cleaned.isdigit() or len(cleaned) < 10:
+            raise serializers.ValidationError("Enter a valid 10-digit receiver phone number.")
+        if cleaned in {"0000000000", "1234567890", "9999999999"}:
+            raise serializers.ValidationError("Valid receiver phone number is required.")
+        return cleaned
+
+    def validate_drop_contact_name(self, value):
+        if not value:
+            return value
+        val = str(value).strip()
+        if len(val) < 2:
+            raise serializers.ValidationError("Receiver name must be at least 2 characters.")
+        return val
+
     def validate(self, attrs):
         # Booking window: same-day requests are refused after the configured
         # cut-off, and a slot that has already passed today is refused too.

@@ -7,7 +7,9 @@ import {
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots } from "../../api/logisticsService.js"
+import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
+import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -545,9 +547,29 @@ export function MiniTruckBookingHosurPage() {
   const [quoteError, setQuoteError] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
+  const [receiverName, setReceiverName] = useState("")
+  const [receiverPhone, setReceiverPhone] = useState("")
+  const [receiverPhoneError, setReceiverPhoneError] = useState("")
+  const [showReceiverDetails, setShowReceiverDetails] = useState(false)
   const [userType, setUserType] = useState("House Shifting & Personal Items")
   const [estimateModalOpen, setEstimateModalOpen] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState(null)
+
+  // Recover active in-flight partner search if customer refreshes the page
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        const isFresh = Date.now() - (parsed.timestamp || 0) < 15 * 60 * 1000
+        if (isFresh && parsed.bookingId && parsed.serviceCategory === "goods_transport_truck") {
+          setLookingForPartnerOpen(true)
+        } else if (!isFresh) {
+          sessionStorage.removeItem("calservice_active_partner_search")
+        }
+      }
+    } catch (e) {}
+  }, [])
 
   // Booking Flow State: Explicit separation between IMMEDIATE and SCHEDULED modes
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -582,6 +604,10 @@ export function MiniTruckBookingHosurPage() {
   // Goods Type & Looking for Partner Flow State (Database-Backed Catalog)
   const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
   const [dynamicCategories, setDynamicCategories] = useState([])
+  const [selectedGoodsCategoryObj, setSelectedGoodsCategoryObj] = useState(null)
+  const [cargoItems, setCargoItems] = useState([])
+  const [cargoSelectorOpen, setCargoSelectorOpen] = useState(false)
+  const [intermediateStops, setIntermediateStops] = useState([])
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
   const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
@@ -688,6 +714,25 @@ export function MiniTruckBookingHosurPage() {
   const [lastTrackingToken, setLastTrackingToken] = useState(null)
   const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
+
+  useEffect(() => {
+    if (!selectedDate?.fullDate) return
+    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
+    fetchLogisticsSlots({ date: dStr, category: "goods_transport_truck" })
+      .then(res => {
+        if (res && res.success && res.groups) {
+          const map = {}
+          res.groups.forEach(g => {
+            (g.slots || []).forEach(s => {
+              map[s.slot] = s.is_available
+            })
+          })
+          setServerSlotsAvailability(map)
+        }
+      })
+      .catch(() => {})
+  }, [selectedDate])
 
   // Recover active in-flight partner search if customer refreshes the page
   useEffect(() => {
@@ -724,7 +769,7 @@ export function MiniTruckBookingHosurPage() {
           const status = (res.data.status || "").toLowerCase()
           const isAccepted = Boolean(
             res.data.is_accepted ||
-            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+            ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
@@ -912,7 +957,7 @@ export function MiniTruckBookingHosurPage() {
   const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
   const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
-  // GT-B-01: pickup -> drop -> vehicle -> server distance -> server fare.
+  // GT-B-01: pickup -> waypoints -> drop -> vehicle -> cargo items -> server distance -> server fare.
   // Debounced so dragging through suggestions doesn't spend a metered
   // Distance Matrix call per keystroke, and guarded against out-of-order
   // responses so a slower earlier request can't overwrite a newer quote.
@@ -925,12 +970,25 @@ export function MiniTruckBookingHosurPage() {
     }
     let cancelled = false
     setQuoteLoading(true)
+    setServerQuote(null)
+
+    const validWaypoints = intermediateStops
+      .map((s) => usableCoords(s.coords, s.address))
+      .filter(Boolean)
+
     const timer = setTimeout(async () => {
       const res = await fetchLogisticsQuote({
         serviceCategory: "goods_transport_truck",
         tierId,
         pickup: pickupPoint,
         drop: dropPoint,
+        waypoints: validWaypoints,
+        stopCount: 2 + validWaypoints.length,
+        cargoItems: cargoItems.map((i) => ({
+          goods_item_id: i.goods_item_id || i.goods_item,
+          quantity: i.quantity,
+        })),
+        goodsCategoryId: selectedGoodsCategoryObj?.id,
       })
       if (cancelled) return
       setQuoteLoading(false)
@@ -943,15 +1001,13 @@ export function MiniTruckBookingHosurPage() {
       }
     }, 350)
     return () => { cancelled = true; clearTimeout(timer) }
-    // Depends on the primitive lat/lng values, deliberately NOT on the
-    // pickupPoint/dropPoint objects react-hooks wants here: those are
-    // rebuilt on every render, so listing them would re-run this effect
-    // (and spend a metered Distance Matrix call) on every keystroke
-    // anywhere on the page. The primitives are the actual inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
     selectedVehicle?._tierId,
+    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
+    JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
+    selectedGoodsCategoryObj?.id,
   ])
 
   // Live location fetch handler (can be fetched live or entered manually)
@@ -1112,6 +1168,9 @@ export function MiniTruckBookingHosurPage() {
         bestFor: bestForText,
       },
       _tierId: tier.id,
+      is_active: tier.is_active !== false,
+      max_weight_kg: Number(tier.max_weight_kg) || 0,
+      max_cft: Number(tier.max_cft) || 0,
     }
   }
 
@@ -1121,6 +1180,17 @@ export function MiniTruckBookingHosurPage() {
   const HEAVY_VEHICLES = truckTiers
     .filter((t) => t.weight_class === "heavy" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
     .map(tierToVehicle)
+
+  const selectedVehicleEffective = selectedVehicle || LIGHT_VEHICLES[0]
+  const totalCargoWeightKg = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+  const totalCargoCftVal = cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0)
+  const isSelectedVehicleOverCapacity = serverQuote?.breakdown?.is_cargo_fit != null
+    ? serverQuote.breakdown.is_cargo_fit === false
+    : Boolean(
+        selectedVehicleEffective &&
+        ((Number(selectedVehicleEffective.max_weight_kg) > 0 && totalCargoWeightKg > Number(selectedVehicleEffective.max_weight_kg)) ||
+         (Number(selectedVehicleEffective.max_cft) > 0 && totalCargoCftVal > Number(selectedVehicleEffective.max_cft)))
+      )
 
   const LONG_DISTANCE_ROUTES = truckLanes.map((lane) => ({
     to: lane.destination_label,
@@ -1193,6 +1263,7 @@ export function MiniTruckBookingHosurPage() {
   // service_requests.BookingCreateView). Runs after OTP verification, or
   // immediately if the customer is already signed in.
   const submitBooking = async (goodsTypeOverride = null) => {
+    if (bookingSubmitting) return
     setBookingError("")
     setBookingSubmitting(true)
     try {
@@ -1218,7 +1289,25 @@ export function MiniTruckBookingHosurPage() {
         )
         return
       }
+      if (serverQuote?.breakdown?.is_cargo_fit === false) {
+        setBookingError(serverQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds vehicle capacity. Please select a larger vehicle.")
+        setBookingSubmitting(false)
+        return
+      }
       const fare = Number(serverQuote.total)
+
+      // Check vehicle capacity fitment
+      const totalCargoWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+      const totalCargoCft = cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0)
+      const maxW = Number(vehicle?.max_weight_kg) || 0
+      const maxC = Number(vehicle?.max_cft) || 0
+      if ((maxW > 0 && totalCargoWeight > maxW) || (maxC > 0 && totalCargoCft > maxC)) {
+        setBookingError(
+          `Selected cargo (${totalCargoWeight.toFixed(1)}kg) exceeds ${vehicle?.name || "vehicle"} capacity (${maxW}kg). Please select a larger vehicle.`
+        )
+        setBookingSubmitting(false)
+        return
+      }
       
       let dateString = todayDateString()
       let timeString = "Immediate / Next Available"
@@ -1271,13 +1360,39 @@ export function MiniTruckBookingHosurPage() {
         return
       }
 
+      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "")
+      if (receiverPhone && cleanReceiverPhone.length !== 10) {
+        setBookingSubmitting(false)
+        setReceiverPhoneError("Please enter a valid 10-digit receiver phone number.")
+        setBookingError("Please enter a valid 10-digit receiver phone number.")
+        return
+      }
+      setReceiverPhoneError("")
+
+      const validStops = intermediateStops
+        .filter((s) => s.address && s.address.trim())
+        .map((s, idx) => ({
+          stop_order: idx + 1,
+          address: s.address,
+          latitude: s.coords?.lat != null ? Number(Number(s.coords.lat).toFixed(6)) : null,
+          longitude: s.coords?.lng != null ? Number(Number(s.coords.lng).toFixed(6)) : null,
+          contact_name: s.contact_name || "",
+          contact_phone: s.contact_phone || "",
+        }))
+
+      const cargoDesc = cargoItems.length > 0
+        ? ` | Items: ${cargoItems.map(i => `${i.quantity}x ${i.name}`).join(", ")}`
+        : ""
+
       const payload = {
         customer_name: name.trim(),
         phone: cleanPhone,
         email: customerEmail,
+        drop_contact_name: (receiverName || name).trim(),
+        drop_contact_phone: cleanReceiverPhone || cleanPhone,
         service_category: "goods_transport_truck",
         issue_title: `Mini truck delivery — ${vehicle?.name || "Mini Truck"} (${currentGoodsType})`,
-        description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
+        description: `Goods Type: ${currentGoodsType}${cargoDesc} | Type: ${userType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
         latitude: Number(Number(pickupPoint.lat).toFixed(6)),
@@ -1286,16 +1401,24 @@ export function MiniTruckBookingHosurPage() {
         preferred_time: timeString,
         total_amount: fare,
         payment_method: "COD",
+        stops: validStops,
         cart_data: [{
           tier: vehicle?.name || "Mini Truck",
           price: fare,
+          quote_id: serverQuote?.quoteId || serverQuote?.quote_id || serverQuote?.breakdown?.quote_id || null,
+          expires_at: serverQuote?.expiresAt || serverQuote?.expires_at || serverQuote?.breakdown?.expires_at || null,
+          quote_hash: serverQuote?.quoteHash || serverQuote?.quote_hash || serverQuote?.breakdown?.quote_hash || null,
           goods_type: currentGoodsType,
+          cargo_items: cargoItems,
+          goods_items: cargoItems,
+          stops: validStops,
           route: selectedRoute?.to || null,
           date: bookingMode === "SCHEDULED" ? selectedDate?.value : null,
           slot: slotValue,
           booking_mode: bookingMode,
         }],
       }
+      if (selectedGoodsCategoryObj?.id) payload.goods_category_id = selectedGoodsCategoryObj.id
       if (vehicle?._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
       // Backend accepts these as optional; only send a real resolved point.
@@ -1382,7 +1505,12 @@ export function MiniTruckBookingHosurPage() {
     setCancelSubmitting(true)
     try {
       if (lastBookingId) {
-        await cancelBooking(lastBookingId, `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`)
+        await cancelBooking(
+          lastBookingId,
+          `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`,
+          lastTrackingToken || "",
+          phone || ""
+        )
       }
     } catch (err) {
       console.warn("Error cancelling booking on server:", err)
@@ -1863,6 +1991,55 @@ export function MiniTruckBookingHosurPage() {
               )}
             </div>
 
+            {/* Multi-Stop Waypoints Section (Expandable / Inline) */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 border-t border-slate-200/80 pt-3">
+              <MultiStopRouteManager
+                stops={intermediateStops}
+                onChangeStops={(newStops) => setIntermediateStops(newStops)}
+                maxStops={3}
+                pickupAddress={pickup}
+                dropAddress={drop}
+              />
+            </div>
+
+            {/* Goods & Cargo Item Selector Banner */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      {selectedGoodsCategoryObj?.name || selectedGoodsType || "General Goods"}
+                    </span>
+                    {cargoItems.length > 0 && (
+                      <span className="text-[10px] font-bold text-slate-500">
+                        ({cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
+                    {cargoItems.length > 0
+                      ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
+                      : "No specific items declared (Using default category fitment)"}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {cargoItems.length > 0
+                      ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
+                      : "Add items like Sofas, Boxes, Refrigerators, etc. to calculate vehicle fitment"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCargoSelectorOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                {cargoItems.length > 0 ? "Edit Goods / Items" : "+ Select Goods & Items"}
+              </button>
+            </div>
+
             {/* Name */}
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
@@ -1998,13 +2175,13 @@ export function MiniTruckBookingHosurPage() {
             </button>
           </div>
 
-        {/* Coming Soon Notice Banner for Heavy Vehicles */}
+        {/* Heavy Commercial Fleet Information Banner */}
         {activeTab === "heavy" && (
-          <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold shadow-2xs">
-            <span className="bg-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
-              Coming Soon
+          <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-blue-50/90 border border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-900 text-xs font-bold shadow-2xs">
+            <span className="bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
+              Commercial Fleet
             </span>
-            <span>These heavy vehicles are coming soon! Only Tata Ace &amp; 3-Wheeler (500kg) are currently available for booking.</span>
+            <span>Heavy commercial vehicles for larger loads, industrial freight, and bulk goods.</span>
           </div>
         )}
 
@@ -2052,7 +2229,7 @@ export function MiniTruckBookingHosurPage() {
             {currentVehicles.map((vehicle) => {
               const isComingSoon = Boolean(
                 (vehicle.badge && vehicle.badge.toLowerCase().includes("coming")) ||
-                (!vehicle.badge && (activeTab === "heavy" || vehicle.name?.toLowerCase().includes("pickup") || vehicle.name?.toLowerCase().includes("1.7")))
+                vehicle.is_active === false
               )
               const badgeToShow = vehicle.badge || (isComingSoon ? "Coming Soon" : "")
               return (
@@ -2116,8 +2293,8 @@ export function MiniTruckBookingHosurPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (vehicle.badge?.toLowerCase()?.includes("coming") || vehicle.name?.toLowerCase()?.includes("pickup") || vehicle.name?.toLowerCase()?.includes("1.7") || activeTab === "heavy") {
-                          alert("This vehicle is coming soon! Tata Ace and 3-Wheeler are currently available.")
+                        if (vehicle.badge?.toLowerCase()?.includes("coming") || vehicle.is_active === false) {
+                          alert("This vehicle is currently not available for instant booking. Please select an active vehicle.")
                           return
                         }
                         if (!drop || !drop.trim()) {
@@ -2539,7 +2716,7 @@ export function MiniTruckBookingHosurPage() {
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
                                   {slots.map(slot => {
-                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
                                     return (
                                       <button
                                         key={slot}
@@ -2851,39 +3028,82 @@ export function MiniTruckBookingHosurPage() {
                 
                 {/* Dashed line */}
                 <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+
+                {/* Waypoints */}
+                {intermediateStops.filter(s => s.address).map((stop, sIdx) => (
+                  <React.Fragment key={stop.id || sIdx}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-blue-900 truncate">
+                          {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
+                        </p>
+                        <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
+                      </div>
+                    </div>
+                    <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+                  </React.Fragment>
+                ))}
                 
                 {/* Drop */}
-                <div className="flex items-start gap-3 mb-5">
+                <div className="flex items-start gap-3 mb-2">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                    <p className="text-[11px] font-bold text-slate-800 truncate">
+                      {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
+                    </p>
                     <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVehicleSelectorOpen(false)
-                      const bar = document.getElementById("estimate-bar")
-                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                    }}
-                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
-                  >Edit</button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                      className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                    >
+                      {showReceiverDetails ? "Hide" : "+ Receiver"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVehicleSelectorOpen(false)
+                        const bar = document.getElementById("estimate-bar")
+                        if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }}
+                      className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >Edit</button>
+                  </div>
                 </div>
 
-                {/* Fare Breakdown -- GT-B-01.
-                    Every line below is a value the SERVER returned for this
-                    exact trip. This block used to compute its own: it took
-                    the selector card's indicative "starting from" price,
-                    added a hardcoded 29.89 "Trip Fare", subtracted a
-                    hardcoded 30.00 discount attributed to an invented coupon
-                    code, and presented the result as an Amount Payable. The
-                    arithmetic was rigged so the total always landed back on
-                    the card price, which made it look consistent while being
-                    entirely unrelated to what the backend would charge -- and
-                    it rendered a complete, confident fare breakdown even when
-                    /logistics/quote/ had returned 400. There is no coupon
-                    system in this flow, so no discount line is shown at all.
-                    When there is no server quote there is no fare: say so. */}
+                {showReceiverDetails && (
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 mb-3 space-y-2 animate-in fade-in duration-150">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Receiver at Destination</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Receiver Name"
+                        value={receiverName}
+                        onChange={(e) => setReceiverName(e.target.value)}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="10-digit Phone"
+                        maxLength={10}
+                        value={receiverPhone}
+                        onChange={(e) => {
+                          setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                          if (receiverPhoneError) setReceiverPhoneError("")
+                        }}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    {receiverPhoneError && (
+                      <p className="text-[10px] text-rose-600 font-semibold">{receiverPhoneError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Fare Breakdown -- GT-B-01 */}
                 {(() => {
                   const q = serverQuote
                   const b = q?.breakdown || null
@@ -2895,7 +3115,10 @@ export function MiniTruckBookingHosurPage() {
                     return (
                       <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs text-slate-500">
                         <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                        <p className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Calculating your fare…</p>
+                        <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                          <span className="font-semibold text-xs">Recalculating fare for updated cargo/route…</span>
+                        </div>
                       </div>
                     )
                   }
@@ -2903,11 +3126,14 @@ export function MiniTruckBookingHosurPage() {
                     return (
                       <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs">
                         <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                        <p className="font-semibold text-slate-700">Fare unavailable</p>
-                        <p className="text-slate-500 mt-0.5">
-                          {quoteError ||
-                            "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
-                        </p>
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5">
+                          <p className="font-bold flex items-center gap-1.5 text-xs text-rose-800">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" /> Fare calculation error
+                          </p>
+                          <p className="text-xs text-rose-700">
+                            {quoteError || "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
+                          </p>
+                        </div>
                       </div>
                     )
                   }
@@ -2965,23 +3191,49 @@ export function MiniTruckBookingHosurPage() {
                   )
                 })()}
 
-                {/* Goods Type Row */}
+                {/* Goods Type & Cargo Row */}
                 <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base">📦</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Boxes className="w-4 h-4" />
+                    </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">GOODS TYPE</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">{selectedGoodsType || "General Goods"}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">CARGO & GOODS</p>
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {cargoItems.length > 0
+                          ? `${cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items (${cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")})`
+                          : (selectedGoodsType || "General Goods")}
+                      </p>
+                      {cargoItems.length > 0 && (
+                        <p className="text-[10px] text-emerald-700 font-semibold">
+                          ~{cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • ~{cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT
+                        </p>
+                      )}
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setGoodsTypeModalOpen(true)}
+                    onClick={() => setCargoSelectorOpen(true)}
                     className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
                   >
-                    Change
+                    {cargoItems.length > 0 ? "Edit Cargo" : "Select Cargo"}
                   </button>
                 </div>
+
+                {/* Cargo Capacity Warning if vehicle capacity is exceeded */}
+                {(() => {
+                  const totalWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+                  const maxWeight = Number(selectedVehicle?.max_weight_kg) || 0
+                  if (maxWeight > 0 && totalWeight > maxWeight) {
+                    return (
+                      <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-300 flex items-center gap-2 text-rose-800 text-[11px] font-bold">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Cargo weight ({totalWeight.toFixed(1)} kg) exceeds {selectedVehicle.name} capacity ({maxWeight} kg). Please pick a larger vehicle.</span>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
               </div>
 
               {/* Action Buttons: Book Now & Schedule */}
@@ -2996,18 +3248,26 @@ export function MiniTruckBookingHosurPage() {
                 <button
                   type="button"
                   onClick={() => submitBooking()}
-                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
+                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
                   title={
-                    serverQuote?.total == null && !quoteLoading
+                    isSelectedVehicleOverCapacity
+                      ? "Cargo exceeds selected vehicle capacity. Please select a larger vehicle."
+                      : serverQuote?.total == null && !quoteLoading
                       ? "A fare is needed before booking"
                       : undefined
                   }
-                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    isSelectedVehicleOverCapacity
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                      : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white shadow-emerald-600/30"
+                  }`}
                 >
                   {bookingSubmitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
                   ) : quoteLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Calculating fare…</>
+                  ) : isSelectedVehicleOverCapacity ? (
+                    <span>Capacity Exceeded — Pick Larger Vehicle</span>
                   ) : (
                     <span>Book Now</span>
                   )}
@@ -3083,14 +3343,14 @@ export function MiniTruckBookingHosurPage() {
                     const isSelected = (selectedVehicle?.id === v.id) || (!selectedVehicle && v.id === (LIGHT_VEHICLES[0]?.id || "3-wheeler"))
                     const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || null
                     const fare = v.price || (fareRaw ? `₹ ${fareRaw.toLocaleString("en-IN")}` : "—")
-                    // No fabricated "was" price. This was `fareRaw + 30`,
-                    // which invented an original price by adding a hardcoded
-                    // 30 to the card price and struck it through -- the same
-                    // phantom ₹30 the removed "Coupon Discount - 2WLRBGLR34"
-                    // line used. A discount is only real if a backend
-                    // discount/coupon system produced it; there is none in
-                    // this flow, so nothing is struck through.
                     const strikethrough = null
+
+                    const maxW = Number(v.max_weight_kg) || 0
+                    const maxC = Number(v.max_cft) || 0
+                    const exceedsW = maxW > 0 && totalCargoWeightKg > maxW
+                    const exceedsC = maxC > 0 && totalCargoCftVal > maxC
+                    const exceedsCap = exceedsW || exceedsC
+
                     return (
                       <button
                         key={v.id}
@@ -3098,8 +3358,12 @@ export function MiniTruckBookingHosurPage() {
                         onClick={() => setSelectedVehicle(v)}
                         className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
                           isSelected
-                            ? "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
-                            : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+                            ? exceedsCap
+                              ? "border-rose-500 bg-rose-50/50 shadow-md shadow-rose-100"
+                              : "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
+                            : exceedsCap
+                              ? "border-rose-200 bg-rose-50/20 hover:border-rose-300"
+                              : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
                         }`}
                       >
                         <div className="w-16 shrink-0 flex items-center justify-center">
@@ -3107,12 +3371,21 @@ export function MiniTruckBookingHosurPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
-                            </span>
+                            {exceedsCap ? (
+                              <span className="text-[10px] font-extrabold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <AlertCircle className="w-2.5 h-2.5 text-rose-700" /> Exceeds Capacity
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
-                          <p className="text-xs text-slate-500">{v.capacity}</p>
+                          <p className={`text-xs ${exceedsCap ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
+                            {v.capacity}
+                            {exceedsCap ? ` • Cargo exceeds limit (max ${maxW}kg)` : ""}
+                          </p>
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-[10px] text-slate-400 font-medium block">Starting from</span>
@@ -3278,6 +3551,53 @@ export function MiniTruckBookingHosurPage() {
           </div>
         </div>
       )}
+
+      {/* ── Dynamic Goods & Cargo Item Selection Modal ── */}
+      <GoodsCargoSelectorModal
+        isOpen={cargoSelectorOpen}
+        onClose={() => setCargoSelectorOpen(false)}
+        selectedCargoItems={cargoItems}
+        onApplyCargo={async (items, cat) => {
+          setCargoItems(items)
+          if (cat) {
+            setSelectedGoodsCategoryObj(cat)
+            setSelectedGoodsType(cat.name)
+          }
+          if (items && items.length > 0) {
+            try {
+              const res = await evaluateCargoFitment({
+                cargo_items: items.map((i) => ({
+                  item_id: i.id || i.goods_item_id,
+                  slug: i.slug,
+                  quantity: i.quantity,
+                })),
+                goods_category_id: cat?.id,
+                city: LOGISTICS_CITY,
+              })
+              const rec = res?.recommended_tier
+              if (rec) {
+                const allVehicles = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
+                const matched = allVehicles.find(
+                  (veh) => veh._tierId === rec.id || veh.id === rec.slug || veh.name?.toLowerCase() === rec.name?.toLowerCase()
+                )
+                if (matched) {
+                  setSelectedVehicle(matched)
+                  if (HEAVY_VEHICLES.some((v) => v._tierId === rec.id || v.id === rec.slug)) {
+                    setActiveTab("heavy")
+                  } else {
+                    setActiveTab("light")
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("Authoritative cargo fitment evaluation failed, maintaining current selection:", err)
+            }
+          }
+        }}
+        isTwoWheeler={false}
+        selectedCategory={selectedGoodsCategoryObj}
+        onSelectCategory={setSelectedGoodsCategoryObj}
+      />
 
       {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
       {lookingForPartnerOpen && (

@@ -438,6 +438,8 @@ class BookingCreateView(APIView):
             # otherwise it falls back to the previous flat lane/tier
             # lookup. The client-submitted total_amount is still never
             # trusted for any logistics category.
+            # Multi-stop waypoints extraction for authoritative fare resolution
+            req_waypoints = request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")
             corrected_fare, fare_breakdown = resolve_logistics_fare_v2(
                 service_category=serializer.validated_data.get("service_category", ""),
                 logistics_tier=serializer.validated_data.get("logistics_tier"),
@@ -448,6 +450,7 @@ class BookingCreateView(APIView):
                 drop_lat=serializer.validated_data.get("drop_latitude"),
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
+                waypoints=req_waypoints,
             )
         except UnresolvedLogisticsFareError as err:
             if idem_cache_key:
@@ -616,26 +619,110 @@ class BookingCreateView(APIView):
                             item["price"] = float(corrected_fare)
                         else:
                             item["price"] = p_val
+                        if fare_breakdown:
+                            item["logistics_snapshot"] = _jsonable_fare_breakdown(fare_breakdown)
                     else:
                         item["price"] = p_val
             serializer.validated_data["cart_data"] = clean_cart
 
-        sr = serializer.save(
-            company=company,
-            customer=customer_user,
-            email=final_email,
-            status=initial_status,
-            payment_method=payment_method,
-            payment_status=initial_payment_status,
-            total_amount=corrected_fare,
+        save_kwargs = {
+            "company": company,
+            "customer": customer_user,
+            "email": final_email,
+            "status": initial_status,
+            "payment_method": payment_method,
+            "payment_status": initial_payment_status,
+            "total_amount": corrected_fare,
             # GT-B-01: the itemised quote behind total_amount, when the
             # fare was distance-computed. Empty for flat-priced bookings.
-            fare_breakdown=_jsonable_fare_breakdown(fare_breakdown),
+            "fare_breakdown": _jsonable_fare_breakdown(fare_breakdown),
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
-            service_zone_id_snapshot=zone_result.zone_id,
-            service_zone_name_snapshot=zone_result.zone_name or "",
-        )
+            "service_zone_id_snapshot": zone_result.zone_id,
+            "service_zone_name_snapshot": zone_result.zone_name or "",
+        }
+        if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
+            from logistics.models import ServiceTier
+            tier_obj = ServiceTier.objects.filter(id=fare_breakdown["tier_id"]).first()
+            if tier_obj:
+                save_kwargs["logistics_tier"] = tier_obj
+
+        try:
+            with transaction.atomic():
+                sr = serializer.save(**save_kwargs)
+
+                # Multi-stop GT routing: persist TripStop records if stops provided in request
+                raw_stops = request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")
+                if not raw_stops and clean_cart and isinstance(clean_cart, list) and len(clean_cart) > 0:
+                    c0 = clean_cart[0] if isinstance(clean_cart[0], dict) else {}
+                    raw_stops = c0.get("stops") or c0.get("waypoints") or c0.get("trip_stops")
+                if raw_stops and isinstance(raw_stops, list) and len(raw_stops) > 0:
+                    formatted_stops = []
+                    has_explicit_pickup = any(isinstance(s, dict) and str(s.get("stop_type", "")).upper() == "PICKUP" for s in raw_stops)
+                    has_explicit_drop = any(isinstance(s, dict) and str(s.get("stop_type", "")).upper() == "DROP" for s in raw_stops)
+
+                    if not has_explicit_pickup and (sr.address or sr.latitude):
+                        formatted_stops.append({
+                            "address": sr.address or f"Pickup ({sr.latitude}, {sr.longitude})",
+                            "stop_type": "PICKUP",
+                            "contact_name": sr.customer_name or "",
+                            "contact_phone": sr.phone or "",
+                            "latitude": sr.latitude,
+                            "longitude": sr.longitude,
+                            "notes": "Pickup location",
+                        })
+
+                    for s in raw_stops:
+                        if isinstance(s, dict):
+                            st = str(s.get("stop_type") or "WAYPOINT").upper()
+                            if st == "PICKUP" and not has_explicit_pickup:
+                                continue
+                            if st == "DROP" and not has_explicit_drop:
+                                continue
+                            addr = str(s.get("address") or "").strip()
+                            lat_val = s.get("lat") or s.get("latitude")
+                            lng_val = s.get("lng") or s.get("longitude")
+                            if not addr and lat_val and lng_val:
+                                addr = f"Stop ({lat_val}, {lng_val})"
+                            if addr:
+                                formatted_stops.append({
+                                    "address": addr,
+                                    "stop_type": st,
+                                    "contact_name": str(s.get("contact_name") or "").strip(),
+                                    "contact_phone": str(s.get("contact_phone") or "").strip(),
+                                    "latitude": lat_val,
+                                    "longitude": lng_val,
+                                    "notes": str(s.get("notes") or "").strip(),
+                                })
+
+                    if not has_explicit_drop and (sr.drop_address or sr.drop_latitude):
+                        formatted_stops.append({
+                            "address": sr.drop_address or f"Drop ({sr.drop_latitude}, {sr.drop_longitude})",
+                            "stop_type": "DROP",
+                            "contact_name": sr.drop_contact_name or "",
+                            "contact_phone": sr.drop_contact_phone or "",
+                            "latitude": sr.drop_latitude,
+                            "longitude": sr.drop_longitude,
+                            "notes": "Drop location",
+                        })
+
+                    if formatted_stops:
+                        actor = customer_user or sr.customer or request.user
+                        sr_services.set_trip_stops(sr, actor, formatted_stops)
+                        logger.info(f"[GT_MULTI_STOP] Created {len(formatted_stops)} TripStop rows for ServiceRequest #{sr.id}")
+        except Exception as trip_stop_err:
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            logger.error(f"[BOOKING_ROLLBACK] Booking creation rolled back due to trip stop persistence failure: {trip_stop_err}")
+            return Response(
+                {
+                    "success": False,
+                    "error": f"Failed to persist route trip stops: {str(trip_stop_err)}",
+                    "code": "TRIP_STOPS_PERSISTENCE_FAILED",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
         if coupon_code:
@@ -708,12 +795,16 @@ class BookingCreateView(APIView):
         # the vendor side, this still delivers it, just without blocking the
         # request that doesn't need to wait on it.
         try:
-            import threading
-            threading.Thread(
-                target=WorkforceIntegrationService.dispatch_job,
-                args=(sr.id,),
-                daemon=True,
-            ).start()
+            from django.conf import settings
+            if getattr(settings, "TESTING", False):
+                WorkforceIntegrationService.dispatch_job(sr.id)
+            else:
+                import threading
+                threading.Thread(
+                    target=WorkforceIntegrationService.dispatch_job,
+                    args=(sr.id,),
+                    daemon=True,
+                ).start()
         except Exception as dispatch_err:
             logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
 
@@ -724,13 +815,18 @@ class BookingCreateView(APIView):
         # response.
         if _new_account_created:
             try:
-                import threading
-                from .notifications import notify_account_created
-                threading.Thread(
-                    target=notify_account_created,
-                    args=(customer_user, sr),
-                    daemon=True,
-                ).start()
+                from django.conf import settings
+                if getattr(settings, "TESTING", False):
+                    from .notifications import notify_account_created
+                    notify_account_created(customer_user, sr)
+                else:
+                    import threading
+                    from .notifications import notify_account_created
+                    threading.Thread(
+                        target=notify_account_created,
+                        args=(customer_user, sr),
+                        daemon=True,
+                    ).start()
             except Exception as notify_err:
                 logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
@@ -843,7 +939,7 @@ class CustomerMyBookingsView(APIView):
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-created_at").distinct()
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
         return _success(data=serializer.data)
@@ -1057,7 +1153,8 @@ def _build_logistics_progress(sr):
     None or a missing key, so clients can read it unconditionally.
     """
     empty = {"leg": "", "leg_updated_at": None, "leg_history": [], "stops": [], "proofs": []}
-    if sr.service_category not in LOGISTICS_CATEGORIES:
+    cat = (sr.service_category or "").strip().lower()
+    if cat not in [c.lower() for c in LOGISTICS_CATEGORIES]:
         return empty
 
     try:
@@ -1223,7 +1320,7 @@ def _build_tracking_payload(sr, has_full_access):
     # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
     # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
     tracking = None
-    active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
+    active_statuses = {"accepted", "on_the_way", "en_route", "arrived", "in_progress"}
     if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
         # Must be the numeric pk: the vendor's tracking routes are <int:pk>, so
         # passing request_id (an alphanumeric like "HM0001") never matched any
@@ -1236,12 +1333,12 @@ def _build_tracking_payload(sr, has_full_access):
     # ASSIGNED != ACCEPTED.
     # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
     # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
-    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
+    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
     technician_accepted = bool(
-        sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+        sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
     )
     is_accepted = technician_accepted
-    tracking_available = bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress"])
+    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -1298,7 +1395,7 @@ def _build_tracking_payload(sr, has_full_access):
 
         if not tech_name and hasattr(sr, "assignments"):
             assignment = sr.assignments.filter(
-                status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+                status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
             ).order_by("-id").first()
             if assignment:
                 tech_name = assignment.technician_name or None
@@ -1429,7 +1526,7 @@ def _build_tracking_payload(sr, has_full_access):
             }
 
     # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
-    start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
+    start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress"]) else None
 
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
@@ -1735,7 +1832,7 @@ class AdminSRListView(APIView):
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-created_at")
 
         status_param = request.query_params.get("status")
@@ -2405,7 +2502,7 @@ class CustomerActiveBookingsListView(APIView):
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-id").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(qs, many=True, context={"request": request}).data)
 
@@ -2524,7 +2621,7 @@ class CustomerEligibleBookingsListView(APIView):
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).exclude(refund_requests__isnull=False).order_by("-created_at").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(bookings, many=True, context={"request": request}).data)
 
@@ -3430,7 +3527,7 @@ class CustomerBookingMessagesView(APIView):
     docstring for why this doesn't attempt push/websockets or phone-number
     masking (X-09's other half).
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def _get_booking(self, pk, identifier):
         sr_id = pk or identifier
@@ -3442,7 +3539,22 @@ class CustomerBookingMessagesView(APIView):
             return None
 
     def _check_owner(self, sr, request):
-        return sr.customer_id == request.user.id or getattr(request.user, "role", "").upper() == "ADMIN"
+        provided_token = request.data.get("token") or request.query_params.get("token") or request.headers.get("X-Tracking-Token")
+        if provided_token and sr.tracking_token:
+            if str(sr.tracking_token).strip().lower() == str(provided_token).strip().lower():
+                if not _tracking_token_is_expired(sr):
+                    return True
+
+        if request.user and request.user.is_authenticated:
+            if getattr(request.user, "role", "").upper() == "ADMIN" or getattr(request.user, "is_superuser", False):
+                return True
+            if sr.customer_id and sr.customer_id == request.user.id:
+                return True
+            if request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower():
+                return True
+            if request.user.phone and sr.phone and request.user.phone.strip()[-10:] == sr.phone.strip()[-10:]:
+                return True
+        return False
 
     def get(self, request, pk=None, identifier=None):
         sr = self._get_booking(pk, identifier)
@@ -3469,11 +3581,17 @@ class CustomerBookingMessagesView(APIView):
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message cannot be empty."}, status_code=400)
         if len(body) > 2000:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message is too long (max 2000 characters)."}, status_code=400)
+        sender_user = request.user if (request.user and request.user.is_authenticated) else None
+        sender_name = (
+            sr.customer_name or
+            (request.user.get_full_name() if (request.user and request.user.is_authenticated) else None) or
+            "Customer"
+        )
         msg = BookingMessage.objects.create(
             booking=sr,
             sender_persona=BookingMessage.SenderPersona.CUSTOMER,
-            sender_name=sr.customer_name or request.user.get_full_name() or "Customer",
-            sender_user=request.user,
+            sender_name=sender_name,
+            sender_user=sender_user,
             body=body,
         )
         return _standard_response(success=True, data=BookingMessageSerializer(msg).data, status_code=201)

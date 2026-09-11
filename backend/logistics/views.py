@@ -259,10 +259,11 @@ class LogisticsQuoteView(APIView):
             is_fit, fit_reason = evaluate_vehicle_fitment(tier, cargo_summary)
             if not is_fit:
                 recommendations = recommend_vehicles_for_cargo(cargo_summary, city=tier.city or "Hosur")
+                err_code = "CARGO_INCOMPATIBLE" if "incompatible" in str(fit_reason).lower() else "VEHICLE_CAPACITY_EXCEEDED"
                 return Response(
                     {
                         "success": False,
-                        "error_code": "VEHICLE_CAPACITY_EXCEEDED",
+                        "error_code": err_code,
                         "message": fit_reason,
                         "cargo_summary": recommendations["cargo_summary"],
                         "recommended_vehicle": recommendations.get("recommended_tier"),
@@ -281,8 +282,32 @@ class LogisticsQuoteView(APIView):
         )
 
         if breakdown is None:
+            if getattr(tier, "per_km_rate", None) is not None:
+                return Response(
+                    {
+                        "success": False,
+                        "quotable": False,
+                        "error_code": "ROUTE_REQUIRED",
+                        "message": "Authoritative distance fare cannot be calculated without valid pickup and drop coordinates.",
+                        "pricing_mode": "distance",
+                        "tier_id": tier.id,
+                        "tier_name": tier.name,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            import uuid
+            from datetime import timedelta
+            from django.utils import timezone
+            now = timezone.now()
+            quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
+            created_at = now.isoformat()
+            expires_at = (now + timedelta(minutes=15)).isoformat()
             return success_response(data={
                 "quotable": True,
+                "quote_id": quote_id,
+                "created_at": created_at,
+                "expires_at": expires_at,
                 "pricing_mode": "flat",
                 "total": str(tier.starting_price),
                 "currency": tier.currency,
@@ -294,6 +319,10 @@ class LogisticsQuoteView(APIView):
         payload = {k: (str(v) if isinstance(v, Decimal) else v) for k, v in breakdown.items()}
         return success_response(data={
             "quotable": True,
+            "quote_id": payload.get("quote_id"),
+            "quote_hash": payload.get("quote_hash"),
+            "created_at": payload.get("created_at"),
+            "expires_at": payload.get("expires_at"),
             "pricing_mode": "distance",
             "is_authoritative": bool(payload.get("is_authoritative", False)),
             "is_estimate": bool(payload.get("is_estimate", False)),
@@ -367,6 +396,7 @@ class CargoFitmentEvaluationView(APIView):
             goods_category_id=category_id,
             goods_category_slug=category_slug,
             declared_weight_kg=declared_weight,
+            city=city,
         )
 
         recommendations = recommend_vehicles_for_cargo(cargo_summary, city=city)
@@ -391,15 +421,16 @@ class PackersMoversQuoteView(APIView):
 
         data = request.data if isinstance(request.data, dict) else {}
 
-        pickup_lat = _coord(data.get("pickup_latitude") or data.get("latitude"))
-        pickup_lng = _coord(data.get("pickup_longitude") or data.get("longitude"))
-        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat"))
-        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng"))
+        pickup_lat = _coord(data.get("pickup_latitude") or data.get("pickup_lat") or data.get("latitude"))
+        pickup_lng = _coord(data.get("pickup_longitude") or data.get("pickup_lng") or data.get("longitude"))
+        drop_lat = _coord(data.get("drop_latitude") or data.get("drop_lat") or data.get("latitude"))
+        drop_lng = _coord(data.get("drop_longitude") or data.get("drop_lng") or data.get("longitude"))
 
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
             return Response(
                 {
                     "success": False,
+                    "code": "COORDINATES_REQUIRED",
                     "error_code": "COORDINATES_REQUIRED",
                     "message": (
                         "Select both the pickup and drop locations from the "
@@ -409,25 +440,112 @@ class PackersMoversQuoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        inventory = data.get("inventory") or data.get("items") or data.get("cart_data") or {}
-        packing_tier = str(data.get("packing_tier") or "standard").strip()
-        dismantling_required = bool(data.get("dismantling_required", True))
-        unpacking_required = bool(data.get("unpacking_required", False))
+        # Strict boolean parsing helper
+        def _parse_strict_bool(val, field_name: str, default=False) -> bool:
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                v_clean = val.strip().lower()
+                if v_clean in ("true", "1", "yes"):
+                    return True
+                if v_clean in ("false", "0", "no"):
+                    return False
+                raise ValueError(f"Invalid boolean value '{val}' for field '{field_name}'.")
+            if isinstance(val, (int, float)):
+                if val == 1:
+                    return True
+                if val == 0:
+                    return False
+                raise ValueError(f"Invalid boolean value '{val}' for field '{field_name}'.")
+            raise ValueError(f"Invalid boolean value for field '{field_name}'.")
+
+        # Floor parsing helper
+        def _parse_floor(val, field_name: str) -> int:
+            if val is None or val == "":
+                return 0
+            try:
+                f_int = int(val)
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid floor number '{val}' for field '{field_name}'.")
+            if f_int < 0:
+                raise ValueError(f"Floor number cannot be negative for field '{field_name}'.")
+            if f_int > 100:
+                raise ValueError(f"Floor number exceeds maximum limit of 100 for field '{field_name}'.")
+            return f_int
 
         try:
-            pickup_floor = int(data.get("pickup_floor") or 0)
-        except (TypeError, ValueError):
-            pickup_floor = 0
+            pickup_floor = _parse_floor(data.get("pickup_floor"), "pickup_floor")
+            drop_floor = _parse_floor(data.get("drop_floor"), "drop_floor")
+            pickup_has_lift = _parse_strict_bool(data.get("pickup_has_lift", True), "pickup_has_lift", default=True)
+            drop_has_lift = _parse_strict_bool(data.get("drop_has_lift", True), "drop_has_lift", default=True)
+            dismantling_required = _parse_strict_bool(data.get("dismantling_required", True), "dismantling_required", default=True)
+            unpacking_required = _parse_strict_bool(data.get("unpacking_required", False), "unpacking_required", default=False)
+        except ValueError as val_err:
+            msg = str(val_err)
+            err_code = "INVALID_FLOOR" if "floor" in msg.lower() else ("INVALID_BOOLEAN" if "boolean" in msg.lower() else "INVALID_INPUT_PARAMETER")
+            return Response(
+                {
+                    "success": False,
+                    "code": err_code,
+                    "error_code": err_code,
+                    "message": msg,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        pickup_has_lift = bool(data.get("pickup_has_lift", True))
+        packing_tier = str(data.get("packing_tier") or "standard").strip().lower()
+        if packing_tier not in ("standard", "premium", "no_packing", "none", "customer_packed"):
+            return Response(
+                {
+                    "success": False,
+                    "code": "INVALID_PACKING_TIER",
+                    "error_code": "INVALID_PACKING_TIER",
+                    "message": f"Invalid packing tier '{packing_tier}'. Allowed: standard, premium, no_packing.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        try:
-            drop_floor = int(data.get("drop_floor") or 0)
-        except (TypeError, ValueError):
-            drop_floor = 0
-
-        drop_has_lift = bool(data.get("drop_has_lift", True))
         relocation_type = str(data.get("relocation_type") or "Within City").strip()
+        city = str(data.get("city") or "Hosur").strip()
+
+        selected_tier_id = data.get("selected_tier_id") or data.get("service_tier_id") or data.get("tier_id")
+        if selected_tier_id is not None:
+            try:
+                selected_tier_id = int(selected_tier_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {"success": False, "code": "INVALID_TIER_ID", "error_code": "INVALID_TIER_ID", "message": "Invalid service tier ID format."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from logistics.models import ServiceTier
+            tier_obj = ServiceTier.objects.filter(id=selected_tier_id, is_active=True, city__iexact=city).first()
+            if not tier_obj:
+                return Response(
+                    {
+                        "success": False,
+                        "code": "TIER_NOT_FOUND",
+                        "error_code": "TIER_NOT_FOUND",
+                        "message": f"Service tier #{selected_tier_id} is inactive, does not exist, or does not belong to city '{city}'.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if tier_obj.category != "packers_movers":
+                return Response(
+                    {
+                        "success": False,
+                        "code": "TIER_CATEGORY_MISMATCH",
+                        "error_code": "TIER_CATEGORY_MISMATCH",
+                        "message": (
+                            f"Service tier #{selected_tier_id} belongs to category '{tier_obj.category}'. "
+                            "Packers & Movers quotes only accept tiers with category 'packers_movers'."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        inventory = data.get("inventory") or data.get("items") or data.get("cart_data") or {}
 
         try:
             quote = compute_packers_movers_quote(
@@ -436,6 +554,7 @@ class PackersMoversQuoteView(APIView):
                 drop_lat=drop_lat,
                 drop_lng=drop_lng,
                 inventory=inventory,
+                city=city,
                 packing_tier=packing_tier,
                 dismantling_required=dismantling_required,
                 unpacking_required=unpacking_required,
@@ -444,6 +563,7 @@ class PackersMoversQuoteView(APIView):
                 drop_floor=drop_floor,
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
+                service_tier_id=selected_tier_id,
             )
         except Exception as e:
             logger.exception("Error computing Packers & Movers quote: %s", e)
@@ -456,8 +576,20 @@ class PackersMoversQuoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if quote.get("capacity_exceeded"):
+            return Response(
+                {
+                    "success": False,
+                    "code": "VEHICLE_CAPACITY_EXCEEDED",
+                    "error_code": "VEHICLE_CAPACITY_EXCEEDED",
+                    "message": f"Selected vehicle tier cannot accommodate total move volume ({quote.get('inventory_summary', {}).get('effective_cft', 0):.1f} CFT). Please select a larger vehicle or request a survey.",
+                    "data": quote,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return success_response(data={
-            "quotable": True,
+            "quotable": not quote.get("requires_survey", False) and not quote.get("requires_review", False) and quote.get("pricing", {}).get("total") is not None,
             "quote_id": quote["quote_id"],
             "requires_survey": quote["requires_survey"],
             "requires_review": quote["requires_review"],
@@ -467,9 +599,9 @@ class PackersMoversQuoteView(APIView):
             "estimate_notice": quote["estimate_notice"],
             "unrecognized_items": quote.get("unrecognized_items", []),
             "review_reason": quote.get("review_reason"),
-            "total": str(quote["pricing"]["total"]),
-            "subtotal": str(quote["pricing"]["subtotal"]),
-            "gst_amount": str(quote["pricing"]["gst_amount"]),
+            "total": str(quote["pricing"]["total"]) if quote.get("pricing", {}).get("total") is not None else None,
+            "subtotal": str(quote["pricing"]["subtotal"]) if quote.get("pricing", {}).get("subtotal") is not None else None,
+            "gst_amount": str(quote["pricing"]["gst_amount"]) if quote.get("pricing", {}).get("gst_amount") is not None else None,
             "currency": quote["pricing"]["currency"],
             "valid_until": quote["valid_until"],
             "vehicle": quote["vehicle"],
@@ -508,8 +640,9 @@ class PackersMoversInventoryView(APIView):
                         "id": it.id,
                         "name": it.name,
                         "slug": it.slug,
-                        "cft": float(it.default_cft or 1.0),
-                        "weight_kg": float(it.default_weight_kg or 5.0),
+                        "cft": float(it.default_cft) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
+                        "weight_kg": float(it.default_weight_kg) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
+                        "configured": bool(it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0),
                         "is_fragile": it.is_fragile,
                         "can_dismantle": it.requires_special_handling or it.special_handling_charge > 0,
                         "dismantle_charge": str(it.special_handling_charge or "0.00"),
@@ -520,5 +653,80 @@ class PackersMoversInventoryView(APIView):
             categories_data.append(cat_payload)
 
         return success_response(data={"categories": categories_data})
+
+
+class LogisticsSlotAvailabilityView(APIView):
+    """
+    GET /api/logistics/slots/?date=YYYY-MM-DD&category=goods_transport_truck
+    Returns authoritative booking slot availability for a given date and service category,
+    calculated against server clock and business rules in service_requests/booking_window.py.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from service_requests.booking_window import (
+            validate_booking_slot,
+            get_cutoff_hour,
+            get_min_lead_minutes,
+            is_same_day_closed,
+            next_bookable_date,
+            cutoff_label,
+        )
+        import datetime
+        from django.utils import timezone
+
+        date_str = request.query_params.get("date")
+        category = request.query_params.get("category", "goods_transport_truck")
+
+        now = timezone.localtime()
+        if date_str:
+            try:
+                target_date = datetime.date.fromisoformat(date_str)
+            except ValueError:
+                return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            target_date = now.date()
+
+        SLOT_DEFS = [
+            ("Morning", ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"]),
+            ("Afternoon", ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"]),
+            ("Evening", ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]),
+        ]
+
+        same_day_closed = (target_date == now.date()) and is_same_day_closed(now, category)
+
+        groups = []
+        for group_name, slots in SLOT_DEFS:
+            group_slots = []
+            for slot_label in slots:
+                err = validate_booking_slot(
+                    preferred_date=target_date,
+                    preferred_time=slot_label,
+                    now=now,
+                    service_category=category,
+                )
+                is_avail = (err is None)
+                group_slots.append({
+                    "slot": slot_label,
+                    "label": slot_label,
+                    "is_available": is_avail,
+                    "reason": err if not is_avail else None,
+                })
+            groups.append({
+                "group": group_name,
+                "slots": group_slots,
+            })
+
+        return Response({
+            "success": True,
+            "date": target_date.isoformat(),
+            "service_category": category,
+            "is_same_day_closed": same_day_closed,
+            "cutoff_hour": get_cutoff_hour(category),
+            "cutoff_label": cutoff_label(category),
+            "min_lead_minutes": get_min_lead_minutes(),
+            "next_bookable_date": next_bookable_date(now, category).isoformat(),
+            "groups": groups,
+        })
 
 

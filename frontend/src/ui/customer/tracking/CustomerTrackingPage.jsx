@@ -26,6 +26,7 @@ const STATUS_LABEL_MAP = {
   assigned: "Technician Assigned",
   accepted: "Technician Assigned",
   on_the_way: "On The Way",
+  en_route: "On The Way",
   arrived: "Technician Arrived",
   in_progress: "Service In Progress",
   completed: "Service Completed",
@@ -54,7 +55,7 @@ const TIMELINE_STEPS = [
 function getTimelineIdx(s) {
   s = (s || "").toLowerCase()
   if (["assigned", "accepted"].includes(s)) return 1
-  if (s === "on_the_way") return 2
+  if (["on_the_way", "en_route"].includes(s)) return 2
   if (s === "arrived") return 3
   if (s === "in_progress") return 4
   if (["completed", "closed", "feedback_pending", "feedback_received"].includes(s)) return 5
@@ -106,7 +107,7 @@ export function CustomerTrackingPage({
   const isAccepted = Boolean(
     data?.is_accepted ||
     data?.technician_accepted ||
-    ["accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(status)
+    ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed"].includes(status)
   )
   const isCancelled = status === "cancelled" || status === "rejected"
   const tlIdx = getTimelineIdx(status)
@@ -124,7 +125,8 @@ export function CustomerTrackingPage({
     if (!chatAllowed || !chatBookingId || chatUnavailable) return
     let cancelled = false
     const fetchMessages = () => {
-      apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+      const q = trackingToken ? `?token=${encodeURIComponent(trackingToken)}` : ""
+      apiRequest(`/booking/${chatBookingId}/messages/${q}`, { method: "GET" })
         .then((res) => {
           if (cancelled) return
           const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
@@ -142,7 +144,7 @@ export function CustomerTrackingPage({
     fetchMessages()
     const interval = setInterval(fetchMessages, 10000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [chatAllowed, chatBookingId, chatUnavailable])
+  }, [chatAllowed, chatBookingId, chatUnavailable, trackingToken])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
@@ -152,10 +154,11 @@ export function CustomerTrackingPage({
     const body = chatInput.trim()
     if (!body || chatSending || !chatBookingId) return
     setChatSending(true)
+    const q = trackingToken ? `?token=${encodeURIComponent(trackingToken)}` : ""
     try {
-      await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "POST", json: { body } })
+      await apiRequest(`/booking/${chatBookingId}/messages/${q}`, { method: "POST", json: { body, token: trackingToken } })
       setChatInput("")
-      const res = await apiRequest(`/booking/${chatBookingId}/messages/`, { method: "GET" })
+      const res = await apiRequest(`/booking/${chatBookingId}/messages/${q}`, { method: "GET" })
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.results) ? res.results : [])
       setChatMessages(list)
     } catch (err) {

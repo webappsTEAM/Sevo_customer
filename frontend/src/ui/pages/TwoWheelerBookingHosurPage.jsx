@@ -7,7 +7,9 @@ import {
   User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots } from "../../api/logisticsService.js"
+import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
+import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
@@ -310,6 +312,10 @@ export function TwoWheelerBookingHosurPage() {
   const [quoteError, setQuoteError] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
+  const [receiverName, setReceiverName] = useState("")
+  const [receiverPhone, setReceiverPhone] = useState("")
+  const [receiverPhoneError, setReceiverPhoneError] = useState("")
+  const [showReceiverDetails, setShowReceiverDetails] = useState(false)
   const [userType, setUserType] = useState("Personal Parcels & Documents")
   const [selectedRoute, setSelectedRoute] = useState(null)
 
@@ -346,6 +352,10 @@ export function TwoWheelerBookingHosurPage() {
   // Goods Type & Looking for Partner Flow State (Database-Backed Catalog)
   const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
   const [dynamicCategories, setDynamicCategories] = useState([])
+  const [selectedGoodsCategoryObj, setSelectedGoodsCategoryObj] = useState(null)
+  const [cargoItems, setCargoItems] = useState([])
+  const [cargoSelectorOpen, setCargoSelectorOpen] = useState(false)
+  const [intermediateStops, setIntermediateStops] = useState([])
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
@@ -450,6 +460,25 @@ export function TwoWheelerBookingHosurPage() {
   const [lastTrackingToken, setLastTrackingToken] = useState(null)
   const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
+
+  useEffect(() => {
+    if (!selectedDate?.fullDate) return
+    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
+    fetchLogisticsSlots({ date: dStr, category: "goods_transport_two_wheeler" })
+      .then(res => {
+        if (res && res.success && res.groups) {
+          const map = {}
+          res.groups.forEach(g => {
+            (g.slots || []).forEach(s => {
+              map[s.slot] = s.is_available
+            })
+          })
+          setServerSlotsAvailability(map)
+        }
+      })
+      .catch(() => {})
+  }, [selectedDate])
 
   // Recover active in-flight partner search if customer refreshes the page
   useEffect(() => {
@@ -486,7 +515,7 @@ export function TwoWheelerBookingHosurPage() {
           const status = (res.data.status || "").toLowerCase()
           const isAccepted = Boolean(
             res.data.is_accepted ||
-            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+            ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
@@ -674,7 +703,7 @@ export function TwoWheelerBookingHosurPage() {
   const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
   const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
-  // GT-B-01: pickup -> drop -> vehicle -> server distance -> server fare.
+  // GT-B-01: pickup -> waypoints -> drop -> vehicle -> cargo items -> server distance -> server fare.
   // Debounced, and guarded against out-of-order responses.
   useEffect(() => {
     const tierId = selectedVehicle?._tierId
@@ -685,12 +714,25 @@ export function TwoWheelerBookingHosurPage() {
     }
     let cancelled = false
     setQuoteLoading(true)
+    setServerQuote(null)
+
+    const validWaypoints = intermediateStops
+      .map((s) => usableCoords(s.coords, s.address))
+      .filter(Boolean)
+
     const timer = setTimeout(async () => {
       const res = await fetchLogisticsQuote({
         serviceCategory: "goods_transport_two_wheeler",
         tierId,
         pickup: pickupPoint,
         drop: dropPoint,
+        waypoints: validWaypoints,
+        stopCount: 2 + validWaypoints.length,
+        cargoItems: cargoItems.map((i) => ({
+          goods_item_id: i.goods_item_id || i.goods_item,
+          quantity: i.quantity,
+        })),
+        goodsCategoryId: selectedGoodsCategoryObj?.id,
       })
       if (cancelled) return
       setQuoteLoading(false)
@@ -703,15 +745,13 @@ export function TwoWheelerBookingHosurPage() {
       }
     }, 350)
     return () => { cancelled = true; clearTimeout(timer) }
-    // Depends on the primitive lat/lng values, deliberately NOT on the
-    // pickupPoint/dropPoint objects react-hooks wants here: those are
-    // rebuilt on every render, so listing them would re-run this effect
-    // (and spend a metered Distance Matrix call) on every keystroke
-    // anywhere on the page. The primitives are the actual inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
     selectedVehicle?._tierId,
+    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
+    JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
+    selectedGoodsCategoryObj?.id,
   ])
 
   // Live location fetch handler
@@ -843,10 +883,23 @@ export function TwoWheelerBookingHosurPage() {
         bestFor: bestForText,
       },
       _tierId: tier.id,
+      max_weight_kg: Number(tier.max_weight_kg) || 0,
+      max_cft: Number(tier.max_cft) || 0,
     }
   }
 
   const TWO_WHEELER_VEHICLES = fetchedTiers.map(tierToVehicle)
+
+  const selectedVehicleEffective = selectedVehicle || TWO_WHEELER_VEHICLES[0]
+  const totalCargoWeightKg = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+  const totalCargoCftVal = cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0)
+  const maxAllowed2WWeight = Number(selectedVehicleEffective?.max_weight_kg) || 0
+  const hasIncompatible2WItems = cargoItems.some((i) => i.is_two_wheeler_compatible === false)
+  const isSelectedVehicleOverCapacity = serverQuote?.breakdown?.is_cargo_fit != null
+    ? serverQuote.breakdown.is_cargo_fit === false
+    : Boolean(
+        (maxAllowed2WWeight > 0 && totalCargoWeightKg > maxAllowed2WWeight) || hasIncompatible2WItems
+      )
 
   const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
@@ -903,9 +956,9 @@ export function TwoWheelerBookingHosurPage() {
     if (!selectedVehicle) setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
   }
 
-  // Persists the booking to the backend (POST /api/booking/ — see
-  // service_requests.BookingCreateView).
+  // Persists the booking to the backend (POST /api/booking/ — see service_requests.BookingCreateView).
   const submitBooking = async (goodsTypeOverride = null) => {
+    if (bookingSubmitting) return
     setBookingError("")
     setBookingSubmitting(true)
     try {
@@ -926,7 +979,26 @@ export function TwoWheelerBookingHosurPage() {
         )
         return
       }
+      if (serverQuote?.breakdown?.is_cargo_fit === false) {
+        setBookingError(serverQuote.breakdown.cargo_fit_reason || "Selected cargo exceeds Two-Wheeler capacity. Please book a Mini Truck instead.")
+        setBookingSubmitting(false)
+        return
+      }
       const fare = Number(serverQuote.total)
+
+      // Check 2-Wheeler capacity & item compatibility
+      const totalCargoWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+      const maxW = Number(vehicle?.max_weight_kg) || 0
+      const hasIncompatible = cargoItems.some((i) => i.is_two_wheeler_compatible === false)
+      if ((maxW > 0 && totalCargoWeight > maxW) || hasIncompatible) {
+        setBookingError(
+          hasIncompatible
+            ? "Selected cargo contains items requiring a Mini Truck. Please book a Mini Truck instead."
+            : `Selected cargo (${totalCargoWeight.toFixed(1)}kg) exceeds vehicle capacity (${maxW}kg). Please book a Mini Truck instead.`
+        )
+        setBookingSubmitting(false)
+        return
+      }
       
       let dateString = todayDateString()
       let timeString = "Immediate / Next Available"
@@ -952,16 +1024,22 @@ export function TwoWheelerBookingHosurPage() {
       // derived from exactly the same inputs.
 
       // No hardcoded fallback coordinate any more. If we could not resolve
-      // where the pickup actually is, refuse rather than book the customer
-      // at a made-up point -- the backend rejects a coordinate-less booking
-      // for exactly this reason (see the HS-B-04 comment in
-      // BookingCreateView), and a wrong coordinate is worse than none
-      // because dispatch, routing and the fare all trust it.
-      if (!pickupPoint) {
+      // coordinates from the user's geocoded selection (e.g. they typed an
+      // address freeform without picking a suggestion), fail fast with a
+      // human explanation. Submitting a fake coordinate creates a booking
+      // that is physically wrong in the database, cannot be dispatched
+      // accurately, and computes an ETA against a place the customer never
+      // mentioned.
+      if (!pickupPoint || !dropPoint) {
         setBookingSubmitting(false)
-        setBookingError(
-          "We couldn't pin your pickup location. Please pick it from the suggestions so we can find a driver near you."
-        )
+        setBookingError("Please pick both the pickup and drop locations from the suggestions so we can map the route.")
+        return
+      }
+
+      // Check Hosur operating boundary
+      if (!isRouteServed(pickupAddressValue, dropAddressValue)) {
+        setBookingSubmitting(false)
+        setBookingError("Our Hosur 2-Wheeler delivery service only operates for trips starting or ending in Hosur / SIPCOT.")
         return
       }
 
@@ -979,13 +1057,39 @@ export function TwoWheelerBookingHosurPage() {
         return
       }
 
+      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "")
+      if (receiverPhone && cleanReceiverPhone.length !== 10) {
+        setBookingSubmitting(false)
+        setReceiverPhoneError("Please enter a valid 10-digit receiver phone number.")
+        setBookingError("Please enter a valid 10-digit receiver phone number.")
+        return
+      }
+      setReceiverPhoneError("")
+
+      const validStops = intermediateStops
+        .filter((s) => s.address && s.address.trim())
+        .map((s, idx) => ({
+          stop_order: idx + 1,
+          address: s.address,
+          latitude: s.coords?.lat != null ? Number(Number(s.coords.lat).toFixed(6)) : null,
+          longitude: s.coords?.lng != null ? Number(Number(s.coords.lng).toFixed(6)) : null,
+          contact_name: s.contact_name || "",
+          contact_phone: s.contact_phone || "",
+        }))
+
+      const cargoDesc = cargoItems.length > 0
+        ? ` | Items: ${cargoItems.map(i => `${i.quantity}x ${i.name}`).join(", ")}`
+        : ""
+
       const payload = {
         customer_name: name.trim(),
         phone: cleanPhone,
         email: customerEmail,
+        drop_contact_name: (receiverName || name).trim(),
+        drop_contact_phone: cleanReceiverPhone || cleanPhone,
         service_category: "goods_transport_two_wheeler",
         issue_title: `Two-wheeler delivery — ${vehicle.name} (${currentGoodsType})`,
-        description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
+        description: `Goods Type: ${currentGoodsType}${cargoDesc} | Type: ${userType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
         latitude: Number(Number(pickupPoint.lat).toFixed(6)),
@@ -994,16 +1098,24 @@ export function TwoWheelerBookingHosurPage() {
         preferred_time: timeString,
         total_amount: fare,
         payment_method: "COD",
+        stops: validStops,
         cart_data: [{
           tier: vehicle.name,
           price: fare,
+          quote_id: serverQuote?.quoteId || serverQuote?.quote_id || serverQuote?.breakdown?.quote_id || null,
+          expires_at: serverQuote?.expiresAt || serverQuote?.expires_at || serverQuote?.breakdown?.expires_at || null,
+          quote_hash: serverQuote?.quoteHash || serverQuote?.quote_hash || serverQuote?.breakdown?.quote_hash || null,
           goods_type: currentGoodsType,
+          cargo_items: cargoItems,
+          goods_items: cargoItems,
+          stops: validStops,
           route: selectedRoute?.to || null,
           date: bookingMode === "SCHEDULED" ? selectedDate?.value : null,
           slot: slotValue,
           booking_mode: bookingMode,
         }],
       }
+      if (selectedGoodsCategoryObj?.id) payload.goods_category_id = selectedGoodsCategoryObj.id
       if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
       // Backend accepts these as optional; only send a real resolved point.
@@ -1090,7 +1202,12 @@ export function TwoWheelerBookingHosurPage() {
     setCancelSubmitting(true)
     try {
       if (lastBookingId) {
-        await cancelBooking(lastBookingId, `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`)
+        await cancelBooking(
+          lastBookingId,
+          `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`,
+          lastTrackingToken || "",
+          phone || ""
+        )
       }
     } catch (err) {
       console.warn("Error cancelling booking on server:", err)
@@ -1619,6 +1736,55 @@ export function TwoWheelerBookingHosurPage() {
               )}
             </div>
 
+            {/* Multi-Stop Waypoints Section (Expandable / Inline) */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 border-t border-slate-200/80 pt-3">
+              <MultiStopRouteManager
+                stops={intermediateStops}
+                onChangeStops={(newStops) => setIntermediateStops(newStops)}
+                maxStops={3}
+                pickupAddress={pickup}
+                dropAddress={drop}
+              />
+            </div>
+
+            {/* Goods & Cargo Item Selector Banner */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      {selectedGoodsCategoryObj?.name || selectedGoodsType || "General Goods"}
+                    </span>
+                    {cargoItems.length > 0 && (
+                      <span className="text-[10px] font-bold text-slate-500">
+                        ({cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
+                    {cargoItems.length > 0
+                      ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
+                      : "No specific items declared (Using default category fitment)"}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {cargoItems.length > 0
+                      ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
+                      : "Add items (e.g. Documents, Boxes, Small Goods) to calculate fitment"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCargoSelectorOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                {cargoItems.length > 0 ? "Edit Goods / Items" : "+ Select Goods & Items"}
+              </button>
+            </div>
+
             {/* Name */}
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
@@ -2133,33 +2299,82 @@ export function TwoWheelerBookingHosurPage() {
                 
                 {/* Dashed line */}
                 <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+
+                {/* Waypoints */}
+                {intermediateStops.filter(s => s.address).map((stop, sIdx) => (
+                  <React.Fragment key={stop.id || sIdx}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-blue-900 truncate">
+                          {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
+                        </p>
+                        <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
+                      </div>
+                    </div>
+                    <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+                  </React.Fragment>
+                ))}
                 
                 {/* Drop */}
-                <div className="flex items-start gap-3 mb-5">
+                <div className="flex items-start gap-3 mb-2">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                    <p className="text-[11px] font-bold text-slate-800 truncate">
+                      {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
+                    </p>
                     <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVehicleSelectorOpen(false)
-                      const bar = document.getElementById("estimate-bar")
-                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                    }}
-                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
-                  >Edit</button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                      className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                    >
+                      {showReceiverDetails ? "Hide" : "+ Receiver"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVehicleSelectorOpen(false)
+                        const bar = document.getElementById("estimate-bar")
+                        if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }}
+                      className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                    >Edit</button>
+                  </div>
                 </div>
 
-                {/* Fare Breakdown -- GT-B-01. Every line is a value the
-                    SERVER returned for this exact trip. This block used to
-                    compute its own: selector card price + a hardcoded 29.89,
-                    minus a hardcoded 30.00 attributed to an invented coupon
-                    code, rigged so the total landed back on the card price.
-                    It rendered a confident breakdown even when
-                    /logistics/quote/ had returned 400. There is no coupon
-                    system in this flow, so no discount line is shown. */}
+                {showReceiverDetails && (
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 mb-3 space-y-2 animate-in fade-in duration-150">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Receiver Details at Destination</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Receiver Name"
+                        value={receiverName}
+                        onChange={(e) => setReceiverName(e.target.value)}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="10-digit Phone"
+                        maxLength={10}
+                        value={receiverPhone}
+                        onChange={(e) => {
+                          setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                          if (receiverPhoneError) setReceiverPhoneError("")
+                        }}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    {receiverPhoneError && (
+                      <p className="text-[10px] text-rose-600 font-semibold">{receiverPhoneError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Fare Breakdown -- GT-B-01 */}
                 {(() => {
                   const q = serverQuote
                   const b = q?.breakdown || null
@@ -2171,7 +2386,10 @@ export function TwoWheelerBookingHosurPage() {
                     return (
                       <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs text-slate-500">
                         <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                        <p className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Calculating your fare…</p>
+                        <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                          <span className="font-semibold text-xs">Recalculating fare for updated cargo/route…</span>
+                        </div>
                       </div>
                     )
                   }
@@ -2179,11 +2397,14 @@ export function TwoWheelerBookingHosurPage() {
                     return (
                       <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs">
                         <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                        <p className="font-semibold text-slate-700">Fare unavailable</p>
-                        <p className="text-slate-500 mt-0.5">
-                          {quoteError ||
-                            "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
-                        </p>
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5">
+                          <p className="font-bold flex items-center gap-1.5 text-xs text-rose-800">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" /> Fare calculation error
+                          </p>
+                          <p className="text-xs text-rose-700">
+                            {quoteError || "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
+                          </p>
+                        </div>
                       </div>
                     )
                   }
@@ -2232,23 +2453,63 @@ export function TwoWheelerBookingHosurPage() {
                   )
                 })()}
 
-                {/* Goods Type Row */}
+                {/* Goods Type & Cargo Row */}
                 <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base">📦</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Boxes className="w-4 h-4" />
+                    </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">GOODS TYPE</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">{selectedGoodsType || "General Goods"}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">CARGO & GOODS</p>
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {cargoItems.length > 0
+                          ? `${cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items (${cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")})`
+                          : (selectedGoodsType || "General Goods")}
+                      </p>
+                      {cargoItems.length > 0 && (
+                        <p className="text-[10px] text-emerald-700 font-semibold">
+                          ~{cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • ~{cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT
+                        </p>
+                      )}
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setGoodsTypeModalOpen(true)}
+                    onClick={() => setCargoSelectorOpen(true)}
                     className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
                   >
-                    Change
+                    {cargoItems.length > 0 ? "Edit Cargo" : "Select Cargo"}
                   </button>
                 </div>
+
+                {/* Cargo Capacity Warning if 2-wheeler capacity is exceeded */}
+                {(() => {
+                  const totalWeight = totalCargoWeightKg
+                  const maxWeight = maxAllowed2WWeight
+                  const hasIncompatible = hasIncompatible2WItems
+                  if (totalWeight > maxWeight || hasIncompatible) {
+                    return (
+                      <div className="mt-2.5 p-3 rounded-xl bg-rose-50 border border-rose-300 flex items-start gap-2.5 text-rose-800 text-[11px] font-bold">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p>
+                            {hasIncompatible
+                              ? "Selected cargo contains items requiring a Mini Truck."
+                              : `Cargo weight (${totalWeight.toFixed(1)} kg) exceeds Two-Wheeler limit (${maxWeight} kg).`}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => navigate(routes.miniTruckBookingHosur())}
+                            className="inline-flex items-center gap-1 mt-1 text-xs font-black text-emerald-800 hover:text-emerald-900 underline cursor-pointer"
+                          >
+                            <Truck className="w-3 h-3" /> Switch to Mini Truck Booking &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
               </div>
 
               {/* Action Buttons: Book Now & Schedule */}
@@ -2257,14 +2518,26 @@ export function TwoWheelerBookingHosurPage() {
                 <button
                   type="button"
                   onClick={() => submitBooking()}
-                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
-                  title={serverQuote?.total == null && !quoteLoading ? "A fare is needed before booking" : undefined}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
+                  title={
+                    isSelectedVehicleOverCapacity
+                      ? "Cargo exceeds Two-Wheeler limits. Please book a Mini Truck."
+                      : serverQuote?.total == null && !quoteLoading
+                      ? "A fare is needed before booking"
+                      : undefined
+                  }
+                  className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    isSelectedVehicleOverCapacity
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                      : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white shadow-emerald-600/30"
+                  }`}
                 >
                   {bookingSubmitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
                   ) : quoteLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Calculating fare…</>
+                  ) : isSelectedVehicleOverCapacity ? (
+                    <span>Capacity Exceeded — Book Mini Truck</span>
                   ) : (
                     <span>Book Now</span>
                   )}
@@ -2493,6 +2766,23 @@ export function TwoWheelerBookingHosurPage() {
           </div>
         </div>
       )}
+
+      {/* ── Dynamic Goods & Cargo Item Selection Modal (Two-Wheeler Compatible Mode) ── */}
+      <GoodsCargoSelectorModal
+        isOpen={cargoSelectorOpen}
+        onClose={() => setCargoSelectorOpen(false)}
+        selectedCargoItems={cargoItems}
+        onApplyCargo={(items, cat) => {
+          setCargoItems(items)
+          if (cat) {
+            setSelectedGoodsCategoryObj(cat)
+            setSelectedGoodsType(cat.name)
+          }
+        }}
+        isTwoWheeler={true}
+        selectedCategory={selectedGoodsCategoryObj}
+        onSelectCategory={setSelectedGoodsCategoryObj}
+      />
 
       {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
       {lookingForPartnerOpen && (
@@ -2837,7 +3127,7 @@ export function TwoWheelerBookingHosurPage() {
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
                                   {slots.map(slot => {
-                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
                                     return (
                                       <button
                                         key={slot}

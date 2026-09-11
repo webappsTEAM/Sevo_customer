@@ -14,7 +14,16 @@ Business logic on purpose lives here, not in BookingCreateView — CLAUDE.md:
 "Business logic: NEVER in views — always in a service function."
 """
 
-from decimal import Decimal, ROUND_HALF_UP
+import hashlib
+import logging
+import uuid
+from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+
+from django.core.cache import cache
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 LOGISTICS_CATEGORIES = {
     "goods_transport_truck",
@@ -255,6 +264,8 @@ def quote_logistics_fare(
     if waypoints and isinstance(waypoints, list) and len(waypoints) > 0:
         points = [(pickup_lat, pickup_lng)]
         for wp in waypoints:
+            if isinstance(wp, dict) and str(wp.get("stop_type", "")).upper() in ("PICKUP", "DROP"):
+                continue
             if isinstance(wp, (list, tuple)) and len(wp) >= 2:
                 points.append((wp[0], wp[1]))
             elif isinstance(wp, dict) and "lat" in wp and "lng" in wp:
@@ -343,7 +354,79 @@ def quote_logistics_fare(
         if is_estimate else None
     )
 
+    now = timezone.now()
+    created_at = now.isoformat()
+    expires_at = (now + timedelta(minutes=15)).isoformat()
+    quote_id = f"gtq_{uuid.uuid4().hex[:16]}"
+
+    # Canonicalize waypoints for cryptographic quote binding
+    canonical_waypoints = []
+    if waypoints and isinstance(waypoints, list):
+        for wp in waypoints:
+            if isinstance(wp, (list, tuple)) and len(wp) >= 2:
+                canonical_waypoints.append((round(float(wp[0]), 5), round(float(wp[1]), 5)))
+            elif isinstance(wp, dict) and ("lat" in wp or "latitude" in wp):
+                w_lat = wp.get("lat") if "lat" in wp else wp.get("latitude")
+                w_lng = wp.get("lng") if "lng" in wp else wp.get("longitude")
+                if w_lat is not None and w_lng is not None:
+                    canonical_waypoints.append((round(float(w_lat), 5), round(float(w_lng), 5)))
+
+    # Canonicalize cargo summary binding server-authoritative GoodsItem attributes
+    cargo_hash_str = ""
+    if cargo_summary and isinstance(cargo_summary, dict):
+        items = cargo_summary.get("items") or []
+        items_sorted = sorted(
+            [
+                f"{it.get('item_id')}:{it.get('item_slug')}:{it.get('quantity')}:"
+                f"{it.get('unit_cft')}:{it.get('unit_weight_kg')}:{int(bool(it.get('is_fragile')))}:"
+                f"{int(bool(it.get('requires_special_handling')))}:{it.get('special_handling_charge')}:"
+                f"{int(bool(it.get('is_two_wheeler_compatible', True)))}"
+                for it in items if isinstance(it, dict)
+            ]
+        )
+        cargo_hash_str = ";".join(items_sorted)
+
+    canonical_route_str = f"{round(float(pickup_lat), 5)},{round(float(pickup_lng), 5)}->{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}"
+    wp_str = ";".join(f"{p[0]},{p[1]}" for p in canonical_waypoints)
+    raw_hash_str = f"{getattr(tier, 'id', '')}:{canonical_route_str}:{wp_str}:{cargo_hash_str}:{chargeable_km}:{total}:{stops}"
+    quote_hash = hashlib.sha256(raw_hash_str.encode("utf-8")).hexdigest()[:16]
+
+    cached_data = {
+        "quote_id": quote_id,
+        "quote_hash": quote_hash,
+        "total": str(total),
+        "tier_id": getattr(tier, "id", None),
+        "tier_name": getattr(tier, "name", ""),
+        "tier_slug": getattr(tier, "slug", ""),
+        "pickup_lat": float(pickup_lat) if pickup_lat is not None else None,
+        "pickup_lng": float(pickup_lng) if pickup_lng is not None else None,
+        "drop_lat": float(drop_lat) if drop_lat is not None else None,
+        "drop_lng": float(drop_lng) if drop_lng is not None else None,
+        "waypoints": canonical_waypoints,
+        "created_at": created_at,
+        "expires_at": expires_at,
+        "distance_km": str(distance_km),
+        "chargeable_km": str(chargeable_km),
+        "stops": stops,
+        "cargo_hash": cargo_hash_str,
+    }
+    try:
+        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
+    except Exception as cache_err:
+        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
+
     return LogisticsFareBreakdown(
+        quote_id=quote_id,
+        quote_hash=quote_hash,
+        created_at=created_at,
+        quoted_at=created_at,
+        expires_at=expires_at,
+        tier_id=getattr(tier, "id", None),
+        tier_name=getattr(tier, "name", ""),
+        pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
+        pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
+        drop_lat=str(drop_lat) if drop_lat is not None else None,
+        drop_lng=str(drop_lng) if drop_lng is not None else None,
         total=total,
         base_fare=base_fare,
         distance_km=distance_km,
@@ -354,6 +437,7 @@ def quote_logistics_fare(
         additional_stops=additional_stops,
         additional_stop_charge=stop_charge,
         special_handling=special_handling,
+        special_handling_charge=special_handling,
         is_cargo_fit=is_cargo_fit,
         cargo_fit_reason=cargo_fit_reason,
         cargo_summary=cargo_summary,
@@ -397,6 +481,9 @@ def resolve_logistics_fare_v2(
     )
 
     if service_category in DISTANCE_PRICED_CATEGORIES:
+        submitted_quote_id = None
+        submitted_quote_hash = None
+        submitted_expires_at = None
         cargo_summary = None
         extracted_waypoints = waypoints
         if cart_data:
@@ -405,22 +492,147 @@ def resolve_logistics_fare_v2(
             goods_type = None
             if isinstance(cart_data, list) and len(cart_data) > 0:
                 first = cart_data[0] if isinstance(cart_data[0], dict) else {}
+                submitted_quote_id = first.get("quote_id")
+                submitted_quote_hash = first.get("quote_hash")
+                submitted_expires_at = first.get("expires_at")
                 if "cargo_items" in first or "items" in first or "goods_type" in first:
                     raw_items = first.get("cargo_items") or first.get("items") or []
                     goods_type = first.get("goods_type") or first.get("category")
                 elif any("item_id" in it or "item_slug" in it or "slug" in it for it in cart_data if isinstance(it, dict)):
                     raw_items = cart_data
                     goods_type = first.get("goods_type") or first.get("category")
-                if not extracted_waypoints and "waypoints" in first:
-                    extracted_waypoints = first.get("waypoints")
+                if not extracted_waypoints:
+                    extracted_waypoints = first.get("waypoints") or first.get("stops") or first.get("trip_stops")
             elif isinstance(cart_data, dict):
+                submitted_quote_id = cart_data.get("quote_id")
+                submitted_quote_hash = cart_data.get("quote_hash")
+                submitted_expires_at = cart_data.get("expires_at")
                 raw_items = cart_data.get("cargo_items") or cart_data.get("items") or []
                 goods_type = cart_data.get("goods_type") or cart_data.get("category")
-                if not extracted_waypoints and "waypoints" in cart_data:
-                    extracted_waypoints = cart_data.get("waypoints")
+                if not extracted_waypoints:
+                    extracted_waypoints = cart_data.get("waypoints") or cart_data.get("stops") or cart_data.get("trip_stops")
 
             if raw_items or goods_type:
-                cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type)
+                target_city = getattr(logistics_tier, "city", None)
+                cargo_summary = resolve_cargo_payload(cargo_items=raw_items, goods_category_slug=goods_type, city=target_city)
+
+        if submitted_expires_at:
+            try:
+                exp_dt = timezone.datetime.fromisoformat(str(submitted_expires_at))
+                if timezone.is_naive(exp_dt):
+                    exp_dt = timezone.make_aware(exp_dt)
+                if timezone.now() > exp_dt:
+                    raise UnresolvedLogisticsFareError(
+                        f"Logistics quote has expired (valid until {submitted_expires_at}). Please recalculate the fare."
+                    )
+            except (ValueError, TypeError):
+                raise UnresolvedLogisticsFareError("Submitted quote expiry timestamp is invalid or malformed.")
+
+        if submitted_quote_id:
+            cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
+            if not cached_quote:
+                raise UnresolvedLogisticsFareError(
+                    f"Logistics quote '{submitted_quote_id}' has expired or is invalid. Please calculate a fresh quote."
+                )
+
+            if cached_quote:
+                if cached_quote.get("expires_at"):
+                    try:
+                        exp_dt = timezone.datetime.fromisoformat(str(cached_quote["expires_at"]))
+                        if timezone.is_naive(exp_dt):
+                            exp_dt = timezone.make_aware(exp_dt)
+                        if timezone.now() > exp_dt:
+                            raise UnresolvedLogisticsFareError(
+                                f"Logistics quote '{submitted_quote_id}' has expired. Please recalculate the fare."
+                            )
+                    except (ValueError, TypeError):
+                        raise UnresolvedLogisticsFareError("Quote expiry timestamp is invalid or malformed.")
+
+                # 1. Authoritative Tier Verification: Cannot use quote from a different vehicle
+                quoted_tier_id = cached_quote.get("tier_id")
+                if quoted_tier_id and logistics_tier and str(quoted_tier_id) != str(logistics_tier.id):
+                    raise UnresolvedLogisticsFareError(
+                        f"Quote tier mismatch: quote '{submitted_quote_id}' was generated for tier #{quoted_tier_id}, but tier #{logistics_tier.id} ({getattr(logistics_tier, 'name', '')}) was selected."
+                    )
+
+                # 2. Authoritative Route Verification: Cannot substitute arbitrary coordinates
+                q_p_lat = cached_quote.get("pickup_lat")
+                q_p_lng = cached_quote.get("pickup_lng")
+                q_d_lat = cached_quote.get("drop_lat")
+                q_d_lng = cached_quote.get("drop_lng")
+                if None not in (pickup_lat, pickup_lng, q_p_lat, q_p_lng):
+                    if abs(float(pickup_lat) - float(q_p_lat)) > 0.005 or abs(float(pickup_lng) - float(q_p_lng)) > 0.005:
+                        raise UnresolvedLogisticsFareError(
+                            "Quote route mismatch: pickup location does not match quoted route. Please recalculate fare."
+                        )
+                if None not in (drop_lat, drop_lng, q_d_lat, q_d_lng):
+                    if abs(float(drop_lat) - float(q_d_lat)) > 0.005 or abs(float(drop_lng) - float(q_d_lng)) > 0.005:
+                        raise UnresolvedLogisticsFareError(
+                            "Quote route mismatch: destination location does not match quoted route. Please recalculate fare."
+                        )
+
+                # 3. Canonical Waypoints & Waypoint Ordering Verification
+                curr_canonical_wp = []
+                if extracted_waypoints and isinstance(extracted_waypoints, list):
+                    for wp in extracted_waypoints:
+                        if isinstance(wp, (list, tuple)) and len(wp) >= 2:
+                            curr_canonical_wp.append((round(float(wp[0]), 5), round(float(wp[1]), 5)))
+                        elif isinstance(wp, dict) and ("lat" in wp or "latitude" in wp):
+                            w_lat = wp.get("lat") if "lat" in wp else wp.get("latitude")
+                            w_lng = wp.get("lng") if "lng" in wp else wp.get("longitude")
+                            if w_lat is not None and w_lng is not None:
+                                curr_canonical_wp.append((round(float(w_lat), 5), round(float(w_lng), 5)))
+
+                cached_wp = [tuple(p) for p in cached_quote.get("waypoints", [])]
+                if curr_canonical_wp != cached_wp:
+                    raise UnresolvedLogisticsFareError(
+                        "Quote route mismatch: waypoints or waypoint ordering do not match quoted route. Please recalculate fare."
+                    )
+
+                # 4. Stop Count Verification
+                if cached_quote.get("stops") is not None and stop_count != cached_quote.get("stops"):
+                    raise UnresolvedLogisticsFareError(
+                        f"Quote stop count mismatch: quote was generated for {cached_quote.get('stops')} stops, but request has {stop_count}. Please recalculate fare."
+                    )
+
+                # 5. Cargo Identity & Quantities Verification (binding server-authoritative GoodsItem attributes)
+                curr_cargo_hash_str = ""
+                if cargo_summary and isinstance(cargo_summary, dict):
+                    items = cargo_summary.get("items") or []
+                    items_sorted = sorted(
+                        [
+                            f"{it.get('item_id')}:{it.get('item_slug')}:{it.get('quantity')}:"
+                            f"{it.get('unit_cft')}:{it.get('unit_weight_kg')}:{int(bool(it.get('is_fragile')))}:"
+                            f"{int(bool(it.get('requires_special_handling')))}:{it.get('special_handling_charge')}:"
+                            f"{int(bool(it.get('is_two_wheeler_compatible', True)))}"
+                            for it in items if isinstance(it, dict)
+                        ]
+                    )
+                    curr_cargo_hash_str = ";".join(items_sorted)
+
+                if cached_quote.get("cargo_hash") and curr_cargo_hash_str != cached_quote.get("cargo_hash"):
+                    raise UnresolvedLogisticsFareError(
+                        "Quote cargo mismatch: cargo items, quantities, or catalog specifications have changed since quotation. Please recalculate fare."
+                    )
+
+                # 6. Cryptographic Signature Verification
+                if submitted_quote_hash and cached_quote.get("quote_hash"):
+                    if str(submitted_quote_hash).strip() != str(cached_quote["quote_hash"]).strip():
+                        raise UnresolvedLogisticsFareError(
+                            "Quote integrity error: quote hash signature mismatch. Please recalculate fare."
+                        )
+
+                # 7. Submitted Amount / Total Verification
+                if submitted_amount is not None:
+                    try:
+                        sub_dec = _money(submitted_amount)
+                        cached_dec = _money(cached_quote["total"])
+                        if sub_dec != cached_dec:
+                            raise UnresolvedLogisticsFareError(
+                                f"Quote total mismatch: submitted amount ({sub_dec}) does not match locked quote total ({cached_dec})."
+                            )
+                    except (InvalidOperation, TypeError):
+                        raise UnresolvedLogisticsFareError(f"Invalid submitted amount format: '{submitted_amount}'.")
 
         if cargo_summary and not cargo_summary.get("is_valid", True):
             errs = cargo_summary.get("validation_errors") or [{}]
@@ -444,7 +656,22 @@ def resolve_logistics_fare_v2(
             if not breakdown.get("is_cargo_fit", True):
                 reason = breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
                 raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            if submitted_quote_id:
+                breakdown["quote_id"] = submitted_quote_id
+            if submitted_expires_at:
+                breakdown["expires_at"] = submitted_expires_at
             return breakdown["total"], breakdown
+
+        # Precedence Rule (Sections 11 & 12):
+        # 1. Authoritative distance-based GT quote (computed above if coordinates provided).
+        # 2. Explicit configured lane fare if a specific Lane was booked.
+        # 3. For distance-priced tiers, never fall back to starting_price as a final payable fare.
+        if getattr(logistics_tier, "per_km_rate", None) is not None:
+            if logistics_lane is not None:
+                return logistics_lane.fare, None
+            raise UnresolvedLogisticsFareError(
+                f"Coordinates required to calculate authoritative distance-based fare for '{service_category}'."
+            )
 
     if service_category == "packers_movers":
         # Extract quote parameters or verified quote_id from cart_data
@@ -459,9 +686,23 @@ def resolve_logistics_fare_v2(
         dismantling_req = True
         unpacking_req = False
 
+        tier_id = getattr(logistics_tier, "id", None)
+        city = getattr(logistics_tier, "city", None)
         if isinstance(cart_data, list) and len(cart_data) > 0:
             c0 = cart_data[0] if isinstance(cart_data[0], dict) else {}
             quote_id = c0.get("quote_id")
+            c_tier = c0.get("tier_id") or c0.get("selected_tier_id")
+            if tier_id is not None and c_tier is not None and str(tier_id) != str(c_tier):
+                raise UnresolvedLogisticsFareError(
+                    f"Quote tier mismatch: booking tier #{tier_id} differs from cart tier #{c_tier}."
+                )
+            tier_id = tier_id or c_tier
+            c_city = c0.get("city")
+            if city is not None and c_city is not None and str(city).strip().lower() != str(c_city).strip().lower():
+                raise UnresolvedLogisticsFareError(
+                    f"Quote city mismatch: booking city '{city}' differs from cart city '{c_city}'."
+                )
+            city = city or c_city
             inventory_items = c0.get("inventory") or c0.get("items")
             packing_tier = c0.get("packing_tier") or "standard"
             pickup_floor = c0.get("pickup_floor", 0)
@@ -475,6 +716,18 @@ def resolve_logistics_fare_v2(
                 unpacking_req = bool(c0.get("unpacking_required"))
         elif isinstance(cart_data, dict):
             quote_id = cart_data.get("quote_id")
+            c_tier = cart_data.get("tier_id") or cart_data.get("selected_tier_id")
+            if tier_id is not None and c_tier is not None and str(tier_id) != str(c_tier):
+                raise UnresolvedLogisticsFareError(
+                    f"Quote tier mismatch: booking tier #{tier_id} differs from cart tier #{c_tier}."
+                )
+            tier_id = tier_id or c_tier
+            c_city = cart_data.get("city")
+            if city is not None and c_city is not None and str(city).strip().lower() != str(c_city).strip().lower():
+                raise UnresolvedLogisticsFareError(
+                    f"Quote city mismatch: booking city '{city}' differs from cart city '{c_city}'."
+                )
+            city = city or c_city
             inventory_items = cart_data.get("inventory") or cart_data.get("items")
             packing_tier = cart_data.get("packing_tier") or "standard"
             pickup_floor = cart_data.get("pickup_floor", 0)
@@ -487,16 +740,62 @@ def resolve_logistics_fare_v2(
             if "unpacking_required" in cart_data:
                 unpacking_req = bool(cart_data.get("unpacking_required"))
 
+        if tier_id:
+            from logistics.models import ServiceTier
+            tier_obj = ServiceTier.objects.filter(id=tier_id).first()
+            if tier_obj:
+                if not city:
+                    city = getattr(tier_obj, "city", None)
+                elif tier_obj.city and str(city).strip().lower() != str(tier_obj.city).strip().lower():
+                    raise UnresolvedLogisticsFareError(
+                        f"Selected tier #{tier_id} belongs to '{tier_obj.city}', but city '{city}' was requested."
+                    )
+
+        current_req = {
+            "tier_id": tier_id,
+            "city": city,
+            "pickup_lat": pickup_lat,
+            "pickup_lng": pickup_lng,
+            "drop_lat": drop_lat,
+            "drop_lng": drop_lng,
+            "inventory": inventory_items,
+            "packing_tier": packing_tier,
+            "dismantling_required": dismantling_req,
+            "unpacking_required": unpacking_req,
+            "pickup_floor": pickup_floor,
+            "pickup_has_lift": pickup_has_lift,
+            "drop_floor": drop_floor,
+            "drop_has_lift": drop_has_lift,
+            "relocation_type": relocation_type,
+        }
+
         if quote_id:
             from .packers_movers_pricing import verify_packers_movers_quote
-            is_valid, cached_quote, err_msg = verify_packers_movers_quote(quote_id, submitted_total=submitted_amount)
+            is_valid, cached_quote, err_msg = verify_packers_movers_quote(
+                quote_id,
+                submitted_total=submitted_amount,
+                current_request=current_req,
+            )
             if not is_valid:
                 raise UnresolvedLogisticsFareError(err_msg or f"Quote '{quote_id}' is invalid or requires survey/review.")
             if cached_quote:
+                if tier_id and str(cached_quote.get("tier_id")) != str(tier_id):
+                    raise UnresolvedLogisticsFareError(
+                        f"Quote tier mismatch: quote was generated for tier #{cached_quote.get('tier_id')}, but tier #{tier_id} was requested."
+                    )
                 return _money(cached_quote["total"]), cached_quote
+
+        # P1-7: If quote_id is absent, we must have a selected ServiceTier to recompute.
+        # Silently auto-selecting a different vehicle or proceeding without a tier is prohibited.
+        if not quote_id and not tier_id:
+            raise UnresolvedLogisticsFareError(
+                "Packers & Movers booking requires a selected ServiceTier or verified quote_id."
+            )
 
         # Compute on-the-fly quote from inventory line items if coordinates are available
         if inventory_items and None not in (pickup_lat, pickup_lng, drop_lat, drop_lng):
+            if not city:
+                raise UnresolvedLogisticsFareError("Packers & Movers booking requires an authoritative city.")
             from .packers_movers_pricing import compute_packers_movers_quote
             computed_quote = compute_packers_movers_quote(
                 pickup_lat=pickup_lat,
@@ -512,11 +811,27 @@ def resolve_logistics_fare_v2(
                 drop_floor=drop_floor,
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
+                city=city,
+                service_tier_id=tier_id,
             )
             if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"
                 reason = computed_quote.get("estimate_notice") or computed_quote.get("review_reason") or "Pre-move survey required."
                 raise UnresolvedLogisticsFareError(f"Packers & Movers booking requires survey/review ({survey_status}: {reason}) and cannot be finalized as an instant booking.")
+            
+            # P1-7: Verify that the resulting quote tier equals the booking tier
+            computed_tier_id = computed_quote.get("tier_id")
+            if tier_id and computed_tier_id and str(computed_tier_id) != str(tier_id):
+                raise UnresolvedLogisticsFareError(
+                    f"P&M vehicle mismatch: Selected tier '{tier_id}' differs from computed tier '{computed_tier_id}'. Automatic vehicle replacement is prohibited."
+                )
+            computed_city = computed_quote.get("city")
+            if city and computed_city and str(city).strip().lower() != str(computed_city).strip().lower():
+                raise UnresolvedLogisticsFareError(
+                    f"P&M city mismatch: Selected city '{city}' differs from computed city '{computed_city}'."
+                )
+            if computed_quote.get("total") is None:
+                raise UnresolvedLogisticsFareError("Packers & Movers booking cannot be finalized without an authoritative fare.")
             return _money(computed_quote["total"]), computed_quote
 
     # Fall through to the original flat resolver rather than duplicating

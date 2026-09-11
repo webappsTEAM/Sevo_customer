@@ -58,6 +58,7 @@ CAPACITY_FIELDS = (
 # availability, not money.
 DESCRIPTIVE_FIELDS = (
     "name",
+    "vehicle_class",
     "is_active",
     "capacity_label",
     "dimensions_label",

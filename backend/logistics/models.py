@@ -18,10 +18,13 @@ No `company` FK on any model here — same convention as
 service_requests.CatalogCategory / CatalogService: this is public catalog
 data served pre-login on marketing/booking pages, not tenant-scoped data.
 """
+import logging
 from decimal import Decimal
 
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+
+logger = logging.getLogger(__name__)
 
 
 class LogisticsCategory(models.TextChoices):
@@ -69,10 +72,27 @@ class ServiceTier(models.Model):
         LIGHT = "light", "Light"
         HEAVY = "heavy", "Heavy"
 
+    class VehicleClass(models.TextChoices):
+        TWO_WHEELER = "two_wheeler", "Two Wheeler"
+        THREE_WHEELER = "three_wheeler", "Three Wheeler"
+        TRUCK = "truck", "Truck"
+        PICKUP = "pickup", "Pickup"
+        HEAVY_TRUCK = "heavy_truck", "Heavy Truck"
+
     category = models.CharField(max_length=20, choices=LogisticsCategory.choices, db_index=True)
     city = models.CharField(max_length=100, db_index=True)
     slug = models.SlugField(max_length=120)
     name = models.CharField(max_length=150)
+
+    # Authoritative vehicle classification for cargo fitment & category matching
+    vehicle_class = models.CharField(
+        max_length=30,
+        choices=VehicleClass.choices,
+        default="",
+        blank=True,
+        db_index=True,
+        help_text="Authoritative vehicle classification (two_wheeler, three_wheeler, truck, pickup, heavy_truck).",
+    )
 
     # Truck-only tab split (Light below 750kg / Heavy above 750kg per the UI).
     # Blank for two_wheeler and packers_movers, which don't have this tab.
@@ -158,11 +178,15 @@ class ServiceTier(models.Model):
     )
     max_weight_kg = models.DecimalField(
         max_digits=8, decimal_places=2, null=True, blank=True,
-        help_text="Maximum payload capacity in kg. If null, computed from capacity_label."
+        help_text="Maximum payload capacity in kg. DB field is authoritative. NULL/zero means unconfigured and unavailable for fitment."
     )
     max_cft = models.DecimalField(
         max_digits=8, decimal_places=2, null=True, blank=True,
-        help_text="Maximum cargo volume in cubic feet (CFT). If null, computed from dimensions_label."
+        help_text="Maximum cargo volume in cubic feet (CFT). DB field is authoritative. NULL/zero means unconfigured and unavailable for fitment."
+    )
+    crew_size = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Configured labor/crew size for relocation tiers. If unset, informational display only."
     )
 
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
@@ -182,53 +206,38 @@ class ServiceTier(models.Model):
     def __str__(self):
         return f"{self.get_category_display()} / {self.city} / {self.name}"
 
+    def get_vehicle_class(self) -> str:
+        """
+        Authoritative vehicle classification string.
+        SEVO P0 Rule: No hardcoded fallback to TRUCK. Blank or unset fails closed as empty string.
+        """
+        return self.vehicle_class or ""
+
     def get_max_weight_kg(self) -> Decimal:
-        if self.max_weight_kg is not None:
+        """
+        Authoritative payload capacity in kilograms.
+        SEVO P0 Rule: Database field `max_weight_kg` is the SOLE authority.
+        Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
+        """
+        if self.max_weight_kg is not None and self.max_weight_kg > 0:
             return self.max_weight_kg
-        import re
-        txt = (self.capacity_label or "").lower().replace(",", "")
-        m = re.search(r"(\d+(?:\.\d+)?)\s*kg", txt)
-        if m:
-            return Decimal(m.group(1))
-        if self.category == "two_wheeler":
-            return Decimal("20.00")
-        if "tata" in self.slug or "ace" in self.slug:
-            return Decimal("750.00")
-        if "3-wheeler" in self.slug:
-            return Decimal("500.00")
-        if "pickup" in self.slug:
-            return Decimal("1250.00")
-        if "1-7-ton" in self.slug or "1.7" in self.slug:
-            return Decimal("1700.00")
-        if "eacher" in self.slug or "eicher" in self.slug:
-            return Decimal("2500.00")
-        return Decimal("1000.00")
+        return Decimal("0.00")
 
     def get_max_cft(self) -> Decimal:
-        if self.max_cft is not None:
+        """
+        Authoritative volume capacity in cubic feet (CFT).
+        SEVO P0 Rule: Database field `max_cft` is the SOLE authority.
+        Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
+        """
+        if self.max_cft is not None and self.max_cft > 0:
             return self.max_cft
-        import re
-        txt = (self.dimensions_label or "").lower()
-        m_ft = re.findall(r"(\d+(?:\.\d+)?)\s*ft", txt)
-        if len(m_ft) == 3:
-            return (Decimal(m_ft[0]) * Decimal(m_ft[1]) * Decimal(m_ft[2])).quantize(Decimal("0.01"))
-        elif len(m_ft) == 2:
-            return (Decimal(m_ft[0]) * Decimal(m_ft[1]) * Decimal("4.0")).quantize(Decimal("0.01"))
-        if self.category == "two_wheeler":
-            return Decimal("2.50")
-        if "3-wheeler" in self.slug:
-            return Decimal("88.00")
-        if "tata" in self.slug:
-            return Decimal("157.50")
-        if "pickup" in self.slug:
-            return Decimal("220.00")
-        if "1-7-ton" in self.slug or "1.7" in self.slug:
-            return Decimal("300.00")
-        return Decimal("100.00")
+        return Decimal("0.00")
 
     def evaluate_cargo_fit(self, total_weight_kg: Decimal, total_cft: Decimal):
         max_wt = self.get_max_weight_kg()
         max_vol = self.get_max_cft()
+        if max_wt <= 0 or max_vol <= 0:
+            return False, f"Vehicle capacity is not configured in database for {self.name}."
         if total_weight_kg > max_wt:
             return False, f"Cargo weight ({total_weight_kg} kg) exceeds vehicle payload limit ({max_wt} kg)."
         if total_cft > max_vol:

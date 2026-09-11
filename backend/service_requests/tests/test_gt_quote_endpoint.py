@@ -148,3 +148,69 @@ class LogisticsQuoteEndpointTests(TestCase):
         with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
             data = self._post(total="1.00", total_amount="1.00", fare="1.00").json()["data"]
         self.assertEqual(data["total"], "530.00")
+
+    def test_quote_identity_ttl_and_caching(self):
+        with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json().get("data", resp.json())
+        self.assertTrue(data.get("quote_id", "").startswith("gtq_"))
+        self.assertIsNotNone(data.get("quote_hash"))
+        self.assertIsNotNone(data.get("created_at"))
+        self.assertIsNotNone(data.get("expires_at"))
+
+        from django.core.cache import cache
+        cached = cache.get(f"gt_quote_{data['quote_id']}")
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["total"], data["total"])
+
+    def test_expired_quote_rejected_in_fare_resolver(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from service_requests.services.logistics_pricing import resolve_logistics_fare_v2, UnresolvedLogisticsFareError
+
+        expired_time = (timezone.now() - timedelta(minutes=1)).isoformat()
+        with self.assertRaises(UnresolvedLogisticsFareError) as ctx:
+            resolve_logistics_fare_v2(
+                service_category="goods_transport_truck",
+                logistics_tier=self.tier,
+                logistics_lane=None,
+                submitted_amount=Decimal("530.00"),
+                pickup_lat=Decimal("12.740900"),
+                pickup_lng=Decimal("77.825300"),
+                drop_lat=Decimal("12.935200"),
+                drop_lng=Decimal("77.624500"),
+                cart_data=[{
+                    "quote_id": "gtq_old12345",
+                    "expires_at": expired_time,
+                }]
+            )
+        self.assertIn("expired", str(ctx.exception).lower())
+
+    def test_valid_quote_accepted_and_snapshot_preserved(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from service_requests.services.logistics_pricing import resolve_logistics_fare_v2
+
+        future_time = (timezone.now() + timedelta(minutes=10)).isoformat()
+        with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
+            fare, breakdown = resolve_logistics_fare_v2(
+                service_category="goods_transport_truck",
+                logistics_tier=self.tier,
+                logistics_lane=None,
+                submitted_amount=Decimal("530.00"),
+                pickup_lat=Decimal("12.740900"),
+                pickup_lng=Decimal("77.825300"),
+                drop_lat=Decimal("12.935200"),
+                drop_lng=Decimal("77.624500"),
+                cart_data=[{
+                    "quote_id": "gtq_valid12345",
+                    "expires_at": future_time,
+                }]
+            )
+        self.assertEqual(fare, Decimal("530.00"))
+        self.assertEqual(breakdown["quote_id"], "gtq_valid12345")
+        self.assertEqual(breakdown["expires_at"], future_time)
+        self.assertIsNotNone(breakdown.get("quote_hash"))
+        self.assertIsNotNone(breakdown.get("created_at"))
+        self.assertIsNotNone(breakdown.get("tier_id"))

@@ -18,8 +18,12 @@ export async function createBooking(payload, idempotencyKey = null) {
   return apiRequest("/booking/", { method: "POST", json: bodyData, headers })
 }
 
-export async function cancelBooking(identifier, reason = "Customer requested cancellation") {
-  return apiRequest(`/booking/${identifier}/cancel/`, { method: "POST", json: { reason } })
+export async function cancelBooking(identifier, reason = "Customer requested cancellation", token = "", phone = "") {
+  const body = { reason }
+  if (token) body.token = token
+  if (phone) body.phone = phone
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ""
+  return apiRequest(`/booking/${identifier}/cancel/${tokenQuery}`, { method: "POST", json: body })
 }
 
 export async function getBookingStatus(identifier, token = "") {
