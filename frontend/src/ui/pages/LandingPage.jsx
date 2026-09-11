@@ -2239,6 +2239,50 @@ export function LandingPage() {
 
   const [activeHeroSlide, setActiveHeroSlide] = useState(0)
 
+  // Touch swipe support for hero banner
+  const heroTouchStartRef = useRef(null)
+  const handleHeroTouchStart = (e) => {
+    if (e.targetTouches && e.targetTouches.length > 0) {
+      heroTouchStartRef.current = e.targetTouches[0].clientX
+    }
+  }
+  const handleHeroTouchEnd = (e) => {
+    if (!heroTouchStartRef.current) return
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      const touchEnd = e.changedTouches[0].clientX
+      const diff = heroTouchStartRef.current - touchEnd
+      if (diff > 40) {
+        setActiveHeroSlide((p) => (p + 1) % heroSlides.length)
+      } else if (diff < -40) {
+        setActiveHeroSlide((p) => (p - 1 + heroSlides.length) % heroSlides.length)
+      }
+    }
+    heroTouchStartRef.current = null
+  }
+
+  // Touch swipe support for reviews on mobile
+  const reviewTouchStartRef = useRef(null)
+  const handleReviewTouchStart = (e) => {
+    if (e.targetTouches && e.targetTouches.length > 0) {
+      reviewTouchStartRef.current = e.targetTouches[0].clientX
+    }
+  }
+  const handleReviewTouchEnd = (e) => {
+    if (!reviewTouchStartRef.current) return
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      const touchEnd = e.changedTouches[0].clientX
+      const diff = reviewTouchStartRef.current - touchEnd
+      const reviewsList = homeConfig.testimonials?.reviews?.length ? homeConfig.testimonials.reviews : DEFAULT_HOME_PAGE_CONFIG.testimonials.reviews
+      const len = reviewsList.length || 3
+      if (diff > 40) {
+        setTestimonialIdx((p) => (p + 1) % len)
+      } else if (diff < -40) {
+        setTestimonialIdx((p) => (p - 1 + len) % len)
+      }
+    }
+    reviewTouchStartRef.current = null
+  }
+
   useEffect(() => {
     if (activeHeroSlide >= heroSlides.length) setActiveHeroSlide(0)
   }, [heroSlides.length, activeHeroSlide])
@@ -4297,7 +4341,7 @@ export function LandingPage() {
 
         {/* ── 3. Category Sub-Navigation Bar ─────────────────────────── */}
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3 overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {/* All Services Pill */}
             <button
               type="button"
@@ -4436,7 +4480,11 @@ export function LandingPage() {
               slide's configured redirect link -- an in-app path/query
               (e.g. "?category=cleaning") or a full external https:// URL,
               whatever the admin points it at. */}
-          <div className="relative rounded-[28px] overflow-hidden shadow-xs transition-all select-none group/heroimg">
+          <div
+            onTouchStart={handleHeroTouchStart}
+            onTouchEnd={handleHeroTouchEnd}
+            className="relative rounded-2xl sm:rounded-[28px] overflow-hidden shadow-xs transition-all select-none group/heroimg"
+          >
             <button
               type="button"
               onClick={() => !homeEditMode && goToBannerLink(activeHeroSlideData.link)}
@@ -4450,19 +4498,19 @@ export function LandingPage() {
                 onError={(e) => {
                   e.currentTarget.src = "/assets/hero_illustration.jpg"
                 }}
-                className="w-full h-[220px] sm:h-[320px] lg:h-[420px] object-cover transition-transform duration-500 group-hover/heroimg:scale-102"
+                className="w-full aspect-[2/1] sm:aspect-auto sm:h-[320px] lg:h-[420px] object-cover transition-transform duration-500 group-hover/heroimg:scale-102"
                 loading="eager"
               />
             </button>
 
-            {/* Prev/Next Circular Navigation Arrows */}
+            {/* Prev/Next Circular Navigation Arrows (Desktop & Tablet only, avoiding mobile text overlap) */}
             {heroSlides.length > 1 && (
               <>
                 <button
                   type="button"
                   onClick={() => setActiveHeroSlide((p) => (p - 1 + heroSlides.length) % heroSlides.length)}
                   aria-label="Previous slide"
-                  className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
+                  className="hidden sm:flex absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -4470,7 +4518,7 @@ export function LandingPage() {
                   type="button"
                   onClick={() => setActiveHeroSlide((p) => (p + 1) % heroSlides.length)}
                   aria-label="Next slide"
-                  className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
+                  className="hidden sm:flex absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-white shadow-md border border-slate-200/80 dark:border-slate-700 items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer hover:scale-105"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -5000,13 +5048,16 @@ export function LandingPage() {
         {/* ── 9. Customer Testimonials ("What Our Customers Say") ──────────────── */}
         <section id="testimonials" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4 scroll-mt-24">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+            <h2 className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               {homeConfig.testimonials?.title || "What Our Customers Say"}
             </h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="sm:hidden text-[11px] font-extrabold text-[#0B8F7A] bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                ★ 4.9/5 (1.2k+ reviews)
+              </span>
               <a
                 href="#testimonials"
-                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] transition-colors"
+                className="hidden sm:inline-block text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] transition-colors"
               >
                 {homeConfig.testimonials?.viewAllText || "Read All Reviews →"}
               </a>
@@ -5031,13 +5082,108 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none gap-3.5 -mx-4 px-4 pb-2 md:grid md:grid-cols-3 md:gap-4 md:mx-0 md:px-0 md:pb-0">
+          {/* ── Mobile Dedicated Review Spotlight View ── */}
+          <div className="md:hidden">
+            {(() => {
+              const reviewsList = (homeConfig.testimonials?.reviews?.length ? homeConfig.testimonials.reviews : DEFAULT_HOME_PAGE_CONFIG.testimonials.reviews)
+              const currentRev = reviewsList[testimonialIdx % reviewsList.length] || reviewsList[0]
+              const initials = currentRev.initials || currentRev.avatar || (currentRev.name ? currentRev.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "SE")
+
+              return (
+                <div
+                  onTouchStart={handleReviewTouchStart}
+                  onTouchEnd={handleReviewTouchEnd}
+                  className="relative bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/40 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800/90 rounded-2xl border border-emerald-100/90 dark:border-slate-700 p-4 sm:p-5 shadow-xs transition-all select-none overflow-hidden"
+                >
+                  {/* Subtle quote watermark */}
+                  <Quote className="absolute right-3 bottom-3 w-16 h-16 text-emerald-600/5 dark:text-emerald-400/5 -rotate-12 pointer-events-none" />
+
+                  {/* Top: Avatar + Name + Rating */}
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-11 h-11 rounded-full ${currentRev.badgeColor || "bg-[#0B8F7A]"} text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs ring-2 ring-emerald-100 dark:ring-emerald-950`}>
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 dark:text-white truncate">
+                          {currentRev.name}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" /> Verified Customer
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Star Rating Badge */}
+                    <div className="flex items-center gap-0.5 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200/60 dark:border-amber-900/60 shrink-0">
+                      {Array.from({ length: 5 }).map((_, si) => (
+                        <Star key={si} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Review Text */}
+                  <blockquote className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium italic pl-2.5 border-l-2 border-emerald-500/50">
+                    &ldquo;{currentRev.text || currentRev.review}&rdquo;
+                  </blockquote>
+
+                  {/* Footer: Service/Location + Prev/Next Controls */}
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/60">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      {currentRev.city || currentRev.cat || "Bengaluru Home Service"}
+                    </span>
+
+                    {/* Interactive Mobile Prev/Next Controls */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 mr-1">
+                        {reviewsList.slice(0, 3).map((_, dotIdx) => (
+                          <button
+                            key={dotIdx}
+                            type="button"
+                            onClick={() => setTestimonialIdx(dotIdx)}
+                            aria-label={`View review ${dotIdx + 1}`}
+                            className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                              dotIdx === (testimonialIdx % reviewsList.length)
+                                ? "w-5 bg-[#0B8F7A]"
+                                : "w-1.5 bg-slate-300 dark:bg-slate-600"
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setTestimonialIdx((prev) => (prev - 1 + reviewsList.length) % reviewsList.length)}
+                        className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-slate-600 flex items-center justify-center text-slate-700 dark:text-slate-200 transition active:scale-90 cursor-pointer"
+                        aria-label="Previous review"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTestimonialIdx((prev) => (prev + 1) % reviewsList.length)}
+                        className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-slate-600 flex items-center justify-center text-slate-700 dark:text-slate-200 transition active:scale-90 cursor-pointer"
+                        aria-label="Next review"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* ── Desktop 3-Card Grid View ── */}
+          <div className="hidden md:grid md:grid-cols-3 md:gap-4 md:mx-0 md:px-0 md:pb-0">
             {(homeConfig.testimonials?.reviews?.length ? homeConfig.testimonials.reviews : DEFAULT_HOME_PAGE_CONFIG.testimonials.reviews).slice(0, 3).map((testi, idx) => {
               const avatarInitials = testi.initials || testi.avatar || (testi.name ? testi.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "SE")
               return (
                 <div
                   key={testi.id || idx}
-                  className="shrink-0 w-[82vw] max-w-[320px] md:w-auto snap-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-2xs flex flex-col justify-between gap-3"
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-2xs flex flex-col justify-between gap-3"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-full ${testi.badgeColor || "bg-teal-600"} text-white font-black text-xs flex items-center justify-center shrink-0`}>
@@ -5064,22 +5210,10 @@ export function LandingPage() {
               )
             })}
           </div>
-
-          {/* Testimonial indicator dots */}
-          <div className="flex items-center justify-center gap-1.5 pt-2">
-            {[0, 1, 2, 3].map((dot) => (
-              <div
-                key={dot}
-                className={`h-1.5 rounded-full transition-all ${
-                  dot === 0 ? "w-6 bg-[#0B8F7A]" : "w-1.5 bg-slate-300 dark:bg-slate-600"
-                }`}
-              />
-            ))}
-          </div>
         </section>
 
         {/* ── 10. Newsletter / Email Subscription Banner (Dark Emerald #004d40) ──── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <section className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="bg-[#004d40] text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4 text-center lg:text-left">
               <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20">
@@ -5119,7 +5253,7 @@ export function LandingPage() {
         </section>
 
         {/* ── 11. Comprehensive SEVO Footer (6 Columns Matching Spec) ──────────── */}
-        <footer id="about-us" className="bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
+        <footer id="about-us" className="hidden md:block bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 pt-12 border-t border-slate-200 dark:border-slate-800 scroll-mt-24 pb-16 lg:pb-0 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 pb-10">
             {/* Col 1: Brand Info & Socials */}
             <div className="space-y-4 col-span-2 sm:col-span-1 lg:col-span-1">
