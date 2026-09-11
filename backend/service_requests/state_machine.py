@@ -7,7 +7,7 @@ Raises rest_framework.exceptions.ValidationError on illegal moves.
 """
 from rest_framework.exceptions import ValidationError
 
-from .models import ServiceRequest
+from .models import ServiceRequest, is_mason_category
 
 S = ServiceRequest.Status
 PS = ServiceRequest.PaymentStatus
@@ -168,8 +168,8 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
     # Enforce advance payment block for Masonry bookings before moving to work-start states
     if service_request.request_kind == "quoted_work" and new_status not in [S.CONFIRMED, S.REJECTED, S.CANCELLED]:
         is_mason = (
-            service_request.service_category in ["mason", "masonry"] or
-            (service_request.parent_request and service_request.parent_request.service_category in ["mason", "masonry"])
+            is_mason_category(service_request.service_category) or
+            (service_request.parent_request and is_mason_category(service_request.parent_request.service_category))
         )
         if is_mason:
             from .models import Payment

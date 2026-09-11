@@ -35,6 +35,7 @@ CATEGORY_PREFIX_MAP = {
     "painting": "PA",
     "security": "SC",
     "mason": "MS",
+    "masonry": "MS",
     "general": "GM",
     "logistics": "LG",
     "goods_transport": "GT",
@@ -43,6 +44,27 @@ CATEGORY_PREFIX_MAP = {
     "truck": "GT",
     "packers_movers": "PM",
 }
+
+# Canonical Mason/Masonry category aliases, normalized (strip + lowercase)
+# before comparison. Fixes the category-matching bug found in the 8-9 Sep
+# 2026 characterization/Parent-Order audits: 4+ call sites across views.py
+# and state_machine.py each hardcoded their own case-sensitive
+# `in ["mason", "masonry"]` check, so a category stored as "Masonry",
+# "MASON", or a typo like "masonary" silently failed every one of those
+# checks -- most importantly the state_machine.py advance-payment gate,
+# which would then skip the mandatory 50% advance-payment enforcement
+# entirely instead of erroring. Use is_mason_category() everywhere a
+# booking needs to be identified as Mason/Masonry work, instead of a new
+# hardcoded list.
+MASON_CATEGORY_ALIASES = {"mason", "masonry"}
+
+
+def is_mason_category(value) -> bool:
+    """Case/whitespace-insensitive check for whether `value` identifies
+    a Mason/Masonry service_category. Returns False for None/empty."""
+    if not value:
+        return False
+    return str(value).strip().lower() in MASON_CATEGORY_ALIASES
 
 
 def _generate_request_id(category_or_slug=None):
