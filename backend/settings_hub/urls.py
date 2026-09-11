@@ -9,6 +9,7 @@ from .views_catalog_v2 import (
     AdminRecipeListView, AdminRecipeDetailView,
     AdminRecommendationListView, AdminRecommendationDetailView,
     PublicPackageListView, PublicCategoryListView,
+    AdminVendorCapabilityRequestListView, AdminVendorCapabilityRequestDecisionView,
 )
 from .views import (
     NotificationPreferenceView,
@@ -87,6 +88,12 @@ urlpatterns = [
     path("catalog/v2/recommendations/", AdminRecommendationListView.as_view(), name="settings-catalog-v2-recommendations-list"),
     path("catalog/v2/recommendations/<str:pk>/", AdminRecommendationDetailView.as_view(), name="settings-catalog-v2-recommendations-detail"),
     path("catalog/v2/change-log/", AdminCatalogChangeLogView.as_view(), name="settings-catalog-v2-change-log"),
+
+    # Vendor skill/service approvals — admin reviews requests submitted by
+    # the Workforce (vendor) app's own vendor-facing endpoints (see
+    # workforce_integration/urls.py's vendor-capabilities/ + catalog/).
+    path("catalog/v2/vendor-capabilities/", AdminVendorCapabilityRequestListView.as_view(), name="settings-catalog-v2-vendor-capabilities-list"),
+    path("catalog/v2/vendor-capabilities/<int:pk>/decide/", AdminVendorCapabilityRequestDecisionView.as_view(), name="settings-catalog-v2-vendor-capabilities-decide"),
 
     # Public (no-auth) read-only catalog — used by customer-facing booking UI
     path("catalog/public/packages/", PublicPackageListView.as_view(), name="settings-catalog-public-packages"),

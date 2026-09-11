@@ -10,7 +10,6 @@ Decoupled from local employee models — dispatches and tracking queries delegat
 import logging
 import os
 import re
-import sys
 import uuid
 from decimal import Decimal
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -36,7 +35,6 @@ from .models import (
     BookingSeries,
     BookingMessage,
     TripStop,
-    Payment, PaintingQuote,
 )
 from .serializers import (
     AdminChangePrioritySerializer,
@@ -282,20 +280,6 @@ class CatalogSubServiceListView(APIView):
         return Response({"success": True, "data": data})
 
 
-def _haversine_meters(lat1, lon1, lat2, lon2):
-    try:
-        import math
-        R = 6371000.0  # meters
-        phi1 = math.radians(float(lat1))
-        phi2 = math.radians(float(lat2))
-        dphi = math.radians(float(lat2) - float(lat1))
-        dlam = math.radians(float(lon2) - float(lon1))
-        a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
-        return R * 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
-    except (ValueError, TypeError):
-        return None
-
-
 class BookingCreateView(APIView):
     """
     POST /api/booking/
@@ -319,106 +303,86 @@ class BookingCreateView(APIView):
         # unchanged from before, since we can't safely infer "duplicate" from
         # payload contents alone without risking two genuinely different
         # bookings from the same customer being wrongly deduplicated.
-        idem_key = (request.headers.get("Idempotency-Key") or "").strip()
+        idem_key = (request.headers.get("Idempotency-Key") or request.data.get("idempotency_key") or "").strip()
         idem_cache_key = f"booking_idem_{idem_key}" if idem_key else None
+        req_payload_hash = None
         if idem_cache_key:
+            import time, hashlib, json
             from django.core.cache import cache
+            try:
+                norm_data = {k: v for k, v in request.data.items() if k not in ("idempotency_key", "Idempotency-Key")} if isinstance(request.data, dict) else request.data
+                req_payload_hash = hashlib.sha256(json.dumps(norm_data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+            except Exception:
+                req_payload_hash = hashlib.sha256(str(request.data).encode("utf-8")).hexdigest()
+
             cached = cache.get(idem_cache_key)
             if cached is not None:
-                return Response(cached["body"], status=cached["status"])
+                cached_hash = cached.get("payload_hash")
+                if cached_hash and cached_hash != req_payload_hash:
+                    return Response(
+                        {
+                            "success": False,
+                            "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                            "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if not cached.get("in_progress"):
+                    return Response(cached["body"], status=cached["status"])
+                # Wait briefly for in-progress concurrent request
+                for _ in range(20):
+                    time.sleep(0.1)
+                    cached = cache.get(idem_cache_key)
+                    if cached:
+                        if cached.get("payload_hash") and cached["payload_hash"] != req_payload_hash:
+                            return Response(
+                                {
+                                    "success": False,
+                                    "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                                    "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                                },
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                        if not cached.get("in_progress"):
+                            return Response(cached["body"], status=cached["status"])
+                return Response(
+                    {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Atomically claim idempotency key in-flight
+            claimed = cache.add(idem_cache_key, {"in_progress": True, "payload_hash": req_payload_hash}, timeout=60)
+            if not claimed:
+                for _ in range(20):
+                    time.sleep(0.1)
+                    cached = cache.get(idem_cache_key)
+                    if cached:
+                        if cached.get("payload_hash") and cached["payload_hash"] != req_payload_hash:
+                            return Response(
+                                {
+                                    "success": False,
+                                    "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                                    "message": "Idempotency key mismatch: provided key was already used with a different request payload.",
+                                },
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                        if not cached.get("in_progress"):
+                            return Response(cached["body"], status=cached["status"])
+                return Response(
+                    {"success": False, "message": "Booking request is already being processed."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
         if not serializer.is_valid():
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
             return Response(
                 {"success": False, "message": "Validation error.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         company = _get_company(request)
-
-        # Masonry Backend Validations
-        cart_data = request.data.get("cart_data", [])
-        if isinstance(cart_data, str):
-            import json
-            try:
-                cart_data = json.loads(cart_data)
-            except Exception:
-                cart_data = []
-
-        for item in cart_data:
-            if not isinstance(item, dict):
-                continue
-            item_id = str(item.get("id") or "").lower()
-            if "mason" in item_id or item.get("categoryName") == "Mason":
-                # Verify package and properties against database
-                if "minor-masonry" in item_id:
-                    # Validate area
-                    area = item.get("selectedArea")
-                    if area is None:
-                        return Response(
-                            {"success": False, "message": "Area is required for Minor Masonry."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    try:
-                        area_val = float(area)
-                        # Fetch dynamic minimum_area from database customization
-                        from service_requests.models import Package
-                        pkg = Package.objects.filter(slug="minor-masonry", status="ACTIVE").first()
-                        min_area = 500
-                        if pkg and pkg.service and isinstance(pkg.service.customization, dict):
-                            min_area = float(pkg.service.customization.get("minimum_area", 500))
-                        
-                        if area_val < min_area:
-                            return Response(
-                                {"success": False, "message": f"Minimum service area is {int(min_area)} sq.ft. Please enter an area of {int(min_area)} sq.ft or more."},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
-                    except (ValueError, TypeError):
-                        return Response(
-                            {"success": False, "message": "Invalid area value. Area must be a number."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                elif "tile-fixing" in item_id:
-                    size = str(item.get("selectedBathroomSize") or "").strip()
-                    if not size:
-                        return Response(
-                            {"success": False, "message": "Bathroom size choice is required."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    
-                    # Fetch dynamic pricing_slabs from database customization
-                    from service_requests.models import Package
-                    pkg = Package.objects.filter(slug="bathroom-tile-fixing", status="ACTIVE").first()
-                    pricing_slabs = {"Small": 10000, "Medium": 10000, "Large": 20000}
-                    if pkg and pkg.service and isinstance(pkg.service.customization, dict):
-                        pricing_slabs = pkg.service.customization.get("pricing_slabs", pricing_slabs)
-                    
-                    allowed_sizes = [s.strip().lower() for s in pricing_slabs.keys()]
-                    if size.lower() not in allowed_sizes:
-                        return Response(
-                            {"success": False, "message": f"Invalid bathroom size choice. Allowed values: {', '.join(pricing_slabs.keys())}."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    
-                    # Get exact expected price
-                    expected_price = None
-                    for key, val in pricing_slabs.items():
-                        if key.strip().lower() == size.lower():
-                            expected_price = float(val)
-                            break
-                    
-                    submitted_price = item.get("predefinedPrice")
-                    if submitted_price is not None:
-                        try:
-                            if float(submitted_price) != expected_price:
-                                return Response(
-                                    {"success": False, "message": f"Predefined price mismatch for {size} bathroom."},
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
-                        except (ValueError, TypeError):
-                            return Response(
-                                {"success": False, "message": "Invalid predefined price value."},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
 
         # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
         # This is the authoritative zone check. It runs on EVERY booking API
@@ -432,15 +396,20 @@ class BookingCreateView(APIView):
         _lat = serializer.validated_data.get("latitude")
         _lng = serializer.validated_data.get("longitude")
         if _lat is None or _lng is None:
-            if "test" in sys.argv:
-                _lat = _lat or 12.9716
-                _lng = _lng or 77.5946
-            else:
-                return _error(
-                    "We couldn't determine your location. Please select your address "
-                    "on the map and try again.",
-                    400,
-                )
+            # Fixes HS-B-04: this used to silently substitute a hardcoded
+            # Bangalore coordinate here ONLY for the zone-eligibility check
+            # below, while the ServiceRequest itself was still saved with
+            # latitude/longitude = None (serializer.save() uses the real
+            # submitted values, not this fallback). That let a booking with
+            # no coordinates pass the zone check and get created, then sit
+            # with no location for any distance-based technician dispatch to
+            # work from -- exactly the "created, then never dispatched" gap.
+            # Reject it up front instead.
+            return _error(
+                "We couldn't determine your location. Please select your address "
+                "on the map and try again.",
+                400,
+            )
         _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
 
         zone_result = check_booking_eligibility(
@@ -480,15 +449,21 @@ class BookingCreateView(APIView):
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
             )
-        except UnresolvedLogisticsFareError:
+        except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
             # Lane nor ServiceTier has no server-verifiable price, so reject
             # it with a clear message instead of recording a client-supplied
             # amount unchecked.
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            err_text = str(err).strip() or "We couldn't verify a fare for this route/tier. Please pick a valid route or service tier and try again."
+            is_survey_review = any(k in err_text.lower() for k in ("survey", "review", "uncataloged", "estimate"))
             return _error(
-                "We couldn't verify a fare for this route/tier. Please pick a valid "
-                "route or service tier and try again.",
+                err_text,
                 400,
+                error=err_text,
+                code="SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
             )
 
         # Fixes HS-B-01 (partial): for non-logistics (home-services) bookings,
@@ -542,41 +517,10 @@ class BookingCreateView(APIView):
                         400,
                     )
 
-        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
-        is_painting_booking = False
-        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
-            is_painting_booking = True
-        else:
-            if any(isinstance(it, dict) and (it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id"))) for it in cart_data):
-                is_painting_booking = True
-
-        is_mason_booking = False
-        if _service_category in ["mason", "masonry"]:
-            is_mason_booking = True
-        else:
-            if any(isinstance(it, dict) and (it.get("categoryName") == "Mason" or "mason" in str(it.get("id"))) for it in cart_data):
-                is_mason_booking = True
-
-        if is_painting_booking or is_mason_booking:
-            dist_km = 0.0
-            if _lat is not None and _lng is not None:
-                dist_m = _haversine_meters(12.7409, 77.8253, _lat, _lng)
-                if dist_m is not None:
-                    dist_km = dist_m / 1000.0
-            if dist_km > 15.0:
-                corrected_fare = Decimal("300.00")
-            else:
-                corrected_fare = Decimal("0.00")
-
         payment_method = (request.data.get("payment_method") or "COD").upper()
-        req_payment_status = str(request.data.get("payment_status") or "").lower()
         if payment_method == "ONLINE":
-            if req_payment_status == "paid":
-                initial_status = ServiceRequest.Status.CONFIRMED
-                initial_payment_status = ServiceRequest.PaymentStatus.PAID
-            else:
-                initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
-                initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
+            initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
+            initial_payment_status = ServiceRequest.PaymentStatus.PROCESSING
         else:
             payment_method = "COD"
             initial_status = ServiceRequest.Status.CONFIRMED
@@ -664,27 +608,12 @@ class BookingCreateView(APIView):
                 or serializer.validated_data.get("idempotency_key")
                 or request.data.get("idempotency_key")
             )
-            raw_qty = serializer.validated_data.get("ac_quantity")
-            if raw_qty is None:
-                raw_qty = request.data.get("ac_quantity")
-            if raw_qty is None:
-                raw_qty = request.data.get("quantity")
-            if raw_qty is None:
-                raw_qty = 1
-
-            customer_symptom = (
-                serializer.validated_data.get("customer_symptom")
-                or request.data.get("customer_symptom")
-                or request.data.get("symptom")
-                or ""
-            )
-
             ac_details = {
                 "ac_type": serializer.validated_data.get("ac_type") or request.data.get("ac_type") or request.data.get("type"),
                 "ac_brand": serializer.validated_data.get("ac_brand") or request.data.get("ac_brand") or request.data.get("brand") or "Other",
                 "ac_capacity": serializer.validated_data.get("ac_capacity") or request.data.get("ac_capacity") or request.data.get("capacity"),
-                "ac_quantity": raw_qty,
-                "customer_symptom": customer_symptom,
+                "ac_quantity": serializer.validated_data.get("ac_quantity") or request.data.get("ac_quantity") or request.data.get("quantity") or 1,
+                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or serializer.validated_data.get("description"),
                 "customer_notes": serializer.validated_data.get("customer_notes") or request.data.get("customer_notes") or request.data.get("notes") or "",
             }
             booking_data = {
@@ -740,7 +669,6 @@ class BookingCreateView(APIView):
                 message="Your AC estimation request has been submitted successfully.",
                 status_code=201 if created else 200,
             )
-
 
         # Ensure cart_data carries clean numeric prices matching authoritative fare
         clean_cart = serializer.validated_data.get("cart_data")
@@ -850,33 +778,48 @@ class BookingCreateView(APIView):
         # ever succeeds; if/when a real dispatch-webhook endpoint exists on
         # the vendor side, this still delivers it, just without blocking the
         # request that doesn't need to wait on it.
-        if "test" not in sys.argv:
+        try:
+            import threading
+            threading.Thread(
+                target=WorkforceIntegrationService.dispatch_job,
+                args=(sr.id,),
+                daemon=True,
+            ).start()
+        except Exception as dispatch_err:
+            logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
+
+        # Fixes HS-A-02 (partial): tell the customer an account was
+        # created for them by this booking, since User.objects.create()
+        # above did that silently. Background thread, same reasoning as
+        # the dispatch call above -- this must never delay the booking
+        # response.
+        if _new_account_created:
             try:
                 import threading
+                from .notifications import notify_account_created
                 threading.Thread(
-                    target=WorkforceIntegrationService.dispatch_job,
-                    args=(sr.id,),
+                    target=notify_account_created,
+                    args=(customer_user, sr),
                     daemon=True,
                 ).start()
-            except Exception as dispatch_err:
-                logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
+            except Exception as notify_err:
+                logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
-            # Fixes HS-A-02 (partial): tell the customer an account was
-            # created for them by this booking, since User.objects.create()
-            # above did that silently. Background thread, same reasoning as
-            # the dispatch call above -- this must never delay the booking
-            # response.
-            if _new_account_created:
-                try:
-                    import threading
-                    from .notifications import notify_account_created
-                    threading.Thread(
-                        target=notify_account_created,
-                        args=(customer_user, sr),
-                        daemon=True,
-                    ).start()
-                except Exception as notify_err:
-                    logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
+        # Booking confirmation notification (SMS with live tracking URL + Email)
+        try:
+            from django.conf import settings
+            from .notifications import send_booking_confirmation
+            if getattr(settings, "TESTING", False):
+                send_booking_confirmation(sr)
+            else:
+                import threading
+                threading.Thread(
+                    target=send_booking_confirmation,
+                    args=(sr,),
+                    daemon=True,
+                ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start booking confirmation notification for booking {sr.id}: {notify_err}")
 
         if is_admin_booking_on_behalf:
             try:
@@ -915,7 +858,13 @@ class BookingCreateView(APIView):
             status_code=201,
         )
         if idem_cache_key:
-            cache.set(idem_cache_key, {"body": response.data, "status": response.status_code}, timeout=600)
+            from django.core.cache import cache
+            cache.set(idem_cache_key, {
+                "body": response.data,
+                "status": response.status_code,
+                "in_progress": False,
+                "payload_hash": req_payload_hash,
+            }, timeout=86400)
         return response
 
 
@@ -958,7 +907,7 @@ class CustomerMyBookingsView(APIView):
 
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -1087,11 +1036,6 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
-            if hasattr(sr, "estimation"):
-                from .models import Estimation
-                est = sr.estimation
-                est.status = Estimation.Status.CANCELLED
-                est.save(update_fields=["status", "updated_at"])
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
@@ -1234,17 +1178,19 @@ def _build_logistics_progress(sr):
 
 def _jsonable_fare_breakdown(breakdown):
     """
-    GT-B-01: JSONField can't store Decimal. Convert the fare breakdown's
-    Decimals to strings (not floats -- money must not go through binary
-    floating point, even one-way) so the stored quote is exact and
-    round-trips for reconciliation later. None/empty -> {}.
+    GT-B-01: JSONField can't store Decimal. Recursively convert all Decimals
+    to strings (not floats -- money and physical quantities must not go through
+    binary floating point) so the stored quote is exact and safely serialized.
     """
-    if not breakdown:
+    if breakdown is None:
         return {}
-    out = {}
-    for key, value in breakdown.items():
-        out[key] = str(value) if isinstance(value, Decimal) else value
-    return out
+    if isinstance(breakdown, Decimal):
+        return str(breakdown)
+    if isinstance(breakdown, dict):
+        return {k: _jsonable_fare_breakdown(v) for k, v in breakdown.items()}
+    if isinstance(breakdown, (list, tuple)):
+        return [_jsonable_fare_breakdown(v) for v in breakdown]
+    return breakdown
 
 
 def _haversine_meters(lat1, lon1, lat2, lon2):
@@ -1397,7 +1343,13 @@ def _build_tracking_payload(sr, has_full_access):
     freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
 
     if is_accepted:
-        tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
+        # Workforce backend returns 'assigned_technician'; older integration may use 'technician'.
+        # Prefer whichever is populated.
+        tech_obj = (
+            (tracking.get("technician") or tracking.get("assigned_technician") or {})
+            if (tracking and isinstance(tracking, dict))
+            else {}
+        )
 
         # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
         tech_name = None
@@ -1443,7 +1395,13 @@ def _build_tracking_payload(sr, has_full_access):
             tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
 
         # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
-        loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
+        # Location is top-level 'location' in older callers, nested inside
+        # 'assigned_technician.location' in the current WorkforceJobLiveTrackingView response.
+        loc = (
+            tracking.get("location")
+            or (tracking.get("assigned_technician") or {}).get("location")
+            or {}
+        ) if (tracking and isinstance(tracking, dict)) else {}
         if is_terminal:
             tech_lat = None
             tech_lng = None
@@ -1523,7 +1481,12 @@ def _build_tracking_payload(sr, has_full_access):
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
-            "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
+            "updated_at": (
+                tracking.get("updated_at")
+                or (loc.get("received_at") if loc else None)
+                or (loc.get("captured_at") if loc else None)
+                or timezone.now().isoformat()
+            ) if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
         }
 
         if tech_lat is not None and tech_lng is not None and not is_terminal:
@@ -1568,57 +1531,6 @@ def _build_tracking_payload(sr, has_full_access):
         }
         for ev in sr.status_events.all().order_by("occurred_at")
     ] if hasattr(sr, "status_events") else []
-
-    # Quote financial breakdown
-    local_quote = PaintingQuote.objects.filter(service_request=sr).order_by("-quote_version").first()
-    if not local_quote and sr.parent_request:
-        local_quote = PaintingQuote.objects.filter(service_request=sr.parent_request).order_by("-quote_version").first()
-
-    quote_data = None
-    if local_quote:
-        from .serializers import PaintingQuoteSerializer
-        quote_data = PaintingQuoteSerializer(local_quote).data
-    else:
-        quote_res = WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id)
-        if quote_res.get("success"):
-            quote_data = quote_res.get("quote")
-
-    child_booking_data = None
-    child_sr = ServiceRequest.objects.filter(parent_request=sr, request_kind="quoted_work").order_by("-id").first()
-    if child_sr:
-        child_booking_data = {
-            "id": child_sr.id,
-            "request_id": child_sr.request_id,
-            "status": child_sr.status,
-            "payment_status": child_sr.payment_status,
-            "total_amount": float(child_sr.total_amount) if child_sr.total_amount else 0.0,
-            "payment_method": child_sr.payment_method,
-            "invoice_id": child_sr.invoice_id,
-            "tracking_token": str(child_sr.tracking_token) if child_sr.tracking_token else None,
-            "service_category": child_sr.service_category,
-        }
-
-    target_pay_sr = child_sr if child_sr else (sr if sr.request_kind == "quoted_work" else None)
-    
-    quote_grand_total = 0.0
-    quote_advance_amount = 0.0
-    quote_balance_amount = 0.0
-    quote_paid_amount = 0.0
-    quote_remaining_amount = 0.0
-    advance_paid = False
-    balance_paid = False
-
-    if local_quote:
-        quote_grand_total = float(local_quote.grand_total)
-        quote_advance_amount = float(local_quote.advance_amount)
-        quote_balance_amount = float(local_quote.balance_amount)
-
-        if target_pay_sr:
-            payments = Payment.objects.filter(service_request=target_pay_sr, status=ServiceRequest.PaymentStatus.PAID)
-            quote_paid_amount = float(sum(p.amount for p in payments))
-            quote_remaining_amount = max(0.0, quote_grand_total - quote_paid_amount)
-            advance_paid = bool(quote_paid_amount >= quote_advance_amount)
-            balance_paid = bool(quote_paid_amount >= quote_grand_total)
 
     return {
         "booking_id": sr.id,
@@ -1671,15 +1583,7 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
-        "quote": quote_data,
-        "child_booking": child_booking_data,
-        "quote_grand_total": quote_grand_total,
-        "quote_advance_amount": quote_advance_amount,
-        "quote_balance_amount": quote_balance_amount,
-        "quote_paid_amount": quote_paid_amount,
-        "quote_remaining_amount": quote_remaining_amount,
-        "advance_paid": advance_paid,
-        "balance_paid": balance_paid,
+        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
     }
 
 
@@ -4384,5 +4288,4 @@ class CustomerQuotePDFView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="Quote-{quote.quote_number}.pdf"'
         return response
-
 

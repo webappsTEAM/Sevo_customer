@@ -44,6 +44,47 @@ def _delete_or_raise(instance, label):
         raise ValidationError({"detail": f"Cannot delete {label}: still referenced elsewhere ({exc})."})
 
 
+def _create_or_raise(model_cls, data, label):
+    """
+    Mirror of _delete_or_raise for creation: turns a DB-level IntegrityError
+    (a duplicate slug DRF's UniqueValidator didn't catch because of a race,
+    a bad/stale FK id, a DB-level NOT NULL a form field left out, etc.) into
+    a clean ValidationError the view can turn into a 400 with the real
+    reason, instead of an unhandled 500 with no message the admin can act
+    on -- same category of bug as the delete-side crashes fixed earlier.
+    """
+    try:
+        return model_cls.objects.create(**data)
+    except IntegrityError as exc:
+        logger.exception("IntegrityError creating %s", label)
+        raise ValidationError({"detail": f"Could not create {label}: {exc}"})
+
+
+def _detach_workforce_service_assignments(service_id):
+    """
+    workforce_employee_service is a real table with a hard FK to
+    service_requests_service(id) -- but it belongs to the separate
+    workforce/staffing system and has no Django model anywhere in this
+    project, so the ORM has no idea it exists and can't cascade through it
+    the way it does for AddOn/VegetableRecipe (both declared on_delete=CASCADE
+    against Package). Without this, deleting a Service that any employee is
+    assigned to fails with a raw Postgres IntegrityError -- that's exactly
+    what _delete_or_raise above started surfacing instead of crashing with
+    an unhandled 500, which is how this table was found in the first place.
+
+    Best-effort by design, same convention as the ServiceTier cleanup in
+    delete_package below: if the table doesn't exist in this environment
+    (e.g. a dev DB without the workforce integration set up), this is a
+    silent no-op rather than blocking the delete on an unrelated system.
+    """
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM workforce_employee_service WHERE service_id = %s", [service_id])
+    except Exception:
+        logger.exception("Could not detach workforce assignments for service #%s", service_id)
+
+
 class LogisticsPricingPermissionError(PermissionError):
     """
     Raised by update_package() when a caller tries to change the base_price
@@ -147,7 +188,7 @@ def _apply_updates(instance, data, entity_type, actor, reason=None, version_fiel
 # ── Category ──────────────────────────────────────────────────────────────
 
 def create_category(data, actor):
-    category = CatalogCategory.objects.create(**data)
+    category = _create_or_raise(CatalogCategory, data, f'category "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.CREATE, actor)
     return category
 
@@ -185,7 +226,7 @@ def delete_category(category, actor=None, cascade=False):
 # ── Service ───────────────────────────────────────────────────────────────
 
 def create_service(data, actor):
-    service = Service.objects.create(**data)
+    service = _create_or_raise(Service, data, f'service "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.CREATE, actor)
     return service
 
@@ -212,9 +253,11 @@ def delete_service(service, actor=None, cascade=False):
                 delete_package(package, actor=actor)
             _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor,
                  reason="Cascade delete: removed with all child packages.")
+            _detach_workforce_service_assignments(service.pk)
             _delete_or_raise(service, f'service "{service.name}"')
         return
     _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.DELETE, actor)
+    _detach_workforce_service_assignments(service.pk)
     _delete_or_raise(service, f'service "{service.name}"')
 
 
@@ -232,13 +275,32 @@ CANONICAL_LOGISTICS_TIER_SLUG_MAP = {
 
 def _logistics_tier_for_package(package):
     """
-    The ServiceTier a Package maps to, by EXACT slug or canonical slug alias, or None.
+    The ServiceTier a Package maps to, or None.
 
-    Avoids unsafe substring matching while deterministically resolving
-    canonical Packers & Movers slug variants (1-rk-1-bhk-shifting <-> 1rk-1bhk-shifting).
-    Exact slug equality is tried first, followed by canonical alias dictionary.
+    Lookup order:
+      1. package.gt_service_tier_id, if set -- the authoritative, rename-proof
+         link (see the field's docstring in models.py). Once a tier exists
+         for a package, this is always trusted over slug matching, because a
+         later admin rename of the package's name/slug must NOT sever the
+         link the way pure slug-matching used to.
+      2. Exact slug match -- for legacy packages saved before this field
+         existed.
+      3. Canonical alias match -- reconciles hyphenated Packers & Movers slug
+         variants (1-rk-1-bhk-shifting vs 1rk-1bhk-shifting).
+
+    Deliberately no substring guessing here (unsafe -- see
+    CANONICAL_LOGISTICS_TIER_SLUG_MAP's own comment).
     """
     from logistics.models import ServiceTier
+
+    tier_id = getattr(package, "gt_service_tier_id", None)
+    if tier_id:
+        tier = ServiceTier.objects.filter(pk=tier_id).first()
+        if tier:
+            return tier
+        # The linked row is gone (e.g. deleted directly in Django admin
+        # before that surface was locked down) -- fall through to slug
+        # matching rather than treating the package as unlinked forever.
 
     slug = (getattr(package, "slug", "") or "").strip().lower()
     if not slug:
@@ -255,6 +317,57 @@ def _logistics_tier_for_package(package):
         return ServiceTier.objects.filter(slug=canonical_slug).first()
 
     return None
+
+
+def _logistics_category_for_service_slug(svc_slug):
+    """
+    LogisticsCategory a Service maps to by slug substring, or None if it
+    isn't a Goods & Transport service at all. Shared by create_package and
+    update_package's tier-creation fallback so the two paths can never
+    disagree about which packages are "Goods & Transport".
+    """
+    from logistics.models import LogisticsCategory
+
+    svc_slug = (svc_slug or "").lower()
+    if "truck" in svc_slug:
+        return LogisticsCategory.TRUCK
+    if "two-wheeler" in svc_slug or "2-wheeler" in svc_slug or "wheeler" in svc_slug:
+        return LogisticsCategory.TWO_WHEELER
+    if "packers" in svc_slug or "mover" in svc_slug:
+        return LogisticsCategory.PACKERS_MOVERS
+    return None
+
+
+def _gt_tier_defaults_from_package(package, cat_enum):
+    """The ServiceTier field values a Package should currently be mirrored
+    to, as a dict suitable for update_or_create's `defaults=` or for
+    setattr-ing onto an existing tier. Single source of truth for "what does
+    this package's tier look like right now", used by both a brand new tier
+    (create_package, and update_package's re-link fallback) and kept
+    logically identical to the incremental diff update_package normally does
+    on an already-linked tier."""
+    price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
+    gt_city = (package.gt_city or "hosur").strip().lower() or "hosur"
+    return {
+        "category": cat_enum,
+        "name": package.name,
+        "capacity_label": package.tag or "Standard",
+        "starting_price": price_to_sync,
+        "description": package.description or "",
+        "city": gt_city,
+        "is_active": (package.status == "ACTIVE"),
+        "duration": package.duration or "",
+        "image": package.image or "",
+        "weight_class": package.gt_weight_class or "",
+        "dimensions_label": package.gt_dimensions_label or "",
+        "base_fare": package.gt_base_fare,
+        "per_km_rate": package.gt_per_km_rate,
+        "free_km": package.gt_free_km if package.gt_free_km is not None else 0,
+        "loading_unloading_charge": package.gt_loading_unloading_charge if package.gt_loading_unloading_charge is not None else 0,
+        "additional_stop_charge": package.gt_additional_stop_charge if package.gt_additional_stop_charge is not None else 0,
+        "surge_multiplier": package.gt_surge_multiplier if package.gt_surge_multiplier is not None else 1,
+        "minimum_fare": package.gt_minimum_fare,
+    }
 
 
 def _package_for_logistics_tier(tier):
@@ -284,7 +397,7 @@ def _package_for_logistics_tier(tier):
 # ── Package ───────────────────────────────────────────────────────────────
 
 def create_package(data, actor):
-    package = Package.objects.create(**data)
+    package = _create_or_raise(Package, data, f'package "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
     try:
         from django.core.cache import cache
@@ -292,32 +405,24 @@ def create_package(data, actor):
     except Exception:
         pass
     try:
-        from logistics.models import ServiceTier, LogisticsCategory
-        svc_slug = getattr(package.service, "slug", "").lower()
-        cat_enum = None
-        if "truck" in svc_slug:
-            cat_enum = LogisticsCategory.TRUCK
-        elif "two-wheeler" in svc_slug or "2-wheeler" in svc_slug:
-            cat_enum = LogisticsCategory.TWO_WHEELER
-        elif "packers" in svc_slug or "mover" in svc_slug:
-            cat_enum = LogisticsCategory.PACKERS_MOVERS
+        from logistics.models import ServiceTier
+        cat_enum = _logistics_category_for_service_slug(getattr(package.service, "slug", ""))
         if cat_enum:
-            # Keyed on the package's own slug, so this creates or updates
-            # exactly one tier and can never reach a different one.
-            price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
-            ServiceTier.objects.update_or_create(
+            if not package.gt_city:
+                package.gt_city = "hosur"
+                package.save(update_fields=["gt_city"])
+            # Keyed on the package's own slug, so a brand new package creates
+            # its own new tier rather than colliding with an unrelated one.
+            tier, _created = ServiceTier.objects.update_or_create(
                 slug=package.slug,
-                defaults={
-                    "category": cat_enum,
-                    "name": package.name,
-                    "capacity_label": package.tag or "Standard",
-                    "starting_price": price_to_sync,
-                    "description": package.description or "",
-                    "city": "hosur",
-                    "is_active": (package.status == "ACTIVE"),
-                    "duration": package.duration or "",
-                }
+                defaults=_gt_tier_defaults_from_package(package, cat_enum),
             )
+            # Lock in the rename-proof link immediately (see
+            # Package.gt_service_tier_id's docstring) so this package never
+            # depends on slug matching again after today.
+            if package.gt_service_tier_id != tier.id:
+                package.gt_service_tier_id = tier.id
+                package.save(update_fields=["gt_service_tier_id"])
     except Exception:
         # Not re-raised: a logistics-tier mirror failing must not roll back a
         # catalog package the admin just created. But it is no longer
@@ -500,6 +605,34 @@ def update_package(package, data, actor, reason=None):
     pkg = _apply_updates(package, data, CatalogChangeLog.EntityType.PACKAGE, actor, reason=reason, version_fields=_VERSION_FIELDS)
     try:
         tier = _logistics_tier_for_package(pkg)
+
+        if tier is None:
+            # No tier matched this package at all -- either it's not a Goods
+            # & Transport package (cat_enum will be None and this is a
+            # no-op), or it WAS one and lost its link, e.g. by being renamed
+            # to a slug that no ServiceTier shares (the exact bug that let a
+            # renamed/new GT package silently vanish from the customer
+            # booking page while its old tier kept showing stale data).
+            # Create the tier it should have had instead of doing nothing.
+            from logistics.models import ServiceTier
+            cat_enum = _logistics_category_for_service_slug(getattr(pkg.service, "slug", ""))
+            if cat_enum:
+                if not pkg.gt_city:
+                    pkg.gt_city = "hosur"
+                    pkg.save(update_fields=["gt_city"])
+                tier, _created = ServiceTier.objects.update_or_create(
+                    slug=pkg.slug,
+                    defaults=_gt_tier_defaults_from_package(pkg, cat_enum),
+                )
+                logger.info(
+                    "Package #%s (%s) had no linked ServiceTier -- created/relinked #%s.",
+                    pkg.pk, pkg.slug, tier.pk,
+                )
+
+        if tier is not None and pkg.gt_service_tier_id != tier.id:
+            pkg.gt_service_tier_id = tier.id
+            pkg.save(update_fields=["gt_service_tier_id"])
+
         if tier:
             fields_to_update = []
             price_to_sync = pkg.base_price if pkg.base_price is not None else pkg.offer_price
@@ -529,6 +662,40 @@ def update_package(package, data, actor, reason=None):
             if pkg.duration is not None and tier.duration != pkg.duration:
                 tier.duration = pkg.duration
                 fields_to_update.append("duration")
+            if pkg.image is not None and tier.image != (pkg.image or ""):
+                tier.image = pkg.image or ""
+                fields_to_update.append("image")
+
+            # Phase 1 Goods & Transport unification: mirror the gt_*
+            # distance-pricing fields the admin can now edit on the Package
+            # itself onto the same-named (minus prefix) ServiceTier fields.
+            # A gt_* field left blank/None is treated as "admin hasn't set
+            # this here yet" and does NOT overwrite an existing tier value --
+            # this keeps a tier someone already configured via the old
+            # Goods & Transport Rates screen intact until the Package copy
+            # is actually filled in.
+            _gt_field_map = (
+                ("gt_weight_class", "weight_class"),
+                ("gt_dimensions_label", "dimensions_label"),
+                ("gt_base_fare", "base_fare"),
+                ("gt_per_km_rate", "per_km_rate"),
+                ("gt_free_km", "free_km"),
+                ("gt_loading_unloading_charge", "loading_unloading_charge"),
+                ("gt_additional_stop_charge", "additional_stop_charge"),
+                ("gt_surge_multiplier", "surge_multiplier"),
+                ("gt_minimum_fare", "minimum_fare"),
+            )
+            for pkg_field, tier_field in _gt_field_map:
+                pkg_value = getattr(pkg, pkg_field, None)
+                if pkg_value in (None, "") :
+                    continue
+                if getattr(tier, tier_field) != pkg_value:
+                    setattr(tier, tier_field, pkg_value)
+                    fields_to_update.append(tier_field)
+            if pkg.gt_city and tier.city != pkg.gt_city:
+                tier.city = pkg.gt_city
+                fields_to_update.append("city")
+
             if fields_to_update:
                 tier.save(update_fields=fields_to_update)
                 logger.info(
@@ -587,13 +754,13 @@ def transition_package_status(package, new_status, actor, reason=None):
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.STATUS_CHANGE, actor,
          field_name="status", old_value=current, new_value=new_status, reason=reason)
     try:
-        from logistics.models import ServiceTier
-        tier = ServiceTier.objects.filter(slug=package.slug).first()
-        if not tier:
-            for t in ServiceTier.objects.all():
-                if t.slug in package.slug or package.slug in t.slug or t.name.lower() in package.name.lower():
-                    tier = t
-                    break
+        # Uses the same rename-proof lookup as update_package now, instead
+        # of this function's own separate fuzzy-substring fallback -- that
+        # fallback (t.slug in package.slug or ...) could match the WRONG
+        # tier (e.g. any tier whose slug happens to be a substring of this
+        # package's slug), which is exactly the kind of ambiguity
+        # gt_service_tier_id exists to avoid.
+        tier = _logistics_tier_for_package(package)
         if tier:
             tier.is_active = (new_status == "ACTIVE")
             tier.save(update_fields=["is_active"])
@@ -605,8 +772,14 @@ def transition_package_status(package, new_status, actor, reason=None):
 
 def delete_package(package, actor=None):
     try:
-        from logistics.models import ServiceTier
-        ServiceTier.objects.filter(slug=package.slug).delete()
+        tier = _logistics_tier_for_package(package)
+        if tier:
+            tier.delete()
+        else:
+            # Fallback for a package that was never linked (pre-existing
+            # rows from before gt_service_tier_id existed).
+            from logistics.models import ServiceTier
+            ServiceTier.objects.filter(slug=package.slug).delete()
     except Exception:
         pass
     try:
@@ -621,7 +794,7 @@ def delete_package(package, actor=None):
 # ── AddOn ─────────────────────────────────────────────────────────────────
 
 def create_addon(data, actor):
-    addon = AddOn.objects.create(**data)
+    addon = _create_or_raise(AddOn, data, f'add-on "{data.get("name", "")}"')
     _log(CatalogChangeLog.EntityType.ADDON, addon.pk, addon.name, CatalogChangeLog.Action.CREATE, actor)
     return addon
 

@@ -69,7 +69,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-9", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "/logistics", enabled: true }
   ],
   pillarModal: {
-    badge: "⚡ 5 Core Specialized Pillars",
+    badge: "⚡Core Specialized Pillars",
     title: "Home & Repair Services",
     subtitle: "Select any service below to explore specific options, verified technicians, and transparent pricing.",
     pillars: [

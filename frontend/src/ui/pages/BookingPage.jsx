@@ -209,6 +209,54 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
+export function getAuthoritativeItemPrice(item, booking) {
+  if (!item) return 0;
+  if (typeof item.price === 'number' && !isNaN(item.price)) {
+    return item.price;
+  }
+  let raw = item.price;
+  if (raw == null || raw === '') {
+    raw = item.estimated_price || item.unit_price;
+  }
+  let parsed = NaN;
+  if (typeof raw === 'string') {
+    const cleanStr = raw.replace(/[^\d.-]/g, '').trim();
+    parsed = parseFloat(cleanStr);
+  } else if (typeof raw === 'number') {
+    parsed = raw;
+  }
+
+  const isLogistics = ['goods_transport_truck', 'goods_transport_two_wheeler', 'packers_movers'].includes(booking?.service_category);
+  const bookingTotal = Number(booking?.total_amount || 0);
+  const breakdownSubtotal = parseFloat(booking?.fare_breakdown?.subtotal || booking?.fare_breakdown?.total || 0);
+
+  if (isLogistics) {
+    // For Packers & Movers: fare_breakdown.subtotal is the pre-GST transport-only
+    // component (e.g. Rs 2900.50), NOT the full package price which also includes
+    // packing, labor, dismantling charges, and GST (e.g. Rs 3422.59).
+    // total_amount is the authoritative full-package price captured at booking creation.
+    if (booking?.service_category === 'packers_movers') {
+      if (bookingTotal > 0) return bookingTotal;
+      if (breakdownSubtotal > 0) return breakdownSubtotal;
+    } else {
+      // Truck / Two-Wheeler: fare_breakdown.subtotal IS the complete vehicle fare.
+      // Prefer it over the cart string which may be an indicative 'starting from'
+      // price (e.g. the vehicle card shows '₹205' but the quoted fare is Rs 315.86).
+      if (breakdownSubtotal > 0) return breakdownSubtotal;
+      if (bookingTotal > 0) return bookingTotal;
+    }
+  }
+
+  if (!isNaN(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  if (breakdownSubtotal > 0) return breakdownSubtotal;
+  if (bookingTotal > 0) return bookingTotal;
+
+  return 0;
+}
+
 const extractTextList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => typeof i === "string" ? i : (typeof i === "object" && i !== null ? (i.text || i.title || "") : "")).filter(Boolean) : [];
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -1572,7 +1620,7 @@ function StepLogin({ category, onVerified, onBack }) {
   }, [cooldown])
 
   const nameOk = name.trim().length >= 2
-  const phoneOk = phone.replace(/[\s\-\(\)\+]/g, "").length >= 7
+  const phoneOk = phone.replace(/\D/g, "").length === 10
 
   const sendOtp = async () => {
     if (!nameOk || !phoneOk) return
@@ -2580,8 +2628,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   }, [liveData?.cart_data, successData?.cart_data, cart])
 
   const itemTotal = useMemo(() => {
-    return displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0)
-  }, [displayCart])
+    return displayCart.reduce((a, c) => a + (getAuthoritativeItemPrice(c, liveData || successData) * (Number(c.quantity) || 1)), 0)
+  }, [displayCart, liveData, successData])
 
   const totalGst = useMemo(() => {
     if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
@@ -3452,7 +3500,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* PDF Download link */}
           <div style={{ marginBottom: 16 }}>
             <a
-              href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
+              href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
@@ -3489,7 +3537,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                             {isExpanded ? "Hide Details" : "View Details"}
                           </button>
                           <a
-                            href={`${import.meta.env.VITE_VENDOR_API_URL || "http://localhost:8001"}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
+                            href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
@@ -4635,15 +4683,29 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   useEffect(() => {
     if (activeTab === "My Bookings" && user) {
-      if (!realBookings || realBookings.length === 0) {
-        setBookingsLoading(true)
+      const fetchBookings = (showLoading = false) => {
+        if (showLoading && (!realBookings || realBookings.length === 0)) {
+          setBookingsLoading(true)
+        }
+        apiFetchCustomerBookings()
+          .then(res => {
+            if (res?.data) setRealBookings(res.data)
+          })
+          .catch(console.error)
+          .finally(() => {
+            if (showLoading) setBookingsLoading(false)
+          })
       }
-      apiFetchCustomerBookings()
-        .then(res => {
-          if (res?.data) setRealBookings(res.data)
-        })
-        .catch(console.error)
-        .finally(() => setBookingsLoading(false))
+
+      fetchBookings(true)
+      const interval = setInterval(() => fetchBookings(false), 5000)
+      const onFocus = () => fetchBookings(false)
+      window.addEventListener("focus", onFocus)
+
+      return () => {
+        clearInterval(interval)
+        window.removeEventListener("focus", onFocus)
+      }
     }
   }, [activeTab, user])
 
@@ -5416,7 +5478,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 {item.categoryName ? <span style={{ color: '#64748b', fontWeight: 400 }}> ({item.categoryName})</span> : ''}
               </span>
               <span style={{ fontWeight: 700, color: '#059669' }}>
-                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
               </span>
             </div>
           ))}
@@ -5948,7 +6010,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 } else if (Array.isArray(b.cart_data)) {
                                   parsedCart = b.cart_data;
                                 }
-                                const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                                const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
                                 const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                                   ? Number(b.gst_amount)
                                   : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6004,7 +6066,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
-                            const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                            const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
                             const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
                               ? Number(b.gst_amount)
                               : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
@@ -6046,7 +6108,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                             {item.quantity || 1}
                                           </td>
                                           <td style={{ padding: '10px 12px', textAlign: 'right', color: '#059669', fontWeight: 800 }}>
-                                            ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                            ₹{(getAuthoritativeItemPrice(item, b) * (item.quantity || 1)).toLocaleString('en-IN')}
                                           </td>
                                         </tr>
                                       ))}
@@ -9144,7 +9206,8 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const [payMethod, setPayMethod] = useState("online")
+  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
+  const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
   const [showAddSearchModal, setShowAddSearchModal] = useState(false)
@@ -9700,22 +9763,24 @@ function StepWorkflowCheckout({
 
                 {isSlotSelected ? (
                   <div className="space-y-3">
-                    <div
-                      onClick={() => setPayMethod("online")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
-                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
-                        : "border-slate-200 hover:border-slate-300"
-                        }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
-                        <div>
-                          <span className="text-xs font-black text-slate-900 block">Pay Online</span>
-                          <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                    {isOnlinePaymentAvailable && (
+                      <div
+                        onClick={() => setPayMethod("online")}
+                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
+                          <div>
+                            <span className="text-xs font-black text-slate-900 block">Pay Online</span>
+                            <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                          </div>
                         </div>
+                        <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
                       </div>
-                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
-                    </div>
+                    )}
 
                     <div
                       onClick={() => setPayMethod("cash")}
@@ -10371,7 +10436,50 @@ export function resolveCategoryFromCart(currentCategory, cartItems) {
 // category page and to grow that category's sub-tab bar automatically as
 // the catalog admin adds new services, instead of each category page
 // keeping its own private copy of this mapping.
-function getDbCategorySlugForKey(nk) {
+// Frontend route keys (from CATEGORY_SUBCATEGORIES / pillar clicks) do not
+// necessarily match the real admin-created CatalogCategory.slug -- e.g. the
+// "Cleaning" pillar's real category slug is "deep-cleaning", confirmed by
+// testing, not "cleaning". Hardcoding each of these as they were discovered
+// doesn't scale to every pillar (Goods & Transport, Home Services & Pest
+// Control, Paintings, etc. all need the same treatment, and any admin
+// rename/re-slug would silently break the hardcoded value again). Instead,
+// resolve the DB slug live from the same "/settings/catalog/public/categories/"
+// list already fetched for the pillar tiles (see `categoriesData`), by
+// matching on the category NAME -- which is what the admin UI shows and
+// edits, so it's what stays true. A small set of name hints covers the
+// known frontend keys that don't literally equal their category's name; a
+// key with no hint just tries itself. If nothing matches (categoriesData not
+// loaded yet, or a genuinely new key), falls back to the raw key so behavior
+// degrades to the old hardcoded-content path rather than breaking.
+const CATEGORY_NAME_HINTS = {
+  hvac: ["ac & appliance", "ac and appliance", "appliance"],
+  appliance_repair: ["ac & appliance", "ac and appliance", "appliance"],
+  microwave: ["ac & appliance", "ac and appliance", "appliance"],
+  refrigerator: ["ac & appliance", "ac and appliance", "appliance"],
+  washing_machine: ["ac & appliance", "ac and appliance", "appliance"],
+  tv_display: ["ac & appliance", "ac and appliance", "appliance"],
+  water_purifier: ["ac & appliance", "ac and appliance", "appliance"],
+  cleaning: ["cleaning"],
+  mason: ["mason"],
+  electrical: ["home services", "pest control", "electrician"],
+  plumbing: ["home services", "pest control", "electrician"],
+  carpentry: ["home services", "pest control", "electrician"],
+  pest_control: ["home services", "pest control"],
+  painting: ["paint"],
+  goods_transport: ["goods & transport", "goods and transport", "transport"],
+};
+
+function getDbCategorySlugForKey(nk, categoriesData) {
+  if (Array.isArray(categoriesData) && categoriesData.length > 0) {
+    const hints = CATEGORY_NAME_HINTS[nk] || [nk.replace(/_/g, " ")];
+    const match = categoriesData.find((c) => {
+      const name = (c.name || "").toLowerCase();
+      return hints.some((h) => name.includes(h));
+    });
+    if (match?.slug) return match.slug;
+  }
+  // Legacy hardcoded fallbacks -- kept only for the window before
+  // categoriesData has loaded, or if the live lookup above finds nothing.
   if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
     return "ac_appliance";
   }
@@ -10720,6 +10828,7 @@ export function BookingPage() {
           const cats = catRes.data.map((c, i) => ({
             id: c.id.toString(),
             name: c.name,
+            slug: c.slug || "",
             desc: c.description || "Expert " + c.name + " service",
             rating: c.rating || "4.8",
             jobs: c.jobs_count_str || "10K+",
@@ -11479,6 +11588,7 @@ export function BookingPage() {
                   setLocation={setLocation}
                   setFormData={setFormData}
                   formData={formData}
+                  dbCatalogPackages={dbCatalogPackages}
                 />
               );
             } else if (isMason) {
@@ -16985,6 +17095,12 @@ export function CustomCleaningPackageModal({
 
   const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
   const [dbServicesList, setDbServicesList] = useState([]);
+  // Real category name+slug list, needed so getDbCategorySlugForKey can
+  // resolve each frontend key's real DB slug live instead of a hardcoded
+  // guess -- this modal is a separate component from BookingPage() itself
+  // (it doesn't share BookingPage's own categoriesData), so it fetches its
+  // own copy here, same endpoint the pillar tiles already use.
+  const [categoriesData, setCategoriesData] = useState([]);
 
   useEffect(() => {
     apiRequest("/settings/catalog/public/packages/")
@@ -16994,15 +17110,43 @@ export function CustomCleaningPackageModal({
         }
       })
       .catch((err) => console.warn("Public catalog packages unavailable, using local catalog fallback:", err?.message || err));
+  }, []);
 
-    apiRequest("/catalog/services/")
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/categories/")
       .then((res) => {
         if (res?.success && Array.isArray(res.data)) {
-          setDbServicesList(res.data);
+          setCategoriesData(res.data.map((c) => ({ id: c.id?.toString(), name: c.name, slug: c.slug || "" })));
         }
       })
-      .catch((err) => console.warn("Catalog services unavailable, using local services fallback:", err?.message || err));
+      .catch((err) => console.warn("Public catalog categories unavailable:", err?.message || err));
   }, []);
+
+  // Real sub-services (the CatalogService/"Services Catalog" records an
+  // admin creates -- e.g. "Home Cleaning" under Cleaning) drive the sub-tab
+  // bar directly, independent of whether any package has been added under
+  // them yet. This is fetched per-category (not once for everything) since
+  // the /catalog/sub-services/ payload has no category_slug field to filter
+  // on client-side.
+  const dbCategorySlugForEffectiveKey = getDbCategorySlugForKey(effectiveKey, categoriesData);
+  useEffect(() => {
+    apiRequest(`/catalog/sub-services/?category_slug=${encodeURIComponent(dbCategorySlugForEffectiveKey)}`)
+      .then((res) => {
+        setDbServicesList(res?.success && Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((err) => {
+        console.warn("Catalog sub-services unavailable, using local fallback:", err?.message || err);
+        setDbServicesList([]);
+      });
+  }, [dbCategorySlugForEffectiveKey]);
+
+  // Once the catalog admin has created ANY real sub-service under this
+  // category -- even with zero packages under it yet -- that's the single
+  // source of truth for the sub-tab bar and its package list. Nothing
+  // hardcoded should linger next to (or instead of) what's actually in the
+  // catalog.
+  const categoryHasRealServices = Array.isArray(dbServicesList) &&
+    dbServicesList.some(s => s.is_active !== false);
 
   const subCategories = React.useMemo(() => {
     const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
@@ -17011,30 +17155,62 @@ export function CustomCleaningPackageModal({
       ? staticList
       : staticList.map(tab => ({ ...tab, image: resolveImageUrl(tab.image, tab.image) }));
 
-    // Sitewide DB-first: grow this sub-tab bar automatically as the catalog
-    // admin adds new services under this category, instead of requiring a
-    // code change to CATEGORY_SUBCATEGORIES above. The hardcoded list stays
-    // as the bootstrap/default set for categories/tabs nobody has (re)built
-    // in the catalog yet; anything new that shows up in the DB is appended
-    // here so it reaches customers on their next page load.
-    if (!Array.isArray(dbCatalogPackages) || dbCatalogPackages.length === 0) {
+    // Fully admin-driven: the moment the catalog admin has created ANY real
+    // sub-service under this category -- even with zero packages under it
+    // yet -- the sub-tab bar is built entirely from that real data (in the
+    // admin's own sort order) instead of the old hardcoded set. The
+    // hardcoded `CATEGORY_SUBCATEGORIES` list is only a bootstrap/default
+    // for a category nobody has populated in the catalog yet.
+    if (!categoryHasRealServices) {
       return baseList;
     }
-    const targetDbCategory = getDbCategorySlugForKey(effectiveKey);
-    const existingNames = new Set(baseList.map(t => (t.name || "").toLowerCase().trim()));
     const seen = new Set();
-    const dynamicExtras = [];
-    dbCatalogPackages.forEach(p => {
-      const pCatSlug = (p.category_slug || "").toLowerCase();
-      if (pCatSlug !== targetDbCategory) return;
-      const sName = (p.service_name || "").trim();
+    const dbTabs = [];
+    dbServicesList.forEach(s => {
+      if (s.is_active === false) return;
+      const sName = (s.name || "").trim();
+      if (!sName) return;
       const key = sName.toLowerCase();
-      if (!sName || existingNames.has(key) || seen.has(key)) return;
+      if (seen.has(key)) return;
       seen.add(key);
-      dynamicExtras.push({ name: sName, image: resolveImageUrl(p.service_image, baseList[0]?.image || "") });
+      const staticMatch = staticList.find(t => (t.name || "").toLowerCase().trim() === key);
+      dbTabs.push({ name: sName, image: resolveImageUrl(s.image, staticMatch?.image || baseList[0]?.image || ""), db_service_id: s.id, slug: s.slug });
     });
-    return dynamicExtras.length > 0 ? [...baseList, ...dynamicExtras] : baseList;
-  }, [effectiveKey, dbCatalogPackages]);
+    return dbTabs.length > 0 ? dbTabs : baseList;
+  }, [effectiveKey, categoryHasRealServices, dbServicesList]);
+
+  // Deeper, OPTIONAL layer below a Service: some services (e.g. "Full House
+  // Cleaning" -> "Occupied Apartment"/"Unoccupied Apartment", or "Fridge" ->
+  // "Fridge Gas Filling") are split into admin-managed Sub-Services
+  // (Service.customization.subtabs, see the admin's dedicated Sub-Services
+  // page). Not every service has these -- most don't -- so this stays an
+  // empty list for the common case and no extra tab row renders.
+  const activeServiceForSubTab = React.useMemo(() => {
+    if (!Array.isArray(dbServicesList)) return null;
+    const key = (activeSubTab || "").trim().toLowerCase();
+    if (!key) return null;
+    return dbServicesList.find(s => (s.name || "").trim().toLowerCase() === key) || null;
+  }, [dbServicesList, activeSubTab]);
+
+  const activeServiceSubtabs = React.useMemo(() => {
+    const tabs = activeServiceForSubTab?.customization?.subtabs;
+    return Array.isArray(tabs) ? tabs.filter(t => t.enabled !== false) : [];
+  }, [activeServiceForSubTab]);
+
+  const [activeSubServiceId, setActiveSubServiceId] = useState("");
+  // Reset the Sub-Service filter whenever the parent Service tab changes, so
+  // switching from "Fridge" to "AC Service & Cleaning" doesn't silently keep
+  // a stale sub-service selection filtering out everything.
+  useEffect(() => {
+    setActiveSubServiceId("");
+  }, [activeSubTab]);
+
+  // Once the catalog admin has created real sub-service structure under the
+  // Cleaning category, stop forcing customers into the old hardcoded
+  // BHK-based FullHouseCleaningModal below and let this component's own
+  // DB-driven sub-tab bar + package grid (subCategories/finalPlans above)
+  // take over, same as every other category.
+  const cleaningHasRealCatalogData = categoryHasRealServices && dbCategorySlugForEffectiveKey === "deep-cleaning";
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -17043,7 +17219,7 @@ export function CustomCleaningPackageModal({
     if (param === "Full apartment" || param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") param = "Occupied Apartment";
     if (param === "Full bungalow/duplex") param = "Occupied Bungalow/duplex";
 
-    const currentSubCategories = CATEGORY_SUBCATEGORIES[effectiveKey] || [];
+    const currentSubCategories = subCategories || [];
     const isValidTabForCategory = currentSubCategories.some(c => c.name === param);
 
     if (param && isValidTabForCategory) {
@@ -17054,7 +17230,7 @@ export function CustomCleaningPackageModal({
         setActiveSubTab(currentSubCategories[0].name);
       }
     }
-  }, [normalizedKey, effectiveKey, searchParams]);
+  }, [normalizedKey, effectiveKey, searchParams, subCategories]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -17972,6 +18148,31 @@ export function CustomCleaningPackageModal({
       if (explicitSubtab && activeSubTab && explicitSubtab === activeSubTab) {
         return true;
       }
+      // Admin explicitly scoped this package to one Sub-Service via the
+      // Sub-Services admin page (Package.sub_service_key -> one entry's id
+      // inside the parent Service's customization.subtabs list). Resolve
+      // that id back to its label and compare against the active tab, since
+      // activeSubTab here holds the tab's display label, not its id.
+      if (p.sub_service_key && p.service_customization && Array.isArray(p.service_customization.subtabs)) {
+        const matchedSubtab = p.service_customization.subtabs.find((t) => t.id === p.sub_service_key);
+        if (matchedSubtab && activeSubTab && (matchedSubtab.label === activeSubTab || matchedSubtab.id === activeSubTab)) {
+          return true;
+        }
+      }
+
+      // 3. Once this category is entirely catalog-driven (the admin has
+      //    added real Services under it -- see subCategories/categoryHasRealServices
+      //    above) AND this tab is one of those real Services, that mapping
+      //    is authoritative: stop here rather than falling through to the
+      //    legacy keyword heuristics below. Those heuristics predate the
+      //    admin's Services/Sub-Services catalog and use loose substring
+      //    matches (e.g. a service slug "ac-gas-refill" containing "ref")
+      //    that were never meant to judge a brand-new flat Service tab like
+      //    "Fridge" -- without this guard they leak unrelated packages from
+      //    other real Services (like "AC Gas & Refrigerant") into it.
+      if (categoryHasRealServices && activeServiceForSubTab) {
+        return false;
+      }
 
       if (normalizedKey === "mason") {
         if (tab.includes("minor") || tab.includes("masonry") || tab.includes("construction")) {
@@ -18262,7 +18463,7 @@ export function CustomCleaningPackageModal({
       return normSName.includes(normTab) || normTab.includes(normSName) || pName.includes(normTab) || normTab.includes(pName);
     };
 
-    const targetDbCategory = getDbCategorySlugForKey(normalizedKey);
+    const targetDbCategory = getDbCategorySlugForKey(normalizedKey, categoriesData);
     // Filter database packages to only include those matching the target category and subtab
     const filteredDbPackages = dbCatalogPackages.filter(p => {
       const pCatSlug = (p.category_slug || "").toLowerCase();
@@ -18272,6 +18473,12 @@ export function CustomCleaningPackageModal({
       const isRefDrainCleaning = (targetDbCategory === "ac_appliance") &&
         (p.slug === "ref-cln-4" || p.name === "Drain Cleaning" || p.name === "Refrigerator Drain Cleaning");
       if (isRefDrainCleaning) return false;
+
+      // A Sub-Service chip is selected above (e.g. "Fridge Gas Filling")
+      // -- narrow down to only packages explicitly scoped to it.
+      if (activeSubServiceId) {
+        return p.sub_service_key === activeSubServiceId;
+      }
 
       return doesPackageMatchTab(p);
     });
@@ -18314,7 +18521,13 @@ export function CustomCleaningPackageModal({
         }
       });
     } else {
-      finalPlans = filteredRawPlans;
+      // If this category has real catalog structure (an admin-created
+      // sub-service), an empty match means the admin genuinely hasn't added
+      // a package here yet -- show nothing rather than a hardcoded plan
+      // that doesn't actually exist in the catalog. Only categories still
+      // fully in bootstrap mode (no real sub-services at all) fall back to
+      // the hardcoded placeholder plans.
+      finalPlans = categoryHasRealServices ? [] : filteredRawPlans;
     }
 
     // Guarantee that AC Inspection tab always displays ONLY ONE single service card
@@ -18343,7 +18556,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -18384,7 +18597,7 @@ export function CustomCleaningPackageModal({
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
-  if (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") {
+  if (!cleaningHasRealCatalogData && (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning")) {
     const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
     return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
@@ -18568,6 +18781,39 @@ export function CustomCleaningPackageModal({
             );
           })}
         </div>
+
+        {/* Sub-Service Chip Row -- only appears when the selected Service has
+            admin-managed Sub-Services (Service.customization.subtabs). Most
+            services don't have these, so this row is absent for them. */}
+        {activeServiceSubtabs.length > 0 && (
+          <div className="flex overflow-x-auto gap-2 pb-2 pt-0.5 justify-start scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setActiveSubServiceId("")}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                activeSubServiceId === ""
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
+              }`}
+            >
+              All {activeSubTab}
+            </button>
+            {activeServiceSubtabs.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveSubServiceId(t.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                  activeSubServiceId === t.id
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {/* End of sticky header+tabs */}
 
@@ -18580,7 +18826,9 @@ export function CustomCleaningPackageModal({
           <div className="pt-2">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
               <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-              {activeSubTab} Packages
+              {activeSubServiceId
+                ? `${(activeServiceSubtabs.find(t => t.id === activeSubServiceId)?.label) || activeSubTab} Packages`
+                : `${activeSubTab} Packages`}
             </h3>
           </div>
 
@@ -24762,7 +25010,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getActiveServices = () => {
     const isKnownStaticTab = activeTab === "packages" || activeTab === "appliance" || activeTab === "cabinet_tile" || activeTab === "addons";
-    const dbItemsForActiveTab = dbPackages.filter(p => p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
+    const dbItemsForActiveTab = dbPackages.filter(p => p.sub_service_key === activeTab || p.tag === activeTab || p.subtab === activeTab || (p.service_customization && p.service_customization.subtab === activeTab));
     const mapDbPkgToCard = (p) => ({
       id: p.slug || String(p.id),
       db_id: p.id,

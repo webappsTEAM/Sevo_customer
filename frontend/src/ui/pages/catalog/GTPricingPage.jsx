@@ -231,8 +231,15 @@ export function GTPricingPage() {
 
   useEffect(() => { load() }, [load])
 
-  const canModifyPrice = Boolean(meta?.can_modify_price)
-  const canEdit = Boolean(meta?.can_edit)
+  // Goods & Transport unification, Phase 2: this screen is now read-only for
+  // everyone, regardless of role -- pricing lives on Package (Catalog >
+  // Packages) and the server rejects PATCHes here outright (see
+  // logistics/admin_views.py AdminServiceTierDetailView.patch). Forcing
+  // these false (instead of trusting meta.can_modify_price/can_edit) is
+  // what disables every input/button below that was already wired to them,
+  // without having to touch each one individually.
+  const canModifyPrice = false
+  const canEdit = false
   const priceLock = notice || PRICE_LOCK_FALLBACK
 
   // If the server ever grows a pricing field this screen does not render,
@@ -406,7 +413,7 @@ export function GTPricingPage() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              Goods &amp; Transport Rate Card
+              Goods &amp; Transport Rate Card <span className="font-semibold text-slate-400 dark:text-slate-500">(read-only)</span>
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               The live rates the fare engine reads for every Goods &amp; Transport quote.
@@ -414,14 +421,8 @@ export function GTPricingPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={[
-            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold",
-            canModifyPrice
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-              : "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-          ].join(" ")}>
-            {canModifyPrice ? <ShieldCheck size={13} /> : <Lock size={13} />}
-            {canModifyPrice ? "You can change rates" : canEdit ? "View rates · edit details only" : "View only"}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+            <Lock size={13} /> Reference only -- edit via Packages
           </span>
           <Button variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -432,7 +433,12 @@ export function GTPricingPage() {
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-100 dark:border-indigo-500/25 bg-indigo-50/60 dark:bg-indigo-500/10 px-4 py-3">
         <Info size={16} className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
-        <p className="text-[13px] font-medium text-indigo-900 dark:text-indigo-200">{priceLock}</p>
+        <p className="text-[13px] font-medium text-indigo-900 dark:text-indigo-200">
+          Goods &amp; Transport pricing is now managed from <span className="font-bold">Catalog &gt; Packages</span> --
+          open the Mini Truck, 2-Wheeler, or Packers &amp; Movers package you want to change and edit its
+          "Goods &amp; Transport Distance Pricing" section there. The rates below update automatically from that
+          screen; editing here is disabled. {priceLock}
+        </p>
       </div>
 
       {unrenderedFields.length > 0 && (

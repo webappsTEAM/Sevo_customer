@@ -635,6 +635,21 @@ class WorkforceWebhookView(APIView):
 
                         transaction.on_commit(lambda: self._broadcast_event(sr, "job_rescheduled"))
 
+                # ── 14. DISPATCH DELAYED NOTIFICATION (GT Phase 23) ──────────────────
+                elif event_type in ["booking.dispatch_delayed", "job.dispatch_delayed"]:
+                    failed_cycles = payload.get("failed_offer_cycles", 0)
+                    delay_note = f"High demand: Dispatch matching taking longer than usual ({failed_cycles} search cycles completed)."
+                    if hasattr(sr, "notes") and sr.notes:
+                        if "Dispatch matching taking longer" not in sr.notes:
+                            sr.notes = f"{sr.notes}\n{delay_note}"
+                    elif hasattr(sr, "notes"):
+                        sr.notes = delay_note
+                    try:
+                        sr.save(update_fields=["updated_at"] + (["notes"] if hasattr(sr, "notes") else []))
+                    except Exception as note_err:
+                        logger.warning("Could not update notes on booking %s for dispatch_delayed: %s", sr.id, note_err)
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_dispatch_delayed"))
+
                 webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
                 webhook_event.processed_at = timezone.now()
                 webhook_event.save()
@@ -1125,9 +1140,131 @@ class WorkforceBookingFromQuoteView(APIView):
         except Exception as analytic_err:
             logger.warning(f"Failed to record booking status event: {analytic_err}")
 
+        # Trigger booking confirmation notification (SMS with live tracking URL + Email)
+        try:
+            from service_requests.notifications import send_booking_confirmation
+            from django.conf import settings
+            if getattr(settings, "TESTING", False):
+                send_booking_confirmation(new_sr)
+            else:
+                import threading
+                threading.Thread(
+                    target=send_booking_confirmation,
+                    args=(new_sr,),
+                    daemon=True,
+                ).start()
+        except Exception as notify_err:
+            logger.warning(f"Could not start booking confirmation notification for quote booking {new_sr.id}: {notify_err}")
+
         return Response({
             "success": True,
             "request_id": new_sr.request_id,
             "tracking_token": str(new_sr.tracking_token) if new_sr.tracking_token else None
         }, status=status.HTTP_201_CREATED)
+
+
+class WorkforceCatalogListView(APIView):
+    """
+    GET /api/workforce-integration/catalog/
+    Read-only categories + services (the "skills" a vendor can request to
+    serve), for the Workforce app to show its vendors a picker when they
+    apply. Same shared-secret auth as the rest of this module -- the
+    Workforce app has no user session to send.
+
+    Deliberately reuses CatalogCategory/Service directly rather than going
+    through the customer-facing public endpoints (those exclude inactive
+    rows and don't nest services under categories) -- a vendor should be
+    able to see (and request) a Service even while admin is still setting
+    it up, since the approval step below is the actual gate.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import CatalogCategory
+        from service_requests.serializers import ServiceSerializer
+
+        categories = CatalogCategory.objects.filter(is_active=True).order_by("sort_order", "name").prefetch_related("services")
+        data = []
+        for cat in categories:
+            services = ServiceSerializer(cat.services.filter(is_active=True).order_by("sort_order", "name"), many=True).data
+            data.append({
+                "id": cat.id,
+                "name": cat.name,
+                "slug": cat.slug,
+                "services": services,
+            })
+        return Response({"success": True, "data": data})
+
+
+class WorkforceCapabilityRequestListCreateView(APIView):
+    """
+    GET  /api/workforce-integration/vendor-capabilities/?vendor_id=<id>
+      -> that vendor's own requests (any status), so the Workforce app can
+         show "pending" / "approved" / "rejected" against each skill.
+    POST /api/workforce-integration/vendor-capabilities/
+      body: {"vendor_id": "...", "vendor_name": "...", "service_ids": [1, 2, ...], "note": "..."}
+      -> creates a PENDING request per service_id not already requested by
+         this vendor. Idempotent: re-submitting a service_id that already
+         has a row (any status) leaves that row untouched rather than
+         resetting an already-decided one back to PENDING.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import VendorCapabilityRequest
+        from service_requests.serializers import VendorCapabilityRequestSerializer
+
+        vendor_id = (request.GET.get("vendor_id") or "").strip()
+        if not vendor_id:
+            return Response({"error": "vendor_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = VendorCapabilityRequest.objects.select_related("service", "service__category").filter(vendor_id=vendor_id)
+        status_filter = (request.GET.get("status") or "").strip().upper()
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response({"success": True, "data": VendorCapabilityRequestSerializer(qs, many=True).data})
+
+    def post(self, request):
+        if not _verify_webhook_signature(request):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import VendorCapabilityRequest, Service
+        from service_requests.serializers import VendorCapabilityRequestSerializer
+
+        data = request.data
+        vendor_id = str(data.get("vendor_id") or "").strip()
+        vendor_name = str(data.get("vendor_name") or "").strip()
+        service_ids = data.get("service_ids") or ([data["service_id"]] if data.get("service_id") else [])
+        note = str(data.get("note") or "").strip()
+
+        if not vendor_id:
+            return Response({"error": "vendor_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not service_ids:
+            return Response({"error": "service_ids (or service_id) is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        created, already_existing = [], []
+        for service_id in service_ids:
+            service = Service.objects.filter(pk=service_id).first()
+            if not service:
+                continue
+            row, was_created = VendorCapabilityRequest.objects.get_or_create(
+                vendor_id=vendor_id,
+                service=service,
+                defaults={"vendor_name": vendor_name, "note": note},
+            )
+            (created if was_created else already_existing).append(row)
+
+        all_rows = created + already_existing
+        return Response({
+            "success": True,
+            "data": VendorCapabilityRequestSerializer(all_rows, many=True).data,
+            "created_count": len(created),
+            "already_existing_count": len(already_existing),
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

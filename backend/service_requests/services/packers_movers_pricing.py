@@ -186,35 +186,86 @@ VEHICLE_SIZING_TABLE = [
 
 
 def match_catalog_item(item_name: str) -> Dict[str, Any]:
-    """Finds catalog attributes for item_name with fuzzy / keyword fallback."""
+    """
+    Finds catalog attributes for item_name.
+    Queries the database-backed GoodsItem first (allowing live Admin edits),
+    falling back to CANONICAL_INVENTORY_CATALOG and keyword heuristics.
+    """
     key = str(item_name or "").strip().lower()
+    if not key:
+        return {
+            "category": "Uncataloged",
+            "cft": None,
+            "weight_kg": None,
+            "fragile": False,
+            "dismantle": False,
+            "dismantle_charge": 0.0,
+            "is_known": False,
+            "requires_review": True,
+        }
+
+    try:
+        from logistics.models import GoodsItem
+        db_item = GoodsItem.objects.filter(name__iexact=key, is_active=True).select_related("category").first()
+        if not db_item:
+            slug_key = key.replace(" ", "-").replace("/", "-")
+            db_item = GoodsItem.objects.filter(slug__iexact=slug_key, is_active=True).select_related("category").first()
+        if db_item:
+            dismantle_val = float(db_item.special_handling_charge or 0.0)
+            return {
+                "category": db_item.category.name if db_item.category else "Miscellaneous",
+                "cft": float(db_item.default_cft or 1.0),
+                "weight_kg": float(db_item.default_weight_kg or 5.0),
+                "fragile": bool(db_item.is_fragile),
+                "dismantle": bool(db_item.requires_special_handling or dismantle_val > 0),
+                "dismantle_charge": dismantle_val,
+                "is_known": True,
+                "requires_review": False,
+                "source": "database",
+            }
+    except Exception as e:
+        logger.debug("Database GoodsItem lookup fallback: %s", e)
+
     if key in CANONICAL_INVENTORY_CATALOG:
-        return CANONICAL_INVENTORY_CATALOG[key]
+        res = dict(CANONICAL_INVENTORY_CATALOG[key])
+        res["is_known"] = True
+        res["requires_review"] = False
+        res["source"] = "canonical_catalog"
+        return res
 
     # Keyword heuristics
     if "sofa" in key:
-        return {"category": "Living Room", "cft": 30.0, "weight_kg": 40.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Living Room", "cft": 30.0, "weight_kg": 40.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "sofa"}
     if "bed" in key:
-        return {"category": "Bedrooms", "cft": 45.0, "weight_kg": 50.0, "fragile": False, "dismantle": True, "dismantle_charge": 350.0}
+        return {"category": "Bedrooms", "cft": 45.0, "weight_kg": 50.0, "fragile": False, "dismantle": True, "dismantle_charge": 350.0, "is_known": True, "requires_review": False, "matched_alias": "bed"}
     if "mattress" in key:
-        return {"category": "Bedrooms", "cft": 20.0, "weight_kg": 20.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Bedrooms", "cft": 20.0, "weight_kg": 20.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "mattress"}
     if "wardrobe" in key or "almirah" in key:
-        return {"category": "Bedrooms", "cft": 45.0, "weight_kg": 70.0, "fragile": False, "dismantle": True, "dismantle_charge": 400.0}
+        return {"category": "Bedrooms", "cft": 45.0, "weight_kg": 70.0, "fragile": False, "dismantle": True, "dismantle_charge": 400.0, "is_known": True, "requires_review": False, "matched_alias": "wardrobe"}
     if "refrigerator" in key or "fridge" in key:
-        return {"category": "Kitchen", "cft": 30.0, "weight_kg": 50.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Kitchen", "cft": 30.0, "weight_kg": 50.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "refrigerator"}
     if "washing" in key:
-        return {"category": "Kitchen", "cft": 20.0, "weight_kg": 40.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Kitchen", "cft": 20.0, "weight_kg": 40.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "washing machine"}
     if "tv" in key or "lcd" in key or "led" in key:
-        return {"category": "Living Room", "cft": 10.0, "weight_kg": 15.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Living Room", "cft": 10.0, "weight_kg": 15.0, "fragile": True, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "tv"}
     if "table" in key:
-        return {"category": "Living Room", "cft": 20.0, "weight_kg": 25.0, "fragile": False, "dismantle": True, "dismantle_charge": 250.0}
+        return {"category": "Living Room", "cft": 20.0, "weight_kg": 25.0, "fragile": False, "dismantle": True, "dismantle_charge": 250.0, "is_known": True, "requires_review": False, "matched_alias": "table"}
     if "chair" in key:
-        return {"category": "Living Room", "cft": 8.0, "weight_kg": 8.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Living Room", "cft": 8.0, "weight_kg": 8.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "chair"}
     if "carton" in key or "box" in key:
-        return {"category": "Cartons", "cft": 5.0, "weight_kg": 15.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0}
+        return {"category": "Cartons", "cft": 5.0, "weight_kg": 15.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0, "is_known": True, "requires_review": False, "matched_alias": "carton"}
 
-    # Safe default for unknown item
-    return {"category": "General", "cft": 5.0, "weight_kg": 10.0, "fragile": False, "dismantle": False, "dismantle_charge": 0.0}
+    # Uncataloged / unknown item — requires review unless explicit dimensions provided
+    return {
+        "category": "Uncataloged",
+        "cft": None,
+        "weight_kg": None,
+        "fragile": False,
+        "dismantle": False,
+        "dismantle_charge": 0.0,
+        "is_known": False,
+        "requires_review": True,
+    }
 
 
 def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
@@ -229,6 +280,8 @@ def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
     fragile_count = 0
     dismantlable_count = 0
     total_dismantle_cost = Decimal("0.00")
+    requires_review = False
+    unrecognized_items = []
 
     if isinstance(inventory, dict):
         # Format: {"Double Bed - Dismantlable": 1, "Single Door Refrigerator": 1}
@@ -250,8 +303,18 @@ def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
             continue
 
         meta = match_catalog_item(name)
-        unit_cft = float(item.get("cft") or meta["cft"])
-        unit_weight = float(item.get("weight_kg") or meta["weight_kg"])
+        is_known = meta.get("is_known", False)
+        has_custom_dims = (item.get("cft") is not None and item.get("weight_kg") is not None)
+
+        if not is_known and not has_custom_dims:
+            requires_review = True
+            unrecognized_items.append(name)
+            unit_cft = float(item.get("cft") or 15.0)
+            unit_weight = float(item.get("weight_kg") or 25.0)
+        else:
+            unit_cft = float(item.get("cft") if item.get("cft") is not None else meta["cft"])
+            unit_weight = float(item.get("weight_kg") if item.get("weight_kg") is not None else meta["weight_kg"])
+
         is_fragile = bool(item.get("fragile") if "fragile" in item else meta["fragile"])
         can_dismantle = bool(item.get("dismantle") if "dismantle" in item else meta["dismantle"])
         dismantle_charge = Decimal(str(item.get("dismantle_charge") or meta["dismantle_charge"] or 0))
@@ -272,6 +335,8 @@ def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
         items_list.append({
             "name": name,
             "category": meta["category"],
+            "is_known": is_known,
+            "has_custom_dimensions": has_custom_dims,
             "quantity": qty,
             "unit_cft": unit_cft,
             "total_cft": line_cft,
@@ -294,6 +359,8 @@ def calculate_inventory_metrics(inventory: Any) -> Dict[str, Any]:
         "fragile_count": fragile_count,
         "dismantlable_count": dismantlable_count,
         "default_dismantle_cost": total_dismantle_cost,
+        "requires_review": requires_review,
+        "unrecognized_items": unrecognized_items,
     }
 
 
@@ -330,12 +397,20 @@ def compute_packers_movers_quote(
     from .routing import get_route_eta
     route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
     if route is not None:
-        distance_km = _money(str(route.get("distance_km") or "5.0"))
-        distance_source = route.get("source", "google_maps")
+        raw_source = route.get("source") or route.get("distance_source") or "google_maps"
+        if raw_source == "straight_line_estimate" or not route.get("is_authoritative", True) or route.get("is_estimate", False):
+            distance_km = _money(str(route.get("distance_km") or "8.50"))
+            distance_source = "straight_line_estimate"
+            is_distance_estimated = True
+        else:
+            distance_km = _money(str(route.get("distance_km") or "5.0"))
+            distance_source = raw_source
+            is_distance_estimated = False
     else:
         # Straight-line fallback
         distance_km = Decimal("8.50")
         distance_source = "straight_line_estimate"
+        is_distance_estimated = True
 
     # 2. Inventory Metrics
     metrics = calculate_inventory_metrics(inventory)
@@ -355,6 +430,29 @@ def compute_packers_movers_quote(
     distance_charge = _money(chargeable_km * per_km_rate)
     transport_total = _money(base_fare + distance_charge)
 
+    # 4.5 Dynamic Admin Pricing Configuration (Database-Backed)
+    standard_packing_rate = Decimal("3.50")
+    premium_packing_rate = Decimal("6.00")
+    premium_fragile_fee = Decimal("200.00")
+    rate_per_floor_block = Decimal("120.00")
+    unpacking_rate = Decimal("2.00")
+    gst_percentage = Decimal("0.1800")
+    survey_cft_limit = 800.0
+
+    try:
+        from logistics.models import PackersMoversConfig
+        pm_conf = PackersMoversConfig.objects.filter(is_active=True).first()
+        if pm_conf:
+            standard_packing_rate = pm_conf.standard_packing_rate_cft
+            premium_packing_rate = pm_conf.premium_packing_rate_cft
+            premium_fragile_fee = pm_conf.premium_fragile_addon
+            rate_per_floor_block = pm_conf.floor_rate_no_lift_per_100cft
+            unpacking_rate = pm_conf.unpacking_rate_cft
+            gst_percentage = pm_conf.gst_rate
+            survey_cft_limit = float(pm_conf.survey_cft_threshold)
+    except Exception as e:
+        logger.debug("PackersMoversConfig dynamic lookup fallback: %s", e)
+
     # 5. Packing Charges
     packing_clean = (packing_tier or "standard").lower().strip()
     if packing_clean in ("no_packing", "none", "customer_packed"):
@@ -362,14 +460,14 @@ def compute_packers_movers_quote(
         packing_rate_per_cft = Decimal("0.00")
         packing_label = "No Packing (Customer Packed)"
     elif packing_clean == "premium":
-        packing_rate_per_cft = Decimal("6.00")
-        fragile_addon = Decimal("200.00") * metrics["fragile_count"]
+        packing_rate_per_cft = premium_packing_rate
+        fragile_addon = premium_fragile_fee * metrics["fragile_count"]
         packing_charge = _money((Decimal(str(effective_cft)) * packing_rate_per_cft) + fragile_addon)
         packing_label = "Premium 4-Layer Fragile Packing"
     else:
         # Standard
         packing_clean = "standard"
-        packing_rate_per_cft = Decimal("3.50")
+        packing_rate_per_cft = standard_packing_rate
         packing_charge = _money(Decimal(str(effective_cft)) * packing_rate_per_cft)
         packing_label = "Standard Multi-Layer Protective Packing"
 
@@ -377,9 +475,8 @@ def compute_packers_movers_quote(
     base_labor = vehicle["base_labor"]
     crew_size = vehicle["crew_size"]
 
-    # Floor charge: ₹120 per floor without lift per 100 CFT block (minimum 1 block)
+    # Floor charge: per floor without lift per 100 CFT block (minimum 1 block)
     cft_blocks = max(1, math.ceil(effective_cft / 100.0))
-    rate_per_floor_block = Decimal("120.00")
 
     pickup_floor_charge = Decimal("0.00")
     if not pickup_has_lift and pickup_floor > 0:
@@ -400,7 +497,7 @@ def compute_packers_movers_quote(
     # 8. Unpacking
     unpacking_charge = Decimal("0.00")
     if unpacking_required:
-        unpacking_charge = _money(Decimal(str(effective_cft)) * Decimal("2.00"))
+        unpacking_charge = _money(Decimal(str(effective_cft)) * unpacking_rate)
 
     # 9. Subtotal & GST
     subtotal = _money(
@@ -410,11 +507,49 @@ def compute_packers_movers_quote(
         + dismantle_total
         + unpacking_charge
     )
-    gst = _money(subtotal * Decimal("0.18"))
+    gst = _money(subtotal * gst_percentage)
     total = _money(subtotal + gst)
 
-    # 10. Service Tier Floor Guard (if applicable)
-    requires_survey = (total_cft > 800.0) or ("between" in relocation_type.lower() and total_cft > 600.0)
+    # 10. Service Tier Floor Guard, Uncataloged Items & Road Routing Policy
+    has_unrecognized = bool(metrics.get("requires_review", False))
+    requires_volume_survey = (
+        (total_cft > survey_cft_limit)
+        or ("between" in relocation_type.lower() and total_cft > (survey_cft_limit * 0.75))
+    )
+    requires_survey = requires_volume_survey or has_unrecognized or is_distance_estimated
+
+    if has_unrecognized:
+        survey_status = "MANUAL_REVIEW_REQUIRED"
+        is_authoritative = False
+        is_estimate = True
+        estimate_notice = (
+            f"Uncataloged items detected ({', '.join(metrics.get('unrecognized_items', []))}). "
+            "Manual review or survey required before final pricing."
+        )
+        review_reason = estimate_notice
+    elif is_distance_estimated:
+        survey_status = "SURVEY_REQUIRED"
+        is_authoritative = False
+        is_estimate = True
+        estimate_notice = (
+            "Road distance could not be determined accurately (estimated straight-line distance used). "
+            "Fare is an estimate and a pre-move survey or route review is required before final confirmation."
+        )
+        review_reason = estimate_notice
+    elif requires_volume_survey:
+        survey_status = "SURVEY_REQUIRED"
+        is_authoritative = False
+        is_estimate = True
+        estimate_notice = (
+            "Large relocation volume requires a pre-move physical or video survey to confirm crew and truck sizing."
+        )
+        review_reason = estimate_notice
+    else:
+        survey_status = "INSTANT_ESTIMATE_APPROVED"
+        is_authoritative = True
+        is_estimate = False
+        estimate_notice = None
+        review_reason = None
 
     quote_id = f"PMQ-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
     valid_until = timezone.now() + timedelta(hours=48)
@@ -424,11 +559,18 @@ def compute_packers_movers_quote(
         "service_category": "packers_movers",
         "relocation_type": relocation_type,
         "requires_survey": requires_survey,
-        "survey_status": "SURVEY_REQUIRED" if requires_survey else "INSTANT_ESTIMATE_APPROVED",
+        "requires_review": has_unrecognized,
+        "survey_status": survey_status,
+        "is_authoritative": is_authoritative,
+        "is_estimate": is_estimate,
+        "estimate_notice": estimate_notice,
+        "unrecognized_items": metrics.get("unrecognized_items", []),
+        "review_reason": review_reason,
         "valid_until": valid_until.isoformat(),
         "total": total,
         "subtotal": subtotal,
         "distance_km": distance_km,
+        "distance_source": distance_source,
         "chargeable_km": chargeable_km,
         "distance_charge": distance_charge,
         "base_fare": base_fare,
@@ -467,6 +609,9 @@ def compute_packers_movers_quote(
             "distance_km": str(distance_km),
             "chargeable_km": str(chargeable_km),
             "distance_source": distance_source,
+            "is_authoritative": is_authoritative,
+            "is_estimate": is_estimate,
+            "estimate_notice": estimate_notice,
         },
         # Floors & Access
         "access": {
@@ -554,5 +699,16 @@ def verify_packers_movers_quote(quote_id: str, submitted_total: Any = None) -> T
                 return False, None, f"Submitted total ₹{sub_dec} does not match verified server quote ₹{q_dec}."
         except Exception as e:
             return False, None, f"Invalid total amount format: {e}"
+
+    survey_status = cached.get("survey_status") or ("INSTANT_ESTIMATE_APPROVED" if cached.get("is_authoritative") else "SURVEY_REQUIRED")
+
+    if survey_status == "MANUAL_REVIEW_REQUIRED" or cached.get("requires_review"):
+        unrec = ", ".join(cached.get("unrecognized_items", []))
+        reason = cached.get("review_reason") or f"uncataloged inventory ({unrec})"
+        return False, cached, f"Quote '{quote_id}' requires manual review ({reason}) and cannot be finalized automatically."
+
+    if survey_status == "SURVEY_REQUIRED" or cached.get("requires_survey") or not cached.get("is_authoritative") or cached.get("is_estimate"):
+        reason = cached.get("estimate_notice") or cached.get("review_reason") or "pre-move survey required"
+        return False, cached, f"Quote '{quote_id}' requires a pre-move survey ({reason}) and cannot be finalized as an instant booking."
 
     return True, cached, ""

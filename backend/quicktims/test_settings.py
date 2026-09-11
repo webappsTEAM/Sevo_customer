@@ -1,5 +1,7 @@
 from .settings import *
 
+ALLOWED_HOSTS = ["*"]
+
 # Override database to SQLite to run tests completely isolated and fast without PostgreSQL dependency
 DATABASES = {
     "default": {

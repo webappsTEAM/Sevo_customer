@@ -21,6 +21,7 @@ from .models import (
     EstimationQuotation, EstimationQuotationItem,
     BookingSeries,
     BookingMessage,
+    VendorCapabilityRequest,
     _generate_secure_start_otp,
 )
 
@@ -121,6 +122,23 @@ class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
         fields = '__all__'
+
+
+class VendorCapabilityRequestSerializer(serializers.ModelSerializer):
+    """
+    Vendor app <-> CalServices: a vendor asks to be approved to serve one
+    catalog Service, an admin approves/rejects it here. See
+    VendorCapabilityRequest's own docstring in models.py for why this has
+    no FK to the Workforce app's own vendor identity.
+    """
+    service_name  = serializers.CharField(source="service.name", read_only=True)
+    category_id   = serializers.IntegerField(source="service.category_id", read_only=True)
+    category_name = serializers.CharField(source="service.category.name", read_only=True)
+
+    class Meta:
+        model = VendorCapabilityRequest
+        fields = '__all__'
+        read_only_fields = ["status", "decision_note", "decided_by", "decided_at", "requested_at", "updated_at"]
 
 
 class AddOnSerializer(serializers.ModelSerializer):
@@ -292,11 +310,11 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         # writeup and the schema change that would close this properly).
         # This at least stops the crude cases: negative/zero submitted
         # amounts and unreasonably large ones.
-        # Zero amounts are allowed for site consultations/inspections (e.g. Painting/Masonry) and free promotions.
         try:
             amt = float(value)
         except (TypeError, ValueError):
             raise serializers.ValidationError("Enter a valid amount.")
+        # Zero amounts are allowed for site consultations/inspections (e.g. Painting/Masonry) and free promotions.
         if amt < 0:
             raise serializers.ValidationError("Amount cannot be negative.")
         if amt > 1000000:
@@ -309,12 +327,22 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Preferred date cannot be in the past.")
         return value
 
+    def validate_customer_name(self, value):
+        val = (value or "").strip()
+        if not val or len(val) < 2:
+            raise serializers.ValidationError("Please provide your real name to complete the booking.")
+        if val.lower() in {"thejaa t", "fake customer", "test customer", "dummy customer", "customer"}:
+            raise serializers.ValidationError("Valid customer name is required. Please provide your real name.")
+        return val
+
     def validate_phone(self, value):
         import re
-        cleaned = re.sub(r"[\s\-\(\)\+]", "", value)
-        if not cleaned.isdigit() or len(cleaned) < 7:
-            raise serializers.ValidationError("Enter a valid phone number.")
-        return value
+        cleaned = re.sub(r"[\s\-\(\)\+]", "", value or "")
+        if not cleaned.isdigit() or len(cleaned) < 10:
+            raise serializers.ValidationError("Enter a valid 10-digit phone number.")
+        if cleaned in {"6379222691", "0000000000", "1234567890", "9999999999"}:
+            raise serializers.ValidationError("Valid customer phone number is required.")
+        return cleaned
 
     def validate(self, attrs):
         # Booking window: same-day requests are refused after the configured
@@ -327,6 +355,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         slot_error = validate_booking_slot(
             attrs.get("preferred_date"),
             attrs.get("preferred_time"),
+            service_category=attrs.get("service_category"),
         )
         if slot_error:
             raise serializers.ValidationError({"preferred_date": slot_error})
@@ -344,6 +373,19 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "description": "Please describe what you're moving (items, approximate weight, "
                                  "and any fragile/special-handling notes) so the driver knows what to expect."
+            })
+
+        # Prohibited Cargo Safety Gate: reject dangerous, illegal, or restricted goods
+        from .services.prohibited_goods import validate_cargo_safety
+        is_safe, safety_msg, safety_cat = validate_cargo_safety(
+            description=attrs.get("description", ""),
+            goods_type=attrs.get("issue_title", ""),
+            cart_data=attrs.get("cart_data"),
+            service_category=category,
+        )
+        if not is_safe:
+            raise serializers.ValidationError({
+                "description": f"Prohibited Cargo: {safety_msg}"
             })
 
         # Fixes GT-A-03 (partial): "identity requirement scaled to declared
@@ -471,15 +513,20 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_photo       = serializers.SerializerMethodField()
     technician_rating      = serializers.SerializerMethodField()
     child_requests         = serializers.SerializerMethodField()
-    job_type               = serializers.CharField(read_only=True)
+
+        job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
 
-    class Meta:
+    def get_estimation(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation is not None:
+            return EstimationSummarySerializer(obj.estimation, context=self.context).data
+        return None
+
+class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
-            "job_type", "estimation",
             "issue_title", "description", "address", "preferred_date", "preferred_time",
             "status", "status_display", "priority", "priority_display",
             "payment_method", "payment_method_display",
@@ -507,11 +554,6 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if children:
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
-
-    def get_estimation(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation is not None:
-            return EstimationSummarySerializer(obj.estimation, context=self.context).data
-        return None
 
     def get_customer_id(self, obj):
         try:
@@ -823,15 +865,20 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     total_amount           = serializers.SerializerMethodField()
     available_actions      = serializers.SerializerMethodField()
     technician             = serializers.SerializerMethodField()
-    job_type               = serializers.CharField(read_only=True)
+
+        job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
 
-    class Meta:
+    def get_estimation(self, obj):
+        if hasattr(obj, "estimation") and obj.estimation is not None:
+            return EstimationSerializer(obj.estimation, context=self.context).data
+        return None
+
+class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
-            "job_type", "estimation",
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             # discount_amount exposed for the same reason as in
             # ServiceRequestListSerializer -- see comment there.
@@ -854,11 +901,6 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
                 return obj.customer.customer_id
         except Exception:
             pass
-        return None
-
-    def get_estimation(self, obj):
-        if hasattr(obj, "estimation") and obj.estimation is not None:
-            return EstimationSerializer(obj.estimation, context=self.context).data
         return None
 
     def get_technician(self, obj):
@@ -1630,7 +1672,7 @@ class EstimationSerializer(serializers.ModelSerializer):
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
+    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:

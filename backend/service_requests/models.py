@@ -1,13 +1,8 @@
-"""
-service_requests/models.py
-
-Five models for the Service Request -> Job -> Proof -> Feedback -> Performance pipeline.
-FKs reference the existing Employee and User models -- no duplication.
-"""
 import uuid
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 
@@ -952,6 +947,15 @@ class PaymentPolicy(models.TextChoices):
 class Package(models.Model):
     """A single bookable, priced option under a Service (was `CatalogService`)."""
     service        = models.ForeignKey(Service, on_delete=models.PROTECT, related_name="packages")
+    # Optional finer scoping below `service`, matching the admin's "Sub-Service"
+    # concept (e.g. Service "Full House Cleaning" -> Sub-Service "Occupied
+    # Apartment" / "Unoccupied Apartment"). Not every Service has sub-services,
+    # so this stays blank for the common case of a package attached directly
+    # to its Service. Holds the `id` of one entry in the parent Service's
+    # `customization.subtabs` list (see Service.customization) rather than a
+    # FK to a separate table -- sub-services are themselves stored as that
+    # same JSON list, so a package just needs to reference one entry's id.
+    sub_service_key = models.CharField(max_length=100, blank=True, default="")
     name           = models.CharField(max_length=200)
     slug           = models.SlugField(unique=True)
     description    = models.TextField(blank=True)
@@ -977,7 +981,86 @@ class Package(models.Model):
     platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
     stock_item     = models.OneToOneField("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="vegetable_package")
     custom_packs   = models.JSONField(default=list, blank=True)
-    customization  = models.JSONField(default=dict, blank=True)
+
+    # ── Goods & Transport distance-pricing (Phase 1 unification) ───────────
+    # Mirrors logistics.ServiceTier's real fare-engine fields (see
+    # service_requests/services/logistics_pricing.py) so Goods & Transport
+    # packages (Mini Truck / 2-Wheeler / Packers & Movers) can carry the same
+    # distance-pricing data as their matching ServiceTier row, instead of
+    # requiring a separate admin screen (Goods & Transport Rates) for it.
+    #
+    # Blank/null-default and meaningless for every non-Goods & Transport
+    # package -- this is purely additive, so every existing Package keeps
+    # behaving exactly as before. The sync bridge in services/catalog.py
+    # mirrors these fields onto the matching ServiceTier whenever a package
+    # resolves to one, so the live fare engine (still reading ServiceTier
+    # directly, untouched in Phase 1) always sees whatever is entered here.
+    # Phase 2 (separate, later effort) is what actually retires ServiceTier
+    # and repoints the fare engine at these fields directly.
+    # Soft reference (no hard FK -- ServiceTier lives in the separate
+    # `logistics` app, same cross-app convention as ServiceRequest.assigned_employee)
+    # to the ServiceTier this Package is mirrored to. Set once a tier is
+    # first created/matched for this Package and trusted from then on, so a
+    # later rename of Package.slug or Package.name can never silently break
+    # the link the way pure slug-matching did -- that was the exact bug
+    # behind a renamed/new GT package quietly vanishing from the customer
+    # booking page while its old-slug tier kept showing stale data forever.
+    # _logistics_tier_for_package() in services/catalog.py checks this
+    # first, before falling back to slug matching for legacy rows that
+    # predate this field.
+    gt_service_tier_id = models.IntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Goods & Transport only: id of the logistics.ServiceTier this package is mirrored to. Set automatically by the sync bridge.",
+    )
+    gt_weight_class = models.CharField(
+        max_length=10, blank=True, default="",
+        help_text="Goods & Transport only: 'light' or 'heavy' (Mini Truck sub-service tab). Mirrors ServiceTier.weight_class.",
+    )
+    gt_city = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Goods & Transport only: city this pricing applies to. Mirrors ServiceTier.city.",
+    )
+    gt_dimensions_label = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Goods & Transport only: display dimensions (e.g. '6ft x 5ft'). Mirrors ServiceTier.dimensions_label -- "
+                   "the one ServiceTier display field with no other Package equivalent (capacity is covered by the Tag field).",
+    )
+    gt_base_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: fixed component of the distance fare. Mirrors ServiceTier.base_fare.",
+    )
+    gt_per_km_rate = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: per-km charge beyond gt_free_km. Mirrors ServiceTier.per_km_rate.",
+    )
+    gt_free_km = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: distance included in gt_base_fare before gt_per_km_rate applies. Mirrors ServiceTier.free_km.",
+    )
+    gt_loading_unloading_charge = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only. Mirrors ServiceTier.loading_unloading_charge.",
+    )
+    gt_additional_stop_charge = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: charged per stop beyond the standard two. Mirrors ServiceTier.additional_stop_charge.",
+    )
+    gt_surge_multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+        # Matches logistics.ServiceTier.surge_multiplier's own bounds exactly
+        # (a fare multiplier, not a rupee amount -- 100 is invalid, not "a
+        # big surge"). Enforced here too, not just at max_digits/decimal_places,
+        # so a value like 100 fails with a clear per-field message instead of
+        # the generic "no more than 2 digits" DecimalField error a typo'd
+        # price would otherwise trip.
+        validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(Decimal("5.00"))],
+        help_text="Goods & Transport only: a small multiplier (1.00 = no surge, max 5.00) -- NOT a rupee amount. Mirrors ServiceTier.surge_multiplier.",
+    )
+    gt_minimum_fare = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
+    )
+
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
@@ -1005,6 +1088,53 @@ class AddOn(models.Model):
 
     def __str__(self):
         return f"{self.package.name} / {self.name}"
+
+
+class VendorCapabilityRequestStatus(models.TextChoices):
+    PENDING  = "PENDING",  "Pending Review"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class VendorCapabilityRequest(models.Model):
+    """
+    A vendor/technician on the separate Workforce app requesting to be
+    approved to serve one catalog Service (e.g. "AC Service & Cleaning").
+
+    Deliberately no FK to the Workforce app's own Vendor/Employee table --
+    same cross-app convention already used elsewhere in this file (see
+    ServiceRequest.assigned_employee) since the two apps are separate
+    Django projects with separate databases. `vendor_id` is just the id the
+    Workforce app uses for itself; `vendor_name` is a display-convenience
+    snapshot so admin doesn't have to round-trip to the Workforce app to
+    show a human-readable name in the approval list.
+
+    This table is the single source of truth this app owns for "is this
+    vendor allowed to serve this Service" -- the Workforce app is expected
+    to read it (via the read endpoint in workforce_integration) before
+    letting that vendor accept jobs under the Service. Approving/rejecting
+    here does not itself notify or reassign anything; this app has no
+    outbound push for it today, so the Workforce app polls.
+    """
+    vendor_id     = models.CharField(max_length=100, db_index=True)
+    vendor_name   = models.CharField(max_length=200, blank=True, default="")
+    service       = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="vendor_capability_requests")
+    status        = models.CharField(max_length=10, choices=VendorCapabilityRequestStatus.choices, default=VendorCapabilityRequestStatus.PENDING, db_index=True)
+    note          = models.TextField(blank=True, default="")   # vendor's own note when requesting (e.g. "5 yrs AC repair experience")
+    decision_note = models.TextField(blank=True, default="")   # admin's reason, mainly used on rejection
+    decided_by    = models.CharField(max_length=200, blank=True, default="")
+    decided_at    = models.DateTimeField(null=True, blank=True)
+    requested_at  = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        unique_together = [["vendor_id", "service"]]
+        indexes = [models.Index(fields=["vendor_id", "status"])]
+        verbose_name = "Vendor Service Capability Request"
+
+    def __str__(self):
+        return f"{self.vendor_name or self.vendor_id} -> {self.service.name} ({self.status})"
 
 
 class CatalogChangeLog(models.Model):

@@ -4,6 +4,7 @@ import { Plus, Edit2, Trash2, ArrowUpRight } from "lucide-react"
 import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Card, Button, Input, TextArea, Modal, Pill } from "../../components/kit.jsx"
 import { Table } from "../../components/Table.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
 import { routes } from "../../routes.js"
 
@@ -121,7 +122,14 @@ export function CatalogCategoriesPage() {
             <Input label="Slug" required value={editing.slug} onChange={e => setEditing({ ...editing, slug: e.target.value })} />
             <TextArea label="Description" value={editing.description || ""} onChange={e => setEditing({ ...editing, description: e.target.value })} />
             <Input label="Icon" value={editing.icon || ""} onChange={e => setEditing({ ...editing, icon: e.target.value })} />
-            <Input label="Image URL" value={editing.image || ""} onChange={e => setEditing({ ...editing, image: e.target.value })} />
+            <ImageUploader
+              label="Category Image"
+              description="Upload the image customers see for this category. Automatically optimized to WebP."
+              assetType="categories"
+              fallbackSrc="/mockups/service_cleaning.png"
+              value={editing.image || ""}
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
             <Input label="Sort Order" type="number" value={editing.sort_order ?? 0} onChange={e => setEditing({ ...editing, sort_order: Number(e.target.value) })} />
             <label className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
               <input type="checkbox" checked={!!editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />

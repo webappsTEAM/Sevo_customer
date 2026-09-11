@@ -13,51 +13,21 @@ import { resolveImageUrl } from "../../../utils/imageUrl.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
 import { routes } from "../../routes.js"
 
-const SERVICE_SUBTABS = {
-  "kitchen-cleaning": [
-    { id: "packages", label: "Full Kitchen Packages" },
-    { id: "appliance", label: "Single Appliance Cleaning" },
-    { id: "cabinet_tile", label: "Cabinet & Tile Care" },
-    { id: "addons", label: "Quick Extra Services" },
-  ],
-  "bathroom-cleaning": [
-    { id: "packages", label: "Full Clean" },
-    { id: "minis", label: "Quick Extra Services" },
-    { id: "subscription", label: "Weekly Bathroom Cleaning Subscription" },
-  ],
-  "sofa-cleaning": [
-    { id: "sofa", label: "Sofa Cleaning" },
-    { id: "mattress", label: "Mattress Cleaning" },
-    { id: "carpet", label: "Carpet Cleaning" },
-    { id: "addons", label: "Quick Extra Services" },
-  ],
-  "full-house-cleaning": [
-    { id: "full_apartment", label: "Occupied Apartment" },
-    { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
-    { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
-    { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
-    { id: "partial_home", label: "Quick Extra Services / Partial Home" },
-  ],
-  "cleaning": [
-    { id: "full_apartment", label: "Occupied Apartment" },
-    { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
-    { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
-    { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
-    { id: "partial_home", label: "Quick Extra Services / Partial Home" },
-  ],
-  "ants-bed-bugs-control": [
-    { id: "bedbugs", label: "Bedbugs Control" },
-    { id: "ants", label: "Ants Control" },
-  ],
-  "cockroach-control": [
-    { id: "cockroach", label: "Cockroach Control" },
-    { id: "termite", label: "Termite Control" },
-  ],
-  "termite-control": [
-    { id: "cockroach", label: "Cockroach Control" },
-    { id: "termite", label: "Termite Control" },
-  ],
-}
+// SERVICE_SUBTABS used to live here: a hardcoded slug -> subtabs lookup that
+// made this modal switch to an entirely different, subtab-banner-only field
+// set for exactly 8 legacy Home Services & Pest Control slugs (Bathroom
+// Cleaning, Kitchen Cleaning, etc.), while every other service (including
+// anything under AC & Appliance) got the normal Description/Icon/Sort
+// Order/Image fields instead. That made this same "Edit Service" modal look
+// like two unrelated forms depending on which service you opened.
+// Sub-tabs are now a first-class, dedicated concept managed on their own
+// Catalog > Sub-Services admin page (reads/writes the same
+// Service.customization.subtabs / subtab_banners JSON this modal used to
+// edit inline) -- so this modal no longer needs its own copy of that UI at
+// all. Removed rather than kept "just in case": leaving it would mean two
+// different admin screens can both edit the same subtabs field, and the
+// legacy 8-slug list would keep silently swapping this modal's fields for
+// any service whose slug happened to match it.
 
 const EMPTY_SERVICE = {
   name: "",
@@ -267,7 +237,7 @@ export function CatalogServicesPage() {
   }
 
   const handleDelete = async (svc, cascade = false) => {
-    if (!cascade && !window.confirm(`Delete sub-service "${svc.name}"? This action will remove it from the catalog.`)) return
+    if (!cascade && !window.confirm(`Delete service "${svc.name}"? This action will remove it from the catalog.`)) return
     try {
       const qs = cascade ? "?cascade=true" : ""
       const res = await apiRequest(`/settings/catalog/v2/services/${svc.id}/${qs}`, { method: "DELETE" })
@@ -339,7 +309,7 @@ export function CatalogServicesPage() {
               Services Catalog
             </h1>
             <p className="text-xs text-slate-500 font-normal mt-0.5">
-              Click the down arrow on any category pillar to view and customize its sub-services and packages.
+              Click the down arrow on any category pillar to view and customize its services and packages.
             </p>
           </div>
 
@@ -369,7 +339,7 @@ export function CatalogServicesPage() {
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search categories or sub-services..."
+                placeholder="Search categories or services..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-9 pl-8 pr-3 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-xs font-normal text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all"
@@ -459,7 +429,7 @@ export function CatalogServicesPage() {
                           {cat.name}
                         </h3>
                         <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/50">
-                          {catServices.length} {catServices.length === 1 ? "Sub-service" : "Sub-services"}
+                          {catServices.length} {catServices.length === 1 ? "Service" : "Services"}
                         </span>
                         {cat.is_active && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-indigo-700 border border-indigo-200/60">
@@ -489,7 +459,7 @@ export function CatalogServicesPage() {
                       className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 text-xs font-medium transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add Sub-Service</span>
+                      <span>Add Service</span>
                     </button>
 
                     {/* Down Arrow Chevron */}
@@ -511,14 +481,14 @@ export function CatalogServicesPage() {
                   </div>
                 </div>
 
-                {/* ── Sub-Services Expandable Panel ── */}
+                {/* ── Services Expandable Panel ── */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50/40 p-3.5 sm:p-4 space-y-2.5 animate-in fade-in duration-150">
                     {catServices.length === 0 ? (
                       <div className="text-center py-6 bg-white rounded-xl border border-dashed border-slate-200 p-4">
                         <Box className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
-                        <p className="text-xs font-medium text-slate-600">No sub-services configured for {cat.name}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Add sub-services to display them in the customer booking flow.</p>
+                        <p className="text-xs font-medium text-slate-600">No services configured for {cat.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Add services to display them in the customer booking flow.</p>
                         <button
                           type="button"
                           onClick={() =>
@@ -529,7 +499,7 @@ export function CatalogServicesPage() {
                           }
                           className="mt-2.5 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition-colors cursor-pointer"
                         >
-                          <Plus className="w-3 h-3" /> Add First Sub-Service
+                          <Plus className="w-3 h-3" /> Add First Service
                         </button>
                       </div>
                     ) : (
@@ -543,7 +513,7 @@ export function CatalogServicesPage() {
                             key={svc.id}
                             className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden transition-all"
                           >
-                            {/* Sub-Service Header Row */}
+                            {/* Service Header Row */}
                             <div className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
                               <div
                                 onClick={() => setEditing(svc)}
@@ -734,7 +704,7 @@ export function CatalogServicesPage() {
       {/* ── Edit / New Service Modal ── */}
       {editing && (
         <Modal
-          title={editing.id ? `Edit Sub-Service: ${editing.name}` : "Create New Sub-Service"}
+          title={editing.id ? `Edit Service: ${editing.name}` : "Create New Service"}
           onClose={() => setEditing(null)}
         >
           <form onSubmit={handleSave} className="flex flex-col gap-3.5 font-sans text-left">
@@ -748,7 +718,7 @@ export function CatalogServicesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <Input
-                label="Sub-Service Name"
+                label="Service Name"
                 required
                 placeholder="e.g. Truck, Plumber, Carpentry, Electrician"
                 value={editing.name}
@@ -768,135 +738,47 @@ export function CatalogServicesPage() {
                 onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
               />
             </div>
-            {!SERVICE_SUBTABS[editing.slug] && (
-              <>
-                <TextArea
-                  label="Short Description"
-                  placeholder="Brief summary of this service shown in catalog & customer booking..."
-                  value={editing.description || ""}
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                />
+            <TextArea
+              label="Short Description"
+              placeholder="Brief summary of this service shown in catalog & customer booking..."
+              value={editing.description || ""}
+              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+            />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <Input
-                    label="Icon Name"
-                    placeholder="e.g. Truck, Wrench, Wind"
-                    value={editing.icon || ""}
-                    onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
-                  />
-                  <Input
-                    label="Display Sort Order"
-                    type="number"
-                    value={editing.sort_order ?? 0}
-                    onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <Input
+                label="Icon Name"
+                placeholder="e.g. Truck, Wrench, Wind"
+                value={editing.icon || ""}
+                onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
+              />
+              <Input
+                label="Display Sort Order"
+                type="number"
+                value={editing.sort_order ?? 0}
+                onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
+              />
+            </div>
 
-                {/* Service Image Section */}
-                <ImageUploader
-                  label="Service Image"
-                  description="Upload a custom service image or paste an image URL. Automatically compressed to WebP."
-                  value={editing.image || ""}
-                  assetType="services"
-                  aspectRatio="aspect-[16/9]"
-                  onChange={(url) => setEditing({ ...editing, image: url })}
-                />
-              </>
-            )}
+            {/* Service Image Section */}
+            <ImageUploader
+              label="Service Image"
+              description="Upload a custom service image or paste an image URL. Automatically compressed to WebP."
+              value={editing.image || ""}
+              assetType="services"
+              aspectRatio="aspect-[16/9]"
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
 
-            {/* Sub-tab Banner Images Customizer Section */}
-            {editing.slug && SERVICE_SUBTABS[editing.slug] && (
-              <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-4 my-3 text-left">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-xs font-bold text-slate-800">Sub-tab Banner Images</span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Customize the top banner image for each sub-tab. You can also add or rename tabs.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
-                      const newId = `tab_${Date.now()}`;
-                      tabs.push({ id: newId, label: `New Tab (${tabs.length + 1})` });
-                      setEditing({
-                        ...editing,
-                        customization: {
-                          ...(editing.customization || {}),
-                          subtabs: tabs
-                        }
-                      });
-                    }}
-                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-755 text-white text-[11px] font-black rounded-lg border-none cursor-pointer"
-                  >
-                    + Add New Tab
-                  </button>
-                </div>
-                <div className="space-y-3.5">
-                  {(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || []).map((subtab, idx) => {
-                    const currentVal = editing.customization?.subtab_banners?.[subtab.id] || "";
-                    return (
-                      <div key={subtab.id || idx} className="p-3 bg-white rounded-xl border border-slate-100 shadow-2xs space-y-2">
-                        <div className="flex items-center gap-3 justify-start">
-                          <input
-                            type="checkbox"
-                            checked={subtab.enabled !== false}
-                            onChange={(e) => {
-                              const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
-                              tabs[idx] = { ...tabs[idx], enabled: e.target.checked };
-                              setEditing({
-                                ...editing,
-                                customization: {
-                                  ...(editing.customization || {}),
-                                  subtabs: tabs
-                                }
-                              });
-                            }}
-                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
-                          />
-                          <input
-                            type="text"
-                            value={subtab.label}
-                            onChange={(e) => {
-                              const tabs = [...(editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [])];
-                              tabs[idx] = { ...tabs[idx], label: e.target.value };
-                              setEditing({
-                                ...editing,
-                                customization: {
-                                  ...(editing.customization || {}),
-                                  subtabs: tabs
-                                }
-                              });
-                            }}
-                            className="flex-1 px-2.5 py-1 text-xs font-bold border border-slate-200 rounded-lg outline-none focus:border-indigo-400 bg-slate-50 hover:bg-white focus:bg-white"
-                          />
-                        </div>
-                        <ImageUploader
-                          compact={true}
-                          label="Banner Image"
-                          assetType="banners"
-                          value={currentVal}
-                          onChange={(url) => {
-                            const updatedBanners = { ...(editing.customization?.subtab_banners || {}) };
-                            if (url) {
-                              updatedBanners[subtab.id] = url;
-                            } else {
-                              delete updatedBanners[subtab.id];
-                            }
-                            setEditing({
-                              ...editing,
-                              customization: {
-                                ...(editing.customization || {}),
-                                subtabs: editing.customization?.subtabs || SERVICE_SUBTABS[editing.slug] || [],
-                                subtab_banners: updatedBanners
-                              }
-                            });
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {editing.id && (
+              <button
+                type="button"
+                onClick={() => navigate(`${routes.catalog_sub_services}?category=${editing.category}`)}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer self-start"
+              >
+                <Layers className="w-3.5 h-3.5" /> Manage this service's sub-services & banner images
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
             )}
 
             <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer pt-1">

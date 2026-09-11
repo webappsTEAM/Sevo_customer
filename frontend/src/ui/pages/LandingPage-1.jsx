@@ -6680,7 +6680,7 @@ export function LandingPage() {
                     <HomeEditableText
                       active={homeEditMode}
                       value={homeConfig.pillarModal?.badge}
-                      placeholder="⚡ 5 Core Specialized Pillars"
+                      placeholder="⚡Core Specialized Pillars"
                       onSave={(v) => saveHomeConfigField("pillarModal.badge", v)}
                     />
                   </div>

@@ -74,6 +74,9 @@ const CatalogCategoriesPage = lazy(() =>
 const CatalogServicesPage = lazy(() =>
   import("./pages/catalog/CatalogServicesPage.jsx").then(m => ({ default: m.CatalogServicesPage || m.default }))
 )
+const CatalogSubServicesPage = lazy(() =>
+  import("./pages/catalog/CatalogSubServicesPage.jsx").then(m => ({ default: m.CatalogSubServicesPage || m.default }))
+)
 const CatalogPackagesPage = lazy(() =>
   import("./pages/catalog/CatalogPackagesPage.jsx").then(m => ({ default: m.CatalogPackagesPage || m.default }))
 )
@@ -82,6 +85,9 @@ const CatalogAddOnsPage = lazy(() =>
 )
 const CatalogChangeLogPage = lazy(() =>
   import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage || m.default }))
+)
+const CatalogVendorApprovalsPage = lazy(() =>
+  import("./pages/catalog/CatalogVendorApprovalsPage.jsx").then(m => ({ default: m.CatalogVendorApprovalsPage || m.default }))
 )
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
@@ -494,11 +500,13 @@ export function App() {
               <Route path={routes.catalog_dashboard} element={<RequireModule module="catalog"><CatalogDashboardPage /></RequireModule>} />
               <Route path={routes.catalog_categories} element={<RequireModule module="catalog"><CatalogCategoriesPage /></RequireModule>} />
               <Route path={routes.catalog_services} element={<RequireModule module="catalog"><CatalogServicesPage /></RequireModule>} />
+              <Route path={routes.catalog_sub_services} element={<RequireModule module="catalog"><CatalogSubServicesPage /></RequireModule>} />
               <Route path={routes.catalog_packages} element={<RequireModule module="catalog"><CatalogPackagesPage /></RequireModule>} />
               <Route path={routes.catalog_addons} element={<RequireModule module="catalog"><CatalogAddOnsPage /></RequireModule>} />
               <Route path={routes.catalog_recipes} element={<RequireModule module="catalog"><AdminRecipesPage /></RequireModule>} />
               <Route path={routes.catalog_recommendations} element={<RequireModule module="catalog"><AdminRecommendationsPage /></RequireModule>} />
               <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
+              <Route path={routes.catalog_vendor_approvals} element={<RequireModule module="catalog"><CatalogVendorApprovalsPage /></RequireModule>} />
               <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
               <Route path={routes.catalog_gt_pricing} element={<RequireModule module="catalog"><GTPricingPage /></RequireModule>} />
               <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />

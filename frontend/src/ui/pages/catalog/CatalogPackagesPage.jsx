@@ -1576,6 +1576,7 @@ const STATIC_SERVICE_DETAIL_DATA = {
 
 const EMPTY_PACKAGE = {
   service: "",
+  sub_service_key: "",
   name: "",
   slug: "",
   description: "",
@@ -1589,6 +1590,18 @@ const EMPTY_PACKAGE = {
   tools: [],
   ready: [],
   payment_policy: "BOTH",
+  // Goods & Transport unification Phase 1 -- see models.py Package.gt_*
+  // fields. Blank/empty for every non-Goods & Transport package.
+  gt_weight_class: "",
+  gt_city: "",
+  gt_dimensions_label: "",
+  gt_base_fare: "",
+  gt_per_km_rate: "",
+  gt_free_km: "",
+  gt_loading_unloading_charge: "",
+  gt_additional_stop_charge: "",
+  gt_surge_multiplier: "",
+  gt_minimum_fare: "",
 }
 
 const STATUS_TONE = {
@@ -2024,7 +2037,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2119,7 +2132,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2232,7 +2245,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2300,7 +2313,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2358,7 +2371,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2419,7 +2432,7 @@ export function CatalogPackagesPage() {
             groups.push({
               subSlug: tab.id,
               displayName: tab.label,
-              filterFn: (p) => p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
+              filterFn: (p) => p.sub_service_key === tab.id || p.tag === tab.id || p.subtab === tab.id || (p.customization && p.customization.subtab === tab.id),
             });
           }
         });
@@ -2530,6 +2543,22 @@ export function CatalogPackagesPage() {
 
   const handleSave = async (e) => {
     e.preventDefault()
+    // Goods & Transport unification Phase 1/2: catch the one field that has
+    // a narrow valid range (a multiplier, not a rupee amount) with a clear
+    // client-side message before it ever reaches the server -- without
+    // this, a stray extra digit here (e.g. typing a price into it by
+    // habit) surfaces only as a generic "Save failed" toast, with the real
+    // reason buried in the network response body.
+    if (editing.gt_surge_multiplier !== "" && editing.gt_surge_multiplier != null) {
+      const surgeNum = Number(editing.gt_surge_multiplier)
+      if (isNaN(surgeNum) || surgeNum < 0.01 || surgeNum > 5) {
+        showToast(
+          `Surge Multiplier must be between 0.01 and 5.00 (it's a fare multiplier, e.g. 1.00 = no surge -- not a rupee amount). Got "${editing.gt_surge_multiplier}".`,
+          "error",
+        )
+        return
+      }
+    }
     try {
       let finalSlug = (editing.slug || "").trim()
       if (!finalSlug && editing.name) {
@@ -2575,6 +2604,7 @@ export function CatalogPackagesPage() {
       const payload = {
         name: (editing.name || "").trim() || "Custom Package",
         service: serviceId,
+        sub_service_key: editing.sub_service_key || "",
         slug: finalSlug,
         description: editing.description || "",
         base_price: basePrice,
@@ -2602,6 +2632,20 @@ export function CatalogPackagesPage() {
               .filter(r => r.text)
           : [],
         offer_price: null,
+        // Goods & Transport unification Phase 1: only sent as real values
+        // when the admin actually typed something -- an empty string is
+        // normalized to null so it never overwrites the tier-side default
+        // the backend sync bridge falls back to (see catalog.py update_package).
+        gt_weight_class: editing.gt_weight_class || "",
+        gt_city: editing.gt_city || "",
+        gt_dimensions_label: editing.gt_dimensions_label || "",
+        gt_base_fare: editing.gt_base_fare !== "" && editing.gt_base_fare != null && !isNaN(Number(editing.gt_base_fare)) ? Number(editing.gt_base_fare) : null,
+        gt_per_km_rate: editing.gt_per_km_rate !== "" && editing.gt_per_km_rate != null && !isNaN(Number(editing.gt_per_km_rate)) ? Number(editing.gt_per_km_rate) : null,
+        gt_free_km: editing.gt_free_km !== "" && editing.gt_free_km != null && !isNaN(Number(editing.gt_free_km)) ? Number(editing.gt_free_km) : null,
+        gt_loading_unloading_charge: editing.gt_loading_unloading_charge !== "" && editing.gt_loading_unloading_charge != null && !isNaN(Number(editing.gt_loading_unloading_charge)) ? Number(editing.gt_loading_unloading_charge) : null,
+        gt_additional_stop_charge: editing.gt_additional_stop_charge !== "" && editing.gt_additional_stop_charge != null && !isNaN(Number(editing.gt_additional_stop_charge)) ? Number(editing.gt_additional_stop_charge) : null,
+        gt_surge_multiplier: editing.gt_surge_multiplier !== "" && editing.gt_surge_multiplier != null && !isNaN(Number(editing.gt_surge_multiplier)) ? Number(editing.gt_surge_multiplier) : null,
+        gt_minimum_fare: editing.gt_minimum_fare !== "" && editing.gt_minimum_fare != null && !isNaN(Number(editing.gt_minimum_fare)) ? Number(editing.gt_minimum_fare) : null,
       }
       if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
         payload.tag = editing.virtualSlug
@@ -3180,6 +3224,10 @@ export function CatalogPackagesPage() {
       ...EMPTY_PACKAGE,
       service: cleanSvcId,
       virtualSlug: firstSvc?.virtualSlug || "",
+      // Deep-linked from the Sub-Services admin page's "Manage packages under
+      // this sub-service" shortcut (?sub_service=<subtab id>) -- preselect it
+      // so the admin doesn't have to pick it again from the dropdown.
+      sub_service_key: searchParams.get("sub_service") || "",
     })
   }
 
@@ -3200,8 +3248,21 @@ export function CatalogPackagesPage() {
   const selectedServiceId = String(editing?.service?.id || editing?.service || "")
   const selectedService = services.find((s) => String(s.id) === selectedServiceId)
   const isVegetableService = Boolean(
-    selectedService?.slug === "vegetables" || 
+    selectedService?.slug === "vegetables" ||
     selectedService?.name?.toLowerCase().includes("vegetable")
+  )
+  // Goods & Transport unification Phase 1: same slug-matching rule the
+  // backend sync bridge uses (service_requests/services/catalog.py
+  // create_package) to decide whether a Package maps to a logistics
+  // ServiceTier -- kept in sync with that function so the fields shown here
+  // are exactly the ones the bridge will actually mirror on save.
+  const isGoodsTransportService = Boolean(
+    selectedService?.slug && (
+      selectedService.slug.toLowerCase().includes("truck") ||
+      selectedService.slug.toLowerCase().includes("wheeler") ||
+      selectedService.slug.toLowerCase().includes("packers") ||
+      selectedService.slug.toLowerCase().includes("mover")
+    )
   )
 
   const namePlaceholder = isVegetableService
@@ -6446,9 +6507,24 @@ export function CatalogPackagesPage() {
               onChange={(e) => {
                 const sId = e.target.value
                 const matchSvc = services.find(s => String(s.id) === sId)
-                setEditing({ ...editing, service: sId, virtualSlug: matchSvc?.virtualSlug || "" })
+                setEditing({ ...editing, service: sId, virtualSlug: matchSvc?.virtualSlug || "", sub_service_key: "" })
               }}
             />
+
+            {Array.isArray(selectedService?.customization?.subtabs) && selectedService.customization.subtabs.length > 0 && (
+              <Select
+                label="Sub-Service (optional)"
+                options={[
+                  { value: "", label: "None -- sits directly under the service" },
+                  ...selectedService.customization.subtabs.map((t) => ({
+                    value: t.id,
+                    label: t.label || t.id,
+                  })),
+                ]}
+                value={editing.sub_service_key || ""}
+                onChange={(e) => setEditing({ ...editing, sub_service_key: e.target.value })}
+              />
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -6496,6 +6572,107 @@ export function CatalogPackagesPage() {
                 onChange={(e) => setEditing({ ...editing, duration: e.target.value })}
               />
             </div>
+
+            {isGoodsTransportService && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-4">
+                <div className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide">
+                  Goods &amp; Transport Distance Pricing
+                </div>
+                <p className="text-[11px] text-indigo-700/80 -mt-2">
+                  These fares feed the live fare calculator (kept in sync automatically -- no
+                  need to also edit Goods &amp; Transport Rates). Leave a field blank to keep
+                  whatever is already set there.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Select
+                    label="Weight Class (Mini Truck only)"
+                    options={[
+                      { value: "", label: "N/A -- not weight-split" },
+                      { value: "light", label: "Light" },
+                      { value: "heavy", label: "Heavy" },
+                    ]}
+                    value={editing.gt_weight_class || ""}
+                    onChange={(e) => setEditing({ ...editing, gt_weight_class: e.target.value })}
+                  />
+                  <Input
+                    label="City"
+                    placeholder="e.g. hosur"
+                    value={editing.gt_city || ""}
+                    onChange={(e) => setEditing({ ...editing, gt_city: e.target.value })}
+                  />
+                </div>
+
+                <Input
+                  label="Dimensions (display only, e.g. '6ft x 5ft')"
+                  placeholder="e.g. 6ft x 5ft"
+                  value={editing.gt_dimensions_label || ""}
+                  onChange={(e) => setEditing({ ...editing, gt_dimensions_label: e.target.value })}
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Base Fare (₹)"
+                    type="number"
+                    placeholder="e.g. 150"
+                    value={editing.gt_base_fare ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_base_fare: e.target.value })}
+                  />
+                  <Input
+                    label="Per-KM Rate (₹)"
+                    type="number"
+                    placeholder="e.g. 15"
+                    value={editing.gt_per_km_rate ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_per_km_rate: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Free KM (included before per-km applies)"
+                    type="number"
+                    placeholder="e.g. 3"
+                    value={editing.gt_free_km ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_free_km: e.target.value })}
+                  />
+                  <Input
+                    label="Minimum Fare (₹)"
+                    type="number"
+                    placeholder="e.g. 150"
+                    value={editing.gt_minimum_fare ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_minimum_fare: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Loading / Unloading Charge (₹)"
+                    type="number"
+                    placeholder="e.g. 100"
+                    value={editing.gt_loading_unloading_charge ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_loading_unloading_charge: e.target.value })}
+                  />
+                  <Input
+                    label="Additional Stop Charge (₹ per extra stop)"
+                    type="number"
+                    placeholder="e.g. 50"
+                    value={editing.gt_additional_stop_charge ?? ""}
+                    onChange={(e) => setEditing({ ...editing, gt_additional_stop_charge: e.target.value })}
+                  />
+                </div>
+
+                <Input
+                  label="Surge Multiplier (a small multiplier, e.g. 1.00 = no surge, max 5.00 -- NOT a rupee amount)"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="5.00"
+                  placeholder="e.g. 1.00"
+                  value={editing.gt_surge_multiplier ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_surge_multiplier: e.target.value })}
+                />
+              </div>
+            )}
 
             <Input
               label="Tag Badge (e.g. Heavy (above 750kg), Best Seller)"

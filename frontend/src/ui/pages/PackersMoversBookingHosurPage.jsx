@@ -833,6 +833,23 @@ export function PackersMoversBookingHosurPage() {
   const [pmServerQuote, setPmServerQuote] = useState(null)
   const [pmQuoteLoading, setPmQuoteLoading] = useState(false)
   const [pmQuoteError, setPmQuoteError] = useState("")
+  const bookingAttemptKeyRef = useRef(null)
+  const [isSurveySubmittedModalOpen, setIsSurveySubmittedModalOpen] = useState(false)
+
+  const isSurveyRequired = Boolean(
+    pmServerQuote && (
+      pmServerQuote.requires_survey ||
+      pmServerQuote.requires_review ||
+      pmServerQuote.survey_status === "SURVEY_REQUIRED" ||
+      pmServerQuote.survey_status === "MANUAL_REVIEW_REQUIRED" ||
+      pmServerQuote.is_authoritative === false ||
+      pmServerQuote.is_estimate === true
+    )
+  )
+
+  useEffect(() => {
+    bookingAttemptKeyRef.current = null
+  }, [pickup, drop, inventoryItems, packingTier, pickupFloor, dropFloor, dismantlingRequired, unpackingRequired])
 
   const refreshPmQuote = async () => {
     const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
@@ -894,8 +911,59 @@ export function PackersMoversBookingHosurPage() {
   const [bookingError, setBookingError] = useState("")
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [lastBookingId, setLastBookingId] = useState(null)
+  const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [lastTrackingToken, setLastTrackingToken] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+
+  // Recover active partner search if user refreshed the page while searching
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (parsed?.serviceCategory !== "packers_movers") return
+      if (parsed?.bookingId) {
+        const ageMs = Date.now() - (parsed.timestamp || 0)
+        // Only recover if fresh (< 15 mins)
+        if (ageMs < 15 * 60 * 1000) {
+          setLastBookingId(parsed.bookingId)
+          if (parsed.trackingToken) setLastTrackingToken(parsed.trackingToken)
+          if (parsed.amount != null) setLastBookingAmount(parsed.amount)
+          setLookingForPartnerOpen(true)
+
+          // Verify with backend immediately
+          getBookingStatus(parsed.bookingId, parsed.trackingToken || "").then((res) => {
+            if (!res?.data) return
+            const status = (res.data.status || "").toLowerCase()
+            const isAccepted = Boolean(
+              res.data.is_accepted ||
+              ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+            )
+            if (isAccepted) {
+              setLookingForPartnerOpen(false)
+              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
+              const bookingPayload = {
+                id: parsed.bookingId,
+                request_id: parsed.bookingId,
+                tracking_token: parsed.trackingToken,
+                ...(res?.data || {})
+              }
+              navigate(`${routes.booking_checkout}?track=${encodeURIComponent(parsed.bookingId)}`, {
+                state: { isTracking: true, successData: bookingPayload }
+              })
+            } else if (["cancelled", "completed"].includes(status)) {
+              setLookingForPartnerOpen(false)
+              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
+            }
+          }).catch(() => {})
+        } else {
+          sessionStorage.removeItem("calservice_active_partner_search")
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to recover active partner search session:", e)
+    }
+  }, [navigate])
 
   const formatCountdown = (sec) => {
     const m = Math.floor(sec / 60)
@@ -959,6 +1027,7 @@ export function PackersMoversBookingHosurPage() {
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
             const bookingPayload = {
               id: lastBookingId,
               request_id: lastBookingId,
@@ -1009,7 +1078,7 @@ export function PackersMoversBookingHosurPage() {
     }
   }, [lookingForPartnerOpen])
 
-  // Prefill user details if signed in
+  // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
     try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
@@ -1017,7 +1086,7 @@ export function PackersMoversBookingHosurPage() {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
       const ph = user?.phone || user?.mobile || user?.mobile_number || savedPhone
-      if (ph && !phone) setPhone(ph)
+      if (ph && !phone) setPhone(ph.replace(/\D/g, "").slice(0, 10))
     }
   }, [user])
 
@@ -1372,9 +1441,24 @@ export function PackersMoversBookingHosurPage() {
         return
       }
 
+      if (!name || !name.trim()) {
+        setBookingSubmitting(false)
+        setShowCustomerEntryModal(true)
+        setBookingError("Please sign in or enter your contact name to continue.")
+        return
+      }
+
+      const cleanPhone = (phone || "").replace(/\D/g, "")
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        setBookingSubmitting(false)
+        setShowCustomerEntryModal(true)
+        setBookingError("Please enter a valid 10-digit mobile number.")
+        return
+      }
+
       const payload = {
-        customer_name: name || "Thejaa T",
-        phone: phone || "6379222691",
+        customer_name: name.trim(),
+        phone: cleanPhone,
         email: customerEmail,
         service_category: "packers_movers",
         issue_title: `Packers & Movers — ${pmServerQuote?.vehicle?.name || pkg.name || "House Shifting"} (${relocationType})`,
@@ -1414,20 +1498,52 @@ export function PackersMoversBookingHosurPage() {
         payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
       }
 
-      const res = await createBooking(payload)
+      if (isSurveyRequired) {
+        setIsSurveySubmittedModalOpen(true)
+        setBookingSubmitting(false)
+        return
+      }
+
+      if (!bookingAttemptKeyRef.current) {
+        const randStr = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
+        const uuidStr = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${randStr}`
+        bookingAttemptKeyRef.current = `idem_${uuidStr}`
+      }
+      const attemptKey = bookingAttemptKeyRef.current
+
+      const res = await createBooking(payload, attemptKey)
       // No request_id means the server did not create the booking, whatever
       // status it returned. Treated as a failure rather than papered over.
       const bookingId = res?.data?.request_id || res?.request_id
       if (!bookingId) {
         throw { status: 0, body: { message: "The booking was not confirmed by the server." } }
       }
+      bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
+      const authoritativeAmount = res?.data?.total_amount != null
+        ? res.data.total_amount
+        : (res?.total_amount != null ? res.total_amount : null)
       setLastBookingId(bookingId)
+      setLastBookingAmount(authoritativeAmount)
       setLastTrackingToken(token)
       setInventoryBuilderOpen(false)
       setVehicleSelectorOpen(false)
       setLookingForPartnerOpen(true)
+      try {
+        sessionStorage.setItem("calservice_active_partner_search", JSON.stringify({
+          bookingId,
+          trackingToken: token,
+          amount: authoritativeAmount,
+          serviceCategory: "packers_movers",
+          timestamp: Date.now()
+        }))
+      } catch (e) {}
     } catch (err) {
+      if (err?.body?.code === "SURVEY_OR_REVIEW_REQUIRED" || (err?.body?.message && err.body.message.toLowerCase().includes("survey"))) {
+        setIsSurveySubmittedModalOpen(true)
+        setLookingForPartnerOpen(false)
+        return
+      }
       // A booking exists only if the backend created the ServiceRequest.
       //
       // This block used to invent a "CRN<12 random digits>" reference, store
@@ -1471,6 +1587,7 @@ export function PackersMoversBookingHosurPage() {
     } catch (err) {
       console.warn("Error cancelling booking on server:", err)
     } finally {
+      try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
       setCancelSubmitting(false)
       setCancelModalOpen(false)
       setLookingForPartnerOpen(false)
@@ -2446,8 +2563,8 @@ export function PackersMoversBookingHosurPage() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
+                      <div className="text-[10px] text-slate-500 font-medium">Starting from</div>
                       <div className="text-base font-extrabold text-slate-900">{pkg.price}</div>
-                      <span className="text-[10px] text-emerald-700 font-semibold">Base fare</span>
                     </div>
                   </div>
                 )
@@ -2726,7 +2843,14 @@ export function PackersMoversBookingHosurPage() {
                       {/* Warning Banner */}
                       <div className="bg-[#FFF5E5] border border-orange-200 rounded-xl p-3 flex items-center gap-3 mb-6">
                         <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
-                        <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
+                        <div className="flex flex-col text-left">
+                          <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
+                          {SHIFTING_DATES[0]?.label !== "Today" && (
+                            <span className="text-[11px] text-orange-700 font-medium mt-0.5">
+                              Earliest available move date: {SHIFTING_DATES[0]?.label} ({SHIFTING_DATES[0]?.value}) — Same-day booking is unavailable as moves require crew &amp; packing preparation.
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Slot Selector */}
@@ -2997,6 +3121,31 @@ export function PackersMoversBookingHosurPage() {
                         <span className="text-xs font-bold text-[#0B8860] hover:underline">Edit Items</span>
                       </div>
 
+                      {/* Survey & Manual Review Alert Banner */}
+                      {isSurveyRequired && (
+                        <div className="bg-amber-50/95 border border-amber-200 rounded-2xl p-4 text-amber-900 shadow-xs">
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
+                              <ClipboardList className="w-5 h-5" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="font-extrabold text-amber-950 text-sm">Survey Required</h4>
+                              <p className="text-xs text-amber-900 font-semibold leading-relaxed">
+                                Your move needs a quick survey before the final price can be confirmed.
+                              </p>
+                              <p className="text-[11px] text-amber-800 leading-normal">
+                                {pmServerQuote?.estimate_notice || "Due to large volume, uncataloged items, or road routing estimation, the price below is an indicative estimate. Our team will contact you to schedule a quick survey before final price confirmation."}
+                              </p>
+                              <div className="pt-2 text-[11px] text-amber-900/90 font-medium space-y-0.5">
+                                <p>• Request was received upon submitting</p>
+                                <p>• Relocation coordinator will call to arrange survey</p>
+                                <p>• No payment required until final survey confirmation</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Server-Authoritative Price Breakdown */}
                       <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 space-y-3">
                         <div className="flex items-center justify-between">
@@ -3048,11 +3197,11 @@ export function PackersMoversBookingHosurPage() {
                               <span>₹ {pmServerQuote.pricing.gst_amount}</span>
                             </div>
                             <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-200">
-                              <span>Total Moving Fare</span>
-                              <span className="text-[#0B8860]">₹ {pmServerQuote.pricing.total}</span>
+                              <span>{isSurveyRequired ? "Estimated Moving Fare" : "Total Moving Fare"}</span>
+                              <span className={isSurveyRequired ? "text-amber-700 font-black" : "text-[#0B8860]"}>₹ {pmServerQuote.pricing.total}</span>
                             </div>
                             <p className="text-[10px] text-slate-400 pt-1">
-                              Quote Reference: {pmServerQuote.quote_id} • Authoritative quote valid for 48 hours
+                              Quote Reference: {pmServerQuote.quote_id} • {isSurveyRequired ? "Estimated fare (Subject to pre-move survey verification)" : "Authoritative quote valid for 48 hours"}
                             </p>
                           </div>
                         ) : (
@@ -3064,13 +3213,15 @@ export function PackersMoversBookingHosurPage() {
                     {/* Bottom Action Bar */}
                     <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
                       <div>
-                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Total Fare</p>
+                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">
+                          {isSurveyRequired ? "Estimated Fare (Subject to Survey)" : "Your Quoted Price"}
+                        </p>
                         <p className="text-xl font-black text-slate-800">
                           {pmServerQuote?.pricing?.total 
                             ? `₹ ${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
                             : pmServerQuote?.total 
                               ? `₹ ${Number(pmServerQuote.total).toLocaleString("en-IN")}`
-                              : (pmQuoteLoading ? "Calculating..." : "Quote required")}
+                              : (pmQuoteLoading ? "Calculating…" : "Fare unavailable")}
                         </p>
                       </div>
                       <button
@@ -3080,7 +3231,7 @@ export function PackersMoversBookingHosurPage() {
                         disabled={bookingSubmitting || pmQuoteLoading || (!pmServerQuote?.pricing?.total && !pmServerQuote?.total)}
                         className="px-8 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        {bookingSubmitting ? "Confirming Move..." : "Confirm Move"}
+                        {bookingSubmitting ? "Submitting Request..." : (isSurveyRequired ? "Request Pre-Move Survey" : "Confirm Move")}
                       </button>
                     </div>
                   </>
@@ -3117,6 +3268,77 @@ export function PackersMoversBookingHosurPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pre-Move Survey Request Received Modal */}
+      {isSurveySubmittedModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+              <ClipboardList className="w-9 h-9" />
+            </div>
+
+            <h3 className="text-xl font-extrabold text-slate-900 mb-2">
+              Survey Request Received!
+            </h3>
+            <p className="text-sm font-semibold text-amber-800 bg-amber-50 py-2.5 px-4 rounded-xl mb-4">
+              Your move needs a quick survey before the final price can be confirmed.
+            </p>
+
+            <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2.5 border border-slate-200 mb-6">
+              {pmServerQuote?.quote_id && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Quote Reference:</span>
+                  <span className="font-bold text-slate-800">{pmServerQuote.quote_id}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Service:</span>
+                <span className="font-bold text-slate-900">{selectedPackage?.name || "Packers & Movers"} ({relocationType})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Pickup Address:</span>
+                <span className="font-bold text-slate-900 text-right line-clamp-1">{pickup || "Hosur Area"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Drop Address:</span>
+                <span className="font-bold text-slate-900 text-right line-clamp-1">{drop || "Destination"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900">{name || "Valued Customer"} (+91 {phone})</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-slate-200">
+                <span className="text-slate-500 font-medium">Estimated Fare:</span>
+                <span className="font-bold text-amber-700 text-sm">
+                  {pmServerQuote?.pricing?.total 
+                    ? `₹${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
+                    : pmServerQuote?.total 
+                      ? `₹${Number(pmServerQuote.total).toLocaleString("en-IN")}`
+                      : "Pending Survey"} <span className="text-[10px] text-slate-500 font-normal">(Subject to survey)</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-slate-50/80 rounded-xl p-3 text-left text-[11px] text-slate-600 mb-5 space-y-1 border border-slate-100">
+              <p className="font-bold text-slate-800">What happens next?</p>
+              <p>1. Our relocation coordinator will contact you to schedule a quick video or physical survey.</p>
+              <p>2. Once the survey is complete, you will receive your final confirmed price.</p>
+              <p>3. No payment is required right now.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsSurveySubmittedModalOpen(false)
+                navigate(routes.landing)
+              }}
+              className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+            >
+              Back to Home
+            </button>
           </div>
         </div>
       )}
@@ -3160,20 +3382,39 @@ export function PackersMoversBookingHosurPage() {
                 <span className="font-bold text-slate-900">{name || "Valued Customer"} (+91 {phone})</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-200">
-                <span className="text-slate-500 font-medium">Estimated Base Package:</span>
-                <span className="font-extrabold text-emerald-700 text-sm">{selectedPackage?.price || "₹1,499"}</span>
+                <span className="text-slate-500 font-medium">Final Booking Amount:</span>
+                <span className="font-extrabold text-emerald-700 text-sm">
+                  {lastBookingAmount != null
+                    ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                    : "Amount unavailable"}
+                </span>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setBookingSuccessOpen(false)
-                navigate(routes.landing)
-              }}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
-            >
-              Back to Home
-            </button>
+            <div className="flex gap-3">
+              {lastBookingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingSuccessOpen(false)
+                    navigate(`/track/${encodeURIComponent(lastBookingId)}${lastTrackingToken ? `?token=${encodeURIComponent(lastTrackingToken)}` : ""}`)
+                  }}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Track Booking
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingSuccessOpen(false)
+                  navigate(routes.landing)
+                }}
+                className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
+              >
+                Back to Home
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3224,7 +3465,7 @@ export function PackersMoversBookingHosurPage() {
                       <div className="flex items-start gap-3">
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
                           <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
                         </div>
                       </div>
@@ -3233,7 +3474,7 @@ export function PackersMoversBookingHosurPage() {
                       <div className="flex items-start gap-3">
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
                           <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Bengaluru, Karnataka, India")}</p>
                         </div>
                       </div>
@@ -3245,10 +3486,14 @@ export function PackersMoversBookingHosurPage() {
                       {/* Amount */}
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                          <span className="text-base">💵</span> Token Amount
+                          <span className="text-base">💵</span> Amount Payable
                         </div>
                         <span className="text-sm font-extrabold text-slate-900">
-                          ₹ 455
+                          {lastBookingAmount != null
+                            ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                            : (pmServerQuote?.total != null
+                              ? `₹${Number(pmServerQuote.total).toLocaleString("en-IN")}`
+                              : "Amount unavailable")}
                         </span>
                       </div>
                     </div>
@@ -3369,7 +3614,7 @@ export function PackersMoversBookingHosurPage() {
               Booking Cancelled
             </h2>
             <p className="text-sm text-slate-500 font-medium mb-6">
-              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "GT0586"}</strong> has been cancelled.
+              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "—"}</strong> has been cancelled.
             </p>
 
             {/* Cancellation Details Card */}
@@ -3427,6 +3672,7 @@ export function PackersMoversBookingHosurPage() {
                 onClick={() => {
                   setShowExitConfirm(false)
                   setLookingForPartnerOpen(false)
+                  try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
                   const bookingPayload = {
                     id: lastBookingId,
                     request_id: lastBookingId,
