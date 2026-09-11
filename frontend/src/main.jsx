@@ -5,6 +5,7 @@ import { Provider as ReduxProvider } from "react-redux"
 
 import { store } from "./store/store.js"
 import { AuthProvider } from "./state/auth/AuthProvider.jsx"
+import { EditModeProvider } from "./state/editMode/EditModeProvider.jsx"
 import { App } from "./ui/App.jsx"
 import { initTheme } from "./ui/theme.js"
 import "./ui/styles.css"
@@ -40,7 +41,9 @@ createRoot(rootEl).render(
     <ReduxProvider store={store}>
       <BrowserRouter basename={import.meta.env.DEV ? "/" : "/Caltrack"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
-          <App />
+          <EditModeProvider>
+            <App />
+          </EditModeProvider>
         </AuthProvider>
       </BrowserRouter>
     </ReduxProvider>

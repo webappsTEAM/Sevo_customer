@@ -58,15 +58,15 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   // tile (opens the All Services drawer) is always appended after these
   // by the homepage itself -- it isn't part of this editable list.
   categories: [
-    { id: "cat-1", name: "AC Service", image: "/assets/icon_3d_ac.jpg", link: "?category=hvac&subtab=AC%20Service%20%26%20Cleaning", enabled: true },
+    { id: "cat-1", name: "AC Service", image: "/assets/icon_3d_ac.jpg", link: "?category=hvac", enabled: true },
     { id: "cat-2", name: "Cleaning", image: "/assets/icon_3d_cleaning.jpg", link: "?category=cleaning", enabled: true },
-    { id: "cat-3", name: "Plumbing", image: "/assets/icon_3d_plumbing.jpg", link: "?category=plumbing&subtab=Tap%20%26%20Mixer", enabled: true },
-    { id: "cat-4", name: "Electrical", image: "/assets/icon_3d_electrical.jpg", link: "?category=electrical&subtab=Switches%20%26%20Sockets", enabled: true },
-    { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?openModal=ac", enabled: true },
-    { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?openModal=homepest", enabled: true },
-    { id: "cat-7", name: "Salon & Spa", image: "", link: "?openModal=pillars", enabled: true },
+    { id: "cat-3", name: "Plumbing", image: "/assets/icon_3d_plumbing.jpg", link: "?category=plumbing", enabled: true },
+    { id: "cat-4", name: "Electrical", image: "/assets/icon_3d_electrical.jpg", link: "?category=electrical", enabled: true },
+    { id: "cat-5", name: "Appliance Repair", image: "/assets/icon_3d_appliance.jpg", link: "?category=hvac", enabled: true },
+    { id: "cat-6", name: "Pest Control", image: "/assets/icon_3d_pest.png", link: "?category=pest_control", enabled: true },
+    { id: "cat-7", name: "Salon & Spa", image: "", link: "?category=cleaning", enabled: true },
     { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=painting", enabled: true },
-    { id: "cat-9", name: "Carpentry", image: "", link: "?category=electrical&subtab=Switches%20%26%20Sockets", enabled: true }
+    { id: "cat-9", name: "Carpentry", image: "", link: "?category=carpentry", enabled: true }
   ],
   pillarModal: {
     badge: "⚡Core Specialized Pillars",
@@ -385,9 +385,22 @@ function mergeWithDefaultConfig(parsed) {
     }
   })
 
-  const mergedCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0
+  const sanitizeCategoryLink = (link = "") => {
+    if (!link) return ""
+    if (link.includes("openModal=ac")) return "?category=hvac"
+    if (link.includes("openModal=homepest") || link.includes("openModal=subcategories")) return "?category=pest_control"
+    if (link.includes("openModal=pillars")) return "?category=cleaning"
+    return link
+  }
+
+  const rawCats = Array.isArray(parsed.categories) && parsed.categories.length > 0
     ? parsed.categories
     : DEFAULT_HOME_PAGE_CONFIG.categories
+
+  const mergedCategories = rawCats.map(c => ({
+    ...c,
+    link: sanitizeCategoryLink(c.link)
+  }))
 
   // Pillar Modal merge
   const defaultPillars = DEFAULT_HOME_PAGE_CONFIG.pillarModal.pillars

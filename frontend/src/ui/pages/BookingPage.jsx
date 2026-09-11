@@ -39,7 +39,8 @@ import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
-import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
+import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
+import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
@@ -9137,7 +9138,13 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
+  // Was gated on the key starting with "rzp_live_" specifically -- that
+  // hides "Pay Online" for every non-production environment, including
+  // local dev/staging configured with a perfectly valid Razorpay TEST key
+  // (VITE_RAZORPAY_KEY_ID=rzp_test_...), which is exactly the normal setup
+  // while building/testing. Accept any configured Razorpay key (test or
+  // live) instead -- production simply uses a live key in its own .env.
+  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID)))
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -12087,8 +12094,13 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     );
   }, [localCatalogPackages]);
 
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(false);
+  // Sourced from the shared EditModeProvider (see main.jsx) instead of a
+  // section-local useState -- same variable names on purpose so every other
+  // line in this section keeps working unchanged, but turning edit mode on
+  // here now also turns it on for every other page/section (and vice
+  // versa), instead of each of this file's four sections tracking its own
+  // separate on/off switch.
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
 
   const handleSaveServiceField = async (item, field, value) => {
@@ -14721,8 +14733,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     );
   }, [localCatalogPackages]);
 
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(false);
+  // Sourced from the shared EditModeProvider (see main.jsx) instead of a
+  // section-local useState -- same variable names on purpose so every other
+  // line in this section keeps working unchanged, but turning edit mode on
+  // here now also turns it on for every other page/section (and vice
+  // versa), instead of each of this file's four sections tracking its own
+  // separate on/off switch.
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
 
   const handleSaveServiceField = async (item, field, value) => {
@@ -17181,8 +17198,13 @@ export function CustomCleaningPackageModal({
     }
   };
 
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(false);
+  // Sourced from the shared EditModeProvider (see main.jsx) instead of a
+  // section-local useState -- same variable names on purpose so every other
+  // line in this section keeps working unchanged, but turning edit mode on
+  // here now also turns it on for every other page/section (and vice
+  // versa), instead of each of this file's four sections tracking its own
+  // separate on/off switch.
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
 
   const handleSaveServiceField = async (item, field, value) => {
@@ -18455,9 +18477,14 @@ export function CustomCleaningPackageModal({
     ? "bg-[#FAF7F0] relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto py-4"
     : "bg-[#FAF7F0] relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
 
-  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-9 mt-4";
+  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-6 lg:gap-8 mt-4";
 
-  const leftColumnClass = "flex-1 space-y-5";
+  // Vertical list of Services for this category (Fridge, AC Service &
+  // Cleaning, AC Repair & Diagnostics, ...). Sticky on desktop so it stays
+  // visible while the package list to its right scrolls.
+  const servicesSidebarClass = "w-full lg:w-[220px] shrink-0 flex flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto";
+
+  const leftColumnClass = "flex-1 min-w-0 space-y-5";
 
   const rightColumnClass = "w-full lg:w-[380px] bg-[#FEFCF8] border border-[#E8E3DB] rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
@@ -18526,12 +18553,20 @@ export function CustomCleaningPackageModal({
           </div>
         </div>
 
-        {/* Subservice Flex Selector */}
-        <div className="flex overflow-x-auto gap-4 pb-2 pt-1 justify-start scrollbar-none">
+      </div>
+      {/* End of sticky header (services moved into the vertical sidebar below) */}
+
+      {/* Main Content Area */}
+      <div className={mainAreaClass}>
+        {/* Services Sidebar: vertical list of Services (Fridge, AC Service &
+            Cleaning, AC Repair & Diagnostics, ...) for this category. Picking
+            one drives the sub-service chips + package list to the right. */}
+        <div className={servicesSidebarClass}>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 pb-1">
+            Services
+          </h3>
           {effectiveKey === "hvac" && (acInspectionTile.visible || serviceEditMode) && (
-            <div
-              className={`relative flex flex-col items-center justify-start p-1.5 text-center w-[85px] sm:w-[90px] shrink-0 group rounded-xl ${acInspectionTile.visible ? "" : "opacity-40"}`}
-            >
+            <div className={`relative group ${acInspectionTile.visible ? "" : "opacity-40"}`}>
               {serviceEditMode && (
                 <button
                   type="button"
@@ -18540,7 +18575,7 @@ export function CustomCleaningPackageModal({
                     handleSaveAcInspectionTile("visible", !acInspectionTile.visible);
                   }}
                   title={acInspectionTile.visible ? "Hide this tile from customers" : "Show this tile to customers"}
-                  className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 cursor-pointer"
+                  className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 cursor-pointer"
                 >
                   {acInspectionTile.visible ? <Eye size={10} /> : <EyeOff size={10} />}
                 </button>
@@ -18559,48 +18594,50 @@ export function CustomCleaningPackageModal({
                       params.set("subTab", "AC Inspection");
                       navigate(`?${params.toString()}`, { replace: true });
                     }}
-                    className="flex flex-col items-center justify-start bg-transparent cursor-pointer w-full transition-all"
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left ${
+                      isInspectionSelected
+                        ? "bg-emerald-50 border border-emerald-200"
+                        : "bg-transparent border border-transparent hover:bg-slate-50"
+                    }`}
                   >
-                    <span className="text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5">
-                      {serviceEditMode ? (
-                        <EditableText
-                          active={true}
-                          value={acInspectionTile.badge}
-                          onSave={(v) => handleSaveAcInspectionTile("badge", v)}
-                          className="text-white"
-                        />
-                      ) : (
-                        acInspectionTile.badge
-                      )}
-                    </span>
-                    <div className={`w-14 h-14 mb-1 flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                    <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg transition-all duration-200 ${
                       isInspectionSelected
-                        ? "bg-emerald-100 border-2 border-emerald-600 scale-110 drop-shadow-md shadow-xs"
-                        : "bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 group-hover:scale-105"
+                        ? "bg-emerald-100 border-2 border-emerald-600"
+                        : "bg-emerald-50 border border-emerald-100"
                     }`}>
-                      <Wrench className="w-7 h-7 text-emerald-700" strokeWidth={1.5} />
+                      <Wrench className="w-5 h-5 text-emerald-700" strokeWidth={1.5} />
                     </div>
-                    <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                      isInspectionSelected
-                        ? "text-emerald-700 font-extrabold"
-                        : "text-emerald-700 font-bold group-hover:text-emerald-800"
-                    }`}>
-                      {serviceEditMode ? (
-                        <EditableText
-                          active={true}
-                          value={acInspectionTile.label}
-                          multiline
-                          onSave={(v) => handleSaveAcInspectionTile("label", v)}
-                        />
-                      ) : (
-                        acInspectionTile.label
-                      )}
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[8px] font-black uppercase tracking-wider text-white bg-emerald-600 px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm mb-0.5 w-fit">
+                        {serviceEditMode ? (
+                          <EditableText
+                            active={true}
+                            value={acInspectionTile.badge}
+                            onSave={(v) => handleSaveAcInspectionTile("badge", v)}
+                            className="text-white"
+                          />
+                        ) : (
+                          acInspectionTile.badge
+                        )}
+                      </span>
+                      <span className={`block text-xs leading-tight transition-colors ${
+                        isInspectionSelected
+                          ? "text-emerald-700 font-extrabold"
+                          : "text-emerald-700 font-bold"
+                      }`}>
+                        {serviceEditMode ? (
+                          <EditableText
+                            active={true}
+                            value={acInspectionTile.label}
+                            multiline
+                            onSave={(v) => handleSaveAcInspectionTile("label", v)}
+                          />
+                        ) : (
+                          acInspectionTile.label
+                        )}
+                      </span>
                     </span>
-                    {isInspectionSelected ? (
-                      <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
-                    ) : (
-                      <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
-                    )}
+                    {isInspectionSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
                   </button>
                 );
               })()}
@@ -18623,9 +18660,13 @@ export function CustomCleaningPackageModal({
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group"
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left group ${
+                  isSelected
+                    ? "bg-emerald-50 border border-emerald-200"
+                    : "bg-transparent border border-transparent hover:bg-slate-50"
+                }`}
               >
-                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-white border border-slate-100 overflow-hidden">
                   <img
                     src={typeof tab.image === "string" ? resolveImageUrl(tab.image, tab.image) : (tab.image || "")}
                     alt={tab.name}
@@ -18635,65 +18676,57 @@ export function CustomCleaningPackageModal({
                         e.target.src = tab.image;
                       }
                     }}
-                    className={`w-full h-full object-contain transition-all duration-200 ${isSelected
-                      ? "scale-110 drop-shadow-md"
-                      : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    className={`w-7 h-7 object-contain transition-all duration-200 ${isSelected
+                      ? "drop-shadow-md"
+                      : "opacity-80 group-hover:opacity-100"
                       }`}
                   />
                 </div>
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
+                <span className={`flex-1 min-w-0 text-xs leading-tight transition-colors ${isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                   }`}>
                   {tab.name}
                 </span>
-                {isSelected ? (
-                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
-                ) : (
-                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
-                )}
+                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
               </button>
             );
           })}
         </div>
 
-        {/* Sub-Service Chip Row -- only appears when the selected Service has
-            admin-managed Sub-Services (Service.customization.subtabs). Most
-            services don't have these, so this row is absent for them. */}
-        {activeServiceSubtabs.length > 0 && (
-          <div className="flex overflow-x-auto gap-2 pb-2 pt-0.5 justify-start scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setActiveSubServiceId("")}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                activeSubServiceId === ""
-                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
-              }`}
-            >
-              All {activeSubTab}
-            </button>
-            {activeServiceSubtabs.map(t => (
+        {/* Left Column: Subservice categories + package cards */}
+        <div className={leftColumnClass}>
+
+          {/* Sub-Service Chip Row -- only appears when the selected Service has
+              admin-managed Sub-Services (Service.customization.subtabs). Most
+              services don't have these, so this row is absent for them. */}
+          {activeServiceSubtabs.length > 0 && (
+            <div className="flex overflow-x-auto gap-2 pb-2 pt-0.5 justify-start scrollbar-none">
               <button
-                key={t.id}
                 type="button"
-                onClick={() => setActiveSubServiceId(t.id)}
+                onClick={() => setActiveSubServiceId("")}
                 className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                  activeSubServiceId === t.id
+                  activeSubServiceId === ""
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                     : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
                 }`}
               >
-                {t.label}
+                All {activeSubTab}
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* End of sticky header+tabs */}
-
-      {/* Main Content Area */}
-      <div className={mainAreaClass}>
-        {/* Left Column: Subservice categories + package cards */}
-        <div className={leftColumnClass}>
+              {activeServiceSubtabs.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveSubServiceId(t.id)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                    activeSubServiceId === t.id
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Title for Active Category */}
           <div className="pt-2">
@@ -24734,16 +24767,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [dbPackages, setDbPackages] = useState([]);
 
   const [searchParams] = useSearchParams();
-  const editFromUrl = searchParams.get("edit") === "1" || searchParams.get("superAdminEdit") === "1";
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(editFromUrl);
+  // Now sourced from the shared EditModeProvider (see main.jsx), which
+  // already handles the ?edit=1 / ?superAdminEdit=1 (and ?preview=true /
+  // ?edit=true) URL-param auto-activation this section used to do locally
+  // -- generalized so it works from any page's URL, not just this one.
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
-
-  useEffect(() => {
-    if (editFromUrl && canEnterServiceEditMode) {
-      setServiceEditMode(true);
-    }
-  }, [editFromUrl, canEnterServiceEditMode]);
 
   const [serviceOverrides, setServiceOverrides] = useState(() => {
     try {

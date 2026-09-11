@@ -4,7 +4,8 @@ import { ChevronLeft, Search, ShoppingCart, Star, Check, X, ShieldAlert, Chevron
 import { apiRequest } from "../../api/client.js";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
-import { useCanEditCustomerUI, EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import { useEditMode } from "../../state/editMode/useEditMode.js";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -292,8 +293,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
   // isSuperAdmin(user). dbPackages here is the combined array from both
   // the cockroach-control and termite-control fetches below, so updating
   // by matching p.id === item.db_id works across either source fetch.
-  const canEnterServiceEditMode = useCanEditCustomerUI();
-  const [serviceEditMode, setServiceEditMode] = useState(false);
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
   const [saveNotice, setSaveNotice] = useState(null);
 
   const handleSaveServiceField = async (item, field, value) => {

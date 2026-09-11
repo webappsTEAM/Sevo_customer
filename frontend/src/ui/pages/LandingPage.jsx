@@ -18,6 +18,7 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { AllServicesDrawer } from "../components/AllServicesDrawer.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { ModernServiceCatalogView } from "../components/ModernServiceCatalogView.jsx"
 import { estimationRepository } from "../../services/estimation/estimationRepository.js"
 import { SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
@@ -45,8 +46,8 @@ import {
   clearLegacyLocationStorage
 } from "../../utils/customerLocationStorage.js"
 import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl, publishHomePageConfig, DEFAULT_HOME_PAGE_CONFIG } from "../../config/homePageConfig.js"
-import { isSuperAdmin } from "../../auth/authorization.js"
 import { EditableImage, ImageEditModal } from "../components/SuperAdminEditControls.jsx"
+import { useEditMode } from "../../state/editMode/useEditMode.js"
 import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
 import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
@@ -2169,9 +2170,14 @@ export function LandingPage() {
   // settings_hub.models.HomePageConfig and gated server-side by
   // RequireModuleAccess("cms","edit_sections")). No new model, no new API,
   // no second Customer Web -- this just lets Super Admin edit the SAME
-  const isPreviewParam = searchParams.get("preview") === "true" || searchParams.get("edit") === "true"
-  const canEnterHomeEditMode = isSuperAdmin(user) || isPreviewParam
-  const [homeEditMode, setHomeEditMode] = useState(() => searchParams.get("edit") === "true")
+  // Now sourced from the shared EditModeProvider (see main.jsx) instead of
+  // a homepage-only local useState -- same variable names on purpose, so
+  // every other line below that already reads homeEditMode/setHomeEditMode
+  // keeps working unchanged, but the value is now shared with every other
+  // page (turning it on here also turns it on in BookingPage.jsx, and
+  // vice versa) and the ?preview=true / ?edit=true allowance now works
+  // from any page, not just this one.
+  const { canEdit: canEnterHomeEditMode, isEditMode: homeEditMode, setEditMode: setHomeEditMode } = useEditMode()
   const [savingHomeField, setSavingHomeField] = useState(false)
   const [heroImageModalOpen, setHeroImageModalOpen] = useState(false)
   const [offerImageModalIdx, setOfferImageModalIdx] = useState(null)
@@ -2625,13 +2631,13 @@ export function LandingPage() {
     }
 
     if (item.action === "home_pest") {
-      setIsHomePestModalOpen(true)
+      navigate("?category=pest_control")
     } else if (item.action === "ac_modal") {
-      setIsAcModalOpen(true)
+      navigate("?category=hvac")
     } else if (item.action === "elec_modal") {
-      setIsElecModalOpen(true)
+      navigate("?category=electrical")
     } else {
-      setIsHomeServicesCombinedModalOpen(true)
+      navigate("?category=cleaning")
     }
   }
 
@@ -2642,7 +2648,7 @@ export function LandingPage() {
     } else if (query.trim()) {
       navigate(`/booking?search=${encodeURIComponent(query.trim())}`)
     } else {
-      setIsHomeServicesCombinedModalOpen(true)
+      navigate("?category=cleaning")
     }
   }
 
@@ -2656,9 +2662,14 @@ export function LandingPage() {
   // just falls back to the normal booking flow.
   const goToBannerLink = (link) => {
     if (!link) { goToBooking(); return }
-    if (/^https?:\/\//i.test(link)) {
+    let targetLink = link
+    if (targetLink.includes("openModal=ac")) targetLink = "?category=hvac"
+    else if (targetLink.includes("openModal=homepest") || targetLink.includes("openModal=subcategories")) targetLink = "?category=pest_control"
+    else if (targetLink.includes("openModal=pillars")) targetLink = "?category=cleaning"
+
+    if (/^https?:\/\//i.test(targetLink)) {
       try {
-        const url = new URL(link)
+        const url = new URL(targetLink)
         if (url.origin === window.location.origin) {
           navigate(url.pathname + url.search + url.hash)
           return
@@ -2666,9 +2677,9 @@ export function LandingPage() {
       } catch {
         // Malformed URL -- fall through and let the browser handle it.
       }
-      window.open(link, "_blank", "noopener,noreferrer")
+      window.open(targetLink, "_blank", "noopener,noreferrer")
     } else {
-      navigate(link)
+      navigate(targetLink)
     }
   }
 
@@ -2699,8 +2710,8 @@ export function LandingPage() {
     }
   }, [modalCart]);
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
-  const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
-  const [isAcModalOpen, setIsAcModalOpen] = useState(() => location.state?.openAcModal || searchParams.get("openModal") === "ac" || false)
+  const [isElecModalOpen, setIsElecModalOpen] = useState(false)
+  const [isAcModalOpen, setIsAcModalOpen] = useState(false)
 
   // Real admin-added sub-services for the "AC & Appliance" pillar's popup.
   // The popup used to show a hardcoded 5-item "choose an appliance type"
@@ -2734,7 +2745,7 @@ export function LandingPage() {
         setAcModalServicesLoading(false)
       })
   }, [isAcModalOpen, catalogCategories])
-  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(() => location.state?.openHomePestModal || searchParams.get("openModal") === "homepest" || searchParams.get("openModal") === "subcategories" || false)
+  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(false)
 
   // Same live-catalog-lookup pattern as the AC & Appliance modal above,
   // applied to the other pillar popups that still showed a hardcoded item
@@ -2852,16 +2863,20 @@ export function LandingPage() {
 
   useEffect(() => {
     const modalParam = searchParams.get("openModal")
-    if (modalParam === "pillars") {
-      setIsHomeServicesCombinedModalOpen(true)
+    if (modalParam) {
+      setIsAcModalOpen(false)
       setIsHomePestModalOpen(false)
-    } else if (modalParam === "homepest" || modalParam === "subcategories") {
-      setIsHomePestModalOpen(true)
+      setIsElecModalOpen(false)
       setIsHomeServicesCombinedModalOpen(false)
-    } else if (modalParam === "ac") {
-      setIsAcModalOpen(true)
+      if (modalParam === "pillars") {
+        navigate("?category=cleaning", { replace: true })
+      } else if (modalParam === "homepest" || modalParam === "subcategories") {
+        navigate("?category=pest_control", { replace: true })
+      } else if (modalParam === "ac") {
+        navigate("?category=hvac", { replace: true })
+      }
     }
-  }, [searchParams])
+  }, [searchParams, navigate])
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
     () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
@@ -3466,14 +3481,11 @@ export function LandingPage() {
 
   useEffect(() => {
     if (location.state?.openHomePestModal) {
-      setIsHomePestModalOpen(true)
-      navigate(".", { replace: true, state: {} })
+      navigate("?category=pest_control", { replace: true, state: {} })
     } else if (location.state?.openAcModal) {
-      setIsAcModalOpen(true)
-      navigate(".", { replace: true, state: {} })
+      navigate("?category=hvac", { replace: true, state: {} })
     } else if (location.state?.openElecModal) {
-      setIsElecModalOpen(true)
-      navigate(".", { replace: true, state: {} })
+      navigate("?category=electrical", { replace: true, state: {} })
     } else if (location.state?.openGoodsModal) {
       setIsGoodsModalOpen(true)
       navigate(".", { replace: true, state: {} })
@@ -3497,20 +3509,7 @@ export function LandingPage() {
     setIsHomeServicesCombinedModalOpen(false)
     setIsForYouModalOpen(false)
     setIsFoodHealthModalOpen(false)
-    const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
-    if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
-      navigate("/home", { state: { openAcModal: true } })
-    } else if (["electrical", "plumbing", "carpentry", "elec"].some(k => rawCatKey.includes(k))) {
-      navigate("/home", { state: { openElecModal: true } })
-    } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
-      navigate("/home", { state: { openGoodsModal: true } })
-    } else if (["cleaning", "pest"].some(k => rawCatKey.includes(k))) {
-      navigate("/home", { state: { openHomePestModal: true } })
-    } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
-      navigate("/home")
-    } else {
-      navigate(".", { replace: true, state: {} })
-    }
+    navigate("/home", { replace: true, state: {} })
   }
 
   const resolveCartArg = (cartArg) => {
@@ -3807,101 +3806,22 @@ export function LandingPage() {
           </header>
 
           {/* Full Page View Wrapper */}
-          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-0" : "py-10"}`}>
+          <main className="flex-1 w-full">
             {activeCategory && (
-              (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
-                <KitchenCleaningModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
-                />
-              ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
-                <SofaCleaningModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(finalCart);
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                />
-              ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
-                <BathroomCleaningModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(finalCart);
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                />
-              ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
-                <PaintingPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  packagesData={packagesData}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                  onGetEstimate={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-                  }}
-                />
-
-
-              ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
-                <CockroachControlModal
-                  category={{ id: "pest_control", name: "Pest Control" }}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  initialTab={activeSubTabParam === "Termite Control" ? "termite" : "cockroach"}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(finalCart);
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                />
-              ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Ants & Bed Bugs Control" || activeSubTabParam === "Ants Control" || activeSubTabParam === "Bedbugs Control" || activeSubTabParam === "Ants and bed bugs control") ? (
-                <AntsBedBugsControlModal
-                  category={{ id: "pest_control", name: "Pest Control" }}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  initialTab={activeSubTabParam === "Ants Control" ? "ants" : "bedbugs"}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(finalCart);
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                />
-              ) : (
-                <CustomCleaningPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  packagesData={packagesData}
-                  isFullPage={true}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                />
-              )
+              <ModernServiceCatalogView
+                category={activeCategory}
+                cart={modalCart}
+                setCart={setModalCart}
+                packagesData={packagesData}
+                displayLocationText={displayLocationText}
+                onOpenAddressPicker={() => setShowLocationPickerModal(true)}
+                onClose={handleCloseCategory}
+                onCheckout={(customCart) => {
+                  const finalCart = resolveCartArg(customCart);
+                  setModalCart(finalCart);
+                  navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                }}
+              />
             )}
           </main>
         </div>
@@ -4269,35 +4189,35 @@ export function LandingPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsAcModalOpen(true)}
+                onClick={() => navigate("?category=hvac")}
                 className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
               >
                 Appliance Repair
               </button>
               <button
                 type="button"
-                onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")}
+                onClick={() => navigate("?category=hvac")}
                 className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
               >
                 AC Services
               </button>
               <button
                 type="button"
-                onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")}
+                onClick={() => navigate("?category=plumbing")}
                 className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
               >
                 Plumbing
               </button>
               <button
                 type="button"
-                onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")}
+                onClick={() => navigate("?category=electrical")}
                 className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
               >
                 Electrical
               </button>
               <button
                 type="button"
-                onClick={() => setIsHomePestModalOpen(true)}
+                onClick={() => navigate("?category=pest_control")}
                 className="hover:text-[#0B8F7A] transition-colors cursor-pointer"
               >
                 Pest Control
@@ -4359,7 +4279,7 @@ export function LandingPage() {
             </span>
             <button
               type="button"
-              onClick={() => setHomeEditMode((v) => !v)}
+              onClick={() => setHomeEditMode(!homeEditMode)}
               className={`px-3 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer ${homeEditMode ? "bg-white text-indigo-700" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
             >
               <Pencil className="w-3 h-3" />
@@ -4852,7 +4772,28 @@ export function LandingPage() {
 
                     <button
                       type="button"
-                      onClick={() => navigate(`?category=${pkg.category_slug || ""}&service=${pkg.service_slug || ""}`)}
+                      onClick={() => {
+                        // Was `navigate(\`?category=...\`)` -- a bare query
+                        // string navigates relative to whatever page you're
+                        // already on (usually "/home"), so it just appended
+                        // params to the homepage URL instead of actually
+                        // going to the booking/catalog page. Needs the real
+                        // route prefix, same pattern used elsewhere in this
+                        // file (see the serviceCategoryId tile handler above).
+                        const params = new URLSearchParams()
+                        if (pkg.category_slug) params.set("category", pkg.category_slug)
+                        if (pkg.service_slug) {
+                          params.set("service", pkg.service_slug)
+                          // ModernServiceCatalogView (the component that
+                          // actually renders this route) pre-selects the
+                          // active service tab from "subtab"/"subTab", not
+                          // "service" -- set both so the right service is
+                          // already open when the page lands.
+                          params.set("subtab", pkg.service_slug)
+                        }
+                        const qs = params.toString()
+                        navigate(`${routes.booking_services}${qs ? `?${qs}` : ""}`)
+                      }}
                       className="w-full mt-2 py-2 rounded-xl bg-[#0B8F7A] hover:bg-[#087362] text-white text-xs font-black transition-all shadow-2xs active:scale-98 cursor-pointer text-center"
                     >
                       Book Now
@@ -5080,10 +5021,10 @@ export function LandingPage() {
               <ul className="space-y-2 text-xs">
                 <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Cleaning</button></li>
                 <li><button type="button" onClick={() => navigate("?category=hvac&subtab=AC%20Service%20%26%20Cleaning")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">AC Services</button></li>
-                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
+                <li><button type="button" onClick={() => navigate("?category=hvac")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
                 <li><button type="button" onClick={() => navigate("?category=plumbing&subtab=Tap%20%26%20Mixer")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Plumbing</button></li>
                 <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Switches%20%26%20Sockets")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Electrical</button></li>
-                <li><button type="button" onClick={() => setIsHomePestModalOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Pest Control</button></li>
+                <li><button type="button" onClick={() => navigate("?category=pest_control")} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer">Pest Control</button></li>
                 <li><button type="button" onClick={() => setIsAllServicesOpen(true)} className="hover:text-[#0B8F7A] transition-colors text-left cursor-pointer font-bold text-[#0B8F7A]">View All Services</button></li>
               </ul>
             </div>
@@ -6781,11 +6722,11 @@ export function LandingPage() {
                           } else if (item.action === "two_wheeler") {
                             navigate(routes.two_wheeler_booking_hosur)
                           } else if (item.categoryId === "cleaning") {
-                            setIsHomePestModalOpen(true)
+                            goToCategoryServices("cleaning")
                           } else if (item.categoryId === "hvac") {
-                            setIsAcModalOpen(true)
+                            goToCategoryServices("hvac")
                           } else if (item.categoryId === "electrical") {
-                            setIsElecModalOpen(true)
+                            goToCategoryServices("electrical")
                           } else {
                             goToCategoryServices(item.categoryId)
                           }
@@ -6930,11 +6871,11 @@ export function LandingPage() {
                           } else if (label.includes("Goods") || label.includes("Transport")) {
                             setIsGoodsModalOpen(true)
                           } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                            setIsElecModalOpen(true)
+                            goToCategoryServices(serviceCategoryId || "electrical")
                           } else if (label.includes("AC") || label.includes("Appliance")) {
-                            setIsAcModalOpen(true)
+                            goToCategoryServices(serviceCategoryId || "hvac")
                           } else if (label.includes("Pest") || label.includes("Home Services")) {
-                            setIsHomePestModalOpen(true)
+                            goToCategoryServices(serviceCategoryId || "pest_control")
                           } else {
                             goToCategoryServices(serviceCategoryId)
                           }
@@ -8677,11 +8618,11 @@ export function LandingPage() {
                       } else if (item.action === "two_wheeler") {
                         navigate(routes.two_wheeler_booking_hosur)
                       } else if (item.categoryId === "cleaning") {
-                        setIsHomePestModalOpen(true)
+                        goToCategoryServices("cleaning")
                       } else if (item.categoryId === "hvac") {
-                        setIsAcModalOpen(true)
+                        goToCategoryServices("hvac")
                       } else if (item.categoryId === "electrical") {
-                        setIsElecModalOpen(true)
+                        goToCategoryServices("electrical")
                       } else {
                         goToCategoryServices(item.categoryId)
                       }
@@ -8823,11 +8764,11 @@ export function LandingPage() {
                         } else if (label.includes("Goods") || label.includes("Transport")) {
                           setIsGoodsModalOpen(true)
                         } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                          setIsElecModalOpen(true)
+                          goToCategoryServices(serviceCategoryId || "electrical")
                         } else if (label.includes("AC") || label.includes("Appliance")) {
-                          setIsAcModalOpen(true)
+                          goToCategoryServices(serviceCategoryId || "hvac")
                         } else if (label.includes("Pest") || label.includes("Home Services")) {
-                          setIsHomePestModalOpen(true)
+                          goToCategoryServices(serviceCategoryId || "pest_control")
                         } else {
                           goToCategoryServices(serviceCategoryId)
                         }

@@ -49,6 +49,13 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
         model = Package
         fields = [
             "id", "category", "category_slug", "name", "slug", "description", "price", "duration",
+            # base_price/offer_price/platform_fee/gst_rate were missing here entirely --
+            # the frontend catalog page (ModernServiceCatalogView.jsx) reads pkg.base_price
+            # and pkg.offer_price directly to compute MRP strike-through, the discounted
+            # price and the discount %, and pkg.platform_fee for the convenience fee. With
+            # these absent from the response every package showed as ₹0 with no discount,
+            # even when the admin had set real MRP/offer values in the Catalog panel.
+            "base_price", "offer_price", "platform_fee", "gst_rate",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
             "faqs", "sort_order", "tools", "ready",
             "service_id", "service_name", "service_slug", "service_description",

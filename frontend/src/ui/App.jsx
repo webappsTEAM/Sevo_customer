@@ -6,6 +6,7 @@ import { isSuperAdmin, can as canAccess } from "../auth/authorization.js"
 import { routes } from "./routes.js"
 import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
+import { GlobalEditModeToggle } from "./components/GlobalEditModeToggle.jsx"
 import { LoginPage } from "./pages/LoginPage.jsx"
 
 // Lazy-loaded Pages
@@ -69,9 +70,6 @@ const CatalogCategoriesPage = lazy(() =>
 )
 const CatalogServicesPage = lazy(() =>
   import("./pages/catalog/CatalogServicesPage.jsx").then(m => ({ default: m.CatalogServicesPage || m.default }))
-)
-const CatalogSubServicesPage = lazy(() =>
-  import("./pages/catalog/CatalogSubServicesPage.jsx").then(m => ({ default: m.CatalogSubServicesPage || m.default }))
 )
 const CatalogPackagesPage = lazy(() =>
   import("./pages/catalog/CatalogPackagesPage.jsx").then(m => ({ default: m.CatalogPackagesPage || m.default }))
@@ -349,7 +347,16 @@ export function App() {
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
-          <Route path="/ac-inspection" element={<Navigate to="/booking?category=hvac&subtab=AC Inspection" replace />} />
+          {/* Was redirecting into the old BookingPage's hardcoded "AC Inspection"
+              tab (category=hvac, a legacy id that no longer matches any real
+              catalog category) -- that flow also depended on a component,
+              ACInspectionFormModal.jsx, that doesn't exist in the codebase, so
+              it was fully broken. ACInspectionBookingPage.jsx is a complete,
+              working, self-contained replacement (real backend booking via
+              estimationRepository) that was already built and lazy-imported
+              above but never actually mounted on any route -- wiring it in
+              here is what makes it reachable. */}
+          <Route path="/ac-inspection" element={<ACInspectionBookingPage />} />
           <Route path="/ac-inspection/status/:id" element={<ACInspectionStatusPage />} />
           <Route path={routes.vegetables} element={<VegetableFullScreenPage />} />
           <Route path="/vegetables" element={<VegetableFullScreenPage />} />
@@ -488,7 +495,6 @@ export function App() {
               <Route path={routes.catalog_dashboard} element={<RequireModule module="catalog"><CatalogDashboardPage /></RequireModule>} />
               <Route path={routes.catalog_categories} element={<RequireModule module="catalog"><CatalogCategoriesPage /></RequireModule>} />
               <Route path={routes.catalog_services} element={<RequireModule module="catalog"><CatalogServicesPage /></RequireModule>} />
-              <Route path={routes.catalog_sub_services} element={<RequireModule module="catalog"><CatalogSubServicesPage /></RequireModule>} />
               <Route path={routes.catalog_packages} element={<RequireModule module="catalog"><CatalogPackagesPage /></RequireModule>} />
               <Route path={routes.catalog_addons} element={<RequireModule module="catalog"><CatalogAddOnsPage /></RequireModule>} />
               <Route path={routes.catalog_recipes} element={<RequireModule module="catalog"><AdminRecipesPage /></RequireModule>} />
@@ -548,6 +554,11 @@ export function App() {
         </Routes>
       </Suspense>
       <SessionToast />
+      {/* Persistent floating "Edit Mode" switch -- one shared toggle for
+          every customer-facing page (see EditModeProvider in main.jsx),
+          instead of each page needing to wire in its own toggle bar. Renders
+          nothing for anyone who isn't a Super Admin. */}
+      <GlobalEditModeToggle />
     </>
   )
 }
