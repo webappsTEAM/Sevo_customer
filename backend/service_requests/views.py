@@ -38,6 +38,7 @@ from .models import (
     TripStop,
     Payment, PaintingQuote,
 )
+from .models import is_mason_category
 from .serializers import (
     AdminChangePrioritySerializer,
     FeedbackTokenSummarySerializer,
@@ -551,7 +552,7 @@ class BookingCreateView(APIView):
                 is_painting_booking = True
 
         is_mason_booking = False
-        if _service_category in ["mason", "masonry"]:
+        if is_mason_category(_service_category):
             is_mason_booking = True
         else:
             if any(isinstance(it, dict) and (it.get("categoryName") == "Mason" or "mason" in str(it.get("id"))) for it in cart_data):
@@ -834,6 +835,42 @@ class BookingCreateView(APIView):
                         order_amount=subtotal,
                         final_amount=final_tot
                     )
+
+        # Parent Order layer (additive, see PARENT_ORDER_FEASIBILITY_AUDIT_RECONCILED.md
+        # and orders/models.py): every booking created through this endpoint gets an
+        # Order + OrderItem wrapper around its ServiceRequest. Placed here -- after
+        # sr.total_amount has been finalized to the post-coupon amount, not the earlier
+        # pre-discount corrected_fare -- so OrderItem.item_amount always reflects what the
+        # customer was actually charged. Deliberately non-blocking: a failure creating the
+        # Order/OrderItem must never fail or roll back the booking itself, since this is a
+        # reporting/grouping layer added on top of an already-working booking flow, not a
+        # gate on it. Idempotent by construction (checks for an existing OrderItem before
+        # creating one) so it is always safe to re-run against the same ServiceRequest --
+        # e.g. from a future reconciliation command sweeping up any orphans logged below.
+        try:
+            from orders.models import Order, OrderItem
+            if not OrderItem.objects.filter(service_request=sr).exists():
+                with transaction.atomic():
+                    order = Order.objects.create(
+                        customer=sr.customer,
+                        status=Order.Status.CONFIRMED,
+                        total_amount=sr.total_amount,
+                    )
+                    OrderItem.objects.create(
+                        order=order,
+                        service_request=sr,
+                        item_amount=sr.total_amount,
+                    )
+        except Exception as order_err:
+            # Logged with enough to recover later (e.g. a reconciliation command doing
+            # ServiceRequest.objects.filter(order_item__isnull=True)) -- never raised, so a
+            # booking that already succeeded is never turned into a customer-facing failure
+            # by this optional wrapper layer.
+            logger.warning(
+                "Could not create Order/OrderItem for booking %s (service_request_id=%s, "
+                "customer_id=%s, at=%s): %r",
+                sr.request_id, sr.id, sr.customer_id, timezone.now().isoformat(), order_err,
+            )
 
         # Dispatch booking notification to workforce management system.
         #
@@ -3698,6 +3735,7 @@ from service_requests.models import (
     PaintingMaterial,
     QuotePhoto,
 )
+from service_requests.models import is_mason_category
 from service_requests.serializers import (
     VegetableRecipeListSerializer,
     VegetableRecipeDetailSerializer,
@@ -3988,6 +4026,57 @@ class CustomerQuoteDecideView(APIView):
                         payment_status=ServiceRequest.PaymentStatus.PENDING
                     )
 
+                    # Parent Order layer, Phase B (see orders/models.py and
+                    # PARENT_ORDER_FEASIBILITY_AUDIT_RECONCILED.md): this is the one place
+                    # today where a single checkout genuinely spans two ServiceRequests --
+                    # the inspection (parent_sr) and the quoted work it produced (new_sr).
+                    # Attach new_sr as a SECOND OrderItem under the parent's existing Order
+                    # (found via parent_sr.order_item, the OneToOne reverse accessor) instead
+                    # of creating a separate Order -- this is exactly the multi-item shape
+                    # the join table exists for. Falls back to creating a fresh Order only if
+                    # the parent has none (e.g. it predates this feature / Order creation
+                    # failed non-fatally back in BookingCreateView).
+                    #
+                    # This whole block runs inside the CUSTOMER_ACCEPTED transaction.atomic()
+                    # above it, so it is wrapped in its OWN nested transaction.atomic() here
+                    # (Django gives nested atomic() a real savepoint) -- if anything in here
+                    # raises, only this savepoint rolls back and the exception is swallowed
+                    # below, instead of poisoning the outer quote-decision transaction that
+                    # already committed the parent's COMPLETED transition. Idempotent (checks
+                    # for an existing OrderItem first) and non-blocking, matching
+                    # BookingCreateView.post()'s Phase A implementation.
+                    try:
+                        from orders.models import Order, OrderItem
+                        with transaction.atomic():
+                            if not OrderItem.objects.filter(service_request=new_sr).exists():
+                                parent_order_item = OrderItem.objects.filter(
+                                    service_request=parent_sr
+                                ).select_related("order").first()
+                                if parent_order_item:
+                                    target_order = parent_order_item.order
+                                    Order.objects.filter(pk=target_order.pk).update(
+                                        total_amount=F("total_amount") + final_amount
+                                    )
+                                else:
+                                    target_order = Order.objects.create(
+                                        customer=parent_sr.customer,
+                                        status=Order.Status.CONFIRMED,
+                                        total_amount=final_amount,
+                                    )
+                                OrderItem.objects.create(
+                                    order=target_order,
+                                    service_request=new_sr,
+                                    item_amount=final_amount,
+                                )
+                    except Exception as order_err:
+                        logger.warning(
+                            "Could not attach Order/OrderItem for quoted_work booking %s "
+                            "(parent_request_id=%s, service_request_id=%s, customer_id=%s, "
+                            "at=%s): %r",
+                            new_sr.request_id, parent_sr.id, new_sr.id, new_sr.customer_id,
+                            timezone.now().isoformat(), order_err,
+                        )
+
                     # Dispatch job to workforce management system
                     WorkforceIntegrationService.dispatch_job(new_sr.id)
 
@@ -4124,7 +4213,7 @@ class AdminQuoteCreateView(APIView):
             return _error("Quotation must have at least one line item.", 400)
 
         is_painting_or_wp = sr.service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]
-        is_mason = sr.service_category in ["mason", "masonry"]
+        is_mason = is_mason_category(sr.service_category)
 
         for item in items:
             classification = item.get("classification") or ""
@@ -4148,7 +4237,7 @@ class AdminQuoteCreateView(APIView):
             advance_amount = Decimal("0.00")
             balance_amount = Decimal("0.00")
             is_waterproofing = sr.service_category in ["waterproofing", "waterproofing-services"] or any("waterproofing" in str(it.get("category")).lower() for it in items)
-            is_mason_items = sr.service_category in ["mason", "masonry"] or any("mason" in str(it.get("category")).lower() for it in items)
+            is_mason_items = is_mason_category(sr.service_category) or any("mason" in str(it.get("category")).lower() for it in items)
             
             if is_mason_items:
                 # Every valid Mason quote must be split 50/50 regardless of quote amount
@@ -4280,7 +4369,7 @@ class AdminQuoteActionView(APIView):
                 quote.grand_total = subtotal - quote.discount + quote.tax
                 
                 is_waterproofing = quote.service_request.service_category in ["waterproofing", "waterproofing-services"] or any("waterproofing" in str(it.category).lower() for it in quote.items.all())
-                is_mason = quote.service_request.service_category in ["mason", "masonry"] or any("mason" in str(it.category).lower() for it in quote.items.all())
+                is_mason = is_mason_category(quote.service_request.service_category) or any("mason" in str(it.category).lower() for it in quote.items.all())
                 if is_mason:
                     quote.advance_amount = quote.grand_total * Decimal("0.5")
                     quote.balance_amount = quote.grand_total - quote.advance_amount

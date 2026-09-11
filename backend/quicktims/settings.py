@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "inventory",
     "service_requests",
     "logistics",
+    "orders",
     "customer_care",
     "reports",
     "workforce_integration",
