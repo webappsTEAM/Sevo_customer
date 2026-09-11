@@ -981,6 +981,7 @@ class Package(models.Model):
     platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
     stock_item     = models.OneToOneField("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="vegetable_package")
     custom_packs   = models.JSONField(default=list, blank=True)
+    customization  = models.JSONField(default=dict, blank=True)
 
     # ── Goods & Transport distance-pricing (Phase 1 unification) ───────────
     # Mirrors logistics.ServiceTier's real fare-engine fields (see

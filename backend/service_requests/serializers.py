@@ -512,9 +512,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_phone       = serializers.SerializerMethodField()
     technician_photo       = serializers.SerializerMethodField()
     technician_rating      = serializers.SerializerMethodField()
-    child_requests         = serializers.SerializerMethodField()
-
-        job_type               = serializers.CharField(read_only=True)
+    job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
@@ -522,7 +520,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return EstimationSummarySerializer(obj.estimation, context=self.context).data
         return None
 
-class Meta:
+    class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
@@ -866,7 +864,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     available_actions      = serializers.SerializerMethodField()
     technician             = serializers.SerializerMethodField()
 
-        job_type               = serializers.CharField(read_only=True)
+    job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
@@ -874,7 +872,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             return EstimationSerializer(obj.estimation, context=self.context).data
         return None
 
-class Meta:
+    class Meta:
         model = ServiceRequest
         fields = (
             "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
