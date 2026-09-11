@@ -328,7 +328,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
   }
 }
 
-const STORAGE_KEY = "calservices_homepage_config_v1"
+export const STORAGE_KEY = "calservices_homepage_config_v1"
 
 export function getHomePageConfig() {
   try {
@@ -384,7 +384,7 @@ const DEFAULT_CATEGORY_FALLBACKS = [
 
 export function getCategorySafeImage(cat, idx = 0) {
   const img = cat?.image || cat?.image_url
-  if (img && !img.includes("/media/homepage/") && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
+  if (img && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
     return resolveImageUrl(img)
   }
   const key = `${cat?.id || ""} ${cat?.name || ""} ${cat?.title || ""} ${cat?.link || ""}`.toLowerCase()
@@ -404,7 +404,7 @@ const DEFAULT_OFFER_IMAGES = [
 
 export function getOfferSafeImage(offer, idx = 0) {
   const img = offer?.image || offer?.image_url
-  if (img && !img.includes("/media/homepage/") && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
+  if (img && img !== "undefined" && img !== "null" && typeof img === "string" && img.trim()) {
     return resolveImageUrl(img)
   }
   const lower = `${offer?.title || ""} ${offer?.tag || ""} ${offer?.link || ""}`.toLowerCase()
@@ -420,7 +420,7 @@ export function getOfferSafeImage(offer, idx = 0) {
   return DEFAULT_OFFER_IMAGES[idx % DEFAULT_OFFER_IMAGES.length]
 }
 
-function mergeWithDefaultConfig(parsed) {
+export function mergeWithDefaultConfig(parsed) {
   if (!parsed) return DEFAULT_HOME_PAGE_CONFIG
 
   const parsedHero = parsed.hero || {}
@@ -428,7 +428,7 @@ function mergeWithDefaultConfig(parsed) {
   const defaultCollage = DEFAULT_HOME_PAGE_CONFIG.hero.collageImages
   const mergedCollage = [0, 1, 2, 3].map((i) => {
     const rawVal = rawCollage[i]
-    if (!rawVal || rawVal.includes("/media/homepage/")) {
+    if (!rawVal || rawVal === "undefined" || rawVal === "null") {
       return defaultCollage[i]
     }
     return resolveDisplayImageUrl(rawVal, defaultCollage[i])
@@ -438,7 +438,7 @@ function mergeWithDefaultConfig(parsed) {
     parsedHero.heroImage || parsedHero.heroIllustration,
     DEFAULT_HOME_PAGE_CONFIG.hero.heroImage
   )
-  if (!mergedHeroImage || mergedHeroImage.includes("/media/homepage/") || mergedHeroImage === "undefined" || mergedHeroImage === "null") {
+  if (!mergedHeroImage || mergedHeroImage === "undefined" || mergedHeroImage === "null") {
     mergedHeroImage = "/assets/hero_illustration.jpg"
   }
 
@@ -450,7 +450,7 @@ function mergeWithDefaultConfig(parsed) {
   const rawSlides = Array.isArray(parsedHero.slides) ? parsedHero.slides : []
   const mergedSlides = rawSlides.map((s, idx) => {
     let img = s.heroImage || s.heroImage_url || ""
-    if (!img || img.includes("/media/homepage/")) {
+    if (!img || img === "undefined" || img === "null") {
       img = defaultSlideImages[idx % defaultSlideImages.length]
     } else {
       img = resolveDisplayImageUrl(img, defaultSlideImages[idx % defaultSlideImages.length])

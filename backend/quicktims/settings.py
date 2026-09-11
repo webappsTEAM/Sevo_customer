@@ -223,12 +223,6 @@ if _cache_url:
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": _cache_url,
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "SOCKET_CONNECT_TIMEOUT": 2,
-                "SOCKET_TIMEOUT": 2,
-                "IGNORE_EXCEPTIONS": True,  # Degrade gracefully if Redis is down
-            },
             "TIMEOUT": 300,  # 5 min default TTL
         }
     }

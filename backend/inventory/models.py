@@ -32,6 +32,7 @@ class InventoryItem(models.Model):
     expected_delivery_date = models.DateField(null=True, blank=True)
     is_returnable = models.BooleanField(default=True)
     requires_photo_on_issue = models.BooleanField(default=False)
+    image = models.CharField(max_length=500, blank=True, default="")
     # Vegetable Stock Additions (integer grams, null=not tracked)
     unit = models.CharField(max_length=20, blank=True, default="")
     stock_quantity_grams = models.PositiveIntegerField(null=True, blank=True, default=None)

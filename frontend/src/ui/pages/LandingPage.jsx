@@ -2344,7 +2344,15 @@ export function LandingPage() {
   // endpoints BookingPage.jsx and AllServicesDrawer already use) -- popular
   // packages first, so adding/marking a package "Popular" in the catalog
   // admin surfaces it here automatically.
-  const [recommendedItems, setRecommendedItems] = useState([])
+  const CACHED_REC_ITEMS_KEY = 'calservices_recommended_items_cache';
+  const [recommendedItems, setRecommendedItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CACHED_REC_ITEMS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   useEffect(() => {
     Promise.all([
       apiRequest("/settings/catalog/public/packages/").catch(() => ({ success: false, data: [] })),
@@ -2355,7 +2363,7 @@ export function LandingPage() {
       const catBySlug = {}
       cats.forEach((c) => { catBySlug[c.slug] = c })
       const sorted = [...pkgs].sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0))
-      setRecommendedItems(sorted.slice(0, 10).map((p) => ({
+      const mapped = sorted.slice(0, 10).map((p) => ({
         id: p.id,
         name: p.name,
         image: p.image || p.service_image,
@@ -2366,7 +2374,11 @@ export function LandingPage() {
         categoryRating: catBySlug[p.category_slug]?.rating,
         categoryJobs: catBySlug[p.category_slug]?.jobs_count_str,
         serviceName: p.service_name,
-      })))
+      }));
+      setRecommendedItems(mapped);
+      try {
+        localStorage.setItem(CACHED_REC_ITEMS_KEY, JSON.stringify(mapped));
+      } catch (_) {}
     }).catch((err) => console.error("Failed to load recommended items:", err))
   }, [])
 

@@ -39,8 +39,12 @@ def _extract_image_paths(config_data):
         trimmed = v.strip()
         if prefix and trimmed.startswith(prefix):
             paths.add(trimmed[len(prefix):])
-        elif trimmed.startswith("homepage/"):
-            paths.add(trimmed)
+            return
+        clean = trimmed.lstrip("/")
+        if clean.startswith("media/"):
+            clean = clean[len("media/"):]
+        if clean.startswith("homepage/"):
+            paths.add(clean)
 
     if isinstance(config_data, dict):
         for k, v in config_data.items():
@@ -64,6 +68,8 @@ def _resolve_image_urls(config_data):
     if isinstance(config_data, dict):
         resolved = {}
         for k, v in config_data.items():
+            if k.endswith("_url") and k[:-4] in config_data:
+                continue
             resolved[k] = _resolve_image_urls(v)
             if k in ("image_path", "image", "avatar", "photo", "cover", "heroImage", "heroIllustration") and isinstance(v, str) and v:
                 resolved[f"{k}_url"] = SupabaseStorageService.get_public_url(v)

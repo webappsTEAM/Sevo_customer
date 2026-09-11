@@ -375,6 +375,9 @@ export function App() {
           <Route path="/transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           <Route path="/goods-and-transports" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/logistics" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/logistics/" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/booking/logistics" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
           {/* HS-A-03: logged-in customer account area -- real routes, not just a
               modal reachable from the header. Each redirects into the existing
               CustomerAccountModal on /home with the matching tab pre-selected via
