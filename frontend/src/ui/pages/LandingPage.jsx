@@ -4473,7 +4473,7 @@ export function LandingPage() {
         )}
 
         {/* ── 4. Hero Banner Carousel ─────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-7 scroll-mt-24">
+        <section id="home" className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 pb-3 sm:pt-5 sm:pb-6 scroll-mt-24">
           {/* The ENTIRE banner is the advertisement -- a single admin-
               uploaded image per slide, full width, nothing code-drawn on
               top of it. Clicking it (outside edit mode) follows the
@@ -4498,7 +4498,7 @@ export function LandingPage() {
                 onError={(e) => {
                   e.currentTarget.src = "/assets/hero_illustration.jpg"
                 }}
-                className="w-full aspect-[2/1] sm:aspect-auto sm:h-[320px] lg:h-[420px] object-cover transition-transform duration-500 group-hover/heroimg:scale-102"
+                className="w-full h-auto block sm:h-[320px] lg:h-[420px] sm:object-cover transition-transform duration-500 group-hover/heroimg:scale-102"
                 loading="eager"
               />
             </button>
@@ -4527,7 +4527,7 @@ export function LandingPage() {
 
             {/* 4 Bottom Indicator Dots */}
             {heroSlides.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5">
+              <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5">
                 {heroSlides.map((_, idx) => (
                   <button
                     key={idx}
@@ -4633,7 +4633,7 @@ export function LandingPage() {
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               What do you need help with?
             </h2>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {homeEditMode && (
                 <button
                   type="button"
@@ -4646,15 +4646,16 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1.5 transition-colors cursor-pointer group"
+                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1 transition-colors cursor-pointer group shrink-0"
               >
-                <span>View All Categories</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <span className="hidden sm:inline">View All Categories</span>
+                <span className="sm:hidden">View All</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3.5">
+          <div className="grid grid-cols-5 lg:grid-cols-10 gap-1.5 sm:gap-3.5">
             {[
               ...homeCategories.map((cat, idx) => ({
                 ...cat,
@@ -4680,9 +4681,9 @@ export function LandingPage() {
                   type="button"
                   onClick={cat.onClick}
                   disabled={homeEditMode && !cat.fixed}
-                  className="w-full group flex flex-col items-center text-center p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 hover:border-[#0B8F7A] shadow-2xs hover:shadow-md hover:-translate-y-0.5 sm:hover:-translate-y-1 transition-all duration-200 cursor-pointer min-h-[92px] sm:min-h-0 justify-start"
+                  className="w-full group flex flex-col items-center text-center p-1 sm:p-3 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 hover:border-[#0B8F7A] shadow-2xs hover:shadow-md hover:-translate-y-0.5 sm:hover:-translate-y-1 transition-all duration-200 cursor-pointer min-h-[82px] sm:min-h-0 justify-start"
                 >
-                  <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-xl sm:rounded-2xl flex items-center justify-center mb-1.5 sm:mb-2 group-hover:scale-105 sm:group-hover:scale-110 transition-transform overflow-hidden relative shrink-0">
+                  <div className="w-9 h-9 sm:w-13 sm:h-13 rounded-xl sm:rounded-2xl flex items-center justify-center mb-1 sm:mb-2 group-hover:scale-105 sm:group-hover:scale-110 transition-transform overflow-hidden relative shrink-0">
                     {cat.image ? (
                       <img
                         src={cat.image}
@@ -4703,10 +4704,10 @@ export function LandingPage() {
                       />
                     ) : null}
                     <div className={`w-full h-full rounded-xl sm:rounded-2xl ${cat.color} ${cat.image ? 'hidden' : 'flex'} items-center justify-center`}>
-                      <FallbackIcon className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2]" />
+                      <FallbackIcon className="w-4 h-4 sm:w-6 sm:h-6 stroke-[2]" />
                     </div>
                   </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#0B8F7A] transition-colors leading-tight line-clamp-2">
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#0B8F7A] transition-colors leading-tight line-clamp-2">
                     {cat.name || cat.title || "Service"}
                   </span>
                 </button>
@@ -4809,14 +4810,14 @@ export function LandingPage() {
             {(homeConfig.offers?.items || []).filter((o) => o.enabled !== false || homeEditMode).map((offer, idx) => (
               <div
                 key={offer.id || idx}
-                className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 dark:border-slate-700 shadow-xs hover:shadow-md transition-all bg-slate-100 dark:bg-slate-800 group/offer shrink-0 w-[82vw] max-w-[340px] md:w-auto snap-center"
+                className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 dark:border-slate-700 shadow-xs hover:shadow-md transition-all bg-slate-100 dark:bg-slate-800 group/offer shrink-0 w-[78vw] max-w-[280px] md:w-auto snap-center"
               >
                 <button
                   type="button"
                   onClick={() => !homeEditMode && goToBannerLink(offer.link)}
                   disabled={homeEditMode}
                   aria-label={offer.title || "Promotional offer"}
-                  className={`block w-full aspect-[16/9] sm:aspect-[4/3] ${homeEditMode ? "cursor-default" : "cursor-pointer"}`}
+                  className={`block w-full aspect-[4/3] ${homeEditMode ? "cursor-default" : "cursor-pointer"}`}
                 >
                   {offer.image ? (
                     <img
@@ -4892,19 +4893,20 @@ export function LandingPage() {
         </section>
 
         {/* ── 7. "Recommended for You" 5-Card Service Row ─────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               Recommended for You
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1.5 transition-colors cursor-pointer group shrink-0"
+                className="text-xs sm:text-sm font-bold text-[#0B8F7A] hover:text-[#087362] flex items-center gap-1 transition-colors cursor-pointer group shrink-0"
               >
-                <span>See More Like This</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <span className="hidden sm:inline">See More Like This</span>
+                <span className="sm:hidden">See More</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
@@ -5012,23 +5014,46 @@ export function LandingPage() {
 
         {/* ── 8. Trust Guarantees (5 Pillars) ─────────────────────────────────── */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 shadow-2xs">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-0 sm:divide-x divide-slate-100 dark:divide-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 sm:p-6 shadow-2xs">
+            {/* Mobile: Smooth horizontal swipeable guarantee chips */}
+            <div className="sm:hidden flex overflow-x-auto no-scrollbar gap-2.5 pb-0.5 -mx-1 px-1">
               {(homeConfig.trustBadges || DEFAULT_HOME_PAGE_CONFIG.trustBadges)
                 .filter((t) => t.enabled !== false)
                 .map((pill, idx) => {
                   const Icon = TRUST_BADGE_ICON_MAP[pill.icon] || ShieldCheck
                   const color = TRUST_BADGE_COLORS[idx % TRUST_BADGE_COLORS.length]
-                  const isLastOdd = idx === 4
                   return (
                     <div
                       key={pill.id || idx}
-                      className={`flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-0 sm:px-4 rounded-xl sm:rounded-none bg-slate-50/70 sm:bg-transparent dark:bg-slate-800/60 sm:dark:bg-transparent ${
-                        isLastOdd ? "col-span-2 sm:col-span-1 justify-center sm:justify-start" : ""
-                      }`}
+                      className="shrink-0 w-[210px] flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50/90 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700/60"
                     >
-                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-                        <Icon className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2]" />
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                        <Icon className="w-4 h-4 stroke-[2]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">
+                          {pill.title}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
+                          {pill.description || pill.desc}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+
+            {/* Desktop: 5-column divided grid */}
+            <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:divide-x divide-slate-100 dark:divide-slate-700">
+              {(homeConfig.trustBadges || DEFAULT_HOME_PAGE_CONFIG.trustBadges)
+                .filter((t) => t.enabled !== false)
+                .map((pill, idx) => {
+                  const Icon = TRUST_BADGE_ICON_MAP[pill.icon] || ShieldCheck
+                  const color = TRUST_BADGE_COLORS[idx % TRUST_BADGE_COLORS.length]
+                  return (
+                    <div key={pill.id || idx} className="flex items-center gap-3 px-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                        <Icon className="w-5 h-5 stroke-[2]" />
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">
@@ -5046,14 +5071,14 @@ export function LandingPage() {
         </section>
 
         {/* ── 9. Customer Testimonials ("What Our Customers Say") ──────────────── */}
-        <section id="testimonials" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4 scroll-mt-24">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+        <section id="testimonials" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4 scroll-mt-24">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               {homeConfig.testimonials?.title || "What Our Customers Say"}
             </h2>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <span className="sm:hidden text-[11px] font-extrabold text-[#0B8F7A] bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                ★ 4.9/5 (1.2k+ reviews)
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <span className="sm:hidden text-[10px] font-extrabold text-[#0B8F7A] bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200/60 shrink-0">
+                ★ 4.9/5 (1.2k+)
               </span>
               <a
                 href="#testimonials"
