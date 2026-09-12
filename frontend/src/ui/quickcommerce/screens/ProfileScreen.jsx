@@ -21,7 +21,7 @@ export function ProfileScreen() {
 
   const profile = (() => {
     try {
-      const saved = localStorage.getItem('antigravity_customer_profile');
+      const saved = localStorage.getItem('sevo_customer_profile');
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
@@ -35,14 +35,14 @@ export function ProfileScreen() {
     { label: 'My Orders', icon: ShoppingBag, action: () => navigate('/qc/orders') },
     { label: 'Addresses', icon: MapPin, action: () => setAddressSheetOpen(true) },
     { label: 'Saved Items', icon: Heart, action: () => navigate('/qc/search') },
-    { label: 'Subscriptions', icon: Repeat, action: () => alert('antigravity Subscriptions active') },
+    { label: 'Subscriptions', icon: Repeat, action: () => alert('SEVO Subscriptions active') },
     { label: 'Wallet & Offers', icon: Wallet, action: () => alert('Wallet Balance: ₹250.00') },
     { label: 'Support', icon: Headphones, action: () => alert('Connecting to 24x7 Customer Support...') },
     { label: 'Settings', icon: Settings, action: () => alert('Settings & Preferences') },
   ];
 
   const handleLogout = () => {
-    localStorage.removeItem('antigravity_customer_token');
+    localStorage.removeItem('sevo_customer_token');
     navigate('/qc/auth');
   };
 
@@ -94,7 +94,7 @@ export function ProfileScreen() {
           <div>
             <div className="flex items-center gap-1.5 text-amber-900 font-extrabold text-xs">
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>antigravity Plus</span>
+              <span>SEVO Plus</span>
             </div>
             <p className="text-[11px] text-amber-800 font-medium mt-0.5 max-w-[220px]">
               Save more with subscriptions and priority 10m delivery

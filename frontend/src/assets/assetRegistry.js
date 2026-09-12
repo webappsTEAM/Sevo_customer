@@ -1,6 +1,6 @@
 /**
  * assetRegistry.js
- * antigravity Central Asset Registry
+ * SEVO Central Asset Registry
  *
  * Strict Policy Enforcement:
  * - All UI images, icons, product photos, and category visuals must resolve
@@ -13,28 +13,28 @@ export const ASSET_REGISTRY = {
   'brand-emblem': {
     id: 'brand-emblem',
     url: '/mockups/sevo_emblem_transparent.png',
-    alt: 'antigravity emblem',
+    alt: 'SEVO emblem',
     type: 'brand',
     aspectRatio: '1/1',
   },
   'brand-logo': {
     id: 'brand-logo',
     url: '/mockups/sevo_logo_transparent.png',
-    alt: 'antigravity logo',
+    alt: 'SEVO logo',
     type: 'brand',
     aspectRatio: '3/1',
   },
   'brand-app-icon': {
     id: 'brand-app-icon',
     url: '/mockups/sevo_app_icon.png',
-    alt: 'antigravity app icon',
+    alt: 'SEVO app icon',
     type: 'brand',
     aspectRatio: '1/1',
   },
   'bike-partner': {
     id: 'bike-partner',
     url: '/mockups/hero_technician_circular.png',
-    alt: 'antigravity delivery partner',
+    alt: 'SEVO delivery partner',
     type: 'icon',
     aspectRatio: '1/1',
   },
@@ -259,7 +259,7 @@ export function getApprovedAsset(assetId) {
   return {
     id: 'fallback',
     url: '/mockups/sevo_emblem_transparent.png',
-    alt: 'antigravity asset',
+    alt: 'SEVO asset',
     type: 'fallback',
     aspectRatio: '1/1',
   };

@@ -5,7 +5,7 @@ import { ApprovedImage } from '../../../assets/ApprovedImage.jsx';
 
 const MOCK_ORDER_HISTORY = [
   {
-    id: 'AGY12345',
+    id: 'SEVO12345',
     status: 'Delivered',
     date: '12 Jun 2026',
     total: 2450,
@@ -13,7 +13,7 @@ const MOCK_ORDER_HISTORY = [
     assetId: 'prod-air-filter-element',
   },
   {
-    id: 'AGY12344',
+    id: 'SEVO12344',
     status: 'In Transit',
     date: '10 Jun 2026',
     total: 8750,
@@ -21,7 +21,7 @@ const MOCK_ORDER_HISTORY = [
     assetId: 'prod-ir-air-filter',
   },
   {
-    id: 'AGY12343',
+    id: 'SEVO12343',
     status: 'Delivered',
     date: '8 Jun 2026',
     total: 3200,
@@ -29,7 +29,7 @@ const MOCK_ORDER_HISTORY = [
     assetId: 'prod-lubricant-oil',
   },
   {
-    id: 'AGY12342',
+    id: 'SEVO12342',
     status: 'Cancelled',
     date: '5 Jun 2026',
     total: 1850,

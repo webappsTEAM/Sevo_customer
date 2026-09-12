@@ -9,11 +9,11 @@ export function AntigravityBottomNav() {
   const { billDetails, badgeBounced } = useQuickCart();
 
   const navItems = [
-    { label: 'Home', path: '/qc', icon: Home },
-    { label: 'Categories', path: '/qc/categories', icon: LayoutGrid },
-    { label: 'Search', path: '/qc/search', icon: Search },
-    { label: 'Cart', path: '/qc/cart', icon: ShoppingCart, badge: billDetails.itemCount },
-    { label: 'Profile', path: '/qc/profile', icon: User },
+    { label: 'Home', path: '/home', altPaths: ['/qc', '/'], icon: Home },
+    { label: 'Categories', path: '/qc/categories', altPaths: ['/categories'], icon: LayoutGrid },
+    { label: 'Search', path: '/qc/search', altPaths: ['/search'], icon: Search },
+    { label: 'Cart', path: '/qc/cart', altPaths: ['/cart'], icon: ShoppingCart, badge: billDetails.itemCount },
+    { label: 'Profile', path: '/qc/profile', altPaths: ['/profile', '/account'], icon: User },
   ];
 
   const handleNav = (path) => {
@@ -25,6 +25,12 @@ export function AntigravityBottomNav() {
     navigate(path);
   };
 
+  const isItemActive = (item) => {
+    if (location.pathname === item.path) return true;
+    if (item.altPaths && item.altPaths.some((p) => p === location.pathname)) return true;
+    return false;
+  };
+
   return (
     <nav
       aria-label="Bottom Navigation"
@@ -34,7 +40,7 @@ export function AntigravityBottomNav() {
       <div className="flex items-center justify-around h-14 px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive = isItemActive(item);
 
           return (
             <button

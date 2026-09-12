@@ -6,7 +6,7 @@ import { ArrowRight, CheckCircle2, ShieldCheck, Zap } from 'lucide-react';
 const SLIDES = [
   {
     id: 1,
-    title: 'Everything for Compressed Air & Operations',
+    title: 'Everything for Compressed Air Systems',
     subtitle: 'Parts • Accessories • Services Delivered Fast',
     assetId: 'prod-screw-compressor',
     highlight: '10–15 Min Delivery',
@@ -30,13 +30,17 @@ const SLIDES = [
   },
 ];
 
-export function OnboardingScreen() {
+export function OnboardingScreen({ onComplete }) {
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const handleComplete = () => {
-    localStorage.setItem('antigravity_onboarded_v2', 'true');
-    navigate('/qc/auth');
+    localStorage.setItem('sevo_onboarded_v2', 'true');
+    if (onComplete) {
+      onComplete();
+    } else {
+      navigate('/home');
+    }
   };
 
   const handleNext = () => {
@@ -52,14 +56,14 @@ export function OnboardingScreen() {
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between p-6 bg-[#FFFFFF] text-[#17212B]">
-      {/* Top Bar: Brand + Skip */}
+      {/* Top Bar: SEVO Brand Logo + Skip (matching Screen 2 in reference image) */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#E8F5EF] p-1.5 flex items-center justify-center">
-            <ApprovedImage assetId="brand-emblem" alt="antigravity" className="w-full h-full object-contain" />
+          <div className="w-8 h-8 rounded-lg bg-[#E8F5EF] p-1 flex items-center justify-center">
+            <ApprovedImage assetId="brand-emblem" alt="SEVO" className="w-full h-full object-contain" />
           </div>
-          <span className="font-extrabold text-lg tracking-tight text-[#008F6B]">
-            antigravity
+          <span className="font-extrabold text-xl tracking-tight text-[#17212B]">
+            SEVO
           </span>
         </div>
         <button

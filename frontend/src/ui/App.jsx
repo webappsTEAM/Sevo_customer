@@ -23,6 +23,10 @@ const LandingPage = lazy(() =>
   import("./pages/LandingPage.jsx").then(m => ({ default: m.LandingPage }))
 )
 
+const ResponsiveCustomerLanding = lazy(() =>
+  import("./pages/ResponsiveCustomerLanding.jsx").then(m => ({ default: m.ResponsiveCustomerLanding || m.default }))
+)
+
 const DashboardPage = lazy(() =>
   import("./pages/DashboardPage.jsx").then(m => ({ default: m.DashboardPage }))
 )
@@ -362,12 +366,12 @@ export function App() {
               user && user.role !== "customer" ? (
                 <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
               ) : (
-                <LandingPage />
+                <ResponsiveCustomerLanding />
               )
             }
           />
-          <Route path={routes.landing} element={<LandingPage />} />
-          <Route path="/home" element={<LandingPage />} />
+          <Route path={routes.landing} element={<ResponsiveCustomerLanding />} />
+          <Route path="/home" element={<ResponsiveCustomerLanding />} />
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
@@ -453,6 +457,13 @@ export function App() {
             <Route path="profile" element={<QCProfileScreen />} />
             <Route path="orders" element={<QCOrderHistoryScreen />} />
           </Route>
+          <Route path="/sevo" element={<Navigate to="/qc" replace />} />
+          <Route path="/categories" element={<Navigate to="/qc/categories" replace />} />
+          <Route path="/cart" element={<Navigate to="/qc/cart" replace />} />
+          <Route path="/search" element={<Navigate to="/qc/search" replace />} />
+          <Route path="/checkout" element={<Navigate to="/qc/checkout" replace />} />
+          <Route path="/splash" element={<Navigate to="/qc/splash" replace />} />
+          <Route path="/onboarding" element={<Navigate to="/qc/onboarding" replace />} />
           <Route path="/antigravity" element={<Navigate to="/qc" replace />} />
           <Route path="/quick-commerce" element={<Navigate to="/qc" replace />} />
 

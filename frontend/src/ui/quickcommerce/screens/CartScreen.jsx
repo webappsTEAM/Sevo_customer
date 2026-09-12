@@ -167,7 +167,7 @@ export function CartScreen() {
                     type="text"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
-                    placeholder="Try FAST50 or ANTIGRAVITY10"
+                    placeholder="Try FAST50 or SEVO10"
                     className="flex-1 px-3 py-2 bg-[#F8F7F1] border border-[#DDE4E0] rounded-xl text-xs font-semibold uppercase focus:outline-none focus:border-[#008F6B]"
                   />
                   <button

@@ -11,11 +11,11 @@ export function OrderTrackingScreen() {
   const [order, setOrder] = useState(() => {
     if (location.state?.order) return location.state.order;
     try {
-      const saved = localStorage.getItem(`antigravity_order_${orderId}`);
+      const saved = localStorage.getItem(`sevo_order_${orderId}`);
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      orderId: orderId || 'AGY12345',
+      orderId: orderId || 'SEVO12345',
       items: [
         {
           id: 'prod-air-filter-element',

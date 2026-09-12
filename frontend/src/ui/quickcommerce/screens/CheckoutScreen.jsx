@@ -28,7 +28,7 @@ export function CheckoutScreen() {
 
     // Simulate authoritative server order creation
     setTimeout(() => {
-      const orderId = `AGY${Math.floor(10000 + Math.random() * 90000)}`;
+      const orderId = `SEVO${Math.floor(10000 + Math.random() * 90000)}`;
       const orderData = {
         orderId,
         items: [...items],
@@ -41,8 +41,8 @@ export function CheckoutScreen() {
       };
 
       try {
-        localStorage.setItem(`antigravity_order_${orderId}`, JSON.stringify(orderData));
-        localStorage.setItem('antigravity_latest_order_id', orderId);
+        localStorage.setItem(`sevo_order_${orderId}`, JSON.stringify(orderData));
+        localStorage.setItem('sevo_latest_order_id', orderId);
       } catch {}
 
       clearCart();

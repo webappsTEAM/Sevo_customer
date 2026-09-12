@@ -135,7 +135,7 @@ export const QUICK_PRODUCTS = [
     sku: 'LB-SYN5L-06',
     stockStatus: 'In Stock',
     stockCount: 30,
-    brand: 'antigravity Pro',
+    brand: 'SEVO Pro',
     description:
       'Engineered premium ISO VG 46 synthetic compressor oil providing up to 4000 hours of thermal stability and wear reduction.',
     features: ['4000 Hours Drain Interval', 'Anti-foaming formulation', 'Rapid water separation'],

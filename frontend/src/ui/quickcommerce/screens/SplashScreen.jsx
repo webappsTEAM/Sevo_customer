@@ -1,27 +1,39 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApprovedImage } from '../../../assets/ApprovedImage.jsx';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
-export function SplashScreen() {
+export function SplashScreen({ onComplete }) {
   const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const hasOnboarded = localStorage.getItem('antigravity_onboarded_v2') === 'true';
-      if (hasOnboarded) {
-        navigate('/qc');
+      if (onComplete) {
+        onComplete();
       } else {
-        navigate('/qc/onboarding');
+        const hasOnboarded = localStorage.getItem('sevo_onboarded_v2') === 'true';
+        if (hasOnboarded) {
+          navigate('/home');
+        } else {
+          navigate('/qc/onboarding');
+        }
       }
     }, 2400);
 
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [navigate, onComplete]);
+
+  const handleTap = () => {
+    if (onComplete) {
+      onComplete();
+    } else {
+      navigate('/qc/onboarding');
+    }
+  };
 
   return (
     <div
-      onClick={() => navigate('/qc/onboarding')}
+      onClick={handleTap}
       className="min-h-screen w-full flex flex-col justify-between items-center px-6 py-12 select-none cursor-pointer relative overflow-hidden text-white"
       style={{
         background: 'linear-gradient(180deg, #05261D 0%, #008F6B 55%, #022B1E 100%)',
@@ -31,13 +43,13 @@ export function SplashScreen() {
       <div className="absolute -top-24 -left-24 w-80 h-80 bg-[#16A34A]/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-[#008F6B]/30 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Top Brand Identity */}
+      {/* Top Brand Identity (Screen 1 in reference image) */}
       <div className="w-full flex flex-col items-center pt-8 text-center z-10 animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md p-3 mb-4 shadow-xl border border-white/20 flex items-center justify-center">
-          <ApprovedImage assetId="brand-emblem" alt="antigravity" className="w-full h-full object-contain" />
+        <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md p-3 mb-3 shadow-xl border border-white/20 flex items-center justify-center">
+          <ApprovedImage assetId="brand-emblem" alt="SEVO" className="w-full h-full object-contain" />
         </div>
         <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-1.5">
-          antigravity
+          SEVO
         </h1>
         <p className="text-xs text-[#E8F5EF] font-medium tracking-wide mt-1 uppercase">
           Industrial Essentials • Delivered Fast
@@ -50,7 +62,7 @@ export function SplashScreen() {
         <div className="relative w-56 h-56 rounded-3xl bg-white/5 border border-white/15 backdrop-blur-sm p-4 shadow-2xl flex items-center justify-center">
           <ApprovedImage
             assetId="prod-screw-compressor"
-            alt="Essential Equipment"
+            alt="SEVO Equipment"
             className="w-full h-full object-contain filter drop-shadow-2xl"
           />
         </div>

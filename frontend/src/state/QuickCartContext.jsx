@@ -257,8 +257,8 @@ export function QuickCartProvider({ children }) {
       setAppliedCoupon({ code: 'FAST50', value: 50, type: 'flat', label: 'Flat ₹50 OFF' });
       return true;
     }
-    if (cleanCode === 'ANTIGRAVITY10') {
-      setAppliedCoupon({ code: 'ANTIGRAVITY10', value: 10, type: 'percentage', label: '10% OFF' });
+    if (cleanCode === 'SEVO10' || cleanCode === 'ANTIGRAVITY10') {
+      setAppliedCoupon({ code: 'SEVO10', value: 10, type: 'percentage', label: '10% OFF' });
       return true;
     }
     setCouponError('Invalid or expired coupon code.');

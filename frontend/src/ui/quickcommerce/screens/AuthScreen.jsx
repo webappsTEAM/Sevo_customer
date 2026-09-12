@@ -39,9 +39,9 @@ export function AuthScreen() {
 
     try {
       // Store session state
-      localStorage.setItem('antigravity_customer_token', 'token_demo_' + Date.now());
+      localStorage.setItem('sevo_customer_token', 'token_demo_' + Date.now());
       localStorage.setItem(
-        'antigravity_customer_profile',
+        'sevo_customer_profile',
         JSON.stringify({
           name: 'Vignesh G',
           phone: '+91 98765 43210',
@@ -64,13 +64,13 @@ export function AuthScreen() {
       {/* Top Brand Logo */}
       <div className="flex flex-col items-center pt-6 text-center">
         <div className="w-14 h-14 rounded-2xl bg-[#E8F5EF] p-2.5 mb-3 flex items-center justify-center shadow-sm">
-          <ApprovedImage assetId="brand-emblem" alt="antigravity" className="w-full h-full object-contain" />
+          <ApprovedImage assetId="brand-emblem" alt="SEVO" className="w-full h-full object-contain" />
         </div>
         <h1 className="text-2xl font-extrabold tracking-tight text-[#17212B]">
           Welcome Back
         </h1>
         <p className="text-xs text-[#667280] mt-1">
-          Sign in to continue to <span className="font-semibold text-[#008F6B]">antigravity</span>
+          Sign in to continue to <span className="font-bold text-[#17212B]">SEVO</span>
         </p>
       </div>
 
@@ -224,7 +224,7 @@ export function AuthScreen() {
 
       {/* Bottom Switch */}
       <div className="text-center pb-4 text-xs text-[#667280]">
-        New to antigravity?{' '}
+        New to SEVO?{' '}
         <button
           onClick={() => {
             setMode('otp');

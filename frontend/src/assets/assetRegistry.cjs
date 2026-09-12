@@ -7,22 +7,22 @@ const ASSET_REGISTRY = {
   'brand-emblem': {
     id: 'brand-emblem',
     url: '/mockups/sevo_emblem_transparent.png',
-    alt: 'antigravity emblem',
+    alt: 'SEVO emblem',
   },
   'brand-logo': {
     id: 'brand-logo',
     url: '/mockups/sevo_logo_transparent.png',
-    alt: 'antigravity logo',
+    alt: 'SEVO logo',
   },
   'brand-app-icon': {
     id: 'brand-app-icon',
     url: '/mockups/sevo_app_icon.png',
-    alt: 'antigravity app icon',
+    alt: 'SEVO app icon',
   },
   'bike-partner': {
     id: 'bike-partner',
     url: '/mockups/customer-technician-bike.svg',
-    alt: 'antigravity delivery partner',
+    alt: 'SEVO delivery partner',
   },
   'cat-compressors': {
     id: 'cat-compressors',

@@ -27,7 +27,7 @@ function UndoToastBanner() {
   );
 }
 
-function ShellLayout() {
+function ShellLayout({ children }) {
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -43,7 +43,7 @@ function ShellLayout() {
   }, []);
 
   // Screens that should hide the bottom nav (e.g. splash, onboarding, checkout, tracking)
-  const hideBottomNavRoutes = ['/qc/splash', '/qc/onboarding', '/qc/checkout', '/qc/track'];
+  const hideBottomNavRoutes = ['/qc/splash', '/qc/onboarding', '/qc/checkout', '/qc/track', '/splash', '/onboarding', '/checkout'];
   const shouldHideBottomNav = hideBottomNavRoutes.some((route) =>
     location.pathname.startsWith(route)
   );
@@ -60,7 +60,7 @@ function ShellLayout() {
 
       {/* Main Container constrained to Mobile viewport (max-w-md / 448px) */}
       <main className={`flex-1 w-full max-w-md mx-auto relative bg-[#FFFFFF] shadow-sm flex flex-col ${shouldHideBottomNav ? 'pb-4' : 'pb-20'}`}>
-        <Outlet />
+        {children || <Outlet />}
       </main>
 
       {/* Undo Toast */}
@@ -72,10 +72,10 @@ function ShellLayout() {
   );
 }
 
-export function AntigravityShell() {
+export function AntigravityShell({ children }) {
   return (
     <QuickCartProvider>
-      <ShellLayout />
+      <ShellLayout>{children}</ShellLayout>
     </QuickCartProvider>
   );
 }
