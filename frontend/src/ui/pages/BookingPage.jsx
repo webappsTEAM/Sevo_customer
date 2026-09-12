@@ -11318,19 +11318,19 @@ export function BookingPage() {
 
       {/* Urban Style Top Navigation Header */}
       <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
 
           {/* Brand Logo & Urban Location Selector */}
-          <div className="flex items-center gap-3 sm:gap-6">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <div
-              className="flex items-center gap-2 select-none cursor-pointer group"
+              className="flex items-center gap-2 select-none cursor-pointer group shrink-0"
               onClick={() => { setStep(1); setCategory(null); }}
             >
               <img
                 src="/assets/sevo_emblem_transparent.png"
                 alt="SEVO Emblem"
-                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-                style={{ height: '36px', width: 'auto' }}
+                className="h-8.5 sm:h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                style={{ height: '34px', width: 'auto' }}
               />
               <img
                 src="/assets/sevo_text_logo.png"
@@ -11345,7 +11345,7 @@ export function BookingPage() {
             {/* Location Selector Pill */}
             <button
               onClick={() => setShowLocPicker(true)}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[280px] truncate"
+              className="flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs min-w-0 max-w-[130px] min-[360px]:max-w-[160px] min-[400px]:max-w-[200px] sm:max-w-[280px] truncate"
             >
               <MapPin size={15} className="text-indigo-600 shrink-0" />
               <span className="truncate">{location || formData?.address || "Select Location"}</span>
@@ -11354,7 +11354,7 @@ export function BookingPage() {
           </div>
 
           {/* Right Controls: Cart & Profile Button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Cart button is always visible (even with nothing added yet) so
                 customers always know where to find it; the badge only shows
                 once there's a count. */}

@@ -4052,26 +4052,26 @@ export function LandingPage() {
 
         {/* ── 2. Main Brand Header ─────────────────────────── */}
         <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3 sm:gap-6">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-6">
             {/* Left: Official SEVO Brand Logo & Location Pill */}
-            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-              <div className="flex items-center gap-2 select-none cursor-pointer group" onClick={() => navigate(routes.landing)}>
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+              <div className="flex items-center gap-2 select-none cursor-pointer group shrink-0" onClick={() => navigate(routes.landing)}>
                 <img
                   src="/assets/sevo_emblem_transparent.png"
                   alt="SEVO Emblem"
-                  className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-                  style={{ height: '36px', width: 'auto' }}
+                  className="h-8.5 sm:h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                  style={{ height: '34px', width: 'auto' }}
                 />
                 <img
                   src="/assets/sevo_text_logo.png"
                   alt="SEVO"
-                  className="shrink-0 object-contain dark:hidden hidden min-[380px]:block"
+                  className="shrink-0 object-contain dark:hidden hidden sm:block"
                   style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
                 />
                 <img
                   src="/assets/sevo_text_logo_white.png"
                   alt="SEVO"
-                  className="shrink-0 object-contain hidden dark:min-[380px]:block"
+                  className="shrink-0 object-contain hidden dark:sm:block"
                   style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
                 />
               </div>
@@ -4079,11 +4079,11 @@ export function LandingPage() {
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
               {/* Location Selector Pill with Auto-detected Badge */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <button
                   type="button"
                   onClick={() => setShowLocationPickerModal(true)}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-[#0B8F7A] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[130px] min-[380px]:max-w-[150px] sm:max-w-[200px] truncate"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-[#0B8F7A] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs min-w-0 max-w-[120px] min-[360px]:max-w-[150px] min-[400px]:max-w-[180px] sm:max-w-[220px] truncate"
                   title="Change Location"
                 >
                   <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0B8F7A]" />
@@ -4219,7 +4219,7 @@ export function LandingPage() {
             </div>
 
             {/* Right: Account & Action Badges */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {/* User Account / Profile */}
               <button
                 type="button"
@@ -4232,10 +4232,10 @@ export function LandingPage() {
                     setShowAccountPortal(true)
                   }
                 }}
-                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
+                className="flex items-center gap-2 p-1 sm:px-3 sm:py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left shrink-0"
               >
-                <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-slate-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  <User className="w-4 h-4 text-white" />
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900 dark:bg-slate-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                 </div>
                 <div className="hidden sm:flex flex-col leading-tight">
                   <span className="text-[10px] text-slate-500 font-medium">
@@ -4258,12 +4258,12 @@ export function LandingPage() {
                     goToLogin()
                   }
                 }}
-                className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                className="relative p-1.5 sm:p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
                 title="Notifications"
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                 {notificationCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
                     {notificationCount}
                   </span>
                 )}
@@ -4273,12 +4273,12 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={() => setShowCartDrawer(true)}
-                className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                className="relative p-1.5 sm:p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
                 title="Cart"
               >
-                <ShoppingCart className="w-5 h-5" />
+                <ShoppingCart className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                 {modalCart && modalCart.length > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+                  <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white font-black text-[9px] w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
                     {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
                   </span>
                 )}
