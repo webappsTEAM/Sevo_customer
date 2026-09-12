@@ -98,5 +98,19 @@ export const routes = {
   goods: "/goods",
   transport: "/transport",
   logistics_booking: "/logistics/:category/:city",
+  // antigravity Quick-Commerce Handover v2 Routes
+  qc: "/qc",
+  qc_splash: "/qc/splash",
+  qc_onboarding: "/qc/onboarding",
+  qc_auth: "/qc/auth",
+  qc_categories: "/qc/categories",
+  qc_search: "/qc/search",
+  qc_grid: "/qc/grid",
+  qc_product: "/qc/product/:id",
+  qc_cart: "/qc/cart",
+  qc_checkout: "/qc/checkout",
+  qc_track: "/qc/track/:orderId",
+  qc_profile: "/qc/profile",
+  qc_orders: "/qc/orders",
 }
 

@@ -183,6 +183,22 @@ const HelpSupportPage = lazy(() =>
   import("./pages/legal/HelpSupportPage.jsx").then(m => ({ default: m.HelpSupportPage || m.default }))
 )
 
+// ── antigravity Quick-Commerce Pages (Handover v2) ──────────────────────────
+const AntigravityShell = lazy(() => import("./quickcommerce/AntigravityShell.jsx").then(m => ({ default: m.AntigravityShell })))
+const QCSplashScreen = lazy(() => import("./quickcommerce/screens/SplashScreen.jsx").then(m => ({ default: m.SplashScreen })))
+const QCOnboardingScreen = lazy(() => import("./quickcommerce/screens/OnboardingScreen.jsx").then(m => ({ default: m.OnboardingScreen })))
+const QCAuthScreen = lazy(() => import("./quickcommerce/screens/AuthScreen.jsx").then(m => ({ default: m.AuthScreen })))
+const QCHomeScreen = lazy(() => import("./quickcommerce/screens/HomeScreen.jsx").then(m => ({ default: m.HomeScreen })))
+const QCCategoryListingScreen = lazy(() => import("./quickcommerce/screens/CategoryListingScreen.jsx").then(m => ({ default: m.CategoryListingScreen })))
+const QCSearchScreen = lazy(() => import("./quickcommerce/screens/SearchScreen.jsx").then(m => ({ default: m.SearchScreen })))
+const QCProductGridScreen = lazy(() => import("./quickcommerce/screens/ProductGridScreen.jsx").then(m => ({ default: m.ProductGridScreen })))
+const QCProductDetailScreen = lazy(() => import("./quickcommerce/screens/ProductDetailScreen.jsx").then(m => ({ default: m.ProductDetailScreen })))
+const QCCartScreen = lazy(() => import("./quickcommerce/screens/CartScreen.jsx").then(m => ({ default: m.CartScreen })))
+const QCCheckoutScreen = lazy(() => import("./quickcommerce/screens/CheckoutScreen.jsx").then(m => ({ default: m.CheckoutScreen })))
+const QCOrderTrackingScreen = lazy(() => import("./quickcommerce/screens/OrderTrackingScreen.jsx").then(m => ({ default: m.OrderTrackingScreen })))
+const QCProfileScreen = lazy(() => import("./quickcommerce/screens/ProfileScreen.jsx").then(m => ({ default: m.ProfileScreen })))
+const QCOrderHistoryScreen = lazy(() => import("./quickcommerce/screens/OrderHistoryScreen.jsx").then(m => ({ default: m.OrderHistoryScreen })))
+
 // Platform Super Admin Control Center Pages
 const PlatformDashboardPage = lazy(() => import("./pages/platform/PlatformDashboardPage.jsx"))
 const PlatformUsersPage = lazy(() => import("./pages/platform/PlatformUsersPage.jsx"))
@@ -420,6 +436,25 @@ export function App() {
           <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
           <Route path="/track/:jobId" element={<LiveTrackingPage />} />
           <Route path="/tracking/:token" element={<LiveTrackingPage />} />
+
+          {/* ── antigravity Quick-Commerce Handover v2 Routes ── */}
+          <Route path="/qc" element={<AntigravityShell />}>
+            <Route index element={<QCHomeScreen />} />
+            <Route path="splash" element={<QCSplashScreen />} />
+            <Route path="onboarding" element={<QCOnboardingScreen />} />
+            <Route path="auth" element={<QCAuthScreen />} />
+            <Route path="categories" element={<QCCategoryListingScreen />} />
+            <Route path="search" element={<QCSearchScreen />} />
+            <Route path="grid" element={<QCProductGridScreen />} />
+            <Route path="product/:id" element={<QCProductDetailScreen />} />
+            <Route path="cart" element={<QCCartScreen />} />
+            <Route path="checkout" element={<QCCheckoutScreen />} />
+            <Route path="track/:orderId" element={<QCOrderTrackingScreen />} />
+            <Route path="profile" element={<QCProfileScreen />} />
+            <Route path="orders" element={<QCOrderHistoryScreen />} />
+          </Route>
+          <Route path="/antigravity" element={<Navigate to="/qc" replace />} />
+          <Route path="/quick-commerce" element={<Navigate to="/qc" replace />} />
 
           {/* ── Public Legal & Customer Policy Routes ── */}
           <Route path={routes.terms} element={<TermsPage />} />
