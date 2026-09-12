@@ -4450,6 +4450,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const { user, logout, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
   const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
   const activeTab = propActiveTab || internalTab
+  const [mobileView, setMobileView] = useState("content")
+
+  useEffect(() => {
+    if (propActiveTab) {
+      setMobileView("content")
+    }
+  }, [propActiveTab])
+
   const setActiveTab = (tab) => {
     setInternalTab(tab)
     if (typeof onChangeTab === 'function') {
@@ -5494,7 +5502,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Profile</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #e2e8f0' }}>
+            <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-6 mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-slate-200">
               <div
                 className="relative group"
                 style={{
@@ -5547,8 +5555,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   <User size={36} color="#94a3b8" />
                 )}
               </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
                   <span style={{ fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>{profileName || user?.fullName || user?.username || 'Customer'}</span>
                   {(profileCustomerId || user?.customer_id || user?.customerId) && (
                     <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 800, fontFamily: 'monospace' }}>
@@ -5566,7 +5574,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   style={{ display: 'none' }}
                   onChange={handleAvatarUpload}
                 />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="flex items-center justify-center sm:justify-start gap-2">
                   <button
                     type="button"
                     onClick={() => avatarInputRef.current?.click()}
@@ -5583,7 +5591,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Row 1: Full Name & Optional Email Address */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', color: '#334155', fontWeight: 700, marginBottom: 8 }}>
                     <span>Full Name</span>
@@ -5638,7 +5646,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
 
             {/* Save Changes Button */}
-            <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="mt-6 sm:mt-7 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
               <button
                 type="button"
                 onClick={handleSaveProfile}
@@ -8059,11 +8067,27 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 400, opacity: 0 }}
         transition={{ type: 'spring', damping: 35, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 960, background: 'var(--sevo-surface, white)', height: '100%', display: 'flex', boxShadow: '-20px 0 50px rgba(0,0,0,0.15)' }}
+        className="w-full max-w-[960px] h-full bg-[var(--sevo-surface,white)] flex flex-col md:flex-row shadow-2xl overflow-hidden"
       >
-        {/* Sidebar */}
-        <div style={{ width: 280, background: 'var(--sevo-surface-raised, #f8fafc)', borderRight: '1px solid var(--sevo-border, #e2e8f0)', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Sidebar: Full width on mobile when mobileView === 'menu', fixed width on desktop */}
+        <div
+          className={`${
+            mobileView === 'menu' ? 'flex' : 'hidden md:flex'
+          } w-full md:w-[280px] shrink-0 bg-[var(--sevo-surface-raised,#f8fafc)] border-r border-[var(--sevo-border,#e2e8f0)] py-5 md:py-8 flex-col overflow-y-auto`}
+        >
+          {/* Mobile Top Bar for Menu */}
+          <div className="flex md:hidden items-center justify-between px-5 pb-3 border-b border-slate-200/80 mb-3">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Account Options</span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300 flex items-center justify-center text-slate-700 cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--sevo-surface, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--sevo-border, #e2e8f0)', flexShrink: 0, overflow: 'hidden' }}>
               {avatarPreview || user?.avatar_url || user?.avatar ? (
                 <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -8071,7 +8095,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 <User size={22} color="var(--sevo-text-muted, #94a3b8)" />
               )}
             </div>
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 800, color: 'var(--sevo-text-primary, #0f172a)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileName || user?.fullName || user?.username || 'Customer'}</div>
               <div style={{ fontSize: '0.78rem', color: 'var(--sevo-text-secondary, #64748b)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {profilePhone || user?.phone ? `+91 ${profilePhone || user?.phone}` : (profileEmail || user?.email || '')}
@@ -8094,9 +8118,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   } else {
                     setActiveTab(t.id)
                   }
+                  setMobileView('content')
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.25rem', cursor: 'pointer',
                   borderRadius: 12,
                   background: activeTab === t.id ? 'var(--sevo-surface, white)' : 'transparent',
                   borderLeft: `4px solid ${activeTab === t.id ? 'var(--sevo-primary, #0B8F7A)' : 'transparent'}`,
@@ -8110,11 +8135,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <t.icon size={20} color={activeTab === t.id ? 'var(--sevo-primary, #0B8F7A)' : 'var(--sevo-text-muted, #94a3b8)'} /> {t.id}
                 </div>
-                {t.badge > 0 && (
-                  <span style={{ background: 'var(--sevo-primary, #0B8F7A)', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
-                    {t.badge}
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {t.badge > 0 && (
+                    <span style={{ background: 'var(--sevo-primary, #0B8F7A)', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                      {t.badge}
+                    </span>
+                  )}
+                  <ChevronRight size={16} className="text-slate-400 md:hidden" />
+                </div>
               </div>
             ))}
           </div>
@@ -8135,13 +8163,39 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           </div>
         </div>
 
-        {/* Content Area */}
-        <div style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'var(--sevo-surface, white)', color: 'var(--sevo-text-primary, #0B172A)' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
+        {/* Content Area: Full width on mobile when mobileView === 'content', flex-1 on desktop */}
+        <div
+          className={`${
+            mobileView === 'content' ? 'flex' : 'hidden md:flex'
+          } flex-1 flex-col overflow-y-auto p-4 sm:p-8 lg:p-10 bg-[var(--sevo-surface,white)] text-[var(--sevo-text-primary,#0B172A)]`}
+        >
+          {/* Top Mobile Bar with "< All Options" button, active title, and close button */}
+          <div className="flex md:hidden items-center justify-between pb-3 mb-4 border-b border-slate-200 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileView('menu')}
+              className="flex items-center gap-1 text-xs font-black text-[#0B8F7A] bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 active:scale-95 cursor-pointer"
+            >
+              <ChevronLeft size={16} />
+              <span>All Options</span>
+            </button>
+            <span className="font-extrabold text-sm text-slate-800 dark:text-white truncate max-w-[140px]">{activeTab}</span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Desktop Close Button (hidden on mobile) */}
+          <div className="hidden md:flex justify-end mb-4 shrink-0">
             <div onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--sevo-surface-raised, #f1f5f9)', border: '1px solid var(--sevo-border, #e2e8f0)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--sevo-text-primary, #475569)', transition: 'all 0.2s' }}>
               <X size={18} />
             </div>
           </div>
+
           <div style={{ maxWidth: 680, width: '100%' }}>
             {renderTabContent()}
           </div>
