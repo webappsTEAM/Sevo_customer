@@ -9288,9 +9288,9 @@ export function LandingPage() {
       {/* Urban Company Style Floating Bottom Cart Bar */}
       {modalCart && modalCart.length > 0 && !activeCategory && !isGoodsModalOpen && !isElecModalOpen && !isAcModalOpen && !isHomePestModalOpen && !isForYouModalOpen && !isFoodHealthModalOpen && !isHomeServicesCombinedModalOpen && (
         <motion.div
-          initial={{ y: 40, opacity: 0, scale: 0.96 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: 40, opacity: 0, scale: 0.96 }}
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 30, opacity: 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
           onClick={() => {
             // If not logged in, save GO_TO_CHECKOUT intent so cart is restored after auth
@@ -9303,10 +9303,10 @@ export function LandingPage() {
             }
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
           }}
-          className="fixed bottom-[calc(4.25rem+var(--safe-area-bottom)+0.4rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm sm:max-w-md bg-gradient-to-r from-emerald-600 to-[#0B8F7A] text-white rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-xl shadow-emerald-950/25 border border-emerald-400/40 flex items-center justify-between gap-2.5 backdrop-blur-md cursor-pointer hover:shadow-2xl hover:shadow-emerald-900/35 transition-all group select-none active:scale-[0.98]"
+          className="fixed bottom-[calc(4.25rem+var(--safe-area-bottom)+0.35rem)] sm:bottom-6 left-0 right-0 mx-auto z-40 w-[92%] max-w-sm bg-gradient-to-r from-emerald-600 to-[#0B8F7A] text-white rounded-full px-3.5 py-2 shadow-xl shadow-emerald-950/30 border border-emerald-400/40 flex items-center justify-between gap-2 backdrop-blur-md cursor-pointer hover:shadow-2xl hover:shadow-emerald-900/40 transition-all group select-none active:scale-[0.98]"
         >
           {/* Left: Compact Cart Icon & Count + Total Price */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="relative w-7 h-7 rounded-full bg-white/20 flex items-center justify-center shrink-0">
               <ShoppingCart size={14} className="text-white" />
               <span className="absolute -top-1 -right-1 bg-white text-emerald-800 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
@@ -9325,7 +9325,7 @@ export function LandingPage() {
           </div>
 
           {/* Right: Sleek View Cart Pill Button */}
-          <div className="flex items-center gap-1 bg-white/20 group-hover:bg-white/30 text-white font-black text-xs px-3.5 py-1.5 rounded-full transition-all shrink-0 shadow-xs">
+          <div className="flex items-center gap-1 bg-white/20 group-hover:bg-white/30 text-white font-black text-xs px-3 py-1.5 rounded-full transition-all shrink-0 shadow-xs">
             <span>View Cart</span>
             <ChevronRight size={13} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
           </div>
