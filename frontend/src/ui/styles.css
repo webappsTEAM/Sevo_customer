@@ -6,9 +6,23 @@
 @tailwind utilities;
 
 /* Native Mobile Feel & Gesture Rules */
-html, body {
+html,
+body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden !important;
+  max-width: 100vw !important;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+#root {
+  overflow-x: hidden !important;
+  max-width: 100vw !important;
+  width: 100%;
+  min-height: 100vh;
 }
 
 .scroll-momentum {

@@ -4000,7 +4000,7 @@ export function LandingPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] antialiased font-sans transition-colors duration-200 pb-24 lg:pb-0" style={{ animation: "fadeUp 0.4s ease both" }}>
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] antialiased font-sans transition-colors duration-200 pb-24 lg:pb-0" style={{ animation: "fadeUp 0.4s ease both" }}>
         {/* ── 1. Top Announcement Bar ─────────────────────────── */}
         {/* <div className="bg-[#F8FAF9] dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 text-xs py-2 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -4383,7 +4383,7 @@ export function LandingPage() {
         </div>
 
         {/* ── 3. Category Sub-Navigation Bar ─────────────────────────── */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden w-full max-w-full">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3 overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {/* All Services Pill */}
             <button
@@ -4827,7 +4827,7 @@ export function LandingPage() {
             discount/countdown/coupon text on top of it. Reads/writes
             homeConfig.offers.items so it's editable from both the live
             page (Customer Web Edit Mode) and the Homepage Builder preview. ── */}
-        <section id="offers" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 scroll-mt-24">
+        <section id="offers" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 scroll-mt-24 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
               <Gift className="w-5 h-5 text-[#0B8F7A]" />
@@ -4936,7 +4936,7 @@ export function LandingPage() {
         </section>
 
         {/* ── 7. "Recommended for You" 5-Card Service Row ─────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4 overflow-hidden">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               Recommended for You
@@ -5056,7 +5056,7 @@ export function LandingPage() {
         </section>
 
         {/* ── 8. Trust Guarantees (5 Pillars) ─────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-4 overflow-hidden">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 sm:p-6 shadow-2xs">
             {/* Mobile: Smooth horizontal swipeable guarantee chips */}
             <div className="sm:hidden flex overflow-x-auto no-scrollbar gap-2.5 pb-0.5 -mx-1 px-1">
