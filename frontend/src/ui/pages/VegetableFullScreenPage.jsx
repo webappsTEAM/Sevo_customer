@@ -584,7 +584,7 @@ export function VegetableFullScreenPage() {
               {/* Store Switcher Selection */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                 <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Select Store:</span>
-                <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
+                <div className="flex items-center gap-2 overflow-x-auto w-full min-w-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pb-1 sm:pb-0">
                   {stores.map((s) => {
                     const isSelected = activeStore?.id === s.id
                     return (

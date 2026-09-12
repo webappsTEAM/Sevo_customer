@@ -1616,7 +1616,7 @@ export function PackersMoversBookingHosurPage() {
   const totalItemsCount = Object.values(inventoryItems).reduce((sum, val) => sum + val, 0)
 
   return (
-    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased">
+    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased pb-28 lg:pb-0">
       {/* ── Top Header Navigation ─────────────── */}
       <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">

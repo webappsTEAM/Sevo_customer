@@ -704,7 +704,7 @@ export function ModernServiceCatalogView({
               <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
 
               {/* Floating highlight badge */}
-              <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-xs rounded-xl px-3 py-1.5 shadow-md border border-slate-200/80 flex items-center gap-2">
+              <div className="hidden sm:flex absolute top-4 right-4 bg-white/95 backdrop-blur-xs rounded-xl px-3 py-1.5 shadow-md border border-slate-200/80 items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
                 </div>
@@ -1615,7 +1615,7 @@ export function ModernServiceCatalogView({
         )}
       {/* ── Mobile Floating Cart Bar (Appears when items are in cart) ── */}
       {cartTotalQty > 0 && (
-        <div className="lg:hidden fixed bottom-4 left-3 right-3 z-40 animate-in slide-in-from-bottom-3 duration-300">
+        <div className="lg:hidden fixed bottom-[calc(4.25rem+var(--safe-area-bottom))] left-3 right-3 z-40 animate-in slide-in-from-bottom-3 duration-300">
           <div className="bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-3 shadow-2xl flex items-center justify-between border border-slate-700/80">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-xs">

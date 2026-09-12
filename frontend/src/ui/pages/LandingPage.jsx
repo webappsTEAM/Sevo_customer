@@ -2122,16 +2122,23 @@ export function LandingPage() {
         goToLogin()
       }
     }
+    const onOpenLogin = () => goToLogin()
 
     window.addEventListener("calservices_open_services_modal", onOpenServices)
     window.addEventListener("calservices_open_cart_drawer", onOpenCart)
     window.addEventListener("calservices_open_account_portal", onOpenAccount)
+    window.addEventListener("calservices_open_login_modal", onOpenLogin)
 
     if (searchParams.get("openAccount") === "1") {
       if (user) {
         setActiveAccountTab("My Profile")
         setShowAccountPortal(true)
+      } else {
+        goToLogin()
       }
+    }
+    if (searchParams.get("openLogin") === "1") {
+      goToLogin()
     }
     if (searchParams.get("openServices") === "1") {
       setIsHomeServicesCombinedModalOpen(true)
@@ -2141,6 +2148,7 @@ export function LandingPage() {
       window.removeEventListener("calservices_open_services_modal", onOpenServices)
       window.removeEventListener("calservices_open_cart_drawer", onOpenCart)
       window.removeEventListener("calservices_open_account_portal", onOpenAccount)
+      window.removeEventListener("calservices_open_login_modal", onOpenLogin)
     }
   }, [user, searchParams])
 

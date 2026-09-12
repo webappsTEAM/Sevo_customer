@@ -114,7 +114,11 @@ export function MobileBottomNav() {
         navigate("/home?openAccount=1")
       }
     } else {
-      navigate(routes.login || "/login")
+      if (isHome) {
+        window.dispatchEvent(new CustomEvent("calservices_open_login_modal"))
+      } else {
+        navigate("/home?openLogin=1")
+      }
     }
   }
 

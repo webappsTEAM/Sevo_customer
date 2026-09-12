@@ -9019,7 +9019,7 @@ function QuickCommerceCartCheckout({
         </div>
 
         {/* Delivering to Home & Sticky Bottom Checkout Bar */}
-        <div className="sticky bottom-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 p-4 sm:p-5 shadow-[0_-12px_24px_rgba(0,0,0,0.04)] z-30 space-y-4">
+        <div className="sticky bottom-[calc(3.75rem+var(--safe-area-bottom))] lg:bottom-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 p-4 sm:p-5 shadow-[0_-12px_24px_rgba(0,0,0,0.04)] z-30 space-y-4">
           {/* Delivering to Home Address Bar */}
           <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -9553,8 +9553,8 @@ function StepWorkflowCheckout({
                     </div>
 
                     <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs font-bold text-slate-500">Service Address</span>
                           {hasAddress && (
                             <span className="text-[9.5px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
@@ -9566,7 +9566,7 @@ function StepWorkflowCheckout({
                           <button
                             type="button"
                             onClick={() => setShowAddressDrawer(true)}
-                            className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95"
+                            className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
                           >
                             Change
                           </button>
@@ -9574,9 +9574,10 @@ function StepWorkflowCheckout({
                           <button
                             type="button"
                             onClick={() => setShowAddressDrawer(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3.5 py-1.5 text-xs font-extrabold transition-all shadow-xs cursor-pointer active:scale-95"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-xs font-extrabold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
                           >
-                            + Add / Select Address
+                            <span className="sm:hidden">+ Add Address</span>
+                            <span className="hidden sm:inline">+ Add / Select Address</span>
                           </button>
                         )}
                       </div>

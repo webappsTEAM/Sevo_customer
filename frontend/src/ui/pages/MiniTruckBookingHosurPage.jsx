@@ -1403,7 +1403,7 @@ export function MiniTruckBookingHosurPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased">
+    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased pb-28 lg:pb-0">
       {/* ── Top Header Navigation ──────────────────────────────── */}
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (
