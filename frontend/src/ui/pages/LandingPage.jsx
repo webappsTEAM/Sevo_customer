@@ -9288,49 +9288,47 @@ export function LandingPage() {
       {/* Urban Company Style Floating Bottom Cart Bar */}
       {modalCart && modalCart.length > 0 && !activeCategory && !isGoodsModalOpen && !isElecModalOpen && !isAcModalOpen && !isHomePestModalOpen && !isForYouModalOpen && !isFoodHealthModalOpen && !isHomeServicesCombinedModalOpen && (
         <motion.div
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 50, opacity: 0 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed bottom-[calc(4.25rem+var(--safe-area-bottom))] sm:bottom-5 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-slate-900 text-white rounded-2xl p-3.5 shadow-2xl border border-slate-800 flex items-center justify-between gap-4 backdrop-blur-lg"
+          initial={{ y: 40, opacity: 0, scale: 0.96 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 40, opacity: 0, scale: 0.96 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          onClick={() => {
+            // If not logged in, save GO_TO_CHECKOUT intent so cart is restored after auth
+            if (!user && modalCart?.length) {
+              savePendingIntent({
+                type: "GO_TO_CHECKOUT",
+                cart: modalCart,
+                category: activeCategory,
+              })
+            }
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
+          }}
+          className="fixed bottom-[calc(4.25rem+var(--safe-area-bottom)+0.4rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm sm:max-w-md bg-gradient-to-r from-emerald-600 to-[#0B8F7A] text-white rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-xl shadow-emerald-950/25 border border-emerald-400/40 flex items-center justify-between gap-2.5 backdrop-blur-md cursor-pointer hover:shadow-2xl hover:shadow-emerald-900/35 transition-all group select-none active:scale-[0.98]"
         >
-          {/* Cart Item Count & Total Price */}
-          <div className="flex items-center gap-3 pl-1">
-            <div className="relative w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
-              <ShoppingCart size={18} />
-              <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-slate-950 font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xs">
+          {/* Left: Compact Cart Icon & Count + Total Price */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative w-7 h-7 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <ShoppingCart size={14} className="text-white" />
+              <span className="absolute -top-1 -right-1 bg-white text-emerald-800 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
                 {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
               </span>
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-300">
-                {modalCart.reduce((sum, i) => sum + i.quantity, 0)} {modalCart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? "Service" : "Services"} Added
-              </div>
-              <div className="text-sm font-black text-white">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-bold text-emerald-50 tracking-tight whitespace-nowrap">
+                {modalCart.reduce((sum, i) => sum + i.quantity, 0)} {modalCart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? "item" : "items"}
+              </span>
+              <span className="text-emerald-200/70 text-xs">•</span>
+              <span className="text-sm font-black tracking-tight text-white whitespace-nowrap">
                 ₹{modalCart.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString("en-IN")}
-              </div>
+              </span>
             </div>
           </div>
 
-          {/* View Cart / Proceed Action Button */}
-          <button
-            type="button"
-            onClick={() => {
-              // If not logged in, save GO_TO_CHECKOUT intent so cart is restored after auth
-              if (!user && modalCart?.length) {
-                savePendingIntent({
-                  type: "GO_TO_CHECKOUT",
-                  cart: modalCart,
-                  category: activeCategory,
-                })
-              }
-              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
-            }}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer active:scale-95 shrink-0 uppercase tracking-wider"
-          >
+          {/* Right: Sleek View Cart Pill Button */}
+          <div className="flex items-center gap-1 bg-white/20 group-hover:bg-white/30 text-white font-black text-xs px-3.5 py-1.5 rounded-full transition-all shrink-0 shadow-xs">
             <span>View Cart</span>
-            <ChevronRight size={15} strokeWidth={3} />
-          </button>
+            <ChevronRight size={13} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </motion.div>
       )}
 
