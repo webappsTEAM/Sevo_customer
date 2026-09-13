@@ -5775,22 +5775,48 @@ h6 {
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+/* Mobile / Touch: completely hide all scrollbars for native app feel */
+@media (max-width: 768px), (pointer: coarse) {
+  html,
+  body,
+  #root,
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  ::-webkit-scrollbar,
+  *::-webkit-scrollbar,
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  #root::-webkit-scrollbar {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+    -webkit-appearance: none !important;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Desktop: sleek modern 5px scrollbar for mouse pointers */
+@media (min-width: 769px) and (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--stroke2);
-  border-radius: 999px;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  ::-webkit-scrollbar-thumb {
+    background: var(--stroke2);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
 }
 
 /* ─── Status / Time Page ─────────────────────────────────────── */
