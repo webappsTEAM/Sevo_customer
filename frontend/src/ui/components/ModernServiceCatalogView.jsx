@@ -473,46 +473,52 @@ export function ModernServiceCatalogView({
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
       {/* ── 1. Top Breadcrumb & Category Hero Banner ── */}
       <div className="bg-white border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-6">
+          {/* Breadcrumb - Compact on mobile */}
+          <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium mb-1.5 sm:mb-3 overflow-x-auto scrollbar-none whitespace-nowrap">
             <button
               type="button"
               onClick={onClose}
-              className="hover:text-emerald-700 transition-colors"
+              className="hover:text-emerald-700 transition-colors shrink-0"
             >
               Home
             </button>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hover:text-emerald-700 transition-colors">Services</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-900 font-semibold">{category?.name || "Services"}</span>
+            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+            <span className="hover:text-emerald-700 transition-colors shrink-0">Services</span>
+            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-900 font-semibold truncate">{category?.name || "Services"}</span>
           </nav>
 
-          {/* Hero Banner: gradient panel with title/subtitle + tagline + photo */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white border border-emerald-100/70">
+          {/* Hero Banner: Blinkit-style compact, responsive, fit-to-screen */}
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white border border-emerald-100/70 shadow-xs">
             <div className="relative flex flex-col md:flex-row items-stretch">
-              <div className="flex-1 min-w-0 p-5 sm:p-7 flex flex-col justify-center gap-3">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
+              <div className="flex-1 min-w-0 p-3 sm:p-5 lg:p-7 flex flex-col justify-center gap-1 sm:gap-3">
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
                   {category?.name || "Professional Services"}
                 </h1>
-                <p className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed max-w-lg">
+                <p className="text-[11px] sm:text-sm text-slate-600 font-normal leading-snug sm:leading-relaxed max-w-lg line-clamp-1 sm:line-clamp-2">
                   {category?.desc || category?.description || "Professional care for a cleaner, healthier and more comfortable space."}
                 </p>
 
-                {/* Trust Badge Strip */}
-                <div className="flex flex-wrap gap-4 sm:gap-6 pt-2">
+                {/* Trust Badge Strip: Blinkit-style sleek horizontal micro-pills on mobile, grid on desktop */}
+                <div className="flex items-center gap-1.5 sm:gap-6 pt-1 sm:pt-2 overflow-x-auto scrollbar-none">
                   {[
-                    { icon: ShieldCheck, label1: "Verified", label2: "Technicians" },
-                    { icon: Clock, label1: "On-time", label2: "Service" },
-                    { icon: Wrench, label1: "Genuine", label2: "Spare Parts" },
-                    { icon: Tag, label1: "Transparent", label2: "Pricing" },
+                    { icon: ShieldCheck, label: "Verified Pros", label1: "Verified", label2: "Technicians" },
+                    { icon: Clock, label: "On-time", label1: "On-time", label2: "Service" },
+                    { icon: Wrench, label: "Genuine Spares", label1: "Genuine", label2: "Spare Parts" },
+                    { icon: Tag, label: "Transparent Price", label1: "Transparent", label2: "Pricing" },
                   ].map((f, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-full bg-white shadow-xs border border-emerald-100 flex items-center justify-center shrink-0">
-                        <f.icon className="w-4 h-4 text-emerald-600" />
+                    <div
+                      key={idx}
+                      className="flex items-center gap-1 sm:gap-2 px-2 py-0.5 sm:px-0 sm:py-0 rounded-full sm:rounded-none bg-white/90 sm:bg-transparent border border-emerald-100/80 sm:border-0 shrink-0 shadow-2xs sm:shadow-none"
+                    >
+                      <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-emerald-50 sm:bg-white sm:shadow-xs sm:border sm:border-emerald-100 flex items-center justify-center shrink-0">
+                        <f.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-600" />
                       </div>
-                      <div className="leading-tight">
+                      <span className="sm:hidden text-[10px] font-bold text-slate-700 whitespace-nowrap leading-none">
+                        {f.label}
+                      </span>
+                      <div className="hidden sm:block leading-tight">
                         <div className="text-[11px] font-black text-slate-800">{f.label1}</div>
                         <div className="text-[10px] font-medium text-slate-500">{f.label2}</div>
                       </div>
@@ -550,14 +556,14 @@ export function ModernServiceCatalogView({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-6">
         {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
           {/* ════ SERVICES SUBTABS (Mobile Horizontal Bar + Desktop Vertical Sidebar) ════ */}
           {services.length > 0 && !isGoodsTransportCategory && (
             <>
-              {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile) */}
-              <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-2 -mx-4 px-4 sm:mx-0 sm:px-0 flex items-center gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
+              {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile, Blinkit style) */}
+              <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-1.5 sm:py-2 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
                 {services.map(sub => {
                   const isSelected = activeSubService?.id === sub.id
                   return (
@@ -573,9 +579,9 @@ export function ModernServiceCatalogView({
                           return next
                         }, { replace: true })
                       }}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-bold shrink-0 transition-all cursor-pointer ${
                         isSelected
-                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
+                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs font-black"
                           : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                       }`}
                     >
@@ -680,15 +686,9 @@ export function ModernServiceCatalogView({
           {/* ════ CONTENT + BOOKING SUMMARY ════ */}
           <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* ════ LEFT COLUMN (~68% width / 8 cols) ════ */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Active Service Spotlight Card -- the package image now fills
-                the whole card as a background photo, with a dark gradient
-                scrim behind the text so it stays readable over any image,
-                instead of sitting in a separate box beside the text. Updates
-                to whichever package was last clicked/added (see the
-                onClick on each package row below, and the cart actions,
-                both of which call setSelectedPackage). */}
-            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[190px] sm:min-h-[300px] flex items-end">
+          <div className="lg:col-span-8 space-y-3 sm:space-y-6">
+            {/* Active Service Spotlight Card -- Blinkit-style compact, fit-to-screen */}
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[110px] sm:min-h-[220px] lg:min-h-[280px] flex items-end">
               <img
                 key={selectedPackage?.image || activeSubService?.image || category?.image}
                 src={resolveImageUrl(selectedPackage?.image || activeSubService?.image || category?.image)}
@@ -698,8 +698,7 @@ export function ModernServiceCatalogView({
                   e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
                 }}
               />
-              {/* Dark scrim: strongest behind the text at the bottom-left,
-                  fading out toward the top-right so the photo still reads. */}
+              {/* Dark scrim */}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
 
@@ -719,48 +718,47 @@ export function ModernServiceCatalogView({
               </div>
 
               {/* Text content, overlaid on the image */}
-              <div className="relative z-10 p-6 sm:p-7 w-full space-y-3">
+              <div className="relative z-10 p-3 sm:p-5 lg:p-7 w-full space-y-1 sm:space-y-2.5">
                 {/* Category / Sub-service Tag */}
-                <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-emerald-300">
-                  <span className="w-1 h-3.5 bg-emerald-400 rounded-full" />
+                <div className="flex items-center gap-1.5 text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-300">
+                  <span className="w-1 h-2.5 sm:h-3.5 bg-emerald-400 rounded-full" />
                   <span>{activeSubService?.name || category?.name} PACKAGES</span>
                 </div>
 
                 {/* Spotlight Title */}
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
+                <h2 className="text-base sm:text-2xl lg:text-3xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
                   {selectedPackage?.name || activeSubService?.name}
                 </h2>
 
-                {/* Spotlight Description */}
-                <p className="text-xs sm:text-sm text-white/85 leading-relaxed max-w-xl">
-                  {selectedPackage?.description ||
-                   activeSubService?.description ||
-                   category?.desc ||
-                   "Restore performance with certified professional care at your doorstep. Safe, reliable and quick service."}
-                </p>
+                {/* Spotlight Description: hidden on mobile to avoid redundant repetition & save screen height */}
+                {selectedPackage?.description && selectedPackage.description.toLowerCase() !== (selectedPackage.name || "").toLowerCase() && (
+                  <p className="hidden sm:block text-xs sm:text-sm text-white/85 leading-relaxed max-w-xl line-clamp-1 sm:line-clamp-2">
+                    {selectedPackage.description}
+                  </p>
+                )}
 
-                {/* 4 Feature Pill Badges */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-white/15 max-w-xl">
-                  <div className="flex flex-col items-center text-center p-2 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15">
-                    <Shield className="w-4 h-4 text-emerald-300 mb-1" />
-                    <span className="text-[10px] font-black text-white leading-tight">Certified</span>
-                    <span className="text-[9px] text-white/70 font-medium">Technicians</span>
-                  </div>
-                  <div className="flex flex-col items-center text-center p-2 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15">
-                    <Clock className="w-4 h-4 text-emerald-300 mb-1" />
-                    <span className="text-[10px] font-black text-white leading-tight">Quick &</span>
-                    <span className="text-[9px] text-white/70 font-medium">Hassle-free</span>
-                  </div>
-                  <div className="flex flex-col items-center text-center p-2 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15">
-                    <Wrench className="w-4 h-4 text-emerald-300 mb-1" />
-                    <span className="text-[10px] font-black text-white leading-tight">Genuine</span>
-                    <span className="text-[9px] text-white/70 font-medium">Spares & Tools</span>
-                  </div>
-                  <div className="flex flex-col items-center text-center p-2 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15">
-                    <ShieldCheck className="w-4 h-4 text-emerald-300 mb-1" />
-                    <span className="text-[10px] font-black text-white leading-tight">Quality</span>
-                    <span className="text-[9px] text-white/70 font-medium">Assurance</span>
-                  </div>
+                {/* 4 Feature Badges: Blinkit-style compact inline micro-pills on mobile, grid on desktop */}
+                <div className="flex sm:grid sm:grid-cols-4 items-center gap-1.5 sm:gap-2 pt-1 sm:pt-2.5 border-t border-white/15 overflow-x-auto scrollbar-none max-w-xl">
+                  {[
+                    { icon: Shield, title: "Certified", sub: "Technicians", short: "Certified Pros" },
+                    { icon: Clock, title: "Quick &", sub: "Hassle-free", short: "Quick & Easy" },
+                    { icon: Wrench, title: "Genuine", sub: "Spares & Tools", short: "Genuine Tools" },
+                    { icon: ShieldCheck, title: "Quality", sub: "Assurance", short: "Quality Assured" },
+                  ].map((b, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center sm:flex-col sm:items-center sm:text-center gap-1 sm:gap-0 px-2 py-0.5 sm:p-2 rounded-full sm:rounded-xl bg-white/10 backdrop-blur-xs border border-white/15 shrink-0"
+                    >
+                      <b.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-300 sm:mb-1 shrink-0" />
+                      <span className="sm:hidden text-[9px] font-bold text-white whitespace-nowrap leading-none">
+                        {b.short}
+                      </span>
+                      <div className="hidden sm:block leading-tight">
+                        <div className="text-[10px] font-black text-white leading-tight">{b.title}</div>
+                        <div className="text-[9px] text-white/70 font-medium">{b.sub}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
