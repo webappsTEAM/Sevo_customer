@@ -8,7 +8,7 @@ import {
   ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -280,132 +280,45 @@ function filterLocationSuggestions(searchText, city = "HOSUR") {
   return filterHosurLocations(searchText)
 }
 
-/* ── Comprehensive Inventory Data ── */
-const INVENTORY_DATA = {
-  "Bedrooms": {
-    "Bed": [
-      "Baby Wooden Bed", "Bunk Bed - Dismantlable", "Cradle - Dismantleable", 
-      "Diwan Cum Bed", "Double Bed - Dismantlable", "King Size Bed - With Storage", 
-      "King Size Bed - Without Storage", "Queen Size Bed - With Storage", 
-      "Queen Size Bed - Without Storage", "Single Bed - Foldable", 
-      "Single Bed - With Storage", "Single Bed - Without Storage", 
-      "Single Bed Non Storage - Dismantlable", "Single Bed Storage - Dismantlable"
-    ],
-    "Mattress": [
-      "Double Bed Mattress - Foldable", "Double Bed Mattress - Non Foldable", 
-      "Single Bed Mattress - Foldable", "Single Bed Mattress - Non Foldable"
-    ],
-    "Table": [
-      "Bed Side Table", "Center Table", "Study /Computer Table"
-    ],
-    "Chair": [
-      "Arm Chair", "Bean Bag/Pouffe", "Office Chair"
-    ],
-    "Television": [
-      "LCD/LED 52\" - 65\"", "LCD/LED 65\" & Above", "LCD/LED TV 40\" & Below", 
-      "LCD/LED TV 42\" - 50\"", "LCD/LED TV 52\" & Above", "Regular TV (Old Model)"
-    ],
-    "Air Conditioner": [
-      "Split Air Conditioner (AC)", "Window Air Conditioner (AC)"
-    ],
-    "Almirah/Wardrobe": [
-      "Double Door Wardrobe", "Five Door Wardrobe", "Four Door Wardrobe", 
-      "Single Door Wardrobe", "Sliding Door Wardrobe", "Steel Almirah Large", 
-      "Steel Almirah Medium", "Triple Door Wardrobe"
-    ],
-    "Cabinet & Storage": [
-      "Book Shelf Large", "Book Shelf Medium", "Book Shelf Small", 
-      "Chest of Drawers Large", "Chest of Drawers Medium", "Chest of Drawers Small", 
-      "Display Cabinet Large", "Display Cabinet Small", "Dressing Table", 
-      "Entertainment/TV Unit", "Iron Locker Small", "Plastic Cupboard", 
-      "Safe Small", "Trunk", "TV Table", "Wall Shelf"
-    ],
-    "Appliances": [
-      "Air Cooler", "Air Purifier", "Ceiling/Table Fan", "Garment Steamer", "Instant Geyser"
-    ]
-  },
-  "Living Room": {
-    "Sofa": [
-      "1 Seater Sofa", "1 Seater Sofa - Leather", "2 Seater Sofa", "2 Seater Sofa - Leather", 
-      "3 Seater Sofa", "3 Seater Sofa - L Shape", "3 Seater Sofa - Leather", "4 Seater Sofa", 
-      "5 Seater Sofa - L Shape", "7 Seater Sofa - L Shape", "Recliner Sofa 1-Seater", 
-      "Recliner Sofa 2-Seater", "Recliner Sofa 3-Seater", "Sofa Cum Bed"
-    ],
-    "Dining": [
-      "Dining Chair", "Dining Table Only - 4 Seater", "Dining Table Only - 6 Seater", 
-      "Dining Table Only - 8 Seater", "Glass Top Dining Table Only - 4 Seater", 
-      "Glass Top Dining Table Only - 6 Seater", "Glass Top Dining Table Only - 8 Seater", 
-      "Marble Top Dining Table Only - 4 Seater", "Marble Top Dining Table Only - 6 Seater", 
-      "Marble Top Dining Table Only - 8 Seater"
-    ],
-    "Television": [
-      "LCD/LED 52\" - 65\"", "LCD/LED 65\" & Above", "LCD/LED TV 40\" & Below", 
-      "LCD/LED TV 42\" - 50\"", "LCD/LED TV 52\" & Above", "Regular TV (Old Model)"
-    ],
-    "Table": [
-      "Coffee Table Large", "Coffee Table Small", "Console Table", "Folding Table"
-    ],
-    "Chair": [
-      "Arm Chair", "Bean Bag/Pouffe", "Bench", "Folding Chair", "High Chair", 
-      "Plastic Chair", "Rocking Chair", "Settee", "Stool", "Study Chair", "Wooden Chair"
-    ],
-    "Air Conditioner": [
-      "Split Air Conditioner (AC)", "Window Air Conditioner (AC)"
-    ],
-    "Cabinet & Storage": [
-      "Book Shelf Large", "Book Shelf Medium", "Book Shelf Small", "Chest of Drawers Large", 
-      "Chest of Drawers Medium", "Chest of Drawers Small", "Display Cabinet Large", 
-      "Display Cabinet Small", "Entertainment/TV Unit", "Plastic Cupboard", "Prayer Unit/Mandir", 
-      "Shoe Rack Metal", "Shoe Rack Wooden", "TV Table", "Wall Shelf"
-    ],
-    "Appliances": [
-      "Air Cooler", "Air Purifier", "Ceiling/Table Fan", "Music/Video System"
-    ],
-    "Bar Furniture": []
-  },
-  "Kitchen": {
-    "Refrigerator": [
-      "Double Door Refrigerator", "Single Door Refrigerator"
-    ],
-    "Kitchen Items": [
-      "Gas Stove / Hob", "Kitchen Metal Rack", "LPG Gas Cylinder", "Water Drum"
-    ],
-    "Appliances": [
-      "Air Fryer", "Barbeque Grill Large", "Barbeque Grill Small", "Cooking Range", 
-      "Dish washer", "Domestic Flour Mill/ Atta Chakki", "Electric Tandoor", "Food Processor", 
-      "Holds 2-3 Pressure Cookers (5 Litre) Or Equivalent", "Hood Chimney", "Microwave Oven & OTG", 
-      "Mixer Grinder", "Water Purifier", "Wet grinder"
-    ],
-    "Furniture": [
-      "Kitchen Rack", "Serving Trolley", "Side Table"
-    ]
-  },
-  "Miscellaneous": {
-    "Washing Machine": [
-      "Washing Machine <6.9kg", "Washing Machine 7-7.9kg", "Washing Machine 8kg+"
-    ],
-    "Musical Instruments": [
-      "Drum Set - 5 piece", "Electronic Keyboard", "Grand Piano", "Guitar", 
-      "Harmonium", "Piano", "Synthesizer", "Tabla"
-    ],
-    "Decorative Items": [],
-    "Suitcases and Trolleys": [],
-    "Bicycle": [],
-    "Home Utility": [],
-    "Kids Vehicle": [],
-    "Gym Equipments": [],
-    "Swing": [],
-    "Home Appliances": [],
-    "Plants and Pots": []
-  },
-  "Cartons": {
-    "Self Carton": [
-      "Large", "Medium", "Small"
-    ],
-    "NoBroker Carton": [
-      "Gunny Bag", "(1.5ft x 1.5ft x 2ft)"
-    ]
+/* ── Dynamic Category & Subcategory Grouper (Purely Cosmetic Grouping for UI) ── */
+/**
+ * Cosmetically groups database-loaded GoodsItem records into intuitive subcategories
+ * for the UI accordions. Unclassified items cleanly appear in "General Items".
+ * Business authority is the GoodsItem database record.
+ */
+function groupItemsIntoSubcategories(items = []) {
+  const groups = {}
+  const patterns = [
+    { name: "Bed", regex: /\b(bed|cradle|diwan|bunk)\b/i },
+    { name: "Mattress", regex: /\bmattress\b/i },
+    { name: "Sofa", regex: /\b(sofa|recliner)\b/i },
+    { name: "Dining", regex: /\bdining\b/i },
+    { name: "Table", regex: /\b(table|desk)\b/i },
+    { name: "Chair", regex: /\b(chair|stool|bench|pouffe|bean bag|settee)\b/i },
+    { name: "Television", regex: /\b(tv|television|lcd|led)\b/i },
+    { name: "Air Conditioner", regex: /\b(ac|air conditioner|cooler)\b/i },
+    { name: "Almirah/Wardrobe", regex: /\b(wardrobe|almirah|cupboard|locker)\b/i },
+    { name: "Cabinet & Storage", regex: /\b(cabinet|shelf|drawer|unit|rack|trunk|safe)\b/i },
+    { name: "Refrigerator", regex: /\b(refrigerator|fridge)\b/i },
+    { name: "Washing Machine", regex: /\bwashing\b/i },
+    { name: "Kitchen Items", regex: /\b(stove|gas|drum|cylinder)\b/i },
+    { name: "Musical Instruments", regex: /\b(piano|guitar|drum|harmonium|tabla|keyboard|synthesizer)\b/i },
+    { name: "Cartons & Packaging", regex: /\b(carton|box|bag)\b/i },
+    { name: "Appliances", regex: /\b(geyser|purifier|fan|grinder|oven|chimney|microwave|steamer|cooker)\b/i },
+  ]
+
+  for (const it of items) {
+    let matchedGroup = "General Items"
+    for (const p of patterns) {
+      if (p.regex.test(it.name)) {
+        matchedGroup = p.name
+        break
+      }
+    }
+    if (!groups[matchedGroup]) groups[matchedGroup] = []
+    groups[matchedGroup].push(it)
   }
+  return groups
 }
 
 /* ── Slots & Dates Helper ── */
@@ -795,10 +708,44 @@ export function PackersMoversBookingHosurPage() {
 
   const [inventoryBuilderOpen, setInventoryBuilderOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(2) // 1: Location, 2: Add Items, 3: Slots, 4: Summary
+  const [pmCategories, setPmCategories] = useState([])
+  const [inventoryLoading, setInventoryLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState("Bedrooms")
   
-  // Track counts as a flat dictionary: { "Baby Wooden Bed": 1, "1 Seater Sofa": 2 }
+  // Track counts as { [itemId]: quantity }
   const [inventoryItems, setInventoryItems] = useState({})
+
+  // Load database-backed P&M inventory categories and items
+  useEffect(() => {
+    let isMounted = true
+    fetchPackersMoversInventory()
+      .then(res => {
+        if (!isMounted) return
+        const cats = res?.categories || res?.data?.categories || []
+        setPmCategories(cats)
+        if (cats.length > 0) {
+          setActiveCategory(prev => (prev && cats.some(c => c.name === prev) ? prev : cats[0].name))
+        }
+      })
+      .catch(err => {
+        console.warn("Could not load database P&M inventory:", err)
+      })
+      .finally(() => {
+        if (isMounted) setInventoryLoading(false)
+      })
+    return () => { isMounted = false }
+  }, [])
+
+  // Fast lookup map: itemId -> item object
+  const itemsLookup = React.useMemo(() => {
+    const map = {}
+    for (const cat of pmCategories) {
+      for (const it of (cat.items || [])) {
+        map[it.id] = it
+      }
+    }
+    return map
+  }, [pmCategories])
   
   // Track expanded category and subcategory accordions in the UI
   const [expandedSubcategories, setExpandedSubcategories] = useState({})
@@ -806,6 +753,25 @@ export function PackersMoversBookingHosurPage() {
 
   // Step 3: Date & Slot State
   const [selectedDate, setSelectedDate] = useState(() => SHIFTING_DATES[0] || null)
+  const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
+
+  useEffect(() => {
+    if (!selectedDate?.fullDate) return
+    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
+    fetchLogisticsSlots({ date: dStr, category: "packers_movers" })
+      .then(res => {
+        if (res && res.success && res.groups) {
+          const map = {}
+          res.groups.forEach(g => {
+            (g.slots || []).forEach(s => {
+              map[s.slot] = s.is_available
+            })
+          })
+          setServerSlotsAvailability(map)
+        }
+      })
+      .catch(() => {})
+  }, [selectedDate])
   const initialAvailable = getFirstAvailableSlotAndCategory(SHIFTING_DATES[0]?.fullDate || new Date())
   const [selectedSlot, setSelectedSlot] = useState(() => initialAvailable.slot || null)
   const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => initialAvailable.category || "Morning")
@@ -847,27 +813,72 @@ export function PackersMoversBookingHosurPage() {
     )
   )
 
+  const formatQuoteValidity = (validUntilIso, isSurvey) => {
+    if (isSurvey) {
+      return "Non-binding estimate (Subject to pre-move survey verification)"
+    }
+    if (!validUntilIso) {
+      return "Authoritative quote"
+    }
+    try {
+      const validDate = new Date(validUntilIso)
+      if (isNaN(validDate.getTime())) {
+        return "Authoritative quote"
+      }
+      const now = new Date()
+      const diffMinutes = Math.round((validDate.getTime() - now.getTime()) / 60000)
+      if (diffMinutes <= 0) {
+        return "Authoritative quote • Expired"
+      }
+      const timeStr = validDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      return `Authoritative quote • Valid until ${timeStr} (${diffMinutes}m remaining)`
+    } catch {
+      return "Authoritative quote"
+    }
+  }
+
   useEffect(() => {
     bookingAttemptKeyRef.current = null
   }, [pickup, drop, inventoryItems, packingTier, pickupFloor, dropFloor, dismantlingRequired, unpackingRequired])
 
   const refreshPmQuote = async () => {
-    const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-    const dropAddressValue = drop || "Bengaluru, Karnataka, India"
+    const pickupAddressValue = pickup
+    const dropAddressValue = drop
     const usableCoords = (coords, address) =>
       coords && coords.forAddress === address && coords.lat != null && coords.lng != null
         ? { lat: Number(coords.lat), lng: Number(coords.lng) }
         : null
-    const pickupPoint = usableCoords(pickupCoords, pickupAddressValue) || { lat: 12.7409, lng: 77.8253 }
-    const dropPoint = usableCoords(dropCoords, dropAddressValue) || { lat: 12.7500, lng: 77.8350 }
+    const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
+    const dropPoint = usableCoords(dropCoords, dropAddressValue)
+
+    // Strictly enforce real coordinates -- NO FAKE FALLBACK COORDINATES!
+    if (!pickupPoint || !dropPoint) {
+      setPmQuoteLoading(false)
+      setPmServerQuote(null)
+      setPmQuoteError("COORDINATES_REQUIRED: Please select both pickup and drop addresses from suggestions to calculate your quote.")
+      return
+    }
 
     setPmQuoteLoading(true)
     setPmQuoteError("")
+
+    // Format inventory items with authoritative goods_item_id
+    const formattedInventory = Object.entries(inventoryItems)
+      .filter(([_, qty]) => qty > 0)
+      .map(([id, qty]) => {
+        const itemObj = itemsLookup[id]
+        return {
+          goods_item_id: Number(id),
+          name: itemObj?.name || `Item #${id}`,
+          quantity: Number(qty),
+        }
+      })
+
     try {
       const res = await fetchPackersMoversQuote({
         pickup: pickupPoint,
         drop: dropPoint,
-        inventory: inventoryItems,
+        inventory: formattedInventory,
         packingTier,
         dismantlingRequired,
         unpackingRequired,
@@ -876,6 +887,8 @@ export function PackersMoversBookingHosurPage() {
         dropFloor,
         dropHasLift,
         relocationType,
+        city: LOGISTICS_CITY,
+        serviceTierId: selectedPackage?._tierId || selectedPackage?.id || null,
       })
       const quoteData = res?.data || res
       if (quoteData && quoteData.quote_id) {
@@ -895,7 +908,18 @@ export function PackersMoversBookingHosurPage() {
     if (stepperStep === 4) {
       refreshPmQuote()
     }
-  }, [stepperStep, packingTier, dismantlingRequired, unpackingRequired, pickupFloor, pickupHasLift, dropFloor, dropHasLift])
+  }, [
+    stepperStep,
+    selectedPackage,
+    relocationType,
+    packingTier,
+    dismantlingRequired,
+    unpackingRequired,
+    pickupFloor,
+    pickupHasLift,
+    dropFloor,
+    dropHasLift,
+  ])
 
 
   // Live Dispatch & Polling State
@@ -937,7 +961,7 @@ export function PackersMoversBookingHosurPage() {
             const status = (res.data.status || "").toLowerCase()
             const isAccepted = Boolean(
               res.data.is_accepted ||
-              ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+              ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
             )
             if (isAccepted) {
               setLookingForPartnerOpen(false)
@@ -951,9 +975,12 @@ export function PackersMoversBookingHosurPage() {
               navigate(`${routes.booking_checkout}?track=${encodeURIComponent(parsed.bookingId)}`, {
                 state: { isTracking: true, successData: bookingPayload }
               })
-            } else if (["cancelled", "completed"].includes(status)) {
+            } else if (["cancelled", "rejected", "expired", "completed"].includes(status)) {
               setLookingForPartnerOpen(false)
               try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
+              if (["cancelled", "rejected", "expired"].includes(status)) {
+                setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
+              }
             }
           }).catch(() => {})
         } else {
@@ -971,19 +998,71 @@ export function PackersMoversBookingHosurPage() {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
-  // Countdown timer for partner search screen
+  // Countdown timer for partner search screen: wall-clock based so it never gets stuck on tab switch
+  const COUNTDOWN_TOTAL_SECONDS = 600 // 10:00 mins
   useEffect(() => {
-    let t = null
-    if (lookingForPartnerOpen) {
-      setPartnerCountdown(600)
-      t = setInterval(() => {
-        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
-      }, 1000)
+    if (!lookingForPartnerOpen) {
+      setPartnerCountdown(COUNTDOWN_TOTAL_SECONDS)
+      return
     }
+
+    let startTimestamp = Date.now()
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.timestamp && Number(parsed.timestamp) > 0) {
+          startTimestamp = Number(parsed.timestamp)
+        }
+      }
+    } catch (_) {}
+
+    const updateCountdown = () => {
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
+      const remaining = Math.max(0, COUNTDOWN_TOTAL_SECONDS - elapsedSeconds)
+      setPartnerCountdown(remaining)
+      if (remaining <= 0) {
+        setLookingForPartnerOpen(false)
+        let activeBId = lastBookingId
+        let activeToken = lastTrackingToken
+        try {
+          const saved = sessionStorage.getItem("calservice_active_partner_search")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (!activeBId && parsed.bookingId) activeBId = parsed.bookingId
+            if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
+          }
+          sessionStorage.removeItem("calservice_active_partner_search")
+        } catch (_) {}
+        if (activeBId) {
+          cancelBooking(
+            activeBId,
+            "Search window expired (no delivery partner found within 10 minutes)",
+            activeToken || ""
+          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
+        }
+        setBookingError("No relocation team could be assigned within the search window. Please try again or schedule for later.")
+      }
+    }
+
+    updateCountdown()
+    const t = setInterval(updateCountdown, 1000)
+
+    const handleVisibilityOrFocus = () => {
+      if (!document.hidden) {
+        updateCountdown()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus)
+    window.addEventListener("focus", handleVisibilityOrFocus)
+
     return () => {
-      if (t) clearInterval(t)
+      clearInterval(t)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
+      window.removeEventListener("focus", handleVisibilityOrFocus)
     }
-  }, [lookingForPartnerOpen])
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken])
 
   // Lock body scroll when modal open
   useEffect(() => {
@@ -1023,7 +1102,7 @@ export function PackersMoversBookingHosurPage() {
           const status = (res.data.status || "").toLowerCase()
           const isAccepted = Boolean(
             res.data.is_accepted ||
-            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+            ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
@@ -1044,6 +1123,10 @@ export function PackersMoversBookingHosurPage() {
                 successData: bookingPayload
               }
             })
+          } else if (["cancelled", "rejected", "expired"].includes(status)) {
+            setLookingForPartnerOpen(false)
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) {}
+            setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
           }
         }
       } catch (e) {
@@ -1339,7 +1422,7 @@ export function PackersMoversBookingHosurPage() {
         capacity: tier.description || "Complete shifting package with professional crew",
         crew: "Professional packing crew + dedicated vehicle",
         materials: "Bubble wrap, corrugated boxes, stretch film & tape included",
-        baseFare: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })} (Includes packing, loading & transport)`,
+        baseFare: `Starts at ₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
         suitableFor: suitableList,
       },
       _tierId: tier.id,
@@ -1374,7 +1457,7 @@ export function PackersMoversBookingHosurPage() {
     },
     {
       q: "Is transit insurance covered for fragile and high-value items?",
-      a: "Yes, full transit insurance coverage is available for household goods and electronics with swift claim settlement support."
+      a: "Transit insurance coverage is available through our pre-move survey / eligible survey flow, where our survey expert verifies item valuations and policy options prior to movement (instant online bookings intentionally exclude direct insurance add-ons)."
     }
   ]
 
@@ -1399,15 +1482,15 @@ export function PackersMoversBookingHosurPage() {
       const quoteTotal = pmServerQuote?.total != null 
         ? Number(pmServerQuote.total) 
         : (pmServerQuote?.pricing?.total != null ? Number(pmServerQuote.pricing.total) : null)
-      if (quoteTotal == null) {
+      if (!isSurveyRequired && quoteTotal == null) {
         setBookingSubmitting(false)
         setBookingError(
           pmQuoteError ||
-            "We couldn't calculate a relocation quote for this move. Please ensure pickup, drop, and items are selected."
+            "We couldn't calculate an authoritative relocation quote for this move. Please ensure pickup, drop, and items are selected."
         )
         return
       }
-      const fare = quoteTotal
+      const fare = quoteTotal || 0
       const quoteId = pmServerQuote?.quote_id || null
       
       let dateString = todayDateString()
@@ -1418,8 +1501,8 @@ export function PackersMoversBookingHosurPage() {
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
 
-      const pickupAddressValue = pickup || "Hosur, Tamil Nadu"
-      const dropAddressValue = drop || "Bengaluru, Karnataka, India"
+      const pickupAddressValue = pickup || ""
+      const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
       // Only use a stored coordinate if it was resolved for the address
       // being submitted right now -- see the pickupCoords/dropCoords
       // declaration above for why.
@@ -1478,7 +1561,13 @@ export function PackersMoversBookingHosurPage() {
           price: fare,
           route: selectedRoute?.to || null,
           relocation_type: relocationType,
-          inventory: inventoryItems,
+          inventory: Object.entries(inventoryItems)
+            .filter(([_, qty]) => qty > 0)
+            .map(([id, qty]) => ({
+              goods_item_id: Number(id),
+              name: itemsLookup[id]?.name || `Item #${id}`,
+              quantity: Number(qty),
+            })),
           packing_tier: packingTier,
           dismantling_required: dismantlingRequired,
           unpacking_required: unpackingRequired,
@@ -1490,13 +1579,23 @@ export function PackersMoversBookingHosurPage() {
           slot: selectedSlot
         }],
       }
-      payload.logistics_tier = pkg?._tierId || 7
-      if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
-      // Backend accepts these as optional; only send a real resolved point.
-      if (dropPoint?.lat != null && dropPoint?.lng != null) {
-        payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
-        payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
+      // Selected tier must be valid -- NO INVENTED FALLBACK TIER ID (pkg?._tierId || 7)
+      const authoritativeTierId = selectedPackage?._tierId || selectedPackage?.id || pkg?._tierId || pkg?.id
+      if (!authoritativeTierId) {
+        setBookingSubmitting(false)
+        setBookingError("Please select a valid relocation package.")
+        return
       }
+      payload.logistics_tier = authoritativeTierId
+      if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+
+      if (!dropPoint) {
+        setBookingSubmitting(false)
+        setBookingError("We couldn't pin your destination location. Please select it from suggestions.")
+        return
+      }
+      payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
+      payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
 
       if (isSurveyRequired) {
         setIsSurveySubmittedModalOpen(true)
@@ -1602,18 +1701,23 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
-  const handleItemCount = (item, delta) => {
+  const handleItemCount = (itemId, delta) => {
     setInventoryItems(prev => {
-      const current = prev[item] || 0
+      const current = prev[itemId] || 0
       const next = Math.max(0, current + delta)
+      if (next === 0) {
+        const copy = { ...prev }
+        delete copy[itemId]
+        return copy
+      }
       return {
         ...prev,
-        [item]: next
+        [itemId]: next
       }
     })
   }
 
-  const totalItemsCount = Object.values(inventoryItems).reduce((sum, val) => sum + val, 0)
+  const totalItemsCount = Object.values(inventoryItems).reduce((sum, val) => sum + (Number(val) || 0), 0)
 
   return (
     <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased pb-28 lg:pb-0">
@@ -1809,7 +1913,7 @@ export function PackersMoversBookingHosurPage() {
                                   placeholder="Enter pickup address or landmark..."
                                   value={pickup}
                                   onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                                  onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
+                                  onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
                                   className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
                                   required
                                 />
@@ -1850,7 +1954,7 @@ export function PackersMoversBookingHosurPage() {
                                   placeholder="Enter drop address or landmark..."
                                   value={drop}
                                   onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                                  onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}
+                                  onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
                                   className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
                                   required
                                 />
@@ -1904,7 +2008,7 @@ export function PackersMoversBookingHosurPage() {
                                   placeholder="Search Source City"
                                   value={pickup}
                                   onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                                  onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
+                                  onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
                                   className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
                                   required
                                 />
@@ -1952,7 +2056,7 @@ export function PackersMoversBookingHosurPage() {
                                   placeholder="Search Destination City"
                                   value={drop}
                                   onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                                  onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}
+                                  onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
                                   className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
                                   required
                                 />
@@ -2100,7 +2204,7 @@ export function PackersMoversBookingHosurPage() {
                 <div className="mt-3">
                   <h3 className="text-lg font-bold text-slate-900">{pkg.name}</h3>
                   <p className="text-sm text-slate-600 mt-1">
-                    Starting from <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
+                    Starts at <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
                   </p>
                   <p className="text-[11px] text-slate-500 leading-relaxed mt-2 line-clamp-2">
                     {pkg.details.capacity}
@@ -2154,10 +2258,22 @@ export function PackersMoversBookingHosurPage() {
                 <div
                   key={idx}
                   onClick={() => {
-                    setDrop(route.to)
+                    const destination = route.to || ""
+                    if (destination) {
+                      const exactDrop = formatExactLocation(destination)
+                      setDrop(exactDrop)
+                      setDropCoords(null)
+                      resolveLocationCoords(exactDrop).then((c) => {
+                        if (c) setDropCoords({ ...c, forAddress: exactDrop })
+                      })
+                    }
                     setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
                     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    if (!pickup) {
+                      const pickupEl = document.getElementById("pickup-input")
+                      if (pickupEl) pickupEl.focus?.()
+                    }
                   }}
                   className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
@@ -2196,7 +2312,12 @@ export function PackersMoversBookingHosurPage() {
               key={i}
               type="button"
               onClick={() => {
-                setPickup(`${area}, Hosur`)
+                const formatted = formatExactLocation(`${area}, Hosur`)
+                setPickup(formatted)
+                setPickupCoords(null)
+                resolveLocationCoords(formatted).then((c) => {
+                  if (c) setPickupCoords({ ...c, forAddress: formatted })
+                })
                 const bar = document.getElementById("estimate-bar")
                 if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
               }}
@@ -2259,7 +2380,7 @@ export function PackersMoversBookingHosurPage() {
               <MessageSquare className="w-8 h-8 text-rose-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Receive Instant Quote</h3>
-            <p className="text-xs text-slate-500">Get a firm, transparent estimate instantly. Our fixed-rate model has no surprise additions.</p>
+            <p className="text-xs text-slate-500">Transparent pricing based on your move details. Larger or complex moves may require a pre-move survey.</p>
           </div>
           
           <div className="flex flex-col items-center text-center relative z-10">
@@ -2498,7 +2619,7 @@ export function PackersMoversBookingHosurPage() {
 
             {/* Base Fare */}
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Estimated Base Rate:</span>
+              <span className="text-xs font-semibold text-slate-500">Starts at:</span>
               <span className="text-base font-extrabold text-emerald-700">{activePackageDetails.price}</span>
             </div>
 
@@ -2563,7 +2684,7 @@ export function PackersMoversBookingHosurPage() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-[10px] text-slate-500 font-medium">Starting from</div>
+                      <div className="text-[10px] text-slate-500 font-medium">Starts at</div>
                       <div className="text-base font-extrabold text-slate-900">{pkg.price}</div>
                     </div>
                   </div>
@@ -2674,17 +2795,17 @@ export function PackersMoversBookingHosurPage() {
 
                 {/* Tabs */}
                 <div className="flex items-center gap-3 px-6 py-4 overflow-x-auto hide-scrollbar border-b border-slate-100">
-                  {Object.keys(INVENTORY_DATA).map(cat => (
+                  {pmCategories.map(cat => (
                     <button
-                      key={cat}
-                      onClick={() => setActiveCategory(cat)}
+                      key={cat.id || cat.name}
+                      onClick={() => setActiveCategory(cat.name)}
                       className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[13px] font-semibold transition-all border cursor-pointer ${
-                        activeCategory === cat 
+                        activeCategory === cat.name 
                           ? "bg-[#0B8860] text-white border-[#0B8860]" 
                           : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                       }`}
                     >
-                      {cat}
+                      {cat.name}
                     </button>
                   ))}
                 </div>
@@ -2706,70 +2827,75 @@ export function PackersMoversBookingHosurPage() {
                   
                   {/* Subcategories Accordions */}
                   <div className="border border-slate-200 rounded-b-xl overflow-hidden bg-white mb-6">
-                    {Object.entries(INVENTORY_DATA[activeCategory]).map(([subCat, items]) => {
-                      // Filter items by search query if any
-                      const filteredItems = items.filter(item => item.toLowerCase().includes(inventorySearchQuery.toLowerCase()))
-                      
-                      // Don't render subcategory if it has no items matching search
-                      if (filteredItems.length === 0) return null
-                      
-                      const isExpanded = !!expandedSubcategories[subCat] // Default to collapsed
-                      
-                      return (
-                        <div key={subCat} className="border-b border-slate-100 last:border-b-0">
-                          {/* Accordion Toggle */}
-                          <div 
-                            onClick={() => setExpandedSubcategories(prev => ({...prev, [subCat]: !isExpanded}))}
-                            className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-[13px] text-slate-700">{subCat}</span>
-                              {(() => {
-                                const addedCount = filteredItems.reduce((acc, item) => acc + (inventoryItems[item] || 0), 0);
-                                if (addedCount > 0) {
-                                  return (
-                                    <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 ml-1">
-                                      {addedCount} added
-                                    </span>
-                                  )
-                                }
-                                return null;
-                              })()}
-                            </div>
-                            <div className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors">
-                              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                            </div>
-                          </div>
-                          
-                          {/* Items */}
-                          {isExpanded && (
-                            <div className="px-4 pb-4">
-                              <div className="border-l-2 border-slate-100 ml-2 pl-4 space-y-4 pt-2">
-                                {filteredItems.map((item) => {
-                                  const count = inventoryItems[item] || 0
-                                  return (
-                                    <div key={item} className="flex items-center justify-between">
-                                      <span className="text-[13px] text-slate-600 font-medium">{item}</span>
-                                      {count > 0 ? (
-                                        <div className="flex items-center border border-[#0B8860] rounded-md overflow-hidden text-[#0B8860] bg-white h-8">
-                                          <button onClick={() => handleItemCount(item, -1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">-</button>
-                                          <span className="font-bold text-sm min-w-[20px] text-center">{count}</span>
-                                          <button onClick={() => handleItemCount(item, 1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">+</button>
-                                        </div>
-                                      ) : (
-                                        <button onClick={() => handleItemCount(item, 1)} className="w-8 h-8 flex items-center justify-center rounded-md border border-[#0B8860] text-[#0B8860] hover:bg-[#0B8860]/10 transition-colors cursor-pointer bg-white">
-                                          <Plus className="w-4 h-4" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                    {(() => {
+                      const curCat = pmCategories.find(c => c.name === activeCategory) || pmCategories[0]
+                      const subGroups = groupItemsIntoSubcategories(curCat?.items || [])
+                      return Object.entries(subGroups).map(([subCat, items]) => {
+                        // Filter items by search query if any
+                        const filteredItems = items.filter(it => it.name.toLowerCase().includes(inventorySearchQuery.toLowerCase()))
+                        if (filteredItems.length === 0) return null
+                        const isExpanded = !!expandedSubcategories[subCat]
+                        const addedCount = filteredItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0)
+
+                        return (
+                          <div key={subCat} className="border-b border-slate-100 last:border-b-0">
+                            {/* Accordion Toggle */}
+                            <div 
+                              onClick={() => setExpandedSubcategories(prev => ({...prev, [subCat]: !isExpanded}))}
+                              className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-[13px] text-slate-700">{subCat}</span>
+                                {addedCount > 0 && (
+                                  <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 ml-1">
+                                    {addedCount} added
+                                  </span>
+                                )}
+                              </div>
+                              <div className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors">
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                               </div>
                             </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                            
+                            {/* Items */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4">
+                                <div className="border-l-2 border-slate-100 ml-2 pl-4 space-y-4 pt-2">
+                                  {filteredItems.map((item) => {
+                                    const count = inventoryItems[item.id] || 0
+                                    return (
+                                      <div key={item.id} className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                          <span className="text-[13px] text-slate-600 font-medium">{item.name}</span>
+                                          <span className="text-[10px] text-slate-400 font-normal">
+                                            {item.configured === false || item.cft == null || item.weight_kg == null ? (
+                                              <span className="text-amber-600 font-medium">Requires Survey / Manual Review</span>
+                                            ) : (
+                                              `${item.cft} CFT • ${item.weight_kg} kg`
+                                            )}
+                                          </span>
+                                        </div>
+                                        {count > 0 ? (
+                                          <div className="flex items-center border border-[#0B8860] rounded-md overflow-hidden text-[#0B8860] bg-white h-8">
+                                            <button onClick={() => handleItemCount(item.id, -1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">-</button>
+                                            <span className="font-bold text-sm min-w-[20px] text-center">{count}</span>
+                                            <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">+</button>
+                                          </div>
+                                        ) : (
+                                          <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-8 flex items-center justify-center rounded-md border border-[#0B8860] text-[#0B8860] hover:bg-[#0B8860]/10 transition-colors cursor-pointer bg-white">
+                                            <Plus className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
                 </div>
 
@@ -2877,7 +3003,7 @@ export function PackersMoversBookingHosurPage() {
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
                                   {slots.map(slot => {
-                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
                                     return (
                                       <button 
                                         key={slot}
@@ -2910,11 +3036,9 @@ export function PackersMoversBookingHosurPage() {
                       <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
                         <span className="text-lg leading-none">📦</span>
                         {(() => {
-                          const cartonItems = [
-                            ...(INVENTORY_DATA["Cartons"]?.["Self Carton"] || []), 
-                            ...(INVENTORY_DATA["Cartons"]?.["NoBroker Carton"] || [])
-                          ];
-                          const addedCartons = cartonItems.reduce((acc, item) => acc + (inventoryItems[item] || 0), 0);
+                          const cartonCat = pmCategories.find(c => (c.slug && c.slug.includes("carton")) || (c.name && c.name.toLowerCase().includes("carton")))
+                          const cartonItems = cartonCat?.items || []
+                          const addedCartons = cartonItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0);
                           return (
                             <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
                               You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes. 
@@ -3188,21 +3312,32 @@ export function PackersMoversBookingHosurPage() {
                                 <span className="font-semibold text-slate-800">₹ {pmServerQuote.pricing.unpacking_charge}</span>
                               </div>
                             )}
-                            <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200">
-                              <span>Subtotal</span>
-                              <span>₹ {pmServerQuote.pricing.subtotal}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-500">
-                              <span>Taxes (GST 18%)</span>
-                              <span>₹ {pmServerQuote.pricing.gst_amount}</span>
-                            </div>
+                            {pmServerQuote.pricing?.total ? (
+                              <>
+                                <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200">
+                                  <span>Relocation Base Fare</span>
+                                  <span>₹ {pmServerQuote.pricing.subtotal}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-500">
+                                  <span>Taxes (GST 18%)</span>
+                                  <span>₹ {pmServerQuote.pricing.gst_amount}</span>
+                                </div>
+                              </>
+                            ) : null}
                             <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-200">
                               <span>{isSurveyRequired ? "Estimated Moving Fare" : "Total Moving Fare"}</span>
-                              <span className={isSurveyRequired ? "text-amber-700 font-black" : "text-[#0B8860]"}>₹ {pmServerQuote.pricing.total}</span>
+                              <span className={isSurveyRequired ? "text-amber-700 font-black" : "text-[#0B8860]"}>
+                                {pmServerQuote.pricing?.total ? `₹ ${pmServerQuote.pricing.total}` : "Survey / Inspection Required"}
+                              </span>
                             </div>
                             <p className="text-[10px] text-slate-400 pt-1">
-                              Quote Reference: {pmServerQuote.quote_id} • {isSurveyRequired ? "Estimated fare (Subject to pre-move survey verification)" : "Authoritative quote valid for 48 hours"}
+                              Quote Reference: {pmServerQuote.quote_id} • {formatQuoteValidity(pmServerQuote.valid_until, isSurveyRequired)}
                             </p>
+                            {!isSurveyRequired && (
+                              <p className="text-[10px] text-slate-500 pt-0.5">
+                                This fare is calculated from your selected inventory, vehicle, route and service options.
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <p className="text-xs text-rose-500">{pmQuoteError || "Unable to retrieve price calculation."}</p>
@@ -3228,7 +3363,7 @@ export function PackersMoversBookingHosurPage() {
                         onClick={() => {
                           handleBookNow()
                         }}
-                        disabled={bookingSubmitting || pmQuoteLoading || (!pmServerQuote?.pricing?.total && !pmServerQuote?.total)}
+                        disabled={bookingSubmitting || pmQuoteLoading || (!isSurveyRequired && !pmServerQuote?.pricing?.total && !pmServerQuote?.total)}
                         className="px-8 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {bookingSubmitting ? "Submitting Request..." : (isSurveyRequired ? "Request Pre-Move Survey" : "Confirm Move")}
@@ -3466,7 +3601,7 @@ export function PackersMoversBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
                         </div>
                       </div>
                       <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
@@ -3475,7 +3610,7 @@ export function PackersMoversBookingHosurPage() {
                         <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Bengaluru, Karnataka, India")}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
                         </div>
                       </div>
                       {/* Service / Relocation Type */}

@@ -148,3 +148,173 @@ class LogisticsQuoteEndpointTests(TestCase):
         with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
             data = self._post(total="1.00", total_amount="1.00", fare="1.00").json()["data"]
         self.assertEqual(data["total"], "530.00")
+
+    def test_quote_identity_ttl_and_caching(self):
+        with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json().get("data", resp.json())
+        self.assertTrue(data.get("quote_id", "").startswith("gtq_"))
+        self.assertIsNotNone(data.get("quote_hash"))
+        self.assertIsNotNone(data.get("created_at"))
+        self.assertIsNotNone(data.get("expires_at"))
+
+        from django.core.cache import cache
+        cached = cache.get(f"gt_quote_{data['quote_id']}")
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["total"], data["total"])
+
+    def test_expired_quote_rejected_in_fare_resolver(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from service_requests.services.logistics_pricing import resolve_logistics_fare_v2, UnresolvedLogisticsFareError
+
+        expired_time = (timezone.now() - timedelta(minutes=1)).isoformat()
+        with self.assertRaises(UnresolvedLogisticsFareError) as ctx:
+            resolve_logistics_fare_v2(
+                service_category="goods_transport_truck",
+                logistics_tier=self.tier,
+                logistics_lane=None,
+                submitted_amount=Decimal("530.00"),
+                pickup_lat=Decimal("12.740900"),
+                pickup_lng=Decimal("77.825300"),
+                drop_lat=Decimal("12.935200"),
+                drop_lng=Decimal("77.624500"),
+                cart_data=[{
+                    "quote_id": "gtq_old12345",
+                    "expires_at": expired_time,
+                }]
+            )
+        self.assertIn("expired", str(ctx.exception).lower())
+
+    def test_valid_quote_accepted_and_snapshot_preserved(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.core.cache import cache
+        from service_requests.services.logistics_pricing import resolve_logistics_fare_v2
+
+        future_time = (timezone.now() + timedelta(minutes=10)).isoformat()
+        cache.set("gt_quote_gtq_valid12345", {
+            "quote_id": "gtq_valid12345",
+            "tier_id": self.tier.id,
+            "pickup_lat": "12.740900",
+            "pickup_lng": "77.825300",
+            "drop_lat": "12.935200",
+            "drop_lng": "77.624500",
+            "expires_at": future_time,
+            "total": "530.00",
+            "quote_hash": "mock_hash_123",
+            "created_at": timezone.now().isoformat(),
+        }, timeout=600)
+        with patch("service_requests.services.routing.get_route_eta", return_value=_route()):
+            fare, breakdown = resolve_logistics_fare_v2(
+                service_category="goods_transport_truck",
+                logistics_tier=self.tier,
+                logistics_lane=None,
+                submitted_amount=Decimal("530.00"),
+                pickup_lat=Decimal("12.740900"),
+                pickup_lng=Decimal("77.825300"),
+                drop_lat=Decimal("12.935200"),
+                drop_lng=Decimal("77.624500"),
+                cart_data=[{
+                    "quote_id": "gtq_valid12345",
+                    "expires_at": future_time,
+                }]
+            )
+        self.assertEqual(fare, Decimal("530.00"))
+        self.assertEqual(breakdown["quote_id"], "gtq_valid12345")
+        self.assertEqual(breakdown["expires_at"], future_time)
+        self.assertIsNotNone(breakdown.get("quote_hash"))
+        self.assertIsNotNone(breakdown.get("created_at"))
+        self.assertIsNotNone(breakdown.get("tier_id"))
+
+    @patch("service_requests.services.routing.get_route_eta")
+    def test_two_wheeler_city_capacity_isolation_via_quote_endpoint(self, mock_route):
+        """
+        API-level test for standard GT quote endpoint:
+        City A (Hosur): 2W max weight = 20 kg
+        City B (Bengaluru): 2W max weight = 45 kg
+        A 30 kg cargo quote against City A's 2W tier must NOT use City B's 45 kg capacity.
+        City A quote must fail with VEHICLE_CAPACITY_EXCEEDED or CARGO_INCOMPATIBLE.
+        City B quote with the same 30 kg cargo must succeed (200 OK).
+        """
+        import uuid
+        from logistics.models import GoodsCategory, GoodsItem
+
+        mock_route.return_value = _route(distance_km=5.0)
+        uid = uuid.uuid4().hex[:6]
+
+        # City A: 2W max weight = 20 kg
+        tier_2w_a = ServiceTier.objects.create(
+            category=LogisticsCategory.TWO_WHEELER,
+            city="Hosur",
+            slug=f"2w-hosur-{uid}",
+            name="2W Hosur",
+            vehicle_class=ServiceTier.VehicleClass.TWO_WHEELER,
+            starting_price=Decimal("100.00"),
+            base_fare=Decimal("50.00"),
+            per_km_rate=Decimal("10.00"),
+            free_km=Decimal("1.00"),
+            max_cft=Decimal("5.0"),
+            max_weight_kg=Decimal("20.0"),
+            is_active=True,
+        )
+
+        # City B: 2W max weight = 45 kg (alphabetically "Bengaluru" < "Hosur")
+        tier_2w_b = ServiceTier.objects.create(
+            category=LogisticsCategory.TWO_WHEELER,
+            city="Bengaluru",
+            slug=f"2w-blr-{uid}",
+            name="2W Bengaluru",
+            vehicle_class=ServiceTier.VehicleClass.TWO_WHEELER,
+            starting_price=Decimal("120.00"),
+            base_fare=Decimal("60.00"),
+            per_km_rate=Decimal("12.00"),
+            free_km=Decimal("1.00"),
+            max_cft=Decimal("10.0"),
+            max_weight_kg=Decimal("45.0"),
+            is_active=True,
+        )
+
+        # Create a goods item weighing 30 kg
+        cat_small = GoodsCategory.objects.create(
+            name=f"Standard Goods {uid}",
+            slug=f"std-goods-{uid}",
+            allows_two_wheeler=True,
+            is_active=True,
+        )
+        item_30kg = GoodsItem.objects.create(
+            category=cat_small,
+            name=f"30kg Box {uid}",
+            slug=f"30kg-box-{uid}",
+            default_cft=Decimal("2.0"),
+            default_weight_kg=Decimal("30.0"),
+            is_active=True,
+            is_two_wheeler_compatible=True,
+        )
+
+        cargo_payload = [{"goods_item_id": item_30kg.id, "quantity": 1}]
+
+        # 1. Quote against City A's 2W tier with 30 kg cargo
+        resp_a = self._post(
+            service_category="goods_transport_two_wheeler",
+            tier_id=tier_2w_a.id,
+            cargo_items=cargo_payload,
+        )
+        # Must be rejected because 30 kg exceeds City A's 20 kg limit
+        self.assertEqual(resp_a.status_code, 400, f"City A quote should fail: {resp_a.content}")
+        resp_a_json = resp_a.json()
+        self.assertIn(resp_a_json.get("error_code"), ["VEHICLE_CAPACITY_EXCEEDED", "CARGO_INCOMPATIBLE"])
+        self.assertFalse(resp_a_json.get("cargo_summary", {}).get("is_two_wheeler_compatible", True))
+
+        # 2. Quote against City B's 2W tier with the exact same 30 kg cargo
+        resp_b = self._post(
+            service_category="goods_transport_two_wheeler",
+            tier_id=tier_2w_b.id,
+            cargo_items=cargo_payload,
+        )
+        # Must succeed because 30 kg fits safely within City B's 45 kg limit
+        self.assertEqual(resp_b.status_code, 200, f"City B quote should succeed: {resp_b.content}")
+        resp_b_json = resp_b.json()
+        self.assertTrue(resp_b_json.get("data", {}).get("cargo_summary", {}).get("is_two_wheeler_compatible", False))
+

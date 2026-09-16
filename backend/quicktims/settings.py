@@ -97,6 +97,7 @@ USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
 IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
 if IS_TESTING:
+    TESTING = True
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",

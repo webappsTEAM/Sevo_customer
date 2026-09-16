@@ -18,8 +18,8 @@ export function BookingCancellationModal({
   requestId,
   isAccepted,
   graceSecondsRemaining = 300,
-  trackingToken,
-  phone,
+  trackingToken = "",
+  phone = "",
   onClose,
   onCancelled,
 }) {
@@ -36,24 +36,29 @@ export function BookingCancellationModal({
 
   useEffect(() => {
     if (!isAccepted || remainingSecs <= 0) return
-    const timer = setInterval(() => {
-      setRemainingSecs((prev) => (prev > 0 ? prev - 1 : 0))
+    const interval = setInterval(() => {
+      setRemainingSecs((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
     }, 1000)
-    return () => clearInterval(timer)
+    return () => clearInterval(interval)
   }, [isAccepted, remainingSecs])
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}:${s < 10 ? "0" : ""}${s}`
   }
 
   const isGraceExpired = isAccepted && remainingSecs <= 0
-  const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason
-  const canSubmit = Boolean(finalReason && !isGraceExpired && !isSubmitting)
 
   const handleConfirmCancel = async () => {
-    if (!finalReason) {
+    const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason
+    if (!finalReason.trim()) {
       setErrorMsg("Please select or specify a cancellation reason.")
       return
     }
@@ -67,7 +72,6 @@ export function BookingCancellationModal({
     setErrorMsg("")
 
     const lookup = requestId || bookingId
-
     const isEstimation = Boolean(
       (lookup && String(lookup).includes("LOCAL-EST")) ||
       estimationRepository.hasActiveEstimationSync()
@@ -105,11 +109,12 @@ export function BookingCancellationModal({
         savedObj?.tracking_token ||
         urlParams.get("token") ||
         sessionStorage.getItem("active_tracking_token") ||
-        localStorage.getItem("calservice_customer_token");
+        sessionStorage.getItem("caltrack_tracking_token") ||
+        localStorage.getItem("calservice_customer_token") || "";
 
       const resolvedPhone = phone ||
         savedObj?.phone ||
-        localStorage.getItem("caltrack_customer_phone");
+        localStorage.getItem("caltrack_customer_phone") || "";
 
       const payload = {
         reason: finalReason,
@@ -139,12 +144,12 @@ export function BookingCancellationModal({
         }
         if (onClose) onClose()
       } else {
-        const errorText = res?.message || res?.detail || "Failed to cancel booking."
+        const errorText = res?.message || res?.detail || res?.error || "Failed to cancel booking."
         setErrorMsg(errorText)
       }
     } catch (err) {
       console.warn("Cancellation API error:", err)
-      const errorText = err?.body?.message || err?.message || err?.detail || "Cancellation failed. This booking may have already started or completed."
+      const errorText = err?.body?.message || err?.body?.detail || err?.message || "Cancellation failed. This booking may have already started or completed."
       setErrorMsg(errorText)
     } finally {
       setIsSubmitting(false)

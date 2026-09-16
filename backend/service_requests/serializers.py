@@ -344,6 +344,25 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Valid customer phone number is required.")
         return cleaned
 
+    def validate_drop_contact_phone(self, value):
+        if not value:
+            return value
+        import re
+        cleaned = re.sub(r"[\s\-\(\)\+]", "", str(value))
+        if not cleaned.isdigit() or len(cleaned) < 10:
+            raise serializers.ValidationError("Enter a valid 10-digit receiver phone number.")
+        if cleaned in {"0000000000", "1234567890", "9999999999"}:
+            raise serializers.ValidationError("Valid receiver phone number is required.")
+        return cleaned
+
+    def validate_drop_contact_name(self, value):
+        if not value:
+            return value
+        val = str(value).strip()
+        if len(val) < 2:
+            raise serializers.ValidationError("Receiver name must be at least 2 characters.")
+        return val
+
     def validate(self, attrs):
         # Booking window: same-day requests are refused after the configured
         # cut-off, and a slot that has already passed today is refused too.
@@ -386,6 +405,15 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         if not is_safe:
             raise serializers.ValidationError({
                 "description": f"Prohibited Cargo: {safety_msg}"
+            })
+
+        # GT-C-03: Transit insurance is not available for instant self-service Packers & Movers
+        if attrs.get("insurance_opted_in") and category == "packers_movers":
+            raise serializers.ValidationError({
+                "insurance_opted_in": (
+                    "Transit insurance is not available for instant online Packers & Movers booking. "
+                    "Full-value transit insurance is arranged via pre-move survey."
+                )
             })
 
         # Fixes GT-A-03 (partial): "identity requirement scaled to declared
@@ -514,6 +542,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_rating      = serializers.SerializerMethodField()
     job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
+    child_requests         = serializers.SerializerMethodField()
+    is_search_expired      = serializers.SerializerMethodField()
 
     def get_estimation(self, obj):
         if hasattr(obj, "estimation") and obj.estimation is not None:
@@ -543,7 +573,33 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             # completed bookings are eligible to file an insurance claim
             # against, without a second per-booking API call.
             "insurance_opted_in", "insurance_liability_cap",
+            "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
+
+    def get_is_search_expired(self, obj):
+        if (
+            str(getattr(obj, "cancellation_reason", "") or "").lower() == "search_expired"
+            or "search window expired" in str(getattr(obj, "cancellation_note", "") or "").lower()
+            or "search window expired" in str(getattr(obj, "cancellation_reason", "") or "").lower()
+        ):
+            return True
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+        from datetime import timedelta
+        import django.utils.timezone as django_timezone
+        is_logistics = (
+            obj.service_category in LOGISTICS_CATEGORIES
+            or str(obj.service_category or "").startswith("goods_")
+            or "truck" in str(obj.service_category or "").lower()
+            or "two_wheeler" in str(obj.service_category or "").lower()
+        )
+        if (
+            is_logistics
+            and obj.status in [ServiceRequest.Status.UNASSIGNED, ServiceRequest.Status.NEW_REQUEST, ServiceRequest.Status.DRAFT]
+            and not getattr(obj, "assigned_employee_id", None)
+        ):
+            if obj.created_at and obj.created_at < (django_timezone.now() - timedelta(minutes=10)):
+                return True
+        return False
 
     def get_child_requests(self, obj):
         if hasattr(obj, "_prefetched_objects_cache") and "child_requests" in obj._prefetched_objects_cache:
@@ -619,8 +675,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         if obj.technician_phone:
             return obj.technician_phone
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "phone", None):
-            return assigned_emp.phone
+        if assigned_emp:
+            if getattr(assigned_emp, "phone", None):
+                return assigned_emp.phone
+            if getattr(assigned_emp, "user", None) and getattr(assigned_emp.user, "phone", None):
+                return assigned_emp.user.phone
         assignment = self._get_cached_assignment(obj)
         if assignment:
             return assignment.technician_phone or ""
@@ -680,6 +739,15 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return None
         name = self.get_technician_name(obj)
         if name:
+            veh_num = ""
+            assigned_emp = getattr(obj, "assigned_employee", None)
+            if assigned_emp and hasattr(assigned_emp, "vehicles"):
+                try:
+                    veh = assigned_emp.vehicles.filter(is_active=True).first()
+                    if veh:
+                        veh_num = veh.registration_number or ""
+                except Exception:
+                    pass
             return {
                 "name": name,
                 "phone": self.get_technician_phone(obj) or "",
@@ -688,6 +756,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                 "latitude": float(obj.technician_latitude) if obj.technician_latitude is not None else None,
                 "longitude": float(obj.technician_longitude) if obj.technician_longitude is not None else None,
                 "location_name": obj.technician_location_name or "",
+                "vehicle_number": veh_num,
                 "last_seen_at": obj.updated_at.isoformat() if getattr(obj, "updated_at", None) else None,
                 "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or "",
             }
@@ -724,7 +793,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return str(obj.tracking_token)
 
     def get_start_otp(self, obj):
-        if obj.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]:
+        if obj.status in ["cancelled", "rejected"]:
             return None
         if not obj.start_otp:
             # Fixes EC-01: this used to derive the code deterministically from
@@ -734,8 +803,6 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             obj.start_otp = _generate_secure_start_otp()
             ServiceRequest.objects.filter(id=obj.id).update(start_otp=obj.start_otp)
         return str(obj.start_otp)
-
-    _OTP_STATUSES = ("cash_pending", "pending", "collected")
 
     def _payment_otp_map(self):
         """
@@ -769,11 +836,17 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         else:
             items = [source]
 
-        ids = [
-            str(o.id) for o in items
-            if getattr(o, "id", None) is not None
-            and getattr(o, "payment_status", None) in self._OTP_STATUSES
-        ]
+        ids = []
+        req_id_to_id = {}
+        for o in items:
+            if getattr(o, "id", None) is not None and getattr(o, "status", None) not in ["cancelled", "rejected"]:
+                sid = str(o.id)
+                ids.append(sid)
+                rid = getattr(o, "request_id", None)
+                if rid:
+                    s_rid = str(rid)
+                    ids.append(s_rid)
+                    req_id_to_id[s_rid] = sid
 
         otp_map = {}
         if ids:
@@ -794,9 +867,12 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                             continue
                         m = re.search(r'OTP\s+([0-9]{6})', message)
                         if m:
+                            code = m.group(1)
                             # Ascending order means the last row for an id
                             # wins, matching the previous "most recent" query.
-                            otp_map[str(related_id)] = m.group(1)
+                            otp_map[str(related_id)] = code
+                            if str(related_id) in req_id_to_id:
+                                otp_map[req_id_to_id[str(related_id)]] = code
             except Exception:
                 otp_map = {}
 
@@ -804,7 +880,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return otp_map
 
     def get_payment_confirmation_otp(self, obj):
-        if obj.payment_status not in self._OTP_STATUSES:
+        if obj.status in ["cancelled", "rejected"]:
             return None
         return self._payment_otp_map().get(str(obj.id))
 
@@ -911,6 +987,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     total_amount           = serializers.SerializerMethodField()
     available_actions      = serializers.SerializerMethodField()
     technician             = serializers.SerializerMethodField()
+    is_search_expired      = serializers.SerializerMethodField()
 
     job_type               = serializers.CharField(read_only=True)
     estimation             = serializers.SerializerMethodField()
@@ -940,6 +1017,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "has_feedback", "feedback_token", "feedback",
             "job_type", "estimation",
             "created_at", "updated_at",
+            "is_search_expired", "cancellation_reason", "cancellation_note", "cancelled_at",
         )
 
     def get_payment_confirmation_otp(self, obj):
@@ -964,6 +1042,31 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
+
+    def get_is_search_expired(self, obj):
+        if (
+            str(getattr(obj, "cancellation_reason", "") or "").lower() == "search_expired"
+            or "search window expired" in str(getattr(obj, "cancellation_note", "") or "").lower()
+            or "search window expired" in str(getattr(obj, "cancellation_reason", "") or "").lower()
+        ):
+            return True
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+        from datetime import timedelta
+        import django.utils.timezone as django_timezone
+        is_logistics = (
+            obj.service_category in LOGISTICS_CATEGORIES
+            or str(obj.service_category or "").startswith("goods_")
+            or "truck" in str(obj.service_category or "").lower()
+            or "two_wheeler" in str(obj.service_category or "").lower()
+        )
+        if (
+            is_logistics
+            and obj.status in [ServiceRequest.Status.UNASSIGNED, ServiceRequest.Status.NEW_REQUEST, ServiceRequest.Status.DRAFT]
+            and not getattr(obj, "assigned_employee_id", None)
+        ):
+            if obj.created_at and obj.created_at < (django_timezone.now() - timedelta(minutes=10)):
+                return True
+        return False
 
     def get_customer_id(self, obj):
         try:

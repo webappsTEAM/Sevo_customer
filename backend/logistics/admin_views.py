@@ -467,15 +467,21 @@ class AdminGoodsItemListView(APIView):
         if GoodsItem.objects.filter(slug=slug).exists():
             return _fail(f"Goods item slug '{slug}' is already in use.", "DUPLICATE_SLUG", status.HTTP_400_BAD_REQUEST)
 
+        raw_wt = data.get("default_weight_kg")
+        if raw_wt is None or str(raw_wt).strip() == "":
+            return _fail("Item weight is required and cannot be blank.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
         try:
-            wt = Decimal(str(data.get("default_weight_kg") or "5.00"))
+            wt = Decimal(str(raw_wt).strip())
             if wt <= Decimal("0"):
                 return _fail("Item weight must be greater than zero.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
         except (InvalidOperation, TypeError, ValueError):
             return _fail("Enter a valid numeric weight in kg.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
 
+        raw_cft = data.get("default_cft")
+        if raw_cft is None or str(raw_cft).strip() == "":
+            return _fail("Item volume in CFT is required and cannot be blank.", "INVALID_CFT", status.HTTP_400_BAD_REQUEST)
         try:
-            cft = Decimal(str(data.get("default_cft") or "1.00"))
+            cft = Decimal(str(raw_cft).strip())
             if cft <= Decimal("0"):
                 return _fail("Item volume must be greater than zero.", "INVALID_CFT", status.HTTP_400_BAD_REQUEST)
         except (InvalidOperation, TypeError, ValueError):
@@ -591,8 +597,11 @@ class AdminGoodsItemDetailView(APIView):
                 changes.append("slug")
 
         if "default_weight_kg" in data:
+            raw_wt = data.get("default_weight_kg")
+            if raw_wt is None or str(raw_wt).strip() == "":
+                return _fail("Weight cannot be blank.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
             try:
-                new_wt = Decimal(str(data["default_weight_kg"]))
+                new_wt = Decimal(str(raw_wt).strip())
                 if new_wt <= Decimal("0"):
                     return _fail("Weight must be greater than zero.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
                 if new_wt != item.default_weight_kg:
@@ -603,8 +612,11 @@ class AdminGoodsItemDetailView(APIView):
                 return _fail("Invalid weight number.", "INVALID_WEIGHT", status.HTTP_400_BAD_REQUEST)
 
         if "default_cft" in data:
+            raw_cft = data.get("default_cft")
+            if raw_cft is None or str(raw_cft).strip() == "":
+                return _fail("CFT volume cannot be blank.", "INVALID_CFT", status.HTTP_400_BAD_REQUEST)
             try:
-                new_cft = Decimal(str(data["default_cft"]))
+                new_cft = Decimal(str(raw_cft).strip())
                 if new_cft <= Decimal("0"):
                     return _fail("CFT volume must be greater than zero.", "INVALID_CFT", status.HTTP_400_BAD_REQUEST)
                 if new_cft != item.default_cft:

@@ -235,6 +235,7 @@ class ServiceRequest(models.Model):
         WRONG_SERVICE      = "WRONG_SERVICE",      "Selected wrong service, date, or address"
         FOUND_ALTERNATIVE  = "FOUND_ALTERNATIVE",  "Found alternative service / Solved myself"
         PRICE_OR_PAYMENT   = "PRICE_OR_PAYMENT",   "Price or payment issue"
+        SEARCH_EXPIRED     = "SEARCH_EXPIRED",     "Search window expired (no delivery partner found within 10 minutes)"
         OTHER              = "OTHER",              "Other reason"
 
     # Human-readable ID (SR-0001, SR-0002, ...)
@@ -1096,7 +1097,7 @@ class Package(models.Model):
 
 class AddOn(models.Model):
     """Optional extra scoped to one specific Package (e.g. 'Gas Top-up' on 'AC General Service')."""
-    package     = models.ForeignKey(Package, on_delete=models.CASCADE, related_name="addons")
+    package     = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True, blank=True, related_name="addons")
     name        = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     price       = models.DecimalField(max_digits=10, decimal_places=2, default=0)

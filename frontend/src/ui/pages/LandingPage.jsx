@@ -2828,6 +2828,7 @@ export function LandingPage() {
           searchParams.get("openModal") === "logistics" ||
           false
   )
+  const [showTransportEstimatePicker, setShowTransportEstimatePicker] = useState(false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(() => location.state?.openAcModal || searchParams.get("openModal") === "ac" || false)
 
@@ -3626,6 +3627,7 @@ export function LandingPage() {
     setIsAcModalOpen(false)
     setIsElecModalOpen(false)
     setIsGoodsModalOpen(false)
+    setShowTransportEstimatePicker(false)
     setIsHomeServicesCombinedModalOpen(false)
     setIsForYouModalOpen(false)
     setIsFoodHealthModalOpen(false)
@@ -5953,8 +5955,18 @@ export function LandingPage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="transport-modal-title"
+              tabIndex={-1}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setIsGoodsModalOpen(false)
+                  setShowTransportEstimatePicker(false)
+                }
+              }}
               className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsGoodsModalOpen(false)}
+              onClick={() => {
+                setIsGoodsModalOpen(false)
+                setShowTransportEstimatePicker(false)
+              }}
             >
               <div
                 className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
@@ -5963,7 +5975,10 @@ export function LandingPage() {
                 {/* Close Button */}
                 <button
                   type="button"
-                  onClick={() => setIsGoodsModalOpen(false)}
+                  onClick={() => {
+                    setIsGoodsModalOpen(false)
+                    setShowTransportEstimatePicker(false)
+                  }}
                   aria-label="Close popup"
                   className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
                 >
@@ -6031,11 +6046,12 @@ export function LandingPage() {
                             return
                           }
                           setIsGoodsModalOpen(false)
+                          setShowTransportEstimatePicker(false)
                           document.body.style.overflow = "unset"
                           if (item.route) navigate(item.route)
                           else goToCategoryServices(item.cat, item.subTab)
                         }}
-                        className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                        className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer border-2 ${isAvailable
                           ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                           : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
@@ -6065,28 +6081,95 @@ export function LandingPage() {
                     )
                   })}
 
-                  {/* Option 4: Get an Estimate card in Landing Page Emerald theme */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.truck_booking_hosur)
-                    }}
-                    className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
+                  {/* Option 4: Get an Estimate card with interactive transport selection */}
+                  <div
+                    className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-lg shadow-emerald-600/25 transition-all text-left min-h-[140px]"
                   >
-                    <div>
-                      <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
-                        Get an<br />Estimate
-                      </p>
-                      <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
-                        (takes ~2 mins)
-                      </p>
-                    </div>
-                    <div className="pt-4 flex items-center">
-                      <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
-                    </div>
-                  </button>
+                    {!showTransportEstimatePicker ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowTransportEstimatePicker(true)}
+                        className="w-full h-full flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-white rounded-xl text-left"
+                        aria-expanded={showTransportEstimatePicker}
+                        aria-label="Get an Estimate - Choose transport type"
+                      >
+                        <div>
+                          <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight text-white">
+                            Get an<br />Estimate
+                          </p>
+                          <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
+                            (takes ~2 mins)
+                          </p>
+                        </div>
+                        <div className="pt-3 flex items-center justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full text-white">
+                            Select Type
+                          </span>
+                          <ArrowRight className="w-5 h-5 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="w-full h-full flex flex-col justify-between animate-in fade-in duration-150">
+                        <div className="flex items-center justify-between pb-1 border-b border-white/20">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100">
+                            Choose Transport
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowTransportEstimatePicker(false)
+                            }}
+                            className="text-white/80 hover:text-white p-0.5 cursor-pointer rounded"
+                            aria-label="Back to estimate card"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-1.5 py-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsGoodsModalOpen(false)
+                              setShowTransportEstimatePicker(false)
+                              document.body.style.overflow = "unset"
+                              navigate(routes.truck_booking_hosur)
+                            }}
+                            className="text-left text-xs font-bold px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/30 text-white transition-colors flex items-center justify-between cursor-pointer"
+                          >
+                            <span>Mini Truck</span>
+                            <ArrowRight className="w-3.5 h-3.5 opacity-80" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsGoodsModalOpen(false)
+                              setShowTransportEstimatePicker(false)
+                              document.body.style.overflow = "unset"
+                              navigate(routes.two_wheeler_booking_hosur)
+                            }}
+                            className="text-left text-xs font-bold px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/30 text-white transition-colors flex items-center justify-between cursor-pointer"
+                          >
+                            <span>2-Wheeler</span>
+                            <ArrowRight className="w-3.5 h-3.5 opacity-80" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsGoodsModalOpen(false)
+                              setShowTransportEstimatePicker(false)
+                              document.body.style.overflow = "unset"
+                              navigate(routes.packers_movers_booking_hosur)
+                            }}
+                            className="text-left text-xs font-bold px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/30 text-white transition-colors flex items-center justify-between cursor-pointer"
+                          >
+                            <span>Packers &amp; Movers</span>
+                            <ArrowRight className="w-3.5 h-3.5 opacity-80" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>,
@@ -7513,142 +7596,7 @@ export function LandingPage() {
           document.body
         )}
 
-      {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-      {isGoodsModalOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="transport-modal-title"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsGoodsModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsGoodsModalOpen(false)}
-                aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
 
-              {/* Modal Title */}
-              <div className="text-center mb-6">
-                <h3
-                  id="transport-modal-title"
-                  className="text-lg sm:text-xl font-extrabold text-slate-900"
-                >
-                  Goods &amp; Transports
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Choose a transport type to get an instant estimate
-                </p>
-              </div>
-
-              {/* Items Grid -- the 3 known transport types keep their
-                  dedicated, purpose-built booking pages; any OTHER real
-                  sub-service the admin adds under Goods & Transport (beyond
-                  these 3) is appended here too, routed through the generic
-                  booking flow so it isn't silently dropped */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
-                {[
-                  goodsTileOverrides.truck
-                    ? { key: "truck", name: goodsTileOverrides.truck.name, sub: "", image: goodsTileOverrides.truck.image, slug: "truck", route: routes.truck_booking_hosur, graphic: goodsTileOverrides.truck.image ? undefined : TruckGraphic }
-                    : { key: "truck", name: "Mini Truck", sub: "(Hosur)", slug: "truck", route: routes.truck_booking_hosur, graphic: TruckGraphic },
-                  goodsTileOverrides.two_wheeler
-                    ? { key: "two_wheeler", name: goodsTileOverrides.two_wheeler.name, sub: "", image: goodsTileOverrides.two_wheeler.image, slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: goodsTileOverrides.two_wheeler.image ? undefined : TwoWheelerGraphic }
-                    : { key: "two_wheeler", name: "2-Wheeler", sub: "(Hosur)", slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: TwoWheelerGraphic },
-                  goodsTileOverrides.packers_movers
-                    ? { key: "packers_movers", name: goodsTileOverrides.packers_movers.name, sub: "", image: goodsTileOverrides.packers_movers.image, slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: goodsTileOverrides.packers_movers.image ? undefined : PackersMoversGraphic }
-                    : { key: "packers_movers", name: "Packers &", sub: "Movers", slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: PackersMoversGraphic },
-                  ...goodsModalServices
-                    .filter((s) => {
-                      const n = (s.name || "").toLowerCase()
-                      const sl = (s.slug || "").toLowerCase()
-                      return !(n.includes("truck") || n.includes("wheeler") || n.includes("packers") || n.includes("movers") ||
-                        sl.includes("truck") || sl.includes("wheeler") || sl.includes("packers") || sl.includes("movers"))
-                    })
-                    .map((s) => ({ key: `db-${s.id}`, name: s.name, sub: "", slug: s.slug || s.name, cat: "goods_transport", subTab: s.name, image: s.image })),
-                ].map((item) => {
-                  const isAvailable = isServiceAvailableInZone(item.slug)
-                  const Graphic = item.graphic
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => {
-                        if (!isAvailable) {
-                          showUnavailableServiceAlert(item.name)
-                          return
-                        }
-                        setIsGoodsModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        if (item.route) navigate(item.route)
-                        else goToCategoryServices(item.cat, item.subTab)
-                      }}
-                      className={`group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
-                        ? "border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                        : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
-                        }`}
-                    >
-                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative overflow-hidden">
-                        {Graphic ? (
-                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
-                        ) : item.image ? (
-                          <img
-                            src={resolveImageUrl(item.image, item.image)}
-                            alt={item.name}
-                            className={`w-full h-full object-cover rounded-xl ${!isAvailable ? 'grayscale-[50%]' : ''}`}
-                          />
-                        ) : (
-                          <Wrench className={`w-8 h-8 text-slate-400 ${!isAvailable ? 'opacity-50' : ''}`} />
-                        )}
-                        {!isAvailable && (
-                          <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
-                            Not Available
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
-                        {item.name}{item.sub ? <><br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">{item.sub}</span></> : null}
-                      </span>
-                    </button>
-                  )
-                })}
-
-                {/* Option: Get an Estimate card/button in Landing Page Emerald theme */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.truck_booking_hosur)
-                  }}
-                  className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
-                >
-                  <div>
-                    <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
-                      Get an<br />Estimate
-                    </p>
-                    <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
-                      (takes ~2 mins)
-                    </p>
-                  </div>
-                  <div className="pt-4 flex items-center">
-                    <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
 
       {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
       {isElecModalOpen &&
