@@ -20,6 +20,10 @@ import { getVegetableProducePhoto } from "../../utils/vegetablePhotoMap.js"
 
 import { useAuth } from "../../state/auth/useAuth.js"
 import { getCustomerSelectedAddress, getCustomerLocation } from "../../utils/customerLocationStorage.js"
+import {
+  fetchDailyEssentialsCart,
+  syncPackageQuantity,
+} from "../../services/dailyEssentialsCartSync.js"
 
 // Quick categories mapping
 const VEG_CATEGORY_FILTERS = [
@@ -191,6 +195,32 @@ export function VegetableFullScreenPage() {
     } catch {}
   }, [foodCart])
 
+  // Hydrate from the real backend cart (carts app, /api/carts/daily_essentials/)
+  // on mount -- this is what lets the cart survive a reload on another
+  // device or after re-login, not just localStorage on this browser. Only
+  // overwrites local state when the backend actually has items; an empty
+  // backend cart with a non-empty localStorage cart is left alone (most
+  // likely means those local adds haven't synced yet -- see handleUpdateQty
+  // below, which is what performs that sync going forward).
+  useEffect(() => {
+    let cancelled = false
+    fetchDailyEssentialsCart()
+      .then((items) => {
+        if (cancelled || !Array.isArray(items) || items.length === 0) return
+        const hydrated = {}
+        items.forEach((it) => {
+          if (it && it.package_name && it.quantity > 0) {
+            hydrated[it.package_name] = it.quantity
+          }
+        })
+        if (Object.keys(hydrated).length > 0) setFoodCart(hydrated)
+      })
+      .catch((err) => {
+        console.error("Failed to load your saved Daily Essentials cart:", err)
+      })
+    return () => { cancelled = true }
+  }, [])
+
   // Fetch active vegetables from database catalog with live real-time sync
   useEffect(() => {
     let isMounted = true
@@ -334,6 +364,31 @@ export function VegetableFullScreenPage() {
       } else {
         copy[name] = next
       }
+
+      // Mirror to the backend Cart (Phase 1 of the frontend plan) -- keyed
+      // by package_id, not by this foodCart key, since a "2 x" saver-pack
+      // key and its plain-unit key are the same Package, just a quantity
+      // multiplier. Total the real unit count for this package across
+      // every key in the *new* cart so the backend always gets the true
+      // total, not a per-key delta.
+      if (matchedVeg) {
+        let totalUnitsForPackage = 0
+        Object.entries(copy).forEach(([k, q]) => {
+          if (k === matchedVeg.name) {
+            totalUnitsForPackage += q
+          } else if (k.includes(" (2 x ") && k.startsWith(matchedVeg.name)) {
+            totalUnitsForPackage += q * 2
+          } else if (k.startsWith(matchedVeg.name)) {
+            totalUnitsForPackage += q
+          }
+        })
+        syncPackageQuantity(matchedVeg.id, totalUnitsForPackage).then((result) => {
+          if (!result.ok) {
+            showStockToast(result.message || "Couldn't update your cart — check your connection")
+          }
+        })
+      }
+
       return copy
     })
   }
@@ -734,6 +789,7 @@ export function VegetableFullScreenPage() {
             onClose={() => setShowCartDrawer(false)}
             foodCart={foodCart}
             setFoodCart={setFoodCart}
+            onUpdateCartQty={handleUpdateQty}
             deliveryAddress={activeAddressObj?.formatted_address || activeAddressObj?.address || activeLocationLabel}
             deliveryAddressType={activeAddressObj?.address_type || activeAddressObj?.type || "Home"}
             onChangeAddress={() => {

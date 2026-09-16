@@ -9,6 +9,22 @@ from inventory.serializers import (
     InventoryItemSerializer, InventoryAlertSerializer, InventoryTransferSerializer
 )
 
+# VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2: stock/price writes
+# now happen exclusively in the Vendor app (vendor/backend/inventory), scoped
+# to each vendor's own company. These Customer-app endpoints stay read-only
+# for admin visibility/support -- write actions here would race against a
+# vendor's own writes to the same InventoryItem/StockMovement rows with no
+# way to reconcile who's authoritative, so they're refused outright rather
+# than silently allowed.
+STOCK_WRITES_LOCKED_MESSAGE = "Stock and pricing are now managed from the Vendor app. This view is read-only."
+
+
+def _stock_writes_locked_response():
+    return Response(
+        {"success": False, "message": STOCK_WRITES_LOCKED_MESSAGE},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
 
 class StandardResponseMixin:
     def success_response(self, data=None, message="", status_code=status.HTTP_200_OK):
@@ -37,25 +53,16 @@ class InventoryItemViewSet(VisibilityQuerysetMixin, StandardResponseMixin, views
         return self.success_response(data=serializer.data)
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            self.perform_create(serializer)
-            return self.success_response(data=serializer.data, message="Item created successfully", status_code=status.HTTP_201_CREATED)
-        return self.error_response(message=str(serializer.errors))
+        return _stock_writes_locked_response()
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        if serializer.is_valid():
-            self.perform_update(serializer)
-            return self.success_response(data=serializer.data, message="Item updated successfully")
-        return self.error_response(message=str(serializer.errors))
+        return _stock_writes_locked_response()
+
+    def partial_update(self, request, *args, **kwargs):
+        return _stock_writes_locked_response()
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-        return self.success_response(message="Item deleted successfully")
+        return _stock_writes_locked_response()
 
 
 class InventoryAlertViewSet(VisibilityQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
@@ -146,106 +153,42 @@ class VegetableStockListView(APIView):
 class VegetableStockRestockView(APIView):
     """
     POST /api/inventory/vegetable-stock/<product_id>/restock/
-    Body: { "quantity": 10, "unit": "kg" }
+
+    Locked (VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2): restocking
+    now happens exclusively from the Vendor app, scoped to each vendor's own
+    company. This endpoint stays registered for a clear 403 rather than a 404,
+    so any caller still pointed at it gets an explanatory message.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, product_id):
-        company = _get_request_company(request)
-        product = get_object_or_404(Package.objects.select_related("stock_item", "service"), id=product_id)
-        
-        serializer = VegetableRestockActionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            item = vegetable_stock_service.add_stock(
-                product=product,
-                quantity=serializer.validated_data["quantity"],
-                unit=serializer.validated_data["unit"],
-                company=company,
-                entered_by_user=request.user,
-            )
-            # Fetch updated admin status
-            product.refresh_from_db()
-            status_data = vegetable_stock_selectors.get_admin_stock_status(product)
-            return Response({
-                "success": True,
-                "message": f"Successfully restocked {product.name}.",
-                "data": status_data,
-            })
-        except Exception as exc:
-            return Response({"success": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return _stock_writes_locked_response()
 
 
 class VegetableStockAdjustView(APIView):
     """
     POST /api/inventory/vegetable-stock/<product_id>/adjust/
-    Body: { "quantity": 5, "unit": "kg", "reason": "Physical count mismatch correction" }
+
+    Locked (VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2): manual
+    stock adjustments now happen exclusively from the Vendor app.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, product_id):
-        company = _get_request_company(request)
-        product = get_object_or_404(Package.objects.select_related("stock_item", "service"), id=product_id)
-        
-        serializer = VegetableAdjustActionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            item = vegetable_stock_service.adjust_stock(
-                product=product,
-                quantity=serializer.validated_data["quantity"],
-                unit=serializer.validated_data["unit"],
-                reason=serializer.validated_data["reason"],
-                company=company,
-                entered_by_user=request.user,
-            )
-            product.refresh_from_db()
-            status_data = vegetable_stock_selectors.get_admin_stock_status(product)
-            return Response({
-                "success": True,
-                "message": f"Successfully adjusted stock for {product.name}.",
-                "data": status_data,
-            })
-        except Exception as exc:
-            return Response({"success": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return _stock_writes_locked_response()
 
 
 class VegetableStockSetDefaultView(APIView):
     """
     POST /api/inventory/vegetable-stock/<product_id>/set-default/
-    Body: { "quantity": 20, "unit": "kg", "apply_now": true }
+
+    Locked (VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2): default
+    daily quantity is now configured exclusively from the Vendor app.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, product_id):
-        company = _get_request_company(request)
-        product = get_object_or_404(Package.objects.select_related("stock_item", "service"), id=product_id)
-        
-        serializer = VegetableSetDefaultActionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            item = vegetable_stock_service.set_default_daily_quantity(
-                product=product,
-                quantity=serializer.validated_data.get("quantity"),
-                unit=serializer.validated_data["unit"],
-                company=company,
-                entered_by_user=request.user,
-                apply_now=serializer.validated_data.get("apply_now", False),
-            )
-            product.refresh_from_db()
-            status_data = vegetable_stock_selectors.get_admin_stock_status(product)
-            return Response({
-                "success": True,
-                "message": f"Successfully updated default daily stock for {product.name}.",
-                "data": status_data,
-            })
-        except Exception as exc:
-            return Response({"success": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return _stock_writes_locked_response()
 
 
 class VegetableStockHistoryView(APIView):
@@ -286,121 +229,13 @@ class VegetableStockHistoryView(APIView):
 class VegetableDetailsUpdateView(APIView):
     """
     PATCH /api/inventory/vegetable-stock/<product_id>/update-details/
-    Updates price, offer_price, offer_percentage, vegetable_gram, opening/default stock,
-    current stock, reorder level, and restock level.
+
+    Locked (VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2): price,
+    offer price, and reorder/restock levels are now configured exclusively
+    from the Vendor app -- see vendor/backend/inventory/views.py's
+    VendorStockUpdateDetailsView for the equivalent, company-scoped endpoint.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def patch(self, request, product_id):
-        company = _get_request_company(request)
-        product = get_object_or_404(Package.objects.select_related("stock_item", "service"), id=product_id)
-
-        serializer = VegetableDetailsUpdateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        data = serializer.validated_data
-
-        # 1. Update Package fields: price (selling price), offer_price (MRP), tag, vegetable_gram (duration)
-        pkg_update_fields = []
-        if "price" in data:
-            product.base_price = data["price"]
-            pkg_update_fields.append("base_price")
-
-        selling_price = float(data.get("price", product.base_price) or 0)
-        mrp_val = None
-
-        if "mrp" in data and data["mrp"] is not None and float(data["mrp"]) > 0:
-            mrp_val = float(data["mrp"])
-        elif "offer_price" in data and data["offer_price"] is not None and float(data["offer_price"]) > 0:
-            mrp_val = float(data["offer_price"])
-        elif "offer_percentage" in data and data["offer_percentage"] is not None:
-            pct = float(data["offer_percentage"])
-            if pct > 0 and selling_price > 0 and pct < 100:
-                mrp_val = round(selling_price / (1.0 - (pct / 100.0)), 2)
-
-        if mrp_val and mrp_val > selling_price:
-            product.offer_price = mrp_val
-            pct = round(((mrp_val - selling_price) / mrp_val) * 100)
-            product.tag = f"{pct}% OFF"
-            pkg_update_fields.extend(["offer_price", "tag"])
-        else:
-            product.offer_price = None
-            product.tag = ""
-            pkg_update_fields.extend(["offer_price", "tag"])
-
-        if "vegetable_gram" in data:
-            product.duration = str(data["vegetable_gram"]).strip()
-            pkg_update_fields.append("duration")
-
-        if pkg_update_fields:
-            product.save(update_fields=pkg_update_fields)
-
-        # 2. Resolve / Create InventoryItem
-        item = product.stock_item
-        if not item:
-            item = InventoryItem.objects.create(
-                org=company,
-                name=f"{product.name} (Produce)",
-                category=InventoryItem.Category.CONSUMABLE,
-                sku=f"VEG-{product.slug.upper()[:20]}",
-                unit="g",
-                stock_quantity_grams=None,
-                default_daily_quantity_grams=None,
-                total_quantity=0,
-                available_quantity=0,
-            )
-            product.stock_item = item
-            product.save(update_fields=["stock_item"])
-
-        item_update_fields = []
-
-        # Reorder Level (Threshold)
-        if "reorder_level_quantity" in data and data["reorder_level_quantity"] is not None:
-            r_grams = to_grams(data["reorder_level_quantity"], data.get("reorder_level_unit", "kg"), allow_zero=True)
-            item.reorder_threshold = r_grams
-            item_update_fields.append("reorder_threshold")
-
-        # Restock Level
-        if "restock_level_quantity" in data and data["restock_level_quantity"] is not None:
-            rstk_grams = to_grams(data["restock_level_quantity"], data.get("restock_level_unit", "kg"), allow_zero=True)
-            item.reorder_quantity = rstk_grams
-            item.default_daily_quantity_grams = rstk_grams
-            item_update_fields.extend(["reorder_quantity", "default_daily_quantity_grams"])
-
-        # Opening Stock (Set default daily quantity)
-        if "opening_stock_quantity" in data and data["opening_stock_quantity"] is not None:
-            op_grams = to_grams(data["opening_stock_quantity"], data.get("opening_stock_unit", "kg"), allow_zero=True)
-            item.default_daily_quantity_grams = op_grams
-            if "default_daily_quantity_grams" not in item_update_fields:
-                item_update_fields.append("default_daily_quantity_grams")
-
-        # Current Live Stock
-        if "current_stock_quantity" in data and data["current_stock_quantity"] is not None:
-            curr_grams = to_grams(data["current_stock_quantity"], data.get("current_stock_unit", "kg"), allow_zero=True)
-            old_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
-            delta = curr_grams - old_stock
-            item.stock_quantity_grams = curr_grams
-            item_update_fields.append("stock_quantity_grams")
-            StockMovement.objects.create(
-                org=company,
-                item=item,
-                movement_type=StockMovement.MovementType.ADJUSTMENT,
-                delta_grams=delta,
-                balance_after_grams=curr_grams,
-                reason="Updated from inventory table details",
-                entered_by=request.user,
-            )
-
-        if item_update_fields:
-            item.save(update_fields=list(set(item_update_fields)))
-
-        product.refresh_from_db()
-        status_data = vegetable_stock_selectors.get_admin_stock_status(product)
-        return Response({
-            "success": True,
-            "message": f"Successfully updated {product.name} details.",
-            "data": status_data,
-        })
-
-
+        return _stock_writes_locked_response()
