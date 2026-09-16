@@ -9234,7 +9234,7 @@ export function LandingPage() {
             setFoodCart={setFoodCart}
             selectedFoodSubModule={selectedFoodSubModule}
             getFoodItemPhoto={getFoodItemPhoto}
-            deliveryAddress={activeLocationLabel || "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu"}
+            deliveryAddress={activeLocationLabel || (typeof user?.last_known_location === "string" ? user?.last_known_location : user?.last_known_location?.label) || user?.address || "Select Location"}
             onChangeAddress={() => setShowLocationPickerModal(true)}
             isServiceAvailable={isServiceAvailableInZone("vegetables")}
           />
