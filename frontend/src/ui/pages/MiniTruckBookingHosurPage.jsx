@@ -555,21 +555,6 @@ export function MiniTruckBookingHosurPage() {
   const [estimateModalOpen, setEstimateModalOpen] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState(null)
 
-  // Recover active in-flight partner search if customer refreshes the page
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem("calservice_active_partner_search")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        const isFresh = Date.now() - (parsed.timestamp || 0) < 15 * 60 * 1000
-        if (isFresh && parsed.bookingId && parsed.serviceCategory === "goods_transport_truck") {
-          setLookingForPartnerOpen(true)
-        } else if (!isFresh) {
-          sessionStorage.removeItem("calservice_active_partner_search")
-        }
-      }
-    } catch (e) {}
-  }, [])
 
   // Booking Flow State: Explicit separation between IMMEDIATE and SCHEDULED modes
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -602,6 +587,7 @@ export function MiniTruckBookingHosurPage() {
   const isSignedIn = Boolean(user) || localIsSignedIn
 
   // Goods Type & Looking for Partner Flow State (Database-Backed Catalog)
+  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
   const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
   const [dynamicCategories, setDynamicCategories] = useState([])
   const [selectedGoodsCategoryObj, setSelectedGoodsCategoryObj] = useState(null)
@@ -610,23 +596,77 @@ export function MiniTruckBookingHosurPage() {
   const [intermediateStops, setIntermediateStops] = useState([])
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
-  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
-  const [partnerCountdown, setPartnerCountdown] = useState(598) // 9:58 mins
+  const COUNTDOWN_TOTAL_SECONDS = 598 // 9:58 mins
+  const [partnerCountdown, setPartnerCountdown] = useState(COUNTDOWN_TOTAL_SECONDS)
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(true)
+  const [lastBookingId, setLastBookingId] = useState(null)
+  const [lastTrackingToken, setLastTrackingToken] = useState(null)
+  const [lastBookingAmount, setLastBookingAmount] = useState(null)
 
   useEffect(() => {
-    let interval = null
-    if (lookingForPartnerOpen) {
-      interval = setInterval(() => {
-        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
-      }, 1000)
-    } else {
-      setPartnerCountdown(598)
+    if (!lookingForPartnerOpen) {
+      setPartnerCountdown(COUNTDOWN_TOTAL_SECONDS)
+      return
     }
+
+    // Determine authoritative start timestamp from sessionStorage or now
+    let startTimestamp = Date.now()
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.timestamp && Number(parsed.timestamp) > 0) {
+          startTimestamp = Number(parsed.timestamp)
+        }
+      }
+    } catch (_) {}
+
+    const updateCountdown = () => {
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
+      const remaining = Math.max(0, COUNTDOWN_TOTAL_SECONDS - elapsedSeconds)
+      setPartnerCountdown(remaining)
+      if (remaining <= 0) {
+        setLookingForPartnerOpen(false)
+        let activeBId = lastBookingId
+        let activeToken = lastTrackingToken
+        try {
+          const saved = sessionStorage.getItem("calservice_active_partner_search")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (!activeBId && parsed.bookingId) activeBId = parsed.bookingId
+            if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
+          }
+          sessionStorage.removeItem("calservice_active_partner_search")
+        } catch (_) {}
+        if (activeBId) {
+          cancelBooking(
+            activeBId,
+            "Search window expired (no delivery partner found within 10 minutes)",
+            activeToken || ""
+          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
+        }
+        setBookingError("No delivery partner could be assigned within the search window. Please try again or schedule for later.")
+      }
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+
+    const handleVisibilityOrFocus = () => {
+      if (!document.hidden) {
+        updateCountdown()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus)
+    window.addEventListener("focus", handleVisibilityOrFocus)
+
     return () => {
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
+      window.removeEventListener("focus", handleVisibilityOrFocus)
     }
-  }, [lookingForPartnerOpen])
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken])
 
 
 
@@ -710,9 +750,6 @@ export function MiniTruckBookingHosurPage() {
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [bookingError, setBookingError] = useState("")
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
-  const [lastBookingId, setLastBookingId] = useState(null)
-  const [lastTrackingToken, setLastTrackingToken] = useState(null)
-  const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
 
@@ -792,6 +829,12 @@ export function MiniTruckBookingHosurPage() {
                 successData: bookingPayload
               }
             })
+          } else if (["cancelled", "rejected", "expired"].includes(status)) {
+            setLookingForPartnerOpen(false)
+            try {
+              sessionStorage.removeItem("calservice_active_partner_search")
+            } catch (_) {}
+            setBookingError("We could not find an available delivery partner for your booking. Please try again or schedule for later.")
           }
         }
       } catch (e) {

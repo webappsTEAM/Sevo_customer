@@ -930,6 +930,53 @@ class CustomerMyBookingsView(APIView):
                 | Q(phone=f"+91{clean_phone}")
             )
 
+        # Sweep expired on-demand logistics bookings (> 10 mins without an assigned partner)
+        from datetime import timedelta
+        import django.utils.timezone as django_timezone
+        from service_requests.state_machine import apply_transition
+        from workforce_integration.services import WorkforceIntegrationService
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+
+        ten_minutes_ago = django_timezone.now() - timedelta(minutes=10)
+        stale_logistics_qs = ServiceRequest.objects.filter(
+            query,
+            status__in=[
+                ServiceRequest.Status.UNASSIGNED,
+                ServiceRequest.Status.NEW_REQUEST,
+                ServiceRequest.Status.DRAFT,
+            ],
+            created_at__lt=ten_minutes_ago,
+        ).filter(
+            Q(service_category__in=LOGISTICS_CATEGORIES)
+            | Q(service_category__startswith="goods_")
+            | Q(service_category__icontains="truck")
+            | Q(service_category__icontains="two_wheeler")
+        )
+        for stale_sr in stale_logistics_qs:
+            try:
+                with transaction.atomic():
+                    locked_sr = ServiceRequest.objects.select_for_update().get(pk=stale_sr.pk)
+                    if locked_sr.status in [
+                        ServiceRequest.Status.UNASSIGNED,
+                        ServiceRequest.Status.NEW_REQUEST,
+                        ServiceRequest.Status.DRAFT,
+                    ] and not locked_sr.external_assignment_id and not locked_sr.technician_name:
+                        prev_st = locked_sr.status
+                        apply_transition(locked_sr, ServiceRequest.Status.CANCELLED)
+                        locked_sr.cancelled_at = django_timezone.now()
+                        locked_sr.cancelled_by_persona = "system"
+                        locked_sr.cancellation_reason = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+                        locked_sr.cancellation_note = "Search window expired (no delivery partner found within 10 minutes)"
+                        locked_sr.cancelled_at_status = prev_st
+                        locked_sr._status_reason_code = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+                        locked_sr._status_reason_note = "Search window expired (no delivery partner found within 10 minutes)"
+                        locked_sr.save()
+                        WorkforceIntegrationService.cancel_workforce_job(
+                            locked_sr.id, reason="Search window expired (no delivery partner found within 10 minutes)"
+                        )
+            except Exception as ex:
+                logger.warning(f"Error auto-expiring stale logistics booking {stale_sr.id}: {ex}")
+
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
         qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
@@ -1044,16 +1091,42 @@ class CustomerBookingCancelView(APIView):
             "Selected wrong service, date, or address": ServiceRequest.CancellationReason.WRONG_SERVICE,
             "Found alternative service / Solved myself": ServiceRequest.CancellationReason.FOUND_ALTERNATIVE,
             "Price or payment issue": ServiceRequest.CancellationReason.PRICE_OR_PAYMENT,
+            "Search window expired (no delivery partner found within 10 minutes)": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
+            "Search window expired - no delivery partner available within 10 minutes": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
+            "Search window expired": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
         }
-        normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
+        if "search window expired" in str(reason).lower() or "expired" in str(reason).lower():
+            normalized_reason = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+        else:
+            normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
 
         with transaction.atomic():
+            sr = ServiceRequest.objects.select_for_update().get(pk=sr.pk)
+            if sr.status == ServiceRequest.Status.CANCELLED:
+                return _success(
+                    data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+                    message="Booking is already cancelled.",
+                )
+            if getattr(sr, "otp_verified", False) or sr.status in [
+                ServiceRequest.Status.IN_PROGRESS,
+                ServiceRequest.Status.PROOF_SUBMITTED,
+                ServiceRequest.Status.COMPLETED,
+            ]:
+                return Response(
+                    {
+                        "success": False,
+                        "code": "CANCELLATION_LOCKED_AFTER_OTP",
+                        "message": "Cancellation is locked because customer OTP has been verified.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            previous_status = sr.status
             apply_transition(sr, ServiceRequest.Status.CANCELLED, actor=actor)
             sr.cancelled_at = django_timezone.now()
             sr.cancelled_by = cancelled_by_user
             sr.cancelled_by_persona = persona
             sr.cancellation_reason = normalized_reason
-            sr.cancellation_note = reason if normalized_reason == ServiceRequest.CancellationReason.OTHER else ""
+            sr.cancellation_note = reason if normalized_reason in [ServiceRequest.CancellationReason.OTHER, ServiceRequest.CancellationReason.SEARCH_EXPIRED] else ""
             sr.cancelled_at_status = previous_status
             
             # Pass details to status log save hook
@@ -1258,6 +1331,11 @@ def _build_tracking_payload(sr, has_full_access):
             ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
             ServiceRequest.LogisticsLeg.UNLOADING,
             ServiceRequest.LogisticsLeg.DELIVERED,
+            ServiceRequest.LogisticsLeg.IN_TRANSIT,
+            ServiceRequest.LogisticsLeg.ARRIVED_DROP,
+            ServiceRequest.LogisticsLeg.REASSEMBLY,
+            ServiceRequest.LogisticsLeg.UNPACKING,
+            ServiceRequest.LogisticsLeg.COMPLETED,
         }
         try:
             stops = list(sr.trip_stops.all().order_by("sequence"))
@@ -1333,12 +1411,23 @@ def _build_tracking_payload(sr, has_full_access):
     # ASSIGNED != ACCEPTED.
     # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
     # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
-    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
+    POST_ACCEPT_STATUSES = [
+        "accepted", "on_the_way", "en_route", "arrived", "service_started",
+        "in_progress", "on_hold", "proof_submitted", "payment_pending",
+        "cash_pending", "waiting_for_payment", "settling", "completed",
+        "closed", "feedback_pending", "feedback_received"
+    ]
+    technician_assigned = bool(
+        sr.status in (["assigned"] + POST_ACCEPT_STATUSES)
+        or sr.workforce_job_id or sr.external_assignment_id
+        or sr.technician_name
+    )
     technician_accepted = bool(
-        sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
+        sr.status in POST_ACCEPT_STATUSES
+        or (sr.technician_name and sr.status not in ["draft", "new_request", "unassigned", "assigned", "cancelled", "rejected"])
     )
     is_accepted = technician_accepted
-    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress"])
+    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -1415,10 +1504,13 @@ def _build_tracking_payload(sr, has_full_access):
         if not tech_name and getattr(sr, "assigned_employee", None):
             emp = sr.assigned_employee
             tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
-            tech_phone = getattr(emp, "phone", None) or tech_phone
+            tech_phone = getattr(emp, "phone", None) or (getattr(getattr(emp, "user", None), "phone", None)) or tech_phone
             tech_photo = getattr(emp, "photo", None) or tech_photo
             tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
             tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
+
+        if not tech_phone:
+            tech_phone = sr.technician_phone or None
 
         # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
         # Location is top-level 'location' in older callers, nested inside
@@ -1507,6 +1599,8 @@ def _build_tracking_payload(sr, has_full_access):
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
+            "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
+            "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
             "updated_at": (
                 tracking.get("updated_at")
                 or (loc.get("received_at") if loc else None)
@@ -1525,8 +1619,30 @@ def _build_tracking_payload(sr, has_full_access):
                 "freshness": freshness,
             }
 
-    # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
-    start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress"]) else None
+    # OTP is exposed to customer once partner ACCEPTS and booking is not cancelled/rejected
+    start_otp = sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
+
+    # Retrieve Cash Payment Confirmation OTP if one was generated for this booking
+    payment_confirmation_otp = None
+    if sr.status not in ["cancelled", "rejected"]:
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id = %s "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(sr.id)],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        payment_confirmation_otp = m.group(1)
+        except Exception:
+            pass
 
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
@@ -1608,8 +1724,19 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_seconds": eta_seconds,
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
-        "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
-        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
+        "payment_confirmation_otp": payment_confirmation_otp,
+        "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
+        "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
+        "pickup_address": sr.address or "",
+        "drop_address": sr.drop_address or "",
+        "drop_contact_name": sr.drop_contact_name or "",
+        "drop_contact_phone": sr.drop_contact_phone if has_full_access else "",
+        "fare_breakdown": getattr(sr, "fare_breakdown", None) or {},
+        "quote": (
+            WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote")
+            if (sr.status not in ["draft", "new_request"] and not (sr.service_category or "").startswith("goods_transport") and (sr.service_category or "") != "packers_movers")
+            else None
+        ),
     }
 
 

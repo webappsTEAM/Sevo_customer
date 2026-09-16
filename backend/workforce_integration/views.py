@@ -601,7 +601,7 @@ class WorkforceWebhookView(APIView):
                             # fare exists: stops completed, extra work
                             # approved, distance travelled. This is where the
                             # estimate becomes the amount actually charged.
-                            if leg == "DELIVERED":
+                            if leg in ("DELIVERED", "COMPLETED"):
                                 self._reconcile_final_fare(sr, payload)
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
 

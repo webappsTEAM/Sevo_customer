@@ -7,7 +7,7 @@ import {
   User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
@@ -350,6 +350,7 @@ export function TwoWheelerBookingHosurPage() {
   const isSignedIn = Boolean(user) || localIsSignedIn
 
   // Goods Type & Looking for Partner Flow State (Database-Backed Catalog)
+  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
   const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
   const [dynamicCategories, setDynamicCategories] = useState([])
   const [selectedGoodsCategoryObj, setSelectedGoodsCategoryObj] = useState(null)
@@ -359,23 +360,76 @@ export function TwoWheelerBookingHosurPage() {
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState("")
   const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
-  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
-  const [partnerCountdown, setPartnerCountdown] = useState(598) // 9:58 mins
+  const COUNTDOWN_TOTAL_SECONDS = 598 // 9:58 mins
+  const [partnerCountdown, setPartnerCountdown] = useState(COUNTDOWN_TOTAL_SECONDS)
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(true)
+  const [lastBookingId, setLastBookingId] = useState(null)
+  const [lastTrackingToken, setLastTrackingToken] = useState(null)
+  const [lastBookingAmount, setLastBookingAmount] = useState(null)
 
   useEffect(() => {
-    let interval = null
-    if (lookingForPartnerOpen) {
-      interval = setInterval(() => {
-        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
-      }, 1000)
-    } else {
-      setPartnerCountdown(598)
+    if (!lookingForPartnerOpen) {
+      setPartnerCountdown(COUNTDOWN_TOTAL_SECONDS)
+      return
     }
+
+    let startTimestamp = Date.now()
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.timestamp && Number(parsed.timestamp) > 0) {
+          startTimestamp = Number(parsed.timestamp)
+        }
+      }
+    } catch (_) {}
+
+    const updateCountdown = () => {
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
+      const remaining = Math.max(0, COUNTDOWN_TOTAL_SECONDS - elapsedSeconds)
+      setPartnerCountdown(remaining)
+      if (remaining <= 0) {
+        setLookingForPartnerOpen(false)
+        let activeBId = lastBookingId
+        let activeToken = lastTrackingToken
+        try {
+          const saved = sessionStorage.getItem("calservice_active_partner_search")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (!activeBId && parsed.bookingId) activeBId = parsed.bookingId
+            if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
+          }
+          sessionStorage.removeItem("calservice_active_partner_search")
+        } catch (_) {}
+        if (activeBId) {
+          cancelBooking(
+            activeBId,
+            "Search window expired (no delivery partner found within 10 minutes)",
+            activeToken || ""
+          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
+        }
+        setBookingError("No delivery partner could be assigned within the search window. Please try again or schedule for later.")
+      }
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+
+    const handleVisibilityOrFocus = () => {
+      if (!document.hidden) {
+        updateCountdown()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus)
+    window.addEventListener("focus", handleVisibilityOrFocus)
+
     return () => {
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
+      window.removeEventListener("focus", handleVisibilityOrFocus)
     }
-  }, [lookingForPartnerOpen])
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken])
 
 
 
@@ -456,9 +510,6 @@ export function TwoWheelerBookingHosurPage() {
   const [destinationError, setDestinationError] = useState("")
   const [bookingError, setBookingError] = useState("")
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
-  const [lastBookingId, setLastBookingId] = useState(null)
-  const [lastTrackingToken, setLastTrackingToken] = useState(null)
-  const [lastBookingAmount, setLastBookingAmount] = useState(null)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
 
@@ -538,6 +589,12 @@ export function TwoWheelerBookingHosurPage() {
                 successData: bookingPayload
               }
             })
+          } else if (["cancelled", "rejected", "expired"].includes(status)) {
+            setLookingForPartnerOpen(false)
+            try {
+              sessionStorage.removeItem("calservice_active_partner_search")
+            } catch (_) {}
+            setBookingError("We could not find an available delivery partner for your booking. Please try again or schedule for later.")
           }
         }
       } catch (e) {
@@ -2844,11 +2901,35 @@ export function TwoWheelerBookingHosurPage() {
         isOpen={cargoSelectorOpen}
         onClose={() => setCargoSelectorOpen(false)}
         selectedCargoItems={cargoItems}
-        onApplyCargo={(items, cat) => {
+        onApplyCargo={async (items, cat) => {
           setCargoItems(items)
           if (cat) {
             setSelectedGoodsCategoryObj(cat)
             setSelectedGoodsType(cat.name)
+          }
+          if (items && items.length > 0) {
+            try {
+              const res = await evaluateCargoFitment({
+                cargo_items: items.map((i) => ({
+                  item_id: i.id || i.goods_item_id,
+                  slug: i.slug,
+                  quantity: i.quantity,
+                })),
+                goods_category_id: cat?.id,
+                city: LOGISTICS_CITY,
+              })
+              if (res?.cargo_summary?.is_two_wheeler_compatible === false || res?.recommended_tier?.category === "truck") {
+                setBookingError(
+                  `Selected cargo exceeds Two-Wheeler limits (~${res.cargo_summary.total_weight_kg} kg, ~${res.cargo_summary.total_cft} CFT). A truck or mini-truck is recommended.`
+                )
+              } else {
+                setBookingError("")
+              }
+            } catch (err) {
+              console.warn("Cargo fitment check failed:", err)
+            }
+          } else {
+            setBookingError("")
           }
         }}
         isTwoWheeler={true}

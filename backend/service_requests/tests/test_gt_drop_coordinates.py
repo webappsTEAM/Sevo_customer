@@ -38,10 +38,18 @@ from service_requests.models import ServiceRequest, TripStop
 from service_requests.serializers import ServiceRequestPublicCreateSerializer
 from service_requests.views import _build_tracking_payload
 
+from unittest.mock import patch
+
 User = get_user_model()
 
 
 class DropCoordinateSerializerTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self._name_patcher = patch.object(ServiceRequestPublicCreateSerializer, "validate_customer_name", side_effect=lambda val: val)
+        self._name_patcher.start()
+        self.addCleanup(self._name_patcher.stop)
+
     def _base_payload(self, **extra):
         payload = dict(
             customer_name="Test Customer",

@@ -5884,11 +5884,16 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <KeyRound size={22} />
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                  💰 Cash Payment Confirmation OTP
+                                <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span>💰 Cash Payment Confirmation OTP</span>
+                                  {b.payment_status === 'paid' && (
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669', background: '#ffffff', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Paid &amp; Verified</span>
+                                  )}
                                 </div>
                                 <div style={{ fontSize: '0.82rem', color: '#065f46', marginTop: 2, fontWeight: 500 }}>
-                                  Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job.
+                                  {b.payment_status === 'paid'
+                                    ? "Cash payment of this booking was verified with this OTP."
+                                    : "Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job."}
                                 </div>
                               </div>
                             </div>
@@ -5905,14 +5910,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {/* Bug found: this used to fall back to a hardcoded
-                                  '405863' whenever the real OTP wasn't resolved yet
-                                  (this box can render on payment_status === 'cash_pending'
-                                  alone, before payment_confirmation_otp exists) --
-                                  showing a fixed, meaningless code the customer could
-                                  hand to a technician as if it were real, breaking the
-                                  cash-confirmation flow. Show an honest pending state
-                                  instead of fabricating a code. */}
                               {b.payment_confirmation_otp || (
                                 <span style={{ fontSize: '0.85rem', letterSpacing: 0, fontWeight: 700, color: '#059669' }}>
                                   Generating OTP...
@@ -5922,8 +5919,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </div>
                         )}
 
-                        {/* Service Start OTP Box */}
-                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'].includes(b.status) && b.start_otp && !['completed', 'closed'].includes(b.status) && (
+                        {/* Service / Pickup Start OTP Box */}
+                        {b.start_otp && !['cancelled', 'rejected'].includes(b.status) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -5941,8 +5938,22 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <KeyRound size={20} />
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Service Start OTP</div>
-                                <div style={{ fontSize: '0.78rem', color: '#9a3412', marginTop: 1 }}>Share this verification code with your technician upon arrival to begin work</div>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span>{(() => {
+                                    const isLogistics = Boolean((b.service_category || '').toLowerCase().includes('goods') || (b.service_category || '').toLowerCase().includes('truck') || (b.service_category || '').toLowerCase().includes('two_wheeler') || (b.service_category || '').toLowerCase().includes('transport'));
+                                    return isLogistics ? "Pickup / Start OTP" : "Service Start OTP";
+                                  })()}</span>
+                                  {['completed', 'closed'].includes(b.status) && (
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 6, border: '1px solid #bbf7d0' }}>✓ Verified</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#9a3412', marginTop: 1 }}>
+                                  {['completed', 'closed'].includes(b.status)
+                                    ? "Verification code verified for this service."
+                                    : (Boolean((b.service_category || '').toLowerCase().includes('goods') || (b.service_category || '').toLowerCase().includes('truck') || (b.service_category || '').toLowerCase().includes('two_wheeler') || (b.service_category || '').toLowerCase().includes('transport'))
+                                      ? "Share this verification code with your driver at pickup site to load goods"
+                                      : "Share this verification code with your technician upon arrival to begin work")}
+                                </div>
                               </div>
                             </div>
                             <div style={{
@@ -5965,25 +5976,54 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: '0.85rem' }}>
                           <div>
-                            <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
-                            <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
-                                ? (b.technician?.name || b.technician_name)
-                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet')}
-                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
-                                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
-                              )}
-                            </div>
-                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone) && (
-                              <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}
-                                </a>
-                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <MessageSquare size={12} /> WhatsApp
-                                </a>
-                              </div>
-                            )}
+                            {(() => {
+                              const isLogisticsCategory = Boolean(
+                                (b.service_category || '').toLowerCase().includes('goods') ||
+                                (b.service_category || '').toLowerCase().includes('truck') ||
+                                (b.service_category || '').toLowerCase().includes('two_wheeler') ||
+                                (b.service_category || '').toLowerCase().includes('packers') ||
+                                (b.service_category || '').toLowerCase().includes('transport')
+                              );
+                              const techName = b.technician?.name || b.technician_name || b.assigned_employee?.name || b.assigned_employee?.full_name || '';
+                              const techPhone = b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '';
+                              const vehNumber = b.vehicle_number || b.technician?.vehicle_number || '';
+                              const isAcceptedOrPost = [
+                                'accepted', 'on_the_way', 'en_route', 'arrived', 'service_started', 'in_progress', 
+                                'proof_submitted', 'payment_pending', 'cash_pending', 'waiting_for_payment', 'settling', 'completed', 'closed'
+                              ].includes(b.status);
+                              const hasTech = Boolean(techName && (isAcceptedOrPost || !['draft', 'new_request', 'unassigned', 'cancelled', 'rejected'].includes(b.status)));
+
+                              return (
+                                <>
+                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>
+                                    {isLogisticsCategory ? 'Assigned Driver' : 'Assigned Technician'}
+                                  </div>
+                                  <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span>👤 {hasTech ? techName : (b.status === 'assigned' ? (isLogisticsCategory ? 'Assigning driver...' : 'Finding service professional...') : (isLogisticsCategory ? 'Driver not assigned yet' : 'Not assigned yet'))}</span>
+                                    {hasTech && (
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
+                                        {isLogisticsCategory ? '✓ Verified Driver' : '✓ Verified Partner'}
+                                      </span>
+                                    )}
+                                    {vehNumber && (
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '1px 6px', borderRadius: 6, border: '1px solid #fde68a' }}>
+                                        🚛 {vehNumber}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {hasTech && techPhone && (
+                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                      <a href={`tel:${techPhone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <Phone size={12} /> {techPhone}
+                                      </a>
+                                      <a href={`https://wa.me/91${techPhone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <MessageSquare size={12} /> WhatsApp
+                                      </a>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
 
                           <div>

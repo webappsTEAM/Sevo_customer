@@ -961,7 +961,7 @@ export function PackersMoversBookingHosurPage() {
             const status = (res.data.status || "").toLowerCase()
             const isAccepted = Boolean(
               res.data.is_accepted ||
-              ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+              ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
             )
             if (isAccepted) {
               setLookingForPartnerOpen(false)
@@ -975,9 +975,12 @@ export function PackersMoversBookingHosurPage() {
               navigate(`${routes.booking_checkout}?track=${encodeURIComponent(parsed.bookingId)}`, {
                 state: { isTracking: true, successData: bookingPayload }
               })
-            } else if (["cancelled", "completed"].includes(status)) {
+            } else if (["cancelled", "rejected", "expired", "completed"].includes(status)) {
               setLookingForPartnerOpen(false)
               try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
+              if (["cancelled", "rejected", "expired"].includes(status)) {
+                setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
+              }
             }
           }).catch(() => {})
         } else {
@@ -995,19 +998,71 @@ export function PackersMoversBookingHosurPage() {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
-  // Countdown timer for partner search screen
+  // Countdown timer for partner search screen: wall-clock based so it never gets stuck on tab switch
+  const COUNTDOWN_TOTAL_SECONDS = 600 // 10:00 mins
   useEffect(() => {
-    let t = null
-    if (lookingForPartnerOpen) {
-      setPartnerCountdown(600)
-      t = setInterval(() => {
-        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
-      }, 1000)
+    if (!lookingForPartnerOpen) {
+      setPartnerCountdown(COUNTDOWN_TOTAL_SECONDS)
+      return
     }
+
+    let startTimestamp = Date.now()
+    try {
+      const saved = sessionStorage.getItem("calservice_active_partner_search")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.timestamp && Number(parsed.timestamp) > 0) {
+          startTimestamp = Number(parsed.timestamp)
+        }
+      }
+    } catch (_) {}
+
+    const updateCountdown = () => {
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
+      const remaining = Math.max(0, COUNTDOWN_TOTAL_SECONDS - elapsedSeconds)
+      setPartnerCountdown(remaining)
+      if (remaining <= 0) {
+        setLookingForPartnerOpen(false)
+        let activeBId = lastBookingId
+        let activeToken = lastTrackingToken
+        try {
+          const saved = sessionStorage.getItem("calservice_active_partner_search")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (!activeBId && parsed.bookingId) activeBId = parsed.bookingId
+            if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
+          }
+          sessionStorage.removeItem("calservice_active_partner_search")
+        } catch (_) {}
+        if (activeBId) {
+          cancelBooking(
+            activeBId,
+            "Search window expired (no delivery partner found within 10 minutes)",
+            activeToken || ""
+          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
+        }
+        setBookingError("No relocation team could be assigned within the search window. Please try again or schedule for later.")
+      }
+    }
+
+    updateCountdown()
+    const t = setInterval(updateCountdown, 1000)
+
+    const handleVisibilityOrFocus = () => {
+      if (!document.hidden) {
+        updateCountdown()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus)
+    window.addEventListener("focus", handleVisibilityOrFocus)
+
     return () => {
-      if (t) clearInterval(t)
+      clearInterval(t)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
+      window.removeEventListener("focus", handleVisibilityOrFocus)
     }
-  }, [lookingForPartnerOpen])
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken])
 
   // Lock body scroll when modal open
   useEffect(() => {
@@ -1047,7 +1102,7 @@ export function PackersMoversBookingHosurPage() {
           const status = (res.data.status || "").toLowerCase()
           const isAccepted = Boolean(
             res.data.is_accepted ||
-            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+            ["accepted", "on_the_way", "en_route", "arrived", "in_progress"].includes(status)
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
@@ -1068,6 +1123,10 @@ export function PackersMoversBookingHosurPage() {
                 successData: bookingPayload
               }
             })
+          } else if (["cancelled", "rejected", "expired"].includes(status)) {
+            setLookingForPartnerOpen(false)
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) {}
+            setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
           }
         }
       } catch (e) {

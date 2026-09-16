@@ -1,6 +1,6 @@
-import React from "react"
+import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, X, RefreshCw, WifiOff, ExternalLink } from "lucide-react"
+import { ArrowLeft, X, RefreshCw, WifiOff, ExternalLink, Share2, Check } from "lucide-react"
 import { getFreshnessBadge } from "./trackingUtils.js"
 
 export function CustomerTrackingHeader({
@@ -16,8 +16,10 @@ export function CustomerTrackingHeader({
   onRefresh,
   onClose,
   isModal = false,
+  isLogistics = false,
 }) {
   const navigate = useNavigate()
+  const [copiedLink, setCopiedLink] = useState(false)
   const freshnessBadge = getFreshnessBadge(freshness, status)
 
   // Service icon / category label
@@ -37,6 +39,17 @@ export function CustomerTrackingHeader({
     window.open(`/track/${encodeURIComponent(requestId)}${tokenQuery}`, "_blank")
   }
 
+  const handleShareTracking = () => {
+    if (!requestId || typeof window === "undefined") return
+    const tokenQuery = trackingToken ? `?token=${encodeURIComponent(trackingToken)}` : ""
+    const shareUrl = `${window.location.origin}/track/${encodeURIComponent(requestId)}${tokenQuery}`
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl)
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    }
+  }
+
   return (
     <header className="ltp-header">
       <div className="ltp-hdr-left">
@@ -51,7 +64,7 @@ export function CustomerTrackingHeader({
 
         <div>
           <div className="ltp-hdr-title-row">
-            <h1 className="ltp-hdr-title">Track Technician</h1>
+            <h1 className="ltp-hdr-title">{isLogistics ? "Track Delivery" : "Track Technician"}</h1>
             {requestId && <span className="ltp-hdr-badge">#{requestId}</span>}
           </div>
           <div className="ltp-hdr-sub">
@@ -81,6 +94,17 @@ export function CustomerTrackingHeader({
         <button className="ltp-hdr-btn" onClick={onRefresh} aria-label="Refresh tracking" title="Refresh live status">
           <RefreshCw size={13} /> Refresh
         </button>
+        {requestId && (
+          <button
+            className="ltp-hdr-btn"
+            onClick={handleShareTracking}
+            aria-label="Share tracking link"
+            title="Copy live tracking link to share with recipient"
+          >
+            {copiedLink ? <Check size={13} color="#10b981" /> : <Share2 size={13} />}
+            {copiedLink ? "Link Copied!" : "Share"}
+          </button>
+        )}
         {isModal && requestId && (
           <button
             className="ltp-hdr-btn"

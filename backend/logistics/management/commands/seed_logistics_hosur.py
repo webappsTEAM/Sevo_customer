@@ -75,16 +75,20 @@ LAUNCH_PRICING = {
 }
 
 TRUCK_TIERS = [
-    dict(slug="3-wheeler", name="3 Wheeler", weight_class="light", capacity_label="500kg",
+    dict(slug="3-wheeler", name="3 Wheeler", weight_class="light", vehicle_class="three_wheeler",
+         max_weight_kg=Decimal("500.00"), max_cft=Decimal("88.00"), capacity_label="500kg",
          dimensions_label="5.5ft x 4ft x 4ft", starting_price="160.00", order=1,
          description="Small appliances, electronics, carton boxes, luggage shifting"),
-    dict(slug="tata-ace", name="Tata Ace", weight_class="light", capacity_label="750kg",
+    dict(slug="tata-ace", name="Tata Ace", weight_class="light", vehicle_class="truck",
+         max_weight_kg=Decimal("850.00"), max_cft=Decimal("120.00"), capacity_label="750kg",
          dimensions_label="7ft x 4.5ft x 5ft", starting_price="205.00", order=2,
          description="1 RK / 1 BHK furniture, home appliances, retail supply transport"),
-    dict(slug="pickup-8ft", name="Pickup 8ft", weight_class="heavy", capacity_label="1250 kg",
+    dict(slug="pickup-8ft", name="Pickup 8ft", weight_class="heavy", vehicle_class="pickup",
+         max_weight_kg=Decimal("1200.00"), max_cft=Decimal("150.00"), capacity_label="1250 kg",
          dimensions_label="8ft x 5ft x 5.5ft", starting_price="300.00", order=3,
          description="Bulky electronics, commercial goods, furniture, home shifting"),
-    dict(slug="1-7-ton", name="1.7 ton", weight_class="heavy", capacity_label="1700 kg",
+    dict(slug="1-7-ton", name="1.7 ton", weight_class="heavy", vehicle_class="heavy_truck",
+         max_weight_kg=Decimal("1700.00"), max_cft=Decimal("300.00"), capacity_label="1700 kg",
          dimensions_label="9ft x 5.5ft x 6.1ft", starting_price="380.00", order=4,
          description="Heavy manufacturing loads, industrial raw materials, large 2 BHK relocation"),
 ]
@@ -102,10 +106,12 @@ TRUCK_LANES = [
 ]
 
 TWO_WHEELER_TIERS = [
-    dict(slug="2-wheeler", name="2 Wheeler", capacity_label="20 kg",
+    dict(slug="2-wheeler", name="2 Wheeler", vehicle_class="two_wheeler",
+         max_weight_kg=Decimal("20.00"), max_cft=Decimal("2.50"), capacity_label="20 kg",
          dimensions_label="40cm x 40cm", starting_price="48.00", order=1,
          description="Base fare is inclusive of 1.0 km distance & 25 minutes of order time. Pricing may vary basis locality."),
-    dict(slug="2-wheeler-electric-express", name="2 Wheeler Electric / Express", capacity_label="20 kg",
+    dict(slug="2-wheeler-electric-express", name="2 Wheeler Electric / Express", vehicle_class="two_wheeler",
+         max_weight_kg=Decimal("20.00"), max_cft=Decimal("2.50"), capacity_label="20 kg",
          dimensions_label="40cm x 40cm", starting_price="55.00", order=2,
          description="Base fare is inclusive of 1.0 km distance & 25 minutes of order time. Pricing may vary basis locality."),
 ]
@@ -120,14 +126,17 @@ TWO_WHEELER_LANES = [
 ]
 
 PACKERS_MOVERS_TIERS = [
-    dict(slug="1rk-1bhk-shifting", name="1 RK / 1 BHK Shifting", capacity_label="Up to 750 kg",
-         starting_price="1499.00", order=1,
+    dict(slug="1rk-1bhk-shifting", name="1 RK / 1 BHK Shifting", vehicle_class="truck",
+         max_weight_kg=Decimal("750.00"), max_cft=Decimal("250.00"), crew_size=2,
+         capacity_label="Up to 750 kg", starting_price="1499.00", order=1,
          description="Bed, mattress, wardrobe, 10-15 cartons, TV & basic kitchenware"),
-    dict(slug="2bhk-3bhk-shifting", name="2 BHK / 3 BHK Shifting", capacity_label="Up to 1,800 kg",
-         starting_price="2999.00", order=2,
+    dict(slug="2bhk-3bhk-shifting", name="2 BHK / 3 BHK Shifting", vehicle_class="truck",
+         max_weight_kg=Decimal("1800.00"), max_cft=Decimal("500.00"), crew_size=3,
+         capacity_label="Up to 1,800 kg", starting_price="2999.00", order=2,
          description="Sofa set, dining table, fridge, washing machine, 2 beds & 25+ boxes"),
-    dict(slug="villa-office-relocation", name="Villa / Office Relocation", capacity_label="Custom Load",
-         starting_price="4499.00", order=3,
+    dict(slug="villa-office-relocation", name="Villa / Office Relocation", vehicle_class="heavy_truck",
+         max_weight_kg=Decimal("4000.00"), max_cft=Decimal("1000.00"), crew_size=5,
+         capacity_label="Custom Load", starting_price="4499.00", order=3,
          description="Large residential villas, corporate workstations, IT server equipment & machinery"),
 ]
 
@@ -190,14 +199,29 @@ class Command(BaseCommand):
     def _seed_tiers(self, category, tiers):
         """
         Identity and display fields are upserted every run, as before.
+        Capacities and vehicle_class are seeded for unconfigured tiers, while
+        preserving admin-tuned capacities unless --force-pricing is passed.
         Pricing is handled separately by _apply_launch_pricing so that a
         re-seed cannot revert rates that were tuned after launch.
         """
         count = 0
-        for tier in tiers:
+        for tier_data in tiers:
+            slug = tier_data["slug"]
+            existing = ServiceTier.objects.filter(category=category, city=CITY, slug=slug).first()
+            defaults = {**tier_data, "is_active": True}
+            if existing and not self.force_pricing:
+                if existing.max_weight_kg is not None and existing.max_weight_kg > 0:
+                    defaults["max_weight_kg"] = existing.max_weight_kg
+                if existing.max_cft is not None and existing.max_cft > 0:
+                    defaults["max_cft"] = existing.max_cft
+                if existing.vehicle_class:
+                    defaults["vehicle_class"] = existing.vehicle_class
+                if existing.crew_size:
+                    defaults["crew_size"] = existing.crew_size
+
             obj, _created = ServiceTier.objects.update_or_create(
-                category=category, city=CITY, slug=tier["slug"],
-                defaults={**tier, "is_active": True},
+                category=category, city=CITY, slug=slug,
+                defaults=defaults,
             )
             self._apply_launch_pricing(obj)
             count += 1

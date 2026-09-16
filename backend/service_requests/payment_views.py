@@ -370,12 +370,24 @@ class PaymentVerifyView(APIView):
             )
             sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
         except ValidationError as e:
-            # The payment itself is captured and recorded either way — never
-            # lose the customer's money over a status-machine conflict.
-            # Flag it for manual review instead of silently failing.
             logger.error(f"Payment captured for booking {sr.id} but status transition to CONFIRMED failed: {e}")
             sr.payment_status = ServiceRequest.PaymentStatus.PAID
             sr.save(update_fields=["transaction_id", "payment_gateway", "invoice_id", "payment_status", "updated_at"])
+
+            if sr.status == ServiceRequest.Status.CANCELLED:
+                try:
+                    import service_requests.services as sr_services
+                    from service_requests.models import RefundReason
+                    sr_services.create_refund_request(
+                        booking=sr,
+                        customer=sr.customer,
+                        amount=sr.total_amount,
+                        reason=RefundReason.OTHER,
+                        additional_notes="Auto-created: Payment succeeded on a previously cancelled booking.",
+                    )
+                    logger.info(f"Auto-created refund request for late payment on cancelled booking {sr.id}")
+                except Exception as refund_err:
+                    logger.warning(f"Could not auto-create refund request for late payment on cancelled booking {sr.id}: {refund_err}")
             return _success(
                 data={
                     "request_id":     sr.request_id,

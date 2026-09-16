@@ -9,7 +9,7 @@ import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield, Home, Send
+  Wrench, WifiOff, Shield, Home, Send, Truck, Share2
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { useCustomerTracking } from "./useCustomerTracking.js"
@@ -52,8 +52,27 @@ const TIMELINE_STEPS = [
   { label: "Service Completed", emoji: "🎉" },
 ]
 
-function getTimelineIdx(s) {
+// Porter-equivalent Logistics Lifecycle Timeline
+const LOGISTICS_TIMELINE_STEPS = [
+  { label: "Booking Confirmed", emoji: "📋" },
+  { label: "Driver Assigned", emoji: "🚛" },
+  { label: "En Route to Pickup", emoji: "🛣️" },
+  { label: "Arrived at Pickup", emoji: "📍" },
+  { label: "Goods In Transit", emoji: "📦" },
+  { label: "Goods Delivered", emoji: "✅" },
+]
+
+function getTimelineIdx(s, isLogistics = false, logisticsLeg = "") {
   s = (s || "").toLowerCase()
+  const leg = (logisticsLeg || "").toUpperCase()
+  if (isLogistics) {
+    if (leg === "DELIVERED" || ["completed", "closed", "feedback_pending", "feedback_received"].includes(s)) return 5
+    if (["EN_ROUTE_DROP", "IN_TRANSIT", "ARRIVED_DROP", "UNLOADING", "REASSEMBLY", "UNPACKING"].includes(leg)) return 4
+    if (["ARRIVED_PICKUP", "LOADING", "PACKING", "DISMANTLING"].includes(leg) || s === "arrived") return 3
+    if (["EN_ROUTE_PICKUP", "TEAM_EN_ROUTE"].includes(leg) || ["on_the_way", "en_route"].includes(s)) return 2
+    if (["assigned", "accepted"].includes(s) || leg === "ASSIGNED") return 1
+    return 0
+  }
   if (["assigned", "accepted"].includes(s)) return 1
   if (["on_the_way", "en_route"].includes(s)) return 2
   if (s === "arrived") return 3
@@ -88,6 +107,7 @@ export function CustomerTrackingPage({
   } = useCustomerTracking({ bookingId, jobId, trackingToken })
 
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [copiedPayOtp, setCopiedPayOtp] = useState(false)
 
   // X-09: in-app chat. Polling-based (see BookingMessage's docstring on
   // the backend for why) -- only attempted once technician assignment is
@@ -101,16 +121,32 @@ export function CustomerTrackingPage({
   const chatEndRef = useRef(null)
 
   const status = (data?.status || "").toLowerCase()
-  // "assigned" deliberately excluded — the backend hides technician identity/GPS/OTP
-  // until the technician explicitly accepts (assigned != accepted), so the customer
-  // must not be shown a partner card with blank data while still just "assigned".
+  // "assigned" deliberately excluded unless technician identity is available
   const isAccepted = Boolean(
     data?.is_accepted ||
     data?.technician_accepted ||
-    ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed"].includes(status)
+    data?.technician?.name ||
+    data?.technician_name ||
+    data?.assigned_employee?.name ||
+    [
+      "accepted", "on_the_way", "en_route", "arrived", "service_started",
+      "in_progress", "on_hold", "proof_submitted", "payment_pending",
+      "cash_pending", "waiting_for_payment", "settling", "completed", "closed"
+    ].includes(status)
   )
   const isCancelled = status === "cancelled" || status === "rejected"
-  const tlIdx = getTimelineIdx(status)
+  const isLogistics = Boolean(
+    data?.logistics?.leg ||
+    data?.service_category?.toLowerCase().includes("goods") ||
+    data?.service_category?.toLowerCase().includes("truck") ||
+    data?.service_category?.toLowerCase().includes("two_wheeler") ||
+    data?.service_category?.toLowerCase().includes("packers") ||
+    data?.service_category?.toLowerCase().includes("transport")
+  )
+  const isTwoWheeler = Boolean(data?.service_category?.toLowerCase().includes("two_wheeler"))
+  const logisticsLeg = (data?.logistics?.leg || "").toUpperCase()
+  const activeTimelineSteps = isLogistics ? LOGISTICS_TIMELINE_STEPS : TIMELINE_STEPS
+  const tlIdx = getTimelineIdx(status, isLogistics, logisticsLeg)
   const isArrived = status === "arrived"
   const isInProgress = status === "in_progress"
   const isCompleted = ["completed", "closed", "feedback_pending", "feedback_received"].includes(status)
@@ -189,12 +225,20 @@ export function CustomerTrackingPage({
   const etaMins = data?.technician?.eta_minutes ?? data?.eta_minutes ?? null
   const distKm = data?.technician?.distance_km ?? data?.distance_km ?? null
   const freshness = data?.freshness || "LIVE"
+  const paymentConfirmationOtp = data?.payment_confirmation_otp || null
 
   const copyOtp = () => {
     if (!startOtp || !navigator.clipboard) return
     navigator.clipboard.writeText(startOtp)
     setCopiedOtp(true)
     setTimeout(() => setCopiedOtp(false), 2000)
+  }
+
+  const copyPayOtp = () => {
+    if (!paymentConfirmationOtp || !navigator.clipboard) return
+    navigator.clipboard.writeText(paymentConfirmationOtp)
+    setCopiedPayOtp(true)
+    setTimeout(() => setCopiedPayOtp(false), 2000)
   }
 
   const openWA = () => {
@@ -270,12 +314,12 @@ export function CustomerTrackingPage({
         <div className="ltp-fullscreen ltp-center" style={{ minHeight: isModal ? "450px" : "100vh" }}>
           <motion.div className="ltp-error-card" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
             <div className="ltp-error-emoji">🎉</div>
-            <h2 className="ltp-error-title" style={{ color: "#047857" }}>Service Completed</h2>
-            <p className="ltp-error-body">Your service request <strong>#{data.request_id || activeIdentifier}</strong> has been finished successfully.</p>
+            <h2 className="ltp-error-title" style={{ color: "#047857" }}>{isLogistics ? "Goods Delivered" : "Service Completed"}</h2>
+            <p className="ltp-error-body">Your {isLogistics ? "consignment" : "service request"} <strong>#{data.request_id || activeIdentifier}</strong> has been {isLogistics ? "delivered" : "finished"} successfully.</p>
             {data.issue_title && <p className="ltp-error-body" style={{ color: "#64748b", fontSize: "0.85rem" }}>{data.issue_title}</p>}
             {techName && (
               <div style={{ margin: "14px 0", padding: "10px 14px", background: "#f0fdf4", borderRadius: "10px", border: "1px solid #bbf7d0", textAlign: "left" }}>
-                <div style={{ fontSize: "0.72rem", color: "#047857", fontWeight: 700, textTransform: "uppercase" }}>Serviced By</div>
+                <div style={{ fontSize: "0.72rem", color: "#047857", fontWeight: 700, textTransform: "uppercase" }}>{isLogistics ? "Delivered By" : "Serviced By"}</div>
                 <div style={{ fontSize: "0.92rem", color: "#065f46", fontWeight: 800 }}>👤 {techName} {vendorName ? `(${vendorName})` : ""}</div>
               </div>
             )}
@@ -285,7 +329,7 @@ export function CustomerTrackingPage({
               style={{ background: "#059669", borderColor: "#059669", width: "100%", justifyContent: "center" }}
               onClick={isModal && onClose ? onClose : () => window.location.href = "/"}
             >
-              <Home size={14} /> {isModal ? "Close Window" : "Book Another Service"}
+              <Home size={14} /> {isModal ? "Close Window" : (isLogistics ? "Book Another Delivery" : "Book Another Service")}
             </button>
           </motion.div>
         </div>
@@ -329,6 +373,7 @@ export function CustomerTrackingPage({
           onRefresh={refresh}
           onClose={onClose}
           isModal={isModal}
+          isLogistics={isLogistics}
         />
 
         {/* ── Main Body ── */}
@@ -363,14 +408,64 @@ export function CustomerTrackingPage({
 
           {/* Right: Booking Details Panel */}
           <aside className="ltp-panel" aria-label="Booking details">
-            {/* Work Start OTP Card */}
-            {isAccepted && startOtp && !isCompleted && !isCancelled && (
+            {/* Cash Payment Confirmation OTP Card */}
+            {paymentConfirmationOtp && !isCancelled && (
+              <div
+                className="ltp-card ltp-otp-card"
+                style={{
+                  background: "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)",
+                  border: "1.5px solid #10b981",
+                  boxShadow: "0 4px 12px rgba(16, 185, 129, 0.15)",
+                  marginBottom: "12px",
+                }}
+              >
+                <div className="ltp-otp-left">
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <KeyRound size={18} color="#059669" />
+                  </div>
+                  <div>
+                    <div className="ltp-otp-label" style={{ color: "#065f46" }}>CASH PAYMENT CONFIRMATION OTP</div>
+                    <div className="ltp-otp-hint" style={{ color: "#047857" }}>
+                      Technician reported cash collection. Share this 6-digit OTP with your technician to verify payment and complete the job.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="ltp-otp-val"
+                  onClick={copyPayOtp}
+                  aria-label="Copy Payment OTP"
+                  title="Click to copy"
+                  style={{
+                    background: "#ffffff",
+                    color: "#047857",
+                    borderColor: "#a7f3d0",
+                    boxShadow: "0 2px 5px rgba(0,0,0,0.06)",
+                    letterSpacing: "3px",
+                  }}
+                >
+                  {paymentConfirmationOtp}
+                  {copiedPayOtp ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
+
+            {/* Work / Pickup Start OTP Card */}
+            {isAccepted && startOtp && !isCancelled && (
               <div className={`ltp-card ltp-otp-card ${isArrived ? "highlight-arrived" : ""}`}>
                 <div className="ltp-otp-left">
                   <KeyRound size={18} color="#ea580c" />
                   <div>
-                    <div className="ltp-otp-label">WORK START OTP</div>
-                    <div className="ltp-otp-hint">Share this code with technician to begin service</div>
+                    <div className="ltp-otp-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{isLogistics ? "PICKUP OTP" : "WORK START OTP"}</span>
+                      {isCompleted && (
+                        <span style={{ fontSize: "0.62rem", fontWeight: 800, color: "#15803d", background: "#dcfce7", padding: "1px 6px", borderRadius: 4 }}>✓ Verified</span>
+                      )}
+                    </div>
+                    <div className="ltp-otp-hint">
+                      {isCompleted
+                        ? (isLogistics ? "Goods loading verification code (verified)" : "Service commencement code (verified)")
+                        : (isLogistics ? "Share this code with the driver at pickup site to load goods" : "Share this code with technician to begin service")}
+                    </div>
                   </div>
                 </div>
                 <button className="ltp-otp-val" onClick={copyOtp} aria-label="Copy OTP" title="Click to copy">
@@ -385,10 +480,10 @@ export function CustomerTrackingPage({
               <motion.div className="ltp-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="ltp-vendor-row">
                   <div>
-                    <div className="ltp-vendor-label">Service Provider</div>
+                    <div className="ltp-vendor-label">{isLogistics ? "Transport Partner" : "Service Provider"}</div>
                     <div className="ltp-vendor-name">🏢 {vendorName}</div>
                   </div>
-                  <span className="ltp-verified">✓ Verified Vendor</span>
+                  <span className="ltp-verified">{isLogistics ? "✓ Verified Driver" : "✓ Verified Vendor"}</span>
                 </div>
 
                 <div className="ltp-partner-top">
@@ -402,8 +497,8 @@ export function CustomerTrackingPage({
                   </div>
                   <div className="ltp-partner-info">
                     <div className="ltp-partner-name-row">
-                      <span className="ltp-partner-name">{techName || "Service Partner"}</span>
-                      <span className="ltp-verified">✓ Professional</span>
+                      <span className="ltp-partner-name">{techName || (isLogistics ? "Commercial Driver" : "Service Partner")}</span>
+                      <span className="ltp-verified">{isLogistics ? "✓ Professional" : "✓ Professional"}</span>
                     </div>
                     <div className="ltp-partner-meta">
                       {techRating != null ? (
@@ -421,8 +516,16 @@ export function CustomerTrackingPage({
                       <span className="ltp-tech-id-pill">
                         {data?.technician?.job_id || `Ref #${data?.request_id || activeIdentifier}`}
                       </span>
+                      {(data?.vehicle_number || data?.technician?.vehicle_number) && (
+                        <span className="ltp-tech-id-pill" style={{ background: "#fef3c7", color: "#92400e", borderColor: "#fde68a", fontWeight: 700 }}>
+                          🚛 {data?.vehicle_number || data?.technician?.vehicle_number}
+                        </span>
+                      )}
                       <span className={`ltp-tech-status-pill ${status}`}>
-                        {isArrived ? "📍 Arrived At Site" : isInProgress ? "🔧 In Progress" : isCompleted ? "✅ Completed" : "🛵 On The Way"}
+                        {isLogistics
+                          ? (isCompleted ? "✅ Delivered" : status === "proof_submitted" ? "📄 Proof Submitted" : isArrived ? "📍 At Pickup" : isInProgress ? "📦 In Transit" : "🛣️ En Route")
+                          : (isArrived ? "📍 Arrived At Site" : isInProgress ? "🔧 In Progress" : status === "proof_submitted" ? "📄 Proof Submitted" : isCompleted ? "✅ Completed" : "🛵 On The Way")
+                        }
                       </span>
                     </div>
                   </div>
@@ -431,14 +534,14 @@ export function CustomerTrackingPage({
                 <div className="ltp-action-row">
                   {techPhone ? (
                     <a href={`tel:${techPhone}`} className="ltp-btn green" aria-label="Call technician">
-                      <Phone size={14} /> Call Partner
+                      <Phone size={14} /> {isLogistics ? "Call Driver" : "Call Partner"}
                     </a>
                   ) : (
                     <span className="ltp-btn disabled" aria-disabled="true"><Phone size={14} /> Call Unavailable</span>
                   )}
                   {techPhone && (
                     <button className="ltp-btn outline" onClick={openWA} aria-label="WhatsApp technician">
-                      <MessageSquare size={14} color="#25D366" /> WhatsApp
+                      <MessageSquare size={14} color="#25D366" /> {isLogistics ? "WhatsApp Driver" : "WhatsApp"}
                     </button>
                   )}
                 </div>
@@ -448,11 +551,11 @@ export function CustomerTrackingPage({
                 <div className="ltp-radar-wrap">
                   <motion.div className="ltp-radar-ring r1" animate={{ scale: [1, 1.8, 2.4], opacity: [0.5, 0.15, 0] }} transition={{ repeat: Infinity, duration: 2.4, ease: "easeOut" }} />
                   <motion.div className="ltp-radar-ring r2" animate={{ scale: [1, 1.5, 2.0], opacity: [0.6, 0.25, 0] }} transition={{ repeat: Infinity, duration: 2.4, delay: 0.8, ease: "easeOut" }} />
-                  <div className="ltp-radar-center"><Bike size={24} color="white" /></div>
+                  <div className="ltp-radar-center">{isTwoWheeler ? <Bike size={24} color="white" /> : isLogistics ? <Truck size={24} color="white" /> : <Bike size={24} color="white" />}</div>
                 </div>
                 <div className="ltp-waiting-info">
-                  <div className="ltp-waiting-title">Finding your professional…</div>
-                  <div className="ltp-waiting-sub">Searching nearby verified service pros in your area</div>
+                  <div className="ltp-waiting-title">{isLogistics ? "Finding your driver…" : "Finding your professional…"}</div>
+                  <div className="ltp-waiting-sub">{isLogistics ? "Searching nearby verified commercial vehicles in your area" : "Searching nearby verified service pros in your area"}</div>
                   <div className="ltp-waiting-confirm-tag">✓ Booking Confirmed</div>
                 </div>
               </div>
@@ -460,12 +563,12 @@ export function CustomerTrackingPage({
 
             {/* Compact Status Timeline */}
             <div className="ltp-card">
-              <div className="ltp-sec-title">Service Lifecycle Status</div>
+              <div className="ltp-sec-title">{isLogistics ? "Trip Lifecycle Status" : "Service Lifecycle Status"}</div>
               <div className="ltp-timeline">
-                {TIMELINE_STEPS.map((step, i) => {
+                {activeTimelineSteps.map((step, i) => {
                   const done = tlIdx > i
                   const active = tlIdx === i
-                  const last = i === TIMELINE_STEPS.length - 1
+                  const last = i === activeTimelineSteps.length - 1
                   return (
                     <div key={i} className="ltp-tl-row">
                       <div className="ltp-tl-col">
@@ -478,7 +581,10 @@ export function CustomerTrackingPage({
                         <span className={`ltp-tl-label ${done ? "done" : active ? "active" : "pend"}`}>{step.label}</span>
                         {active && !isCancelled && (
                           <span className="ltp-tl-badge">
-                            {isArrived ? "At Site" : isInProgress ? "Active" : isCompleted ? "Finished" : etaMins != null ? `~${etaMins} min` : "Active"}
+                            {isLogistics
+                              ? (isCompleted ? "Delivered" : isArrived ? "At Pickup" : isInProgress ? "In Transit" : etaMins != null ? `~${etaMins} min` : "En Route")
+                              : (isArrived ? "At Site" : isInProgress ? "Active" : isCompleted ? "Finished" : etaMins != null ? `~${etaMins} min` : "Active")
+                            }
                           </span>
                         )}
                         {done && !last && <span className="ltp-tl-done-badge">Done</span>}
@@ -489,8 +595,43 @@ export function CustomerTrackingPage({
               </div>
             </div>
 
-            {/* Service Location Card */}
-            {(data?.destination?.address || data?.service_location?.address) && (
+            {/* Service Location / Route Card */}
+            {isLogistics ? (
+              <div className="ltp-card">
+                <div className="ltp-sec-title">Delivery Route</div>
+                {/* Pickup Address */}
+                <div className="ltp-addr-row" style={{ marginBottom: 10 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#dcfce7", color: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>P</div>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", color: "#15803d", fontWeight: 700, textTransform: "uppercase" }}>Pickup Location</div>
+                    <span className="ltp-addr-text">{data?.pickup_address || data?.address || "Pickup address"}</span>
+                  </div>
+                </div>
+                {/* Intermediate Stops (if any) */}
+                {Array.isArray(data?.logistics?.stops) && data.logistics.stops.length > 0 && data.logistics.stops.map((stop, sIdx) => (
+                  <div key={stop.id || sIdx} className="ltp-addr-row" style={{ marginBottom: 8, paddingLeft: 6, borderLeft: "2px dashed #94a3b8" }}>
+                    <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>{sIdx + 1}</div>
+                    <div>
+                      <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>Stop {sIdx + 1} {stop.completed_at ? "✓ (Completed)" : stop.arrived_at ? "📍 (Driver Arrived)" : ""}</div>
+                      <span className="ltp-addr-text" style={{ fontSize: "0.82rem" }}>{stop.address}</span>
+                    </div>
+                  </div>
+                ))}
+                {/* Drop Address */}
+                <div className="ltp-addr-row">
+                  <MapPin size={16} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 700, textTransform: "uppercase" }}>Drop Destination</div>
+                    <span className="ltp-addr-text">{data?.drop_address || data?.destination?.address || "Drop address"}</span>
+                    {(data?.drop_contact_name || data?.drop_contact_phone) && (
+                      <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: 3 }}>
+                        👤 Receiver: <strong>{data.drop_contact_name || "Recipient"}</strong> {data.drop_contact_phone ? `(${data.drop_contact_phone})` : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (data?.destination?.address || data?.service_location?.address) && (
               <div className="ltp-card">
                 <div className="ltp-sec-title">Service Address</div>
                 <div className="ltp-addr-row">

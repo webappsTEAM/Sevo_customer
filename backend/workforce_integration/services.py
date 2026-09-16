@@ -82,6 +82,23 @@ class WorkforceIntegrationService:
         if not sr:
             return {"success": False, "error": "Booking not found"}
 
+        # Extract logistics vehicle / fitment requirements if present
+        logistics_info = None
+        tier = getattr(sr, "logistics_tier", None)
+        if tier:
+            v_class = getattr(tier, "vehicle_class", "") or (tier.get_vehicle_class() if hasattr(tier, "get_vehicle_class") else "")
+            max_wt = float(tier.get_max_weight_kg()) if hasattr(tier, "get_max_weight_kg") and tier.get_max_weight_kg() > 0 else (float(tier.max_weight_kg) if getattr(tier, "max_weight_kg", None) else None)
+            max_vol = float(tier.get_max_cft()) if hasattr(tier, "get_max_cft") and tier.get_max_cft() > 0 else (float(tier.max_cft) if getattr(tier, "max_cft", None) else None)
+            logistics_info = {
+                "tier_id": tier.id,
+                "tier_slug": tier.slug,
+                "tier_name": tier.name,
+                "vehicle_class": v_class,
+                "max_weight_kg": max_wt,
+                "max_cft": max_vol,
+                "category": getattr(tier, "category", ""),
+            }
+
         payload = {
             "booking_id": sr.request_id,
             "category": sr.service_category,
@@ -98,6 +115,8 @@ class WorkforceIntegrationService:
                 "drop_address": getattr(sr, "drop_address", ""),
                 "latitude": float(sr.latitude) if sr.latitude else None,
                 "longitude": float(sr.longitude) if sr.longitude else None,
+                "drop_latitude": float(sr.drop_latitude) if getattr(sr, "drop_latitude", None) else None,
+                "drop_longitude": float(sr.drop_longitude) if getattr(sr, "drop_longitude", None) else None,
             },
             "schedule": {
                 "preferred_date": str(sr.preferred_date),
@@ -111,6 +130,10 @@ class WorkforceIntegrationService:
             "cart_data": sr.cart_data,
             "start_otp": sr.start_otp,
             "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
+            "logistics": logistics_info,
+            "vehicle_class": logistics_info.get("vehicle_class") if logistics_info else None,
+            "vehicle_type": logistics_info.get("vehicle_class") if logistics_info else None,
+            "logistics_tier_id": tier.id if tier else None,
         }
 
         # Guard against unmocked live network requests during test runs (avoids polluting running dev servers)
@@ -450,7 +473,7 @@ class WorkforceIntegrationService:
 
             try:
                 url = f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/"
-                response = requests.get(url, headers=cls._headers(), timeout=5)
+                response = requests.get(url, headers=cls._headers(), timeout=1.5)
                 if response.status_code == 200:
                     result = {"success": True, "quote": response.json()}
                     cache.set(cache_key, result, timeout=60)
@@ -461,6 +484,6 @@ class WorkforceIntegrationService:
             except Exception as e:
                 logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
                 result = {"success": False, "message": "Workforce service unreachable", "quote": None}
-                cache.set(cache_key, result, timeout=15)
+                cache.set(cache_key, result, timeout=60)
                 return result
 

@@ -20,17 +20,24 @@ export function CustomerTrackingStatusCard({
 }) {
   const [copiedOtp, setCopiedOtp] = useState(false)
 
-  const isAccepted = Boolean(data?.is_accepted)
+  const isAccepted = Boolean(
+    data?.is_accepted ||
+    data?.technician_accepted ||
+    data?.technician?.name ||
+    data?.technician_name ||
+    data?.assigned_employee?.name ||
+    ["accepted", "on_the_way", "en_route", "arrived", "service_started", "in_progress", "on_hold", "proof_submitted", "payment_pending", "cash_pending", "waiting_for_payment", "settling", "completed", "closed"].includes(status)
+  )
   const isArrived = status === "arrived"
   const isInProgress = status === "in_progress"
   const isCompleted = ["completed", "closed", "feedback_pending", "feedback_received"].includes(status)
 
   const vendorName = data?.vendor?.name || ""
-  const techName = data?.technician?.name || ""
-  const techPhone = data?.technician?.phone || ""
-  const techPhoto = data?.technician?.photo || null
-  const techRating = data?.technician?.rating || null
-  const techJobs = data?.technician?.jobs_completed || null
+  const techName = data?.technician?.name || data?.technician_name || data?.assigned_employee?.name || ""
+  const techPhone = data?.technician?.phone || data?.technician_phone || data?.assigned_employee?.phone || ""
+  const techPhoto = data?.technician?.photo || data?.technician_photo || data?.assigned_employee?.photo || null
+  const techRating = data?.technician?.rating || data?.technician_rating || data?.assigned_employee?.rating || null
+  const techJobs = data?.technician?.jobs_completed || data?.assigned_employee?.jobs_completed || null
   const startOtp = data?.start_otp || null
 
   const rawTechLat = data?.technician_location?.latitude ?? data?.technician?.latitude
@@ -76,6 +83,36 @@ export function CustomerTrackingStatusCard({
     dynamicTag = isLogistics ? "GOODS DELIVERED" : "SERVICE COMPLETED"
     dynamicTitle = isLogistics ? "Goods Delivered Successfully" : "Service Completed"
     dynamicSub = isLogistics ? "All items have been safely transported & delivered." : "Thank you for choosing Sevo!"
+  } else if (["proof_submitted", "cash_pending", "waiting_for_payment", "payment_pending"].includes(status)) {
+    const isCashPending = status === "cash_pending" || data?.payment_status === "cash_pending"
+    dynamicTag = isLogistics 
+      ? (isCashPending ? "CASH PAYMENT PENDING" : "PROOF SUBMITTED")
+      : (isCashPending ? "CASH PAYMENT PENDING" : "PROOF SUBMITTED")
+    dynamicTitle = isLogistics
+      ? (isCashPending ? "Share Cash Confirmation OTP with driver" : "Driver delivered goods & submitted proof")
+      : (isCashPending ? "Share Cash Confirmation OTP with technician" : "Technician submitted proof of completion")
+    dynamicSub = isCashPending && data?.payment_confirmation_otp ? (
+      <span className="ltp-ftc-otp-highlight" style={{ color: "#059669" }}>
+        Cash Confirmation OTP: <strong>{data.payment_confirmation_otp}</strong>
+      </span>
+    ) : (
+      isLogistics ? "Awaiting payment verification to close booking." : "Awaiting payment verification to complete service."
+    )
+    dynamicTheme = "green"
+  } else if (logisticsLeg === "REASSEMBLY") {
+    dynamicTag = "REASSEMBLY IN PROGRESS"
+    dynamicTitle = `${techName || "Team"} is reassembling furniture & items`
+    dynamicSub = "Placing and reassembling items at your destination"
+    dynamicTheme = "blue"
+  } else if (logisticsLeg === "UNPACKING") {
+    dynamicTag = "UNPACKING GOODS"
+    dynamicTitle = `${techName || "Team"} is unpacking items at destination`
+    dynamicSub = "Safely unpacking goods and organizing placement"
+    dynamicTheme = "blue"
+  } else if (logisticsLeg === "ARRIVED_DROP") {
+    dynamicTag = "ARRIVED AT DESTINATION"
+    dynamicTitle = `${techName || "Driver"} has arrived at drop location`
+    dynamicSub = "Vehicle at delivery site — preparing for unloading"
     dynamicTheme = "green"
   } else if (logisticsLeg === "UNLOADING") {
     dynamicTag = "UNLOADING GOODS"
@@ -94,9 +131,19 @@ export function CustomerTrackingStatusCard({
     )
     dynamicTheme = "orange"
   } else if (logisticsLeg === "LOADING" || logisticsLeg === "PACKING" || logisticsLeg === "DISMANTLING") {
-    dynamicTag = logisticsLeg === "PACKING" ? "PACKING GOODS" : "LOADING GOODS"
-    dynamicTitle = `${techName || "Driver"} is loading items at pickup site`
-    dynamicSub = "Items are currently being inspected and loaded"
+    if (logisticsLeg === "DISMANTLING") {
+      dynamicTag = "DISMANTLING ITEMS"
+      dynamicTitle = `${techName || "Team"} is dismantling furniture & fixtures`
+      dynamicSub = "Safely taking apart fixtures for secure transit"
+    } else if (logisticsLeg === "PACKING") {
+      dynamicTag = "PACKING GOODS"
+      dynamicTitle = `${techName || "Team"} is packing items at pickup site`
+      dynamicSub = "Items are currently being packed & protected"
+    } else {
+      dynamicTag = "LOADING GOODS"
+      dynamicTitle = `${techName || "Driver"} is loading items at pickup site`
+      dynamicSub = "Items are currently being inspected and loaded"
+    }
     dynamicTheme = "blue"
   } else if (logisticsLeg === "EN_ROUTE_PICKUP" || logisticsLeg === "TEAM_EN_ROUTE") {
     dynamicTag = "DRIVER EN ROUTE TO PICKUP"
