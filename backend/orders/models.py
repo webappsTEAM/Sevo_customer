@@ -181,3 +181,140 @@ class OrderItem(models.Model):
     def __str__(self):
         sr_label = self.service_request.request_id if self.service_request else "(no ServiceRequest yet)"
         return f"OrderItem #{self.id} of {self.order.order_number} -> {sr_label}"
+
+
+# ─── Grocery Order layer (Daily Essentials, Phase 2) ──────────────────────────
+#
+# Added per DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase 2. A separate model
+# family from Order/OrderItem above -- NOT a shared/polymorphic table -- per
+# the approved two-cart architecture: Services and Daily Essentials have
+# independent payment and fulfillment rules, and a failure in one pipeline
+# must never roll back or block the other. The two are only ever merged in
+# the read-only "My Orders" view (Phase 6), never on the write side.
+#
+# Models + hand-written migration only in this pass -- no checkout wiring yet
+# (that's Phase 3), same "models first, confirm, then wire" sequencing used
+# for Order/OrderItem above.
+
+def _generate_grocery_order_number():
+    """
+    Mirrors _generate_order_number()'s prefix + zero-padded sequence
+    approach, using its own "GRO" prefix and its own sequence so grocery
+    and service order numbers never collide or interleave.
+    """
+    prefix = "GRO"
+    last = GroceryOrder.objects.filter(order_number__startswith=prefix).order_by("-id").first()
+    num = (last.id + 1) if last and last.id else (GroceryOrder.objects.count() + 1)
+    order_number = f"{prefix}{str(num).zfill(5)}"
+    while GroceryOrder.objects.filter(order_number=order_number).exists():
+        num += 1
+        order_number = f"{prefix}{str(num).zfill(5)}"
+    return order_number
+
+
+class GroceryOrder(models.Model):
+    """
+    The parent record for one Daily Essentials checkout. Deliberately does
+    not reuse Order.status: grocery fulfillment (pick -> pack -> deliver)
+    has no equivalent to a service booking's technician-dispatch lifecycle,
+    so it gets its own small status set (see Phase 5's grocery_state_machine.py
+    for the transition rules, layered on top of this field).
+    """
+
+    class Status(models.TextChoices):
+        PLACED           = "PLACED",           "Placed"
+        PACKED           = "PACKED",           "Packed"
+        OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY",  "Out for Delivery"
+        DELIVERED        = "DELIVERED",         "Delivered"
+        CANCELLED        = "CANCELLED",         "Cancelled"
+
+    order_number = models.CharField(max_length=20, unique=True, blank=True, db_index=True)
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="grocery_orders",
+        help_text="The customer who placed this grocery order.",
+    )
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLACED, db_index=True)
+
+    # Snapshot of what the customer was charged at checkout time -- same
+    # "snapshot, don't silently recompute" pattern as Order.total_amount.
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    delivery_address = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_groceryorder"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        _order_number_was_generated = False
+        if not self.order_number:
+            self.order_number = _generate_grocery_order_number()
+            _order_number_was_generated = True
+
+        # Same bounded-retry-on-collision pattern as Order.save().
+        _max_attempts = 5
+        for _attempt in range(1, _max_attempts + 1):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                break
+            except IntegrityError:
+                if not _order_number_was_generated or _attempt == _max_attempts:
+                    raise
+                self.order_number = _generate_grocery_order_number()
+
+    def __str__(self):
+        return f"{self.order_number} ({self.get_status_display()})"
+
+    def transition_to(self, new_status):
+        """
+        Thin convenience hook onto grocery_state_machine.apply_grocery_transition()
+        (Phase 5) -- validates the move and, for CANCELLED, restores reserved
+        stock. Lazy import to avoid a module-load cycle (grocery_state_machine
+        imports GroceryOrder from this module).
+        """
+        from .grocery_state_machine import apply_grocery_transition
+        return apply_grocery_transition(self, new_status)
+
+
+class GroceryOrderItem(models.Model):
+    """
+    One line item within a GroceryOrder. Unlike OrderItem's OneToOne link to
+    a single ServiceRequest, a grocery checkout is inherently multi-line
+    (a cart of several vegetables/fruits/groceries), so this is a plain FK
+    to its parent GroceryOrder -- matching CartItem's shape, since a
+    GroceryOrder is what a daily_essentials Cart becomes at checkout.
+    """
+
+    order = models.ForeignKey(GroceryOrder, on_delete=models.CASCADE, related_name="items")
+
+    package = models.ForeignKey(
+        "service_requests.Package",
+        on_delete=models.PROTECT,
+        related_name="grocery_order_items",
+    )
+
+    quantity_grams = models.PositiveIntegerField()
+
+    # Snapshot at checkout time -- never a live lookup. Matches
+    # CartItem.unit_price_snapshot / OrderItem.service_category_snapshot.
+    unit_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+
+    line_amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "orders_groceryorderitem"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"GroceryOrderItem #{self.id} of {self.order.order_number}"

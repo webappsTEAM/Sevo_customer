@@ -24,7 +24,10 @@ import { usePendingIntent } from "../../hooks/usePendingIntent.js"
 import { setCustomerSelectedAddress, getCustomerSelectedAddress, getCustomerLocation, getCustomerCoordinates } from "../../utils/customerLocationStorage.js"
 import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
-import { apiRequest } from "../../api/client.js"
+import { apiRequest, extractApiErrorMessage } from "../../api/client.js"
+import { resetDailyEssentialsCartCache } from "../../services/dailyEssentialsCartSync.js"
+import { hasPendingDailyEssentialsCart, hasPendingServicesCart } from "../../services/combinedCartCheck.js"
+import { CombinedCheckoutConfirmModal } from "../components/CombinedCheckoutConfirmModal.jsx"
 import { LocationPermissionHandler, MapPickerScreen, SelectServiceAddressDrawer } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
@@ -4576,6 +4579,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
+  // Phase 4 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md): Daily
+  // Essentials orders, read-only, fetched from the merged /orders/my/
+  // endpoint (orders/views.py MyOrdersView) alongside the existing service
+  // bookings fetch above. Kept as its own list/section rather than woven
+  // into realBookings -- the two order families stay independent on the
+  // write side per the architecture, this view only merges them visually.
+  const [groceryOrders, setGroceryOrders] = useState([])
+  const [groceryOrdersLoading, setGroceryOrdersLoading] = useState(false)
   // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
   // each fetches only when its tab is activated, matching the existing
   // My Bookings fetch-on-activate pattern immediately above.
@@ -4783,6 +4794,35 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       fetchBookings(true)
       const interval = setInterval(() => fetchBookings(false), 5000)
       const onFocus = () => fetchBookings(false)
+      window.addEventListener("focus", onFocus)
+
+      return () => {
+        clearInterval(interval)
+        window.removeEventListener("focus", onFocus)
+      }
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (activeTab === "My Bookings" && user) {
+      const fetchGroceryOrders = (showLoading = false) => {
+        if (showLoading && (!groceryOrders || groceryOrders.length === 0)) {
+          setGroceryOrdersLoading(true)
+        }
+        apiRequest("/orders/my/")
+          .then(res => {
+            const merged = Array.isArray(res?.data) ? res.data : []
+            setGroceryOrders(merged.filter(o => o.order_type === "grocery"))
+          })
+          .catch(console.error)
+          .finally(() => {
+            if (showLoading) setGroceryOrdersLoading(false)
+          })
+      }
+
+      fetchGroceryOrders(true)
+      const interval = setInterval(() => fetchGroceryOrders(false), 5000)
+      const onFocus = () => fetchGroceryOrders(false)
       window.addEventListener("focus", onFocus)
 
       return () => {
@@ -6336,6 +6376,64 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   </React.Fragment>
                 )
               })}
+
+              {/* Phase 4 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md):
+                  Daily Essentials orders, merged visually into this same
+                  My Bookings tab but kept in their own clearly-labeled
+                  section -- the two order families stay separate on the
+                  write side (own checkout, own status lifecycle), this is
+                  read-only display only, sourced from GET /orders/my/. */}
+              {groceryOrdersLoading && groceryOrders.length === 0 ? null : groceryOrders.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <h4 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ display: 'inline-flex', width: 28, height: 28, borderRadius: 8, background: '#ecfdf5', color: '#059669', alignItems: 'center', justifyContent: 'center' }}>🛒</span>
+                    Daily Essentials Orders
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {groceryOrders.map(o => (
+                      <div
+                        key={`grocery-${o.id}`}
+                        style={{
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 16,
+                          padding: '16px',
+                          background: 'white',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>{o.order_number}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
+                              {o.created_at ? new Date(o.created_at).toLocaleString() : ''}
+                            </div>
+                          </div>
+                          <span style={{
+                            padding: '4px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 800,
+                            background: '#ecfdf5', color: '#059669', whiteSpace: 'nowrap',
+                          }}>
+                            {o.status_label}
+                          </span>
+                        </div>
+                        {Array.isArray(o.detail?.items) && o.detail.items.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {o.detail.items.map((it, idx) => (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569' }}>
+                                <span>{it.package_name} × {it.quantity_grams}g</span>
+                                <span style={{ fontWeight: 700, color: '#334155' }}>₹{it.line_amount}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total</span>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )
@@ -8715,58 +8813,41 @@ function QuickCommerceCartCheckout({
     setIsSubmitting(true)
     setErrorMsg("")
     try {
-      let resolvedLat = activeAddressObj?.latitude
-      let resolvedLng = activeAddressObj?.longitude
-      if (resolvedLat == null || resolvedLng == null) {
-        try {
-          const storedCoords = getCustomerCoordinates(user?.id)
-          if (storedCoords?.lat && storedCoords?.lng) {
-            resolvedLat = Number(storedCoords.lat)
-            resolvedLng = Number(storedCoords.lng)
-          }
-        } catch (_) {}
-      }
-      if (resolvedLat == null || resolvedLng == null) {
-        resolvedLat = 12.7409
-        resolvedLng = 77.8253
+      const deliveryAddress = activeAddressObj?.address || activeAddressObj?.formatted_address
+      if (!deliveryAddress) {
+        setErrorMsg("Please select a delivery address before placing this order.")
+        setIsSubmitting(false)
+        return
       }
 
-      const deliveryDate = vegTiming.deliveryDateStr
-      const payload = {
-        customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
-        phone: user.phone,
-        service_category: "vegetables_quick_delivery",
-        issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items) - ${vegTiming.deliverySlot}`,
-        description: `Quick Commerce Vegetable Order\nDelivery Slot: 6:00 PM – 8:00 PM on ${deliveryDate} (${vegTiming.deliveryDay})\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
-        address: activeAddressObj?.address || "Hosur, Tamil Nadu",
-        latitude: parseFloat(Number(resolvedLat).toFixed(6)),
-        longitude: parseFloat(Number(resolvedLng).toFixed(6)),
-        preferred_date: deliveryDate,
-        preferred_time_slot: "6:00 PM - 8:00 PM",
-        total_amount: grandTotal,
-        payment_method: "ONLINE",
-        payment_status: "paid",
-        cart_data: cart.map(c => ({
-          name: c.name || c.displayName,
-          displayName: c.displayName,
-          unit: c.unit,
-          price: c.price,
-          quantity: c.quantity,
-          image: c.image
-        }))
+      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
+      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
+      // customer's ACTIVE daily_essentials Cart from the backend and
+      // reserves stock atomically, hard-blocking on InsufficientStockError.
+      // No cart_data payload here: unlike the old /booking/ endpoint, this
+      // one is not told what's in the cart, it reads the real Cart rows
+      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
+      // No silent fallback on failure -- a real error (insufficient stock,
+      // network failure, anything) must surface as an error, never a
+      // fabricated success screen.
+      const res = await apiRequest("/orders/grocery/checkout/", {
+        method: "POST",
+        json: { delivery_address: deliveryAddress },
+      })
+
+      if (!res || res.success === false) {
+        setErrorMsg(res?.message || "Failed to place order. Please try again.")
+        setIsSubmitting(false)
+        return
       }
 
-      let res = null
-      try {
-        res = await apiRequest("/booking/", { method: "POST", data: payload })
-      } catch (e) {
-        res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
-      }
+      const order = res.data || {}
+      resetDailyEssentialsCartCache()
 
       setOrderConfirmedData({
-        requestId: res?.data?.request_id || res?.request_id || `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}`,
-        address: activeAddressObj?.address,
-        total: grandTotal,
+        requestId: order.order_number,
+        address: deliveryAddress,
+        total: order.total_amount ?? grandTotal,
         itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
         deliveryDayText: vegTiming.deliveryDay,
         deliverySlot: vegTiming.deliverySlot,
@@ -8776,7 +8857,12 @@ function QuickCommerceCartCheckout({
           : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
       })
     } catch (err) {
-      setErrorMsg(err?.message || "Failed to place order. Please try again.")
+      // GroceryCheckoutView's insufficient-stock response puts the
+      // human-readable text in `message` (and the machine-readable item
+      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
+      // first for other endpoints' sake, so check `message` here explicitly
+      // before falling back to it.
+      setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
     }
@@ -10869,6 +10955,18 @@ export function BookingPage() {
 
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+
+  // Phase 3 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md): explicit
+  // "check out both?" confirmation when the *other* cart also has pending
+  // items. `combinedCheckoutPrompt` holds the submit() args while the
+  // modal is open; `checkoutBothConfirmed` records the customer's answer
+  // once given (or arrives pre-set to true when they already answered
+  // "both" from the Daily Essentials cart drawer, via router state).
+  const [combinedCheckoutPrompt, setCombinedCheckoutPrompt] = useState(null)
+  const [checkoutBothConfirmed, setCheckoutBothConfirmed] = useState(
+    () => routerLocation.state?.combineWithGroceryCheckout === true
+  )
+  const groceryDeliveryAddressFromDrawer = routerLocation.state?.groceryDeliveryAddress || null
   const [showPackageModal, setShowPackageModal] = useState(false)
   const [showSubCategoryChoiceModal, setShowSubCategoryChoiceModal] = useState(false)
   const [dynamicReviews, setDynamicReviews] = useState([])
@@ -11095,7 +11193,23 @@ export function BookingPage() {
     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
   }
 
+  // Public entry point every "Confirm Booking" button already calls.
+  // Phase 3: before actually submitting, check whether the *other* cart
+  // (Daily Essentials) also has pending items and the customer hasn't
+  // already answered the combined-checkout question yet (either from this
+  // modal, or by choosing "both" back in the vegetable cart drawer, which
+  // arrives as router state and pre-sets checkoutBothConfirmed). If so,
+  // pause and ask -- the backend's unified checkout never infers this on
+  // its own, so neither does this.
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
+    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
+      setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
+      return
+    }
+    return performServiceSubmit(paymentMethod, couponCode, tipValue, couponObj, checkoutBothConfirmed)
+  }
+
+  const performServiceSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null, checkoutBoth = false) => {
     if (!user) {
       // Save the full booking context before opening auth — it will be restored on success
       savePendingIntent({
@@ -11253,6 +11367,98 @@ export function BookingPage() {
       data.append("coupon_code", couponCode)
     }
     if (photoFile) data.append("photo", photoFile)
+
+    // Phase 3 combined checkout: POST /api/orders/checkout/ instead of
+    // /api/booking/, wrapping the same fields as a JSON object under
+    // `service` (built directly from the same source variables above, in
+    // parallel to the FormData -- not derived from it, since a JSON
+    // request body needs cart_data as a real array, not the
+    // JSON.stringify'd string multipart form fields require) plus a
+    // `grocery.delivery_address`. Only reachable when the "both" choice
+    // was made with no photoFile attached (CombinedCheckoutConfirmModal
+    // disables that option otherwise), since a file can't travel in a
+    // JSON body -- this never silently drops an attachment.
+    if (checkoutBoth && !photoFile) {
+      const groceryAddress = groceryDeliveryAddressFromDrawer || (formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+      const servicePayload = {
+        customer_name: formData.customer_name,
+        phone: formData.phone,
+        email: formData.email || "",
+        service_category: category?.id || "general",
+        issue_title: finalIssueTitle,
+        description: finalDesc,
+        address: formData.landmark ? formData.address + " | " + formData.landmark : formData.address,
+        flat_house_no: formData.flat_house_no || undefined,
+        landmark: formData.landmark || undefined,
+        saved_address_id: formData.saved_address_id || undefined,
+        latitude: formData.latitude ? Number(parseFloat(formData.latitude).toFixed(6)) : undefined,
+        longitude: formData.longitude ? Number(parseFloat(formData.longitude).toFixed(6)) : undefined,
+        preferred_date: selDate,
+        preferred_time: selTime,
+        total_amount: calculatedGrandTotal,
+        item_total: itemTotal,
+        gst_amount: totalGst,
+        platform_fee: platformFee,
+        discount_amount: discount > 0 ? discount : undefined,
+        tip_amount: tipAmount > 0 ? tipAmount : undefined,
+        cart_data: cart.map(c => ({
+          id: c.id,
+          name: c.name,
+          price: c.price,
+          quantity: c.quantity || 1,
+          gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
+          platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
+          categoryName: c.categoryName || category?.name || "",
+        })),
+        payment_method: backendPaymentMethod,
+        coupon_code: couponCode || undefined,
+      }
+
+      try {
+        const res = await apiRequest("/orders/checkout/", {
+          method: "POST",
+          json: { cart_types: ["services", "daily_essentials"], service: servicePayload, grocery: { delivery_address: groceryAddress } },
+        })
+
+        const serviceOutcome = res?.data?.service_order
+        const groceryOutcome = res?.data?.grocery_order
+
+        if (groceryOutcome?.success) {
+          resetDailyEssentialsCartCache()
+          try { localStorage.setItem("calservice_veg_food_cart", "{}") } catch {}
+        }
+
+        if (serviceOutcome?.success) {
+          const savedData = { ...serviceOutcome.data, paymentMethod: backendPaymentMethod, total_amount: calculatedGrandTotal }
+          setSuccessData(savedData)
+          const bookingTrackingId = String(serviceOutcome.data?.request_id || serviceOutcome.data?.id || "")
+          try {
+            sessionStorage.setItem("calservice_last_booking", JSON.stringify(savedData))
+            sessionStorage.setItem("calservice_active_tracking_id", bookingTrackingId)
+            localStorage.removeItem("calservices_customer_cart")
+            sessionStorage.removeItem("calservices_customer_cart")
+          } catch (e) { }
+          setCart([])
+          // Both outcomes are reported, never silently merged into one --
+          // a grocery failure alongside a successful service booking still
+          // shows the service success screen, with the grocery failure
+          // surfaced separately so it's never mistaken for a blocked or
+          // rolled-back booking.
+          if (!groceryOutcome?.success) {
+            setError(`Your service booking is confirmed. Your grocery order could not be placed: ${groceryOutcome?.message || "please try checking out your Daily Essentials cart again."}`)
+          }
+          setShowPostFlow(true)
+        } else {
+          setError(serviceOutcome?.message || "Your service booking could not be placed. Please try again.")
+        }
+      } catch (err) {
+        setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
@@ -16533,6 +16739,27 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Phase 3 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md): ask before
+          silently checking out only one cart when the other also has items. */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
     </div>
   );
 }

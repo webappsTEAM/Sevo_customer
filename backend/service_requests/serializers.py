@@ -44,6 +44,8 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     service_sort_order = serializers.IntegerField(source="service.sort_order", read_only=True)
     service_image = serializers.CharField(source="service.image", read_only=True)
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    in_stock = serializers.SerializerMethodField()
+    max_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -53,12 +55,27 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
+            "in_stock", "max_quantity",
         ]
 
     def get_category(self, obj):
         if obj.service_id and obj.service:
             return obj.service.category_id
         return None
+
+    def get_stock_status(self, obj):
+        if not hasattr(self, "_stock_status_cache"):
+            self._stock_status_cache = {}
+        if obj.pk not in self._stock_status_cache:
+            from inventory.selectors.vegetable_stock_selectors import get_stock_status
+            self._stock_status_cache[obj.pk] = get_stock_status(obj)
+        return self._stock_status_cache[obj.pk]
+
+    def get_in_stock(self, obj):
+        return self.get_stock_status(obj)["in_stock"]
+
+    def get_max_quantity(self, obj):
+        return self.get_stock_status(obj)["max_quantity"]
 
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
@@ -155,6 +172,8 @@ class PackageSerializer(serializers.ModelSerializer):
     service_image = serializers.CharField(source="service.image", read_only=True, allow_null=True, allow_blank=True)
     service_customization = serializers.JSONField(source="service.customization", read_only=True)
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    in_stock = serializers.SerializerMethodField()
+    max_quantity = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
 
     class Meta:

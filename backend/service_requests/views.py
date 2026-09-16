@@ -749,6 +749,35 @@ class BookingCreateView(APIView):
             with transaction.atomic():
                 sr = serializer.save(**save_kwargs)
 
+                # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
+                # pattern in orders/views.py, see DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md
+                # Phase 3). Uses the already-built BookingService.extract_vegetable_items /
+                # reserve_stock_for_booking_items, with the real permanent sr.request_id as
+                # booking_ref -- this is what BookingService.create_service_request_booking
+                # already does, wired in here since this view builds the ServiceRequest
+                # inline rather than through that helper. Runs immediately after sr is
+                # created so a failure here rolls back cleanly before any coupon usage,
+                # Order/OrderItem wrapper, or notification side effects below.
+                from service_requests.services.booking_service import BookingService
+                from inventory.services.vegetable_stock_service import InsufficientStockError, reserve_stock_for_booking_items
+
+                veg_items = BookingService.extract_vegetable_items(sr.cart_data)
+                if veg_items:
+                    try:
+                        with transaction.atomic():
+                            reserve_stock_for_booking_items(
+                                items=veg_items, company=company, booking_ref=sr.request_id,
+                            )
+                    except InsufficientStockError:
+                        sr.delete()
+                        if idem_cache_key:
+                            from django.core.cache import cache
+                            cache.delete(idem_cache_key)
+                        return _error(
+                            "This quantity is no longer available. Please reduce the quantity and try again.",
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 # Multi-stop GT routing: persist TripStop records if stops provided in request
                 raw_stops = request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")
                 if not raw_stops and clean_cart and isinstance(clean_cart, list) and len(clean_cart) > 0:

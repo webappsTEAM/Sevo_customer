@@ -7,6 +7,8 @@ import {
 import { routes } from "../routes.js"
 import { useNavigate } from "react-router-dom"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
+import { hasPendingServicesCart } from "../../services/combinedCartCheck.js"
+import { CombinedCheckoutConfirmModal } from "./CombinedCheckoutConfirmModal.jsx"
 
 /**
  * Blinkit / Quick Commerce Style Cart Drawer for Farm-Fresh Vegetables & Groceries
@@ -22,6 +24,14 @@ export function VegCartDrawerModal({
   deliveryAddressType = "Home",
   onChangeAddress,
   isServiceAvailable = true,
+  // When provided (VegetableFullScreenPage passes its own handleUpdateQty,
+  // which mirrors changes to the backend Cart -- see
+  // dailyEssentialsCartSync.js), quantity changes made from inside the
+  // drawer go through it instead of mutating foodCart locally, so the
+  // drawer's own +/- buttons stay in sync with the backend too. Falls back
+  // to local-only setFoodCart when not provided, for any other caller of
+  // this component that hasn't been wired up yet.
+  onUpdateCartQty,
 }) {
   const navigate = useNavigate()
   const [selectedTip, setSelectedTip] = useState(0)
@@ -29,6 +39,11 @@ export function VegCartDrawerModal({
   const [copiedShare, setCopiedShare] = useState(false)
   const [drawerToast, setDrawerToast] = useState("")
   const vegTiming = getVegetableTimingInfo()
+  // Phase 3 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md): ask before
+  // silently checking out only the grocery cart when a service booking is
+  // also pending. Mirrors the same decision made on the services side in
+  // BookingPage.jsx.
+  const [showCombinedPrompt, setShowCombinedPrompt] = useState(false)
 
   const showDrawerStockToast = (msg = "Limited stock — can't add more right now") => {
     setDrawerToast(msg)
@@ -145,6 +160,11 @@ export function VegCartDrawerModal({
       }
     }
 
+    if (typeof onUpdateCartQty === "function") {
+      onUpdateCartQty(key, delta)
+      return
+    }
+
     if (typeof setFoodCart === "function") {
       setFoodCart((prev) => {
         const current = prev[key] || 0
@@ -173,8 +193,7 @@ export function VegCartDrawerModal({
     }
   }
 
-  const handleProceedToPay = () => {
-    if (itemsList.length === 0) return
+  const proceedToGroceryCheckoutOnly = () => {
     onClose()
     navigate(routes.booking_checkout, {
       state: {
@@ -203,6 +222,25 @@ export function VegCartDrawerModal({
         vegTiming: vegTiming,
       },
     })
+  }
+
+  const proceedToCombinedCheckout = () => {
+    onClose()
+    navigate(routes.booking, {
+      state: {
+        combineWithGroceryCheckout: true,
+        groceryDeliveryAddress: deliveryAddress,
+      },
+    })
+  }
+
+  const handleProceedToPay = () => {
+    if (itemsList.length === 0) return
+    if (hasPendingServicesCart()) {
+      setShowCombinedPrompt(true)
+      return
+    }
+    proceedToGroceryCheckoutOnly()
   }
 
   return (
@@ -527,6 +565,21 @@ export function VegCartDrawerModal({
           </div>
         )}
       </motion.div>
+
+      <CombinedCheckoutConfirmModal
+        isOpen={showCombinedPrompt}
+        onClose={() => setShowCombinedPrompt(false)}
+        onChoose={(choice) => {
+          setShowCombinedPrompt(false)
+          if (choice === "both") {
+            proceedToCombinedCheckout()
+          } else {
+            proceedToGroceryCheckoutOnly()
+          }
+        }}
+        thisCartLabel="your grocery order"
+        otherCartLabel="a service booking"
+      />
     </div>
   )
 }
