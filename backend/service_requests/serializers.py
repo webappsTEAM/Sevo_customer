@@ -722,11 +722,17 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         else:
             items = [source]
 
-        ids = [
-            str(o.id) for o in items
-            if getattr(o, "id", None) is not None
-            and getattr(o, "status", None) not in ["cancelled", "rejected"]
-        ]
+        ids = []
+        req_id_to_id = {}
+        for o in items:
+            if getattr(o, "id", None) is not None and getattr(o, "status", None) not in ["cancelled", "rejected"]:
+                sid = str(o.id)
+                ids.append(sid)
+                rid = getattr(o, "request_id", None)
+                if rid:
+                    s_rid = str(rid)
+                    ids.append(s_rid)
+                    req_id_to_id[s_rid] = sid
 
         otp_map = {}
         if ids:
@@ -747,9 +753,12 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
                             continue
                         m = re.search(r'OTP\s+([0-9]{6})', message)
                         if m:
+                            code = m.group(1)
                             # Ascending order means the last row for an id
                             # wins, matching the previous "most recent" query.
-                            otp_map[str(related_id)] = m.group(1)
+                            otp_map[str(related_id)] = code
+                            if str(related_id) in req_id_to_id:
+                                otp_map[req_id_to_id[str(related_id)]] = code
             except Exception:
                 otp_map = {}
 

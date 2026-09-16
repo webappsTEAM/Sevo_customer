@@ -1631,10 +1631,10 @@ def _build_tracking_payload(sr, has_full_access):
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT message FROM workforce_notification "
-                    "WHERE related_object_id = %s "
+                    "WHERE related_object_id IN (%s, %s) "
                     "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
                     "ORDER BY created_at DESC LIMIT 1;",
-                    [str(sr.id)],
+                    [str(sr.id), str(sr.request_id or "")],
                 )
                 row = cursor.fetchone()
                 if row and row[0]:

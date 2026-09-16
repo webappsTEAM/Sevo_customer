@@ -5698,7 +5698,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   </button>
                 </div>
               ) : realBookings.filter(b => !b.parent_request).map(b => {
-                const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
+                const isRescheduleEligible = !b.is_search_expired && ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
                     return "Reschedule is unavailable because this service has already been completed."
@@ -5716,6 +5716,46 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 }
                 const noticeMsg = getRescheduleNotice(b.status)
 
+                const isLogisticsCategory = Boolean(
+                  (b.service_category || '').toLowerCase().includes('goods') ||
+                  (b.service_category || '').toLowerCase().includes('truck') ||
+                  (b.service_category || '').toLowerCase().includes('two_wheeler') ||
+                  (b.service_category || '').toLowerCase().includes('packers') ||
+                  (b.service_category || '').toLowerCase().includes('transport')
+                );
+                const isStaleUnassigned = ['unassigned', 'new_request', 'draft'].includes(b.status) &&
+                  isLogisticsCategory &&
+                  !b.assigned_employee_id &&
+                  !b.technician_name &&
+                  b.created_at &&
+                  (Date.now() - new Date(b.created_at).getTime() > 10 * 60 * 1000);
+                const isCancelledExpired = (b.status === 'cancelled' || b.status === 'rejected') && (
+                  (b.cancellation_reason || '').toLowerCase().includes('expired') ||
+                  (b.cancellation_reason || '').toLowerCase().includes('search_expired') ||
+                  (b.cancellation_note || '').toLowerCase().includes('expired')
+                );
+                const isSearchExpired = Boolean(b.is_search_expired || isStaleUnassigned || isCancelledExpired);
+
+                let badgeLabel = b.status_display || b.status;
+                let badgeStyle = { background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' };
+
+                if (isSearchExpired) {
+                  badgeLabel = 'Search Expired';
+                  badgeStyle = { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' };
+                } else if (['cancelled', 'rejected'].includes(b.status)) {
+                  badgeLabel = b.status_display || (b.status === 'cancelled' ? 'Cancelled' : 'Rejected');
+                  badgeStyle = { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' };
+                } else if (['completed', 'closed', 'verified', 'feedback_received'].includes(b.status)) {
+                  badgeLabel = b.status_display || 'Completed';
+                  badgeStyle = { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' };
+                } else if (['in_progress', 'on_the_way', 'arrived', 'accepted', 'assigned', 'started', 'dispatched'].includes(b.status)) {
+                  badgeLabel = b.status_display || 'Active';
+                  badgeStyle = { background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' };
+                } else if (['unassigned', 'new_request', 'draft'].includes(b.status)) {
+                  badgeLabel = b.status_display || 'Looking for Partner';
+                  badgeStyle = { background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' };
+                }
+
                 return (
                   <React.Fragment key={b.id}>
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
@@ -5723,7 +5763,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
-                            <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
+                            <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, ...badgeStyle }}>{badgeLabel}</span>
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
@@ -5747,11 +5787,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
-                            {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
+                          <div style={{
+                            fontWeight: 900,
+                            color: isSearchExpired || ['cancelled', 'rejected'].includes(b.status)
+                              ? '#dc2626'
+                              : ['paid', 'collected'].includes(b.payment_status)
+                                ? '#059669'
+                                : '#d97706',
+                            marginBottom: 12,
+                            fontSize: '1.05rem'
+                          }}>
+                            {isSearchExpired
+                              ? 'Expired'
+                              : ['cancelled', 'rejected'].includes(b.status)
+                                ? (b.status === 'cancelled' ? 'Cancelled' : 'Rejected')
+                                : (b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending'))}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                            {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            {Boolean(!isSearchExpired && !['cancelled', 'rejected'].includes(b.status) && (b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -5762,6 +5815,39 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 onMouseOut={e => e.currentTarget.style.transform = 'none'}
                               >
                                 <MapPin size={14} /> Track Live
+                              </button>
+                            )}
+                            {(isSearchExpired || ['cancelled', 'rejected'].includes(b.status)) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const cat = (b.service_category || '').toLowerCase()
+                                  let targetUrl = '/services'
+                                  if (cat.includes('truck')) targetUrl = '/mini-truck-booking-hosur'
+                                  else if (cat.includes('two_wheeler')) targetUrl = '/two-wheeler-booking-hosur'
+                                  else if (cat.includes('packers')) targetUrl = '/packers-and-movers-hosur'
+                                  else if (cat.includes('goods')) targetUrl = '/mini-truck-booking-hosur'
+                                  window.location.href = targetUrl
+                                }}
+                                style={{
+                                  fontSize: '0.85rem',
+                                  padding: '8px 16px',
+                                  borderRadius: 8,
+                                  border: 'none',
+                                  background: '#059669',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  color: 'white',
+                                  boxShadow: '0 2px 6px rgba(5,150,105,0.25)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  transition: 'background 0.2s'
+                                }}
+                                onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                                onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                              >
+                                <RefreshCw size={13} /> Book Again
                               </button>
                             )}
                             <button
@@ -5865,8 +5951,67 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
+                        {/* Search Window Expired Notice */}
+                        {isSearchExpired && (
+                          <div style={{
+                            background: '#fef2f2',
+                            border: '1.5px solid #fecaca',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            marginBottom: 16,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            boxShadow: '0 2px 8px rgba(220,38,38,0.06)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontSize: '1.2rem', flexShrink: 0 }}>
+                                ⏱️
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  Search Window Expired
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#b91c1c', marginTop: 2, fontWeight: 500 }}>
+                                  No delivery partner was available within the 10-minute search window. Any temporary payment hold has been released. You can place a new request or schedule for later.
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const cat = (b.service_category || '').toLowerCase()
+                                let targetUrl = '/services'
+                                if (cat.includes('truck')) targetUrl = '/mini-truck-booking-hosur'
+                                else if (cat.includes('two_wheeler')) targetUrl = '/two-wheeler-booking-hosur'
+                                else if (cat.includes('packers')) targetUrl = '/packers-and-movers-hosur'
+                                else if (cat.includes('goods')) targetUrl = '/mini-truck-booking-hosur'
+                                window.location.href = targetUrl
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                background: '#dc2626',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 8,
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                boxShadow: '0 2px 6px rgba(220,38,38,0.25)',
+                                flexShrink: 0
+                              }}
+                              onMouseOver={e => e.currentTarget.style.background = '#b91c1c'}
+                              onMouseOut={e => e.currentTarget.style.background = '#dc2626'}
+                            >
+                              + Book Again
+                            </button>
+                          </div>
+                        )}
+
                         {/* Cash Collection Confirmation OTP Box */}
-                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+                        {!isSearchExpired && (b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
                             border: '1.5px solid #10b981',
@@ -5920,7 +6065,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         )}
 
                         {/* Service / Pickup Start OTP Box */}
-                        {b.start_otp && !['cancelled', 'rejected'].includes(b.status) && (
+                        {b.start_otp && !isSearchExpired && !['cancelled', 'rejected'].includes(b.status) && (
                           <div style={{
                             background: '#fff7ed',
                             border: '1.5px dashed #f97316',
@@ -5999,7 +6144,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                     {isLogisticsCategory ? 'Assigned Driver' : 'Assigned Technician'}
                                   </div>
                                   <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                    <span>👤 {hasTech ? techName : (b.status === 'assigned' ? (isLogisticsCategory ? 'Assigning driver...' : 'Finding service professional...') : (isLogisticsCategory ? 'Driver not assigned yet' : 'Not assigned yet'))}</span>
+                                    <span>👤 {hasTech ? techName : (isSearchExpired ? (isLogisticsCategory ? 'No driver available (Search expired)' : 'No partner available (Search expired)') : (b.status === 'assigned' ? (isLogisticsCategory ? 'Assigning driver...' : 'Finding service professional...') : (isLogisticsCategory ? 'Driver not assigned yet' : 'Not assigned yet')))}</span>
                                     {hasTech && (
                                       <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                                         {isLogisticsCategory ? '✓ Verified Driver' : '✓ Verified Partner'}
