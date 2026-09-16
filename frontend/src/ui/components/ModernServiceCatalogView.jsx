@@ -6,12 +6,14 @@ import {
   Shield, Clock, Wrench, ShieldCheck, CheckCircle2,
   Settings, Home, MapPin, ChevronRight, Info, Check,
   Sparkles, Award, Tag, Headphones, ArrowRight, X,
-  Layers, Star, ChevronLeft, SlidersHorizontal, AlertCircle
+  Layers, Star, ChevronLeft, SlidersHorizontal, AlertCircle,
+  Trash2, Calculator, Calendar
 } from "lucide-react"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { apiRequest } from "../../api/client.js"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { EditableText, EditableImage } from "./SuperAdminEditControls.jsx"
+import { getCustomerSelectedAddress } from "../../utils/customerLocationStorage.js"
 
 // Feature icons map for dynamic icon resolution
 const SERVICE_ICON_MAP = {
@@ -61,6 +63,75 @@ export function ModernServiceCatalogView({
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [detailsPackage, setDetailsPackage] = useState(null) // package currently shown in the "See details" modal
 
+  // categoryProp (from LandingPage's URL-based lookup against the old static
+  // categoriesData.js list) almost never matches a real category for
+  // anything created in the admin catalog -- that static list only has
+  // ~14 hardcoded legacy ids (hvac, cleaning, pest_control, ...) and none of
+  // them are "ac_appliance" or "home_pest_control" etc, so LandingPage falls
+  // back to a fake { id: <url-slug>, name: <url-slug> } object with no real
+  // database id/slug at all. Filtering Services/Packages against that fake
+  // id always returned zero matches. liveCategory is the REAL CatalogCategory
+  // row (fetched below by matching the url slug against the live catalog),
+  // and once resolved it takes over as the source of truth for both
+  // filtering and display (name/image/description), while categoryProp
+  // still covers the instant before that fetch resolves.
+  const [liveCategory, setLiveCategory] = useState(null)
+  const category = liveCategory || categoryProp
+
+  // Trade detection: Painting and Masonry follow a Site Consultation & Laser Measurement
+  // workflow where base_price is a rate-card unit rate (e.g. ₹18/sq.ft) and initial booking
+  // is for an on-site consultation & inspection visit.
+  const isConsultationCategory = useMemo(() => {
+    const k = (categoryProp?.slug || categoryProp?.id || categoryProp?.name || category?.slug || category?.id || category?.name || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
+    return k.includes("paint") || k.includes("mason")
+  }, [categoryProp, category])
+
+  // Geofencing consultation fee from Hosur center (12.7409, 77.8253):
+  // Distance <= 15 km -> Fee: ₹0 (FREE), Convenience Fee: ₹0, GST: ₹0
+  // Distance > 15 km -> Fee: ₹300, Convenience Fee: ₹0, GST: ₹0, Total: ₹300
+  const consultationFeeDetails = useMemo(() => {
+    if (!isConsultationCategory) return { fee: 0, isOver15km: false, distanceKm: 0, convenienceFee: 0, gst: 0, total: 0 }
+    let lat = 12.7409
+    let lng = 77.8253
+    try {
+      const saved = getCustomerSelectedAddress()
+      if (saved?.latitude && saved?.longitude) {
+        lat = parseFloat(saved.latitude)
+        lng = parseFloat(saved.longitude)
+      }
+    } catch (e) {}
+
+    const R = 6371 // km
+    const dLat = (lat - 12.7409) * Math.PI / 180
+    const dLon = (lng - 77.8253) * Math.PI / 180
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(12.7409 * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    const distKm = R * c
+
+    if (distKm > 15) {
+      const baseFee = 300
+      return {
+        fee: baseFee,
+        isOver15km: true,
+        distanceKm: Math.round(distKm * 10) / 10,
+        convenienceFee: 0,
+        gst: 0,
+        total: baseFee
+      }
+    }
+
+    return {
+      fee: 0,
+      isOver15km: false,
+      distanceKm: Math.round(distKm * 10) / 10,
+      convenienceFee: 0,
+      gst: 0,
+      total: 0
+    }
+  }, [isConsultationCategory, displayLocationText])
+
   // Same shared Edit Mode switch as the homepage/checkout/service modals (see
   // main.jsx's EditModeProvider) -- when a Super Admin has it on (or opened
   // this page via the admin panel's Edit Preview iframe), package name,
@@ -94,6 +165,33 @@ export function ModernServiceCatalogView({
   const cartItems = Array.isArray(cart) ? cart : localCart
   const updateCart = typeof setCart === "function" ? setCart : setLocalCart
 
+  // Keep consultation cart items dynamically in sync with distance and geofenced fee
+  useEffect(() => {
+    if (!isConsultationCategory) return
+    updateCart((prev) => {
+      const list = Array.isArray(prev) ? prev : []
+      let hasChanged = false
+      const next = list.map(item => {
+        if (item.is_consultation || (item.name && item.name.includes("(Site Consultation"))) {
+          const targetPrice = consultationFeeDetails.fee
+          const targetFee = consultationFeeDetails.convenienceFee
+          const targetGst = consultationFeeDetails.gst
+          if (item.price !== targetPrice || item.platform_fee !== targetFee || item.gst !== targetGst) {
+            hasChanged = true
+            return {
+              ...item,
+              price: targetPrice,
+              platform_fee: targetFee,
+              gst: targetGst
+            }
+          }
+        }
+        return item
+      })
+      return hasChanged ? next : prev
+    })
+  }, [consultationFeeDetails, isConsultationCategory])
+
   const getCartQty = (pkg) => cartItems.find(it => it.db_id === pkg.id)?.quantity || 0
 
   const setCartQty = (pkg, qty) => {
@@ -107,6 +205,32 @@ export function ModernServiceCatalogView({
       if (qty <= 0) {
         return idx === -1 ? list : list.filter((_, i) => i !== idx)
       }
+
+      if (isConsultationCategory) {
+        const consultItem = {
+          id: `pkg-${pkg.id}`,
+          db_id: pkg.id,
+          name: `${pkg.name} (Site Consultation)`,
+          price: consultationFeeDetails.fee,
+          platform_fee: consultationFeeDetails.convenienceFee,
+          gst: consultationFeeDetails.gst,
+          unit_rate: unitPrice,
+          unit_rate_display: `₹${unitPrice}/sq.ft`,
+          duration: pkg.duration || "45 mins",
+          quantity: 1,
+          is_consultation: true,
+          image: pkg.image || activeSubService?.image || category?.image || "",
+          category_id: category?.id,
+          category_name: category?.name,
+          service_id: activeSubService?.id,
+          service_name: activeSubService?.name,
+        }
+        if (idx === -1) return [...list, consultItem]
+        const next = [...list]
+        next[idx] = consultItem
+        return next
+      }
+
       const item = {
         id: `pkg-${pkg.id}`,
         db_id: pkg.id,
@@ -146,25 +270,14 @@ export function ModernServiceCatalogView({
 
   const cartTotalQty = cartItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
   const cartSubtotal = cartItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
-  // One convenience fee per distinct package line (not multiplied by its
-  // quantity) -- an order-level charge per service type queued, not per unit.
-  const cartConvenienceFee = cartItems.reduce((sum, it) => sum + (Number(it.platform_fee) || 29), 0)
-  const cartTotal = cartSubtotal + cartConvenienceFee
-
-  // categoryProp (from LandingPage's URL-based lookup against the old static
-  // categoriesData.js list) almost never matches a real category for
-  // anything created in the admin catalog -- that static list only has
-  // ~14 hardcoded legacy ids (hvac, cleaning, pest_control, ...) and none of
-  // them are "ac_appliance" or "home_pest_control" etc, so LandingPage falls
-  // back to a fake { id: <url-slug>, name: <url-slug> } object with no real
-  // database id/slug at all. Filtering Services/Packages against that fake
-  // id always returned zero matches. liveCategory is the REAL CatalogCategory
-  // row (fetched below by matching the url slug against the live catalog),
-  // and once resolved it takes over as the source of truth for both
-  // filtering and display (name/image/description), while categoryProp
-  // still covers the instant before that fetch resolves.
-  const [liveCategory, setLiveCategory] = useState(null)
-  const category = liveCategory || categoryProp
+  // For consultation categories, convenience fee and GST apply only when beyond 15 km
+  const cartConvenienceFee = isConsultationCategory
+    ? (cartItems.length > 0 ? consultationFeeDetails.convenienceFee : 0)
+    : cartItems.reduce((sum, it) => sum + (Number(it.platform_fee) || 29), 0)
+  const cartGst = isConsultationCategory
+    ? (cartItems.length > 0 ? consultationFeeDetails.gst : 0)
+    : 0
+  const cartTotal = cartSubtotal + cartConvenienceFee + cartGst
 
   const rawCatKey = (categoryProp?.id || categoryProp?.slug || categoryProp?.name || "").toString().toLowerCase()
   // Strips everything except letters/digits so "ac_appliance" (url slug),
@@ -1086,16 +1199,27 @@ export function ModernServiceCatalogView({
                       </div>
 
                       {/* Price + Action */}
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:w-44 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                        <div className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-1">
-                          <span className="text-lg font-black text-slate-900">
-                            {serviceEditMode && pkg.id ? (
-                              <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
-                            ) : (
-                              `₹${finalPrice.toLocaleString("en-IN")}`
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:w-48 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                        <div className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0.5">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-lg font-black text-slate-900">
+                              {serviceEditMode && pkg.id ? (
+                                <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
+                              ) : (
+                                `₹${finalPrice.toLocaleString("en-IN")}`
+                              )}
+                            </span>
+                            {isConsultationCategory && (
+                              <span className="text-xs font-bold text-slate-500">
+                                / sq.ft
+                              </span>
                             )}
-                          </span>
-                          {hasOffer && (
+                          </div>
+                          {isConsultationCategory ? (
+                            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
+                              Rate Card Unit
+                            </div>
+                          ) : hasOffer ? (
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-semibold text-slate-400 line-through">
                                 ₹{mrp.toLocaleString("en-IN")}
@@ -1104,14 +1228,10 @@ export function ModernServiceCatalogView({
                                 {discountPct}% OFF
                               </span>
                             </div>
-                          )}
+                          ) : null}
                         </div>
 
-                        {/* Quantity stepper: lets the same package be queued
-                            multiple times, and multiple different packages
-                            (across services/categories) all stay in the cart
-                            at once -- replaces the old single "Select
-                            Package" radio-style button. */}
+                        {/* Quantity stepper button (unified natural UI) */}
                         {qty === 0 ? (
                           <button
                             type="button"
@@ -1187,55 +1307,60 @@ export function ModernServiceCatalogView({
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
-                  {cartItems.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 border border-slate-100"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                          {item.image ? (
-                            <img
-                              src={resolveImageUrl(item.image)}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Wrench className="w-4 h-4 text-emerald-700" />
-                          )}
+                  {cartItems.map(item => {
+                    const isConsult = item.is_consultation || (item.name && item.name.includes("(Site Consultation"))
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 border border-slate-100"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                            {item.image ? (
+                              <img
+                                src={resolveImageUrl(item.image)}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Wrench className="w-4 h-4 text-emerald-700" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[11.5px] font-black text-slate-900 truncate">
+                              {item.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              {isConsult
+                                ? `${item.unit_rate_display || `₹${item.unit_rate || 18}/sq.ft`} × ${item.quantity}`
+                                : `₹${Number(item.price).toLocaleString("en-IN")} × ${item.quantity}`}
+                            </div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-[11.5px] font-black text-slate-900 truncate">
-                            {item.name}
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
-                            ₹{Number(item.price).toLocaleString("en-IN")} × {item.quantity}
-                          </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setCartLineQty(item.db_id, item.quantity - 1)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="text-[11px] font-black text-slate-900 min-w-[1rem] text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCartLineQty(item.db_id, item.quantity + 1)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setCartLineQty(item.db_id, item.quantity - 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
-                          aria-label="Decrease quantity"
-                        >
-                          −
-                        </button>
-                        <span className="text-[11px] font-black text-slate-900 min-w-[1rem] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCartLineQty(item.db_id, item.quantity + 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
-                          aria-label="Increase quantity"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
@@ -1243,9 +1368,16 @@ export function ModernServiceCatalogView({
               <div className="flex items-start justify-between gap-2.5 p-3 rounded-2xl bg-slate-50/80 border border-slate-100">
                 <div className="flex items-start gap-2 min-w-0">
                   <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                  <span className="text-xs font-medium text-slate-700 line-clamp-2 leading-tight">
-                    {displayLocationText}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-medium text-slate-700 line-clamp-2 leading-tight">
+                      {displayLocationText}
+                    </span>
+                    {isConsultationCategory && (
+                      <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
+                        {consultationFeeDetails.distanceKm > 0 ? `Distance: ~${consultationFeeDetails.distanceKm} km` : "Hosur Center"} • {consultationFeeDetails.isOver15km ? "Chargeable Visit (> 15 km)" : "Standard Consultation Zone (≤ 15 km)"}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {typeof onOpenAddressPicker === "function" && (
                   <button
@@ -1260,23 +1392,72 @@ export function ModernServiceCatalogView({
 
               {/* Cost Breakdown */}
               <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
-                <div className="flex items-center justify-between text-slate-600 font-medium">
-                  <span>Item Total</span>
-                  <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString("en-IN")}</span>
-                </div>
+                {isConsultationCategory ? (
+                  <>
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <div className="flex items-center gap-1">
+                        <span>Site Visit & Inspection</span>
+                        <span className="text-[10px] text-slate-400">
+                          ({consultationFeeDetails.distanceKm > 0 ? `${consultationFeeDetails.distanceKm} km` : "Hosur Area"})
+                        </span>
+                      </div>
+                      <span className="font-bold text-slate-900">
+                        {consultationFeeDetails.fee > 0 ? `₹${consultationFeeDetails.fee}` : "₹0 (≤ 15 km)"}
+                      </span>
+                    </div>
 
-                <div className="flex items-center justify-between text-slate-600 font-medium">
-                  <div className="flex items-center gap-1">
-                    <span>Convenience Fee</span>
-                    <Info className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                  <span className="font-bold text-slate-900">₹{cartConvenienceFee.toLocaleString("en-IN")}</span>
-                </div>
+                    {consultationFeeDetails.convenienceFee > 0 && (
+                      <div className="flex items-center justify-between text-slate-600 font-medium">
+                        <div className="flex items-center gap-1">
+                          <span>Convenience Fee</span>
+                          <Info className="w-3.5 h-3.5 text-slate-400" />
+                        </div>
+                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.convenienceFee}</span>
+                      </div>
+                    )}
 
-                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                  <span className="text-sm font-black text-slate-900">Total Amount</span>
-                  <span className="text-xl font-black text-emerald-700">₹{cartTotal.toLocaleString("en-IN")}</span>
-                </div>
+                    {consultationFeeDetails.gst > 0 && (
+                      <div className="flex items-center justify-between text-slate-600 font-medium">
+                        <div className="flex items-center gap-1">
+                          <span>Taxes & GST (18%)</span>
+                        </div>
+                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.gst}</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-sm font-black text-slate-900">Total Amount</span>
+                      <span className="text-xl font-black text-emerald-700">
+                        ₹{cartTotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[10.5px] text-amber-900 leading-snug">
+                      <span className="font-bold">Inspection Notice: </span>
+                      An expert will visit for precision digital laser measurement and generate an itemized quote based on rate card.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <span>Item Total</span>
+                      <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <div className="flex items-center gap-1">
+                        <span>Convenience Fee</span>
+                        <Info className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                      <span className="font-bold text-slate-900">₹{cartConvenienceFee.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-sm font-black text-slate-900">Total Amount</span>
+                      <span className="text-xl font-black text-emerald-700">₹{cartTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Full-width CTA Button */}
@@ -1290,7 +1471,7 @@ export function ModernServiceCatalogView({
                     : "bg-[#0A7E6C] hover:bg-[#086a5b] cursor-pointer hover:shadow-md"
                 }`}
               >
-                <span>Proceed to Schedule</span>
+                <span>{isConsultationCategory ? "Book Consultation" : "Proceed to Schedule"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -1408,8 +1589,13 @@ export function ModernServiceCatalogView({
                           <div className="flex items-baseline gap-2">
                             <span className="text-xl font-black text-slate-900">
                               ₹{finalPrice.toLocaleString("en-IN")}
+                              {isConsultationCategory && <span className="text-xs font-bold text-slate-500"> / sq.ft</span>}
                             </span>
-                            {hasOffer && (
+                            {isConsultationCategory ? (
+                              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
+                                Rate Card Unit
+                              </span>
+                            ) : hasOffer ? (
                               <>
                                 <span className="text-xs font-semibold text-slate-400 line-through">
                                   ₹{mrp.toLocaleString("en-IN")}
@@ -1418,7 +1604,7 @@ export function ModernServiceCatalogView({
                                   {discountPct}% OFF
                                 </span>
                               </>
-                            )}
+                            ) : null}
                           </div>
                           <p className="text-xs text-slate-500">
                             {pkg.short_description || pkg.description}
@@ -1620,8 +1806,12 @@ export function ModernServiceCatalogView({
                 {cartTotalQty}
               </div>
               <div className="min-w-0">
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cart Total</div>
-                <div className="text-sm font-black text-white truncate">₹{Number(cartTotal).toLocaleString("en-IN")}</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  {isConsultationCategory ? "Consultation Visit" : "Cart Total"}
+                </div>
+                <div className="text-sm font-black text-white truncate">
+                  {cartTotal > 0 ? `₹${Number(cartTotal).toLocaleString("en-IN")}` : "₹0"}
+                </div>
               </div>
             </div>
             <button
