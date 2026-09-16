@@ -386,6 +386,19 @@ function generateAvatarUrl(name) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff&size=150`;
 }
 
+export function isConsultationItem(item, category) {
+  if (!item) return false;
+  if (item.is_consultation) return true;
+  const n = (item.name || item.title || item.service_name || "").toLowerCase();
+  const id = String(item.id || item.db_id || "").toLowerCase();
+  const c = (item.categoryName || category?.name || category?.id || category?.slug || "").toLowerCase();
+  if (n.includes("(site consultation)") || n.includes("site consultation") || n.includes("site inspection") || n.includes("free site inspection") || n.includes("consultation") || n.includes("inspection")) return true;
+  if (c.includes("paint") || c.includes("mason")) {
+    if (n.includes("consultation") || n.includes("inspection") || id.includes("paint") || id.includes("mason") || id.includes("wp-") || n.includes("exterior") || n.includes("interior") || n.includes("wall") || n.includes("tile") || n.includes("crack") || n.includes("waterproof")) return true;
+  }
+  return false;
+}
+
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    HELPERS
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
@@ -1403,11 +1416,20 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
 function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const isFreeCategory = totalPrice === 0 && (category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint")))))
-  const totalGst = isFreeCategory ? 0 : (cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0) : 0)
+  const isPaintingOrMason = Boolean(
+    category?.id === "painting" ||
+    category?.id === "mason" ||
+    category?.slug === "painting" ||
+    category?.slug === "mason" ||
+    category?.slug === "masonry" ||
+    (cart && cart.some(c => isConsultationItem(c, category)))
+  );
+  const isFreeCategory = totalPrice === 0 && isPaintingOrMason;
+  const totalGst = isPaintingOrMason ? 0 : (cart && cart.length > 0 ? cart.reduce((a, c) => isConsultationItem(c, category) ? a : a + (c.price * c.quantity * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0) : 0)
   const roundedGst = Math.round(totalGst)
-  const gstRate = cart && cart.length > 0 && cart[0].gst_rate !== undefined ? Number(cart[0].gst_rate) : 18
-  const platformFee = totalPrice === 0 || isFreeCategory ? 0 : (cart && cart.length > 0 ? Math.max(29, ...cart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29)) : 29)
+  const gstRate = isPaintingOrMason ? 0 : (cart && cart.length > 0 && cart[0].gst_rate !== undefined ? Number(cart[0].gst_rate) : 18)
+  const nonConsultCart = cart ? cart.filter(c => !isConsultationItem(c, category)) : []
+  const platformFee = totalPrice === 0 || isPaintingOrMason || nonConsultCart.length === 0 ? 0 : Math.max(29, ...nonConsultCart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29))
   const grandTotal = totalPrice + roundedGst + platformFee
 
   // Urban time slots: Morning / Afternoon / Evening
@@ -1950,12 +1972,22 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const isFreeCategory = totalPrice === 0 && (category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint")))))
+  const isPaintingOrMason = Boolean(
+    category?.id === "painting" ||
+    category?.id === "mason" ||
+    category?.slug === "painting" ||
+    category?.slug === "mason" ||
+    category?.slug === "masonry" ||
+    (cart && cart.some(c => isConsultationItem(c, category))) ||
+    (pkg && isConsultationItem(pkg, category))
+  );
+  const isFreeCategory = totalPrice === 0 && isPaintingOrMason;
   const itemsList = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
-  const totalGst = isFreeCategory ? 0 : itemsList.reduce((a, c) => a + ((c.price || 0) * (c.quantity || 1) * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0)
+  const totalGst = isPaintingOrMason ? 0 : itemsList.reduce((a, c) => isConsultationItem(c, category) ? a : a + ((c.price || 0) * (c.quantity || 1) * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0)
   const roundedGst = Math.round(totalGst)
-  const gstRate = itemsList.length > 0 && itemsList[0].gst_rate !== undefined ? Number(itemsList[0].gst_rate) : (pkg?.gst_rate !== undefined ? Number(pkg.gst_rate) : 18)
-  const platformFee = totalPrice === 0 || isFreeCategory ? 0 : ((itemsList.length > 0) ? Math.max(29, ...itemsList.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29)) : 29)
+  const gstRate = isPaintingOrMason ? 0 : (itemsList.length > 0 && itemsList[0].gst_rate !== undefined ? Number(itemsList[0].gst_rate) : (pkg?.gst_rate !== undefined ? Number(pkg.gst_rate) : 18))
+  const nonConsultItems = itemsList.filter(c => !isConsultationItem(c, category))
+  const platformFee = totalPrice === 0 || isPaintingOrMason || nonConsultItems.length === 0 ? 0 : Math.max(29, ...nonConsultItems.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29))
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
   const tipAmount = tip === 'custom' ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = totalPrice + roundedGst + platformFee - discount + tipAmount
@@ -2632,18 +2664,28 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     return displayCart.reduce((a, c) => a + (getAuthoritativeItemPrice(c, liveData || successData) * (Number(c.quantity) || 1)), 0)
   }, [displayCart, liveData, successData])
 
+  const catStr = String(liveData?.service_category || successData?.service_category || category?.id || category?.name || "").toLowerCase();
+  const isPaintingOrMasonBooking = Boolean(
+    catStr.includes("paint") ||
+    catStr.includes("mason") ||
+    displayCart.some(c => isConsultationItem(c, category || { id: liveData?.service_category, name: liveData?.service_category }))
+  );
+  const isOnlyConsultation = displayCart.length > 0 && displayCart.every(c => isConsultationItem(c, category || { id: liveData?.service_category, name: liveData?.service_category }));
+
   const totalGst = useMemo(() => {
+    if (isPaintingOrMasonBooking || isOnlyConsultation) return 0
     if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
     if (successData?.gst_amount !== undefined && successData?.gst_amount !== null) return Number(successData.gst_amount)
-    return displayCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0)
-  }, [liveData?.gst_amount, successData?.gst_amount, displayCart])
+    return displayCart.reduce((s, i) => isConsultationItem(i, category) ? s : s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0)
+  }, [liveData?.gst_amount, successData?.gst_amount, displayCart, isPaintingOrMasonBooking, isOnlyConsultation, category])
 
   const platformFee = useMemo(() => {
+    if (isPaintingOrMasonBooking || isOnlyConsultation) return 0
     if (liveData?.platform_fee !== undefined && liveData?.platform_fee !== null) return Number(liveData.platform_fee)
     if (successData?.platform_fee !== undefined && successData?.platform_fee !== null) return Number(successData.platform_fee)
     if (itemTotal === 0) return 0
-    return displayCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29)
-  }, [liveData?.platform_fee, successData?.platform_fee, displayCart, itemTotal])
+    return displayCart.reduce((maxFee, i) => isConsultationItem(i, category) ? maxFee : Math.max(maxFee, Number(i.platform_fee) || 29), 29)
+  }, [liveData?.platform_fee, successData?.platform_fee, displayCart, itemTotal, isPaintingOrMasonBooking, isOnlyConsultation, category])
 
   const discount = Number(liveData?.discount_amount || successData?.discount_amount || 0)
   const tipAmount = Number(liveData?.tip_amount || successData?.tip_amount || 0)
@@ -2674,14 +2716,26 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   // handles all live-location polling for this booking. Removing this prevented ~15 extra requests/min.
 
   const isCompleted = Boolean(
-    liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
+    liveData?.status && [
+      "completed",
+      "closed",
+      "reviewed",
+      "feedback_received",
+      "proof_submitted",
+      "awaiting_verification",
+      "verified"
+    ].includes(String(liveData.status).toLowerCase())
+  )
+
+  const isProofSubmitted = Boolean(
+    liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
   )
 
   const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
   const rawTechName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
 
   const techName = useMemo(() => {
-    if (!rawTechName) return liveData?.is_accepted ? "Assigned Service Professional" : ""
+    if (!rawTechName) return (liveData?.is_accepted || liveData?.technician) ? "Assigned Service Professional" : ""
     const trimmed = rawTechName.trim()
     const slugMatch = (liveData?.service_category || successData?.service_category || "").toLowerCase().replace(/[\s_-]+/g, "")
     const nameSlug = trimmed.toLowerCase().replace(/[\s_-]+/g, "")
@@ -2689,7 +2743,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       return "Assigned Service Professional"
     }
     return trimmed
-  }, [rawTechName, liveData?.is_accepted, liveData?.service_category, successData?.service_category])
+  }, [rawTechName, liveData?.is_accepted, liveData?.technician, liveData?.service_category, successData?.service_category])
   const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
   const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
   const techRating = empInfo?.rating != null ? empInfo.rating : (liveData?.technician_rating != null ? liveData.technician_rating : successData?.technician_rating ?? null)
@@ -2697,15 +2751,28 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
   const isAccepted = Boolean(
     !isCompleted && (
-      (liveData?.is_accepted || ["accepted", "in_progress", "on_the_way", "arrived"].includes(liveData?.status)) &&
-      Boolean(techName)
+      (liveData?.is_accepted || [
+        "accepted",
+        "in_progress",
+        "on_the_way",
+        "arrived",
+        "assigned",
+        "received",
+        "technician_assigned",
+        "technician_on_the_way",
+        "technician_arrived",
+        "inspection_in_progress",
+        "inspection_completed"
+      ].includes(String(liveData?.status || "").toLowerCase()))
     )
   )
 
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
+  const isOtpVerified = Boolean(liveData?.otp_verified)
+  const isWorkStartedOrDone = ["in_progress", "proof_submitted", "completed", "closed", "verified", "awaiting_verification"].includes(String(liveData?.status || successData?.status || "").toLowerCase())
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
-  const canCancel = !isCancelled && !isCompleted && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
+  const canCancel = !isCancelled && !isCompleted && !isOtpVerified && !isWorkStartedOrDone && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
 
   const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
   const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
@@ -2728,9 +2795,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     rawTechLat != null && !isNaN(parseFloat(rawTechLat)) &&
     rawTechLng != null && !isNaN(parseFloat(rawTechLng))
   )
-  const isArrived = currentStatus === "arrived"
-  const isInProgress = currentStatus === "in_progress"
-  const isOnTheWay = currentStatus === "on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
+  const isArrived = currentStatus === "arrived" || currentStatus === "technician_arrived"
+  const isInProgress = currentStatus === "in_progress" || currentStatus === "inspection_in_progress"
+  const isOnTheWay = currentStatus === "on_the_way" || currentStatus === "technician_on_the_way" || (currentStatus === "accepted" && hasValidTechnicianGPS)
 
   const trackingBookingObj = {
     id: liveData?.booking_id || successData?.id,
@@ -2785,12 +2852,13 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           <CheckCircle2 size={44} color="white" />
         </div>
         <div style={{ background: "white", borderRadius: 24, padding: "2.5rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
-          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", boxShadow: "0 8px 24px rgba(16,185,129,0.2)" }}>
-            <CheckCircle2 size={44} />
-          </div>
-          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", marginBottom: "0.4rem" }}>Service Completed!</h2>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", marginBottom: "0.4rem" }}>
+            {isProofSubmitted ? "Service Completed & Proof Submitted! 📸" : "Service Completed! 🎉"}
+          </h2>
           <p style={{ color: "#64748b", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
-            Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.
+            {isProofSubmitted
+              ? <>Service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been serviced and work proof has been uploaded.</>
+              : <>Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.</>}
           </p>
           {techName && (
             <div style={{ padding: "0.85rem", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: 10, marginBottom: "1.5rem" }}>
@@ -2805,7 +2873,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           )}
           <div>
             <button
-              onClick={() => window.location.href = "/"}
+              onClick={() => {
+                sessionStorage.removeItem("calservice_active_tracking_id")
+                sessionStorage.removeItem("calservice_last_booking")
+                window.location.href = "/"
+              }}
               style={{ padding: "0.85rem 2rem", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(16,185,129,0.3)" }}
             >
               Back to Home
@@ -4222,8 +4294,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       <AnimatePresence>
         {showCancelModal && (
           <BookingCancellationModal
-            bookingId={liveData?.booking_id || successData?.id}
-            requestId={rid}
+            bookingId={liveData?.booking_id || liveData?.id || successData?.id}
+            requestId={rid || liveData?.request_id || successData?.request_id}
+            trackingToken={liveData?.tracking_token || successData?.tracking_token}
+            phone={liveData?.phone || successData?.phone || formData?.phone}
             isAccepted={isAccepted}
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
@@ -6019,13 +6093,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 } else if (Array.isArray(b.cart_data)) {
                                   parsedCart = b.cart_data;
                                 }
+                                const catStr = String(b.service_category || b.category || '').toLowerCase();
+                                const isPaintingOrMasonBooking = Boolean(
+                                  catStr.includes('paint') ||
+                                  catStr.includes('mason') ||
+                                  parsedCart.some(c => isConsultationItem(c, { id: b.service_category, name: b.service_category }))
+                                );
+                                const isOnlyConsultation = parsedCart.length > 0 && parsedCart.every(i => isConsultationItem(i, { id: b.service_category, name: b.service_category }));
+
                                 const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
-                                const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
+                                const totalGst = (isPaintingOrMasonBooking || isOnlyConsultation) ? 0 : (b.gst_amount !== undefined && b.gst_amount !== null
                                   ? Number(b.gst_amount)
-                                  : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
-                                const platformFee = b.platform_fee !== undefined && b.platform_fee !== null
+                                  : parsedCart.reduce((s, i) => isConsultationItem(i, { id: b.service_category, name: b.service_category }) ? s : s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0));
+                                const platformFee = (isPaintingOrMasonBooking || isOnlyConsultation) ? 0 : (b.platform_fee !== undefined && b.platform_fee !== null
                                   ? Number(b.platform_fee)
-                                  : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29));
+                                  : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => isConsultationItem(i, { id: b.service_category, name: b.service_category }) ? maxFee : Math.max(maxFee, Number(i.platform_fee) || 29), 29)));
                                 const discount = Number(b.discount_amount || 0);
                                 const tipAmount = Number(b.tip_amount || 0);
                                 const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
@@ -6075,13 +6157,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
+                            const catStr = String(b.service_category || b.category || '').toLowerCase();
+                            const isPaintingOrMasonBooking = Boolean(
+                              catStr.includes('paint') ||
+                              catStr.includes('mason') ||
+                              parsedCart.some(c => isConsultationItem(c, { id: b.service_category, name: b.service_category }))
+                            );
+                            const isOnlyConsultation = parsedCart.length > 0 && parsedCart.every(i => isConsultationItem(i, { id: b.service_category, name: b.service_category }));
+
                             const itemTotal = parsedCart.reduce((acc, c) => acc + (getAuthoritativeItemPrice(c, b) * (Number(c.quantity) || 1)), 0);
-                            const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
+                            const totalGst = (isPaintingOrMasonBooking || isOnlyConsultation) ? 0 : (b.gst_amount !== undefined && b.gst_amount !== null
                               ? Number(b.gst_amount)
-                              : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
-                            const platformFee = b.platform_fee !== undefined && b.platform_fee !== null
+                              : parsedCart.reduce((s, i) => isConsultationItem(i, { id: b.service_category, name: b.service_category }) ? s : s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0));
+                            const platformFee = (isPaintingOrMasonBooking || isOnlyConsultation) ? 0 : (b.platform_fee !== undefined && b.platform_fee !== null
                               ? Number(b.platform_fee)
-                              : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29));
+                              : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => isConsultationItem(i, { id: b.service_category, name: b.service_category }) ? maxFee : Math.max(maxFee, Number(i.platform_fee) || 29), 29)));
                             const discount = Number(b.discount_amount || 0);
                             const tipAmount = Number(b.tip_amount || 0);
                             const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
@@ -9291,7 +9381,17 @@ function StepWorkflowCheckout({
   }]
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const isFreeCategory = itemTotal === 0 && (category?.id === "painting" || category?.id === "mason");
+  const isPaintingOrMason = Boolean(
+    category?.id === "painting" ||
+    category?.id === "mason" ||
+    category?.slug === "painting" ||
+    category?.slug === "mason" ||
+    category?.slug === "masonry" ||
+    categoryKey === "painting" ||
+    categoryKey === "masonry" ||
+    (items && items.some(c => isConsultationItem(c, category)))
+  );
+  const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
   const origTotal = Math.round(itemTotal * 1.1)
   const discount = appliedCoupon
     ? (appliedCoupon.discountAmount != null
@@ -9300,13 +9400,15 @@ function StepWorkflowCheckout({
         ? Math.min(itemTotal, appliedCoupon.discountValue)
         : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
-  const totalGst = isFreeCategory ? 0 : items.reduce((sum, item) => {
+  const totalGst = isPaintingOrMason ? 0 : items.reduce((sum, item) => {
+    if (isConsultationItem(item, category)) return sum;
     const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18
     return sum + (item.price * item.quantity * (rate / 100))
   }, 0)
   const roundedGst = Math.round(totalGst)
-  const gstRate = items.length > 0 && items[0].gst_rate !== undefined ? Number(items[0].gst_rate) : 18
-  const platformFee = itemTotal === 0 || isFreeCategory ? 0 : Math.max(29, ...items.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
+  const gstRate = isPaintingOrMason ? 0 : (items.length > 0 && items[0].gst_rate !== undefined ? Number(items[0].gst_rate) : 18)
+  const nonConsultItems = items.filter(i => !isConsultationItem(i, category))
+  const platformFee = itemTotal === 0 || isPaintingOrMason || nonConsultItems.length === 0 ? 0 : Math.max(29, ...nonConsultItems.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
   const tipAmount = tip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
@@ -10049,10 +10151,11 @@ function StepWorkflowCheckout({
                 {showTaxesDropdown && (
                   <div className="px-3 pb-2.5 pt-1.5 space-y-2.5 border-t border-slate-200/60 bg-white text-[11px] animate-in fade-in duration-150 text-left">
                     {items.map(item => {
+                      const isConsult = isPaintingOrMason || isConsultationItem(item, category);
                       const itemBaseTotal = item.price * item.quantity;
-                      const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18;
-                      const itemTax = Math.round(itemBaseTotal * (rate / 100));
-                      const itemFee = isFreeCategory ? 0 : (Number(item.platform_fee) || 29);
+                      const rate = isConsult ? 0 : (item.gst_rate !== undefined ? Number(item.gst_rate) : 18);
+                      const itemTax = isConsult ? 0 : Math.round(itemBaseTotal * (rate / 100));
+                      const itemFee = isConsult || isFreeCategory ? 0 : (Number(item.platform_fee) || 29);
                       return (
                         <div key={item.id} className="border-b border-slate-100 pb-2 last:border-0 last:pb-0 space-y-1">
                           <div className="font-bold text-slate-700">{item.name}</div>
@@ -10754,9 +10857,9 @@ export function BookingPage() {
       if (!prev || prev.length === 0) return prev;
       let hasChanged = false;
       const updated = prev.map(item => {
-        if (item.name && item.name.includes("(Site Consultation)") && item.price !== currentFee) {
+        if (item.name && item.name.includes("(Site Consultation)") && (item.price !== currentFee || item.platform_fee !== 0 || item.gst_rate !== 0)) {
           hasChanged = true;
-          return { ...item, price: currentFee };
+          return { ...item, price: currentFee, platform_fee: 0, gst_rate: 0, is_consultation: true };
         }
         return item;
       });
@@ -11038,9 +11141,23 @@ export function BookingPage() {
     }
 
     const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
-    const isFreeCategory = itemTotal === 0 && (category?.id === "painting" || category?.id === "mason");
-    const totalGst = isFreeCategory ? 0 : cart.reduce((s, i) => s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
-    const platformFee = (itemTotal === 0 || isFreeCategory) ? 0 : cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+    const isPaintingOrMason = Boolean(
+      category?.id === "painting" ||
+      category?.id === "mason" ||
+      category?.slug === "painting" ||
+      category?.slug === "mason" ||
+      category?.slug === "masonry" ||
+      categoryKey === "painting" ||
+      categoryKey === "masonry" ||
+      (cart && cart.some(c => isConsultationItem(c, category)))
+    );
+    const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
+    const nonConsultCart = cart.filter(i => !isConsultationItem(i, category));
+    const totalGst = isPaintingOrMason ? 0 : cart.reduce((s, i) => {
+      if (isConsultationItem(i, category)) return s;
+      return s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100));
+    }, 0);
+    const platformFee = (itemTotal === 0 || isPaintingOrMason || nonConsultCart.length === 0) ? 0 : nonConsultCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
 
     // Check coupon discount
     let discount = 0;
@@ -11111,22 +11228,26 @@ export function BookingPage() {
     if (tipAmount > 0) data.append("tip_amount", tipAmount)
 
     // Serialize cart_data with gst_rate and platform_fee as JSON string
-    data.append("cart_data", JSON.stringify(cart.map(c => ({
-      id: c.id,
-      name: c.name,
-      price: c.price,
-      quantity: c.quantity || 1,
-      gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
-      platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
-      categoryName: c.categoryName || category?.name || "",
-      selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
-      selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
-      predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice,
-      ac_brand: c.ac_brand || "",
-      ac_type: c.ac_type || "",
-      ac_quantity: c.ac_quantity || c.quantity || 1,
-      ac_notes: c.ac_notes || ""
-    }))))
+    data.append("cart_data", JSON.stringify(cart.map(c => {
+      const isConsult = isPaintingOrMason || isConsultationItem(c, category);
+      return {
+        id: c.id,
+        name: c.name,
+        price: c.price,
+        quantity: c.quantity || 1,
+        gst_rate: isConsult ? 0 : (c.gst_rate !== undefined ? Number(c.gst_rate) : 18),
+        platform_fee: isConsult ? 0 : (c.platform_fee !== undefined ? Number(c.platform_fee) : 29),
+        is_consultation: isConsult,
+        categoryName: c.categoryName || category?.name || "",
+        selectedArea: c.id === "serv-mason-minor-masonry" ? (c.selectedArea || 500) : c.selectedArea,
+        selectedBathroomSize: c.id === "serv-mason-bathroom-tile-fixing" ? (c.selectedBathroomSize || "Small") : c.selectedBathroomSize,
+        predefinedPrice: c.id === "serv-mason-bathroom-tile-fixing" ? (c.predefinedPrice || 10000) : c.predefinedPrice,
+        ac_brand: c.ac_brand || "",
+        ac_type: c.ac_type || "",
+        ac_quantity: c.ac_quantity || c.quantity || 1,
+        ac_notes: c.ac_notes || ""
+      };
+    })))
     data.append("payment_method", backendPaymentMethod)
     if (couponCode) {
       data.append("coupon_code", couponCode)
@@ -12832,6 +12953,9 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                         id: cartId,
                                         name: `${service.name} (Site Consultation)`,
                                         price: currentFee,
+                                        platform_fee: 0,
+                                        gst_rate: 0,
+                                        is_consultation: true,
                                         quantity: 1,
                                         categoryName: "Painting"
                                       };
@@ -14174,6 +14298,9 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   id: cartId,
                                   name: `${service.name} (Site Consultation)`,
                                   price: currentFee,
+                                  platform_fee: 0,
+                                  gst_rate: 0,
+                                  is_consultation: true,
                                   quantity: 1,
                                   categoryName: "Painting"
                                 };
@@ -15111,6 +15238,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         id: cartId,
         name: rawName,
         price: currentFee,
+        platform_fee: 0,
+        gst_rate: 0,
+        is_consultation: true,
         quantity: 1,
         categoryName: "Mason",
         selectedArea: pkg.slug === "minor-masonry" ? (parseFloat(selectedArea) || 0) : undefined,
@@ -17510,8 +17640,16 @@ export function CustomCleaningPackageModal({
   };
 
   const itemTotal = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
-  const totalGst = cart.reduce((acc, c) => acc + Math.round((c.price * (c.quantity || 1)) * ((Number(c.gst_rate) || 18) / 100)), 0);
-  const platformFee = cart.reduce((maxFee, c) => Math.max(maxFee, Number(c.platform_fee) || 29), 0);
+  const isConsultCategory = Boolean(
+    normalizedKey === "paint" ||
+    normalizedKey === "painting" ||
+    normalizedKey === "mason" ||
+    normalizedKey === "masonry" ||
+    (cart && cart.some(c => isConsultationItem(c, category)))
+  );
+  const totalGst = isConsultCategory ? 0 : cart.reduce((acc, c) => isConsultationItem(c, category) ? acc : acc + Math.round((c.price * (c.quantity || 1)) * ((Number(c.gst_rate) || 18) / 100)), 0);
+  const nonConsult = cart.filter(c => !isConsultationItem(c, category));
+  const platformFee = isConsultCategory || nonConsult.length === 0 ? 0 : nonConsult.reduce((maxFee, c) => Math.max(maxFee, Number(c.platform_fee) || 29), 0);
   const couponDiscount = isCouponApplied ? Math.round(itemTotal * 0.1) : 0;
   const vipSavings = isVipJoined ? Math.round(itemTotal * 0.15) : 0;
   const totalAmount = Math.max(0, itemTotal + totalGst + platformFee + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
@@ -19312,7 +19450,7 @@ export function CustomCleaningPackageModal({
                                 onClick={() => {
                                   let updatedCart = [...cart];
                                   if (getCartItemCount(cartId) === 0) {
-                                    const newItem = { id: cartId, name: p.name + " (Site Consultation)", price: currentFee, quantity: 1 };
+                                    const newItem = { id: cartId, name: p.name + " (Site Consultation)", price: currentFee, platform_fee: 0, gst_rate: 0, is_consultation: true, quantity: 1, categoryName: "Mason" };
                                     updatedCart.push(newItem);
                                     addItemToCart(cartId, p.name + " (Site Consultation)", currentFee, "");
                                   }
@@ -19557,9 +19695,10 @@ export function CustomCleaningPackageModal({
                       {showModalTaxesDropdown && (
                         <div className="px-2 pb-1.5 pt-1 space-y-2 border-t border-[#E8E3DB] bg-white text-[10px] animate-in fade-in duration-150 text-left">
                           {cart.map(item => {
-                            const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18;
-                            const itemTax = Math.round((item.price * item.quantity) * (rate / 100));
-                            const itemFee = Number(item.platform_fee) || 29;
+                            const isConsult = isConsultCategory || isConsultationItem(item, category);
+                            const rate = isConsult ? 0 : (item.gst_rate !== undefined ? Number(item.gst_rate) : 18);
+                            const itemTax = isConsult ? 0 : Math.round((item.price * item.quantity) * (rate / 100));
+                            const itemFee = isConsult ? 0 : (Number(item.platform_fee) || 29);
                             return (
                               <div key={item.id} className="border-b border-slate-100 pb-1.5 last:border-0 last:pb-0 space-y-0.5">
                                 <div className="font-bold text-slate-700">{item.name}</div>
@@ -20058,7 +20197,7 @@ export function CustomCleaningPackageModal({
                   const cartId = `serv-mason-${selectedMasonDetail.id}`;
                   let updatedCart = [...cart];
                   if (getCartItemCount(cartId) === 0) {
-                    const newItem = { id: cartId, name: selectedMasonDetail.name + " (Site Consultation)", price: currentFee, quantity: 1 };
+                    const newItem = { id: cartId, name: selectedMasonDetail.name + " (Site Consultation)", price: currentFee, platform_fee: 0, gst_rate: 0, is_consultation: true, quantity: 1, categoryName: "Mason" };
                     updatedCart.push(newItem);
                     addItemToCart(cartId, selectedMasonDetail.name + " (Site Consultation)", currentFee, "");
                   }

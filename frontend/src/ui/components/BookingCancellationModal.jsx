@@ -18,6 +18,8 @@ export function BookingCancellationModal({
   requestId,
   isAccepted,
   graceSecondsRemaining = 300,
+  trackingToken,
+  phone,
   onClose,
   onCancelled,
 }) {
@@ -96,14 +98,34 @@ export function BookingCancellationModal({
     }
 
     try {
+      let savedObj = {}
+      try { savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}") } catch (_) { }
       const urlParams = new URLSearchParams(window.location.search)
-      const token = urlParams.get("token") || sessionStorage.getItem("active_tracking_token") || ""
-      const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel/`, {
+      const resolvedToken = trackingToken ||
+        savedObj?.tracking_token ||
+        urlParams.get("token") ||
+        sessionStorage.getItem("active_tracking_token") ||
+        localStorage.getItem("calservice_customer_token");
+
+      const resolvedPhone = phone ||
+        savedObj?.phone ||
+        localStorage.getItem("caltrack_customer_phone");
+
+      const payload = {
+        reason: finalReason,
+      }
+      if (resolvedToken) {
+        payload.token = resolvedToken
+        payload.tracking_token = resolvedToken
+      }
+      if (resolvedPhone) {
+        payload.phone = resolvedPhone
+      }
+
+      const tokenQuery = resolvedToken ? `?token=${encodeURIComponent(resolvedToken)}` : ""
+      const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel/${tokenQuery}`, {
         method: "POST",
-        body: JSON.stringify({
-          reason: finalReason,
-          token: token || undefined,
-        }),
+        body: JSON.stringify(payload),
       })
 
       try {
@@ -117,25 +139,13 @@ export function BookingCancellationModal({
         }
         if (onClose) onClose()
       } else {
-        // If not found in DB but frontend mock/flow, allow UI to cancel gracefully
-        if (onCancelled) {
-          onCancelled({ status: "cancelled", cancellation_reason: finalReason })
-        }
-        if (onClose) onClose()
+        const errorText = res?.message || res?.detail || "Failed to cancel booking."
+        setErrorMsg(errorText)
       }
     } catch (err) {
-      console.warn("Cancellation API fallback:", err)
-      try {
-        sessionStorage.removeItem("calservice_active_tracking_id")
-        sessionStorage.removeItem("calservice_last_booking")
-        if (estimationRepository.hasActiveEstimationSync()) {
-          estimationRepository.cancelEstimationBookingSync(lookup, finalReason)
-        }
-      } catch (e) { }
-      if (onCancelled) {
-        onCancelled({ status: "cancelled", cancellation_reason: finalReason })
-      }
-      if (onClose) onClose()
+      console.warn("Cancellation API error:", err)
+      const errorText = err?.body?.message || err?.message || err?.detail || "Cancellation failed. This booking may have already started or completed."
+      setErrorMsg(errorText)
     } finally {
       setIsSubmitting(false)
     }
