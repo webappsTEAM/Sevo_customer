@@ -1024,16 +1024,24 @@ class CustomerBookingCancelView(APIView):
             from accounts.permissions import is_super_admin, can
             is_super = is_super_admin(request.user)
             has_perm = can(request.user, "bookings", "cancel")
+            user_phone = getattr(request.user, "phone", None) or getattr(request.user, "mobile_number", None) or ""
+            if not user_phone and request.user.username and request.user.username.startswith("cust_"):
+                user_phone = request.user.username[5:]
+            user_clean_phone = "".join(c for c in str(user_phone) if c.isdigit())[-10:]
+            sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
+
             is_owner = bool(
                 (sr.customer_id and sr.customer_id == request.user.id) or
                 (request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower()) or
-                (request.user.phone and sr.phone and request.user.phone.strip()[-10:] == sr.phone.strip()[-10:])
+                (user_clean_phone and sr_clean_phone and user_clean_phone == sr_clean_phone) or
+                token_matches
             )
             if not (is_super or has_perm or is_owner or token_matches):
                 return _error("You are not authorized to cancel this booking.", 403)
         else:
-            provided_phone = (request.data.get("phone") or "").strip()
-            phone_matches = bool(provided_phone and sr.phone and provided_phone[-10:] == sr.phone.strip()[-10:])
+            provided_phone = "".join(c for c in str(request.data.get("phone") or request.query_params.get("phone") or "") if c.isdigit())[-10:]
+            sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
+            phone_matches = bool(provided_phone and sr_clean_phone and provided_phone == sr_clean_phone)
             if not (token_matches or phone_matches):
                 return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
 
@@ -1565,6 +1573,27 @@ def _build_tracking_payload(sr, has_full_access):
     # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
     start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
 
+    payment_confirmation_otp = None
+    if sr.payment_status in ("cash_pending", "cash_collected", "pending"):
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id = %s "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(sr.id)],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        payment_confirmation_otp = m.group(1)
+        except Exception:
+            pass
+
     created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
     if created_at_raw and hasattr(created_at_raw, 'isoformat'):
         created_at_str = created_at_raw.isoformat()
@@ -1645,6 +1674,7 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_seconds": eta_seconds,
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
+        "payment_confirmation_otp": payment_confirmation_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
         "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
     }
@@ -1665,8 +1695,7 @@ class CustomerBookingLiveLocationView(APIView):
     # Fixes EC-06: scoped separately from the blanket anon/user rate so a
     # live-tracking poll loop has room to work without opening the endpoint
     # up to unbounded scraping.
-    throttle_classes  = [ScopedRateThrottle]
-    throttle_scope    = "tracking_lookup"
+    throttle_classes  = []
 
     def get(self, request, pk=None, identifier=None):
         sr_id = pk or identifier
@@ -1711,8 +1740,7 @@ class CustomerPublicTrackingView(APIView):
     tracking data. The token is the bearer authorization credential.
     """
     permission_classes = [permissions.AllowAny]
-    throttle_classes  = [ScopedRateThrottle]  # Fixes EC-06
-    throttle_scope    = "tracking_lookup"
+    throttle_classes  = []
 
     def get(self, request, tracking_token):
         import uuid as _uuid

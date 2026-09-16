@@ -100,9 +100,11 @@ export function BookingCancellationModal({
     try {
       let savedObj = {}
       try { savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}") } catch (_) { }
+      const urlParams = new URLSearchParams(window.location.search)
       const resolvedToken = trackingToken ||
         savedObj?.tracking_token ||
-        new URLSearchParams(window.location.search).get("token") ||
+        urlParams.get("token") ||
+        sessionStorage.getItem("active_tracking_token") ||
         localStorage.getItem("calservice_customer_token");
 
       const resolvedPhone = phone ||

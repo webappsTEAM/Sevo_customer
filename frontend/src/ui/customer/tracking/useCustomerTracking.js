@@ -115,9 +115,19 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
         setLoading(false)
         return
       }
+      if (res.status === 429 || res.status >= 500) {
+        // Rate limited or upstream server glitch: keep active tracking alive and mark as reconnecting
+        setConnectionState("RECONNECTING")
+        return
+      }
       if (!res.ok) {
-        setErrorKind("fetch_failed")
-        setLoading(false)
+        setData(prev => {
+          if (!prev) {
+            setErrorKind("fetch_failed")
+            setLoading(false)
+          }
+          return prev
+        })
         return
       }
 

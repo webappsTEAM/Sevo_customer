@@ -25,6 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
     employee_roles = serializers.SerializerMethodField()
     is_care_agent = serializers.SerializerMethodField()
     care_role = serializers.SerializerMethodField()
+    saved_addresses = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -34,8 +35,38 @@ class UserSerializer(serializers.ModelSerializer):
             "company", "company_name", "company_domain", "company_schema", "bio", "phone", "timezone", "language",
             "avatar_url", "two_fa_enabled", "company_permissions", "employee_country", "company_country", "company_region",
             "companyCountry", "primaryCountry", "employee_roles", "company_currency", "company_currency_symbol",
-            "is_care_agent", "care_role"
+            "is_care_agent", "care_role", "saved_addresses"
         )
+
+    def get_saved_addresses(self, obj):
+        try:
+            from .models import SavedAddress
+            addrs = SavedAddress.objects.filter(user=obj).order_by("-is_default", "-created_at")
+            result = []
+            for a in addrs:
+                result.append({
+                    "id": a.pk,
+                    "label": a.label,
+                    "label_display": a.get_label_display() if hasattr(a, "get_label_display") else a.label,
+                    "address_line1": a.address_line1,
+                    "address_line2": a.address_line2 or "",
+                    "formatted_address": a.formatted_address or a.address_line1,
+                    "flat_house_no": a.flat_house_no or "",
+                    "landmark": a.landmark or "",
+                    "locality": a.locality or "",
+                    "city": a.city,
+                    "state": a.state,
+                    "pincode": a.pincode,
+                    "phone_number": a.phone_number or "",
+                    "receiver_name": a.receiver_name or "",
+                    "receiver_phone": a.receiver_phone or "",
+                    "latitude": float(a.latitude) if a.latitude is not None else None,
+                    "longitude": float(a.longitude) if a.longitude is not None else None,
+                    "is_default": a.is_default,
+                })
+            return result
+        except Exception:
+            return []
 
     def get_is_super_admin(self, obj):
         from accounts.permissions import is_super_admin

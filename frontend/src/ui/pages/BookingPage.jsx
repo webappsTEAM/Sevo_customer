@@ -5291,7 +5291,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
   useEffect(() => {
-    if (activeTab === 'Saved Addresses' && user) {
+    if (user) {
       fetchAddresses()
     }
   }, [activeTab, user])
@@ -8582,24 +8582,7 @@ function QuickCommerceCartCheckout({
       coords = getCustomerCoordinates(user?.id)
     } catch (_) {}
 
-    const defaultList = [
-      {
-        id: "addr_home",
-        type: "Home",
-        address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
-        latitude: 12.7409,
-        longitude: 77.8253,
-        icon: "home"
-      },
-      {
-        id: "addr_work",
-        type: "Work",
-        address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
-        latitude: 12.7409,
-        longitude: 77.8253,
-        icon: "work"
-      }
-    ]
+    const defaultList = []
 
     if (initialSelected) {
       const fullAddr = typeof initialSelected === "string" ? initialSelected : (initialSelected.formatted_address || initialSelected.address || "")

@@ -32,6 +32,16 @@ export function CustomerTrackingStatusCard({
   const techRating = data?.technician?.rating || null
   const techJobs = data?.technician?.jobs_completed || null
   const startOtp = data?.start_otp || null
+  const paymentConfirmationOtp = data?.payment_confirmation_otp || null
+  const isCashPending = data?.payment_status === "cash_pending" || Boolean(paymentConfirmationOtp)
+  const [copiedPaymentOtp, setCopiedPaymentOtp] = useState(false)
+
+  const copyPaymentOtp = () => {
+    if (!paymentConfirmationOtp || !navigator.clipboard) return
+    navigator.clipboard.writeText(paymentConfirmationOtp)
+    setCopiedPaymentOtp(true)
+    setTimeout(() => setCopiedPaymentOtp(false), 2000)
+  }
 
   const rawTechLat = data?.technician_location?.latitude ?? data?.technician?.latitude
   const hasGps = rawTechLat != null && !isNaN(parseFloat(rawTechLat))
@@ -144,6 +154,51 @@ export function CustomerTrackingStatusCard({
             )}
           </div>
         </div>
+
+        {isCashPending && paymentConfirmationOtp && (
+          <div style={{
+            margin: "0 14px 14px 14px",
+            padding: "12px 14px",
+            background: "#ecfdf5",
+            border: "1.5px solid #10b981",
+            borderRadius: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "700", color: "#065f46", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Cash Payment OTP
+              </div>
+              <div style={{ fontSize: "11px", color: "#047857", marginTop: "1px" }}>
+                Share with technician to confirm cash collection:
+              </div>
+              <div style={{ fontSize: "20px", fontWeight: "900", color: "#064e3b", letterSpacing: "0.2em", fontFamily: "monospace", marginTop: "2px" }}>
+                {paymentConfirmationOtp}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={copyPaymentOtp}
+              style={{
+                padding: "6px 12px",
+                background: "#059669",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}
+            >
+              {copiedPaymentOtp ? <Check size={14} /> : <Copy size={14} />}
+              <span>{copiedPaymentOtp ? "Copied" : "Copy"}</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
