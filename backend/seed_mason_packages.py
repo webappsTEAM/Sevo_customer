@@ -27,47 +27,18 @@ MASON_SERVICES_DATA = {
         },
         "packages": [
             {
-                "slug": "bathroom-tile-fixing-small",
-                "name": "Bathroom Tile Fixing - Small",
+                "slug": "bathroom-tile-fixing",
+                "name": "Bathroom Tile Fixing",
                 "price": 10000.00,
                 "duration": "Flexible",
-                "tag": "Small Bathroom",
+                "tag": "All Sizes: Small, Medium, Large",
                 "image": "/mockups/aac_block_wall_construction.jpg",
-                "description": "Complete bathroom tile fixing for small bathrooms. Combined price includes tiles, epoxy grout, and expert labour. 50% advance upon quote acceptance, 50% after work completion.",
+                "description": "Complete bathroom tile fixing including tiles, epoxy grout, and expert labour. Pricing: Small (₹10,000), Medium (₹10,000), Large (₹20,000). 50% advance upon quote acceptance, 50% after work completion.",
                 "includes": [
                     "Tiles included (combined material + labour)",
                     "Epoxy waterproof grouting",
                     "Expert mason labour & leveling",
-                    "No separate material or labour charges"
-                ],
-                "excludes": [
-                    "Structural plumbing alterations",
-                    "Area above standard small bathroom size"
-                ],
-                "ready": [
-                    "Clear bathroom of personal toiletries",
-                    "Ensure water and electrical access"
-                ],
-                "reviews": [
-                    {"name": "Vikram Singh", "rating": 5, "text": "Very neat epoxy grouting and tile fixing. Great value!"}
-                ],
-                "faqs": [
-                    {"q": "What materials are included?", "a": "Tiles, waterproof epoxy, and complete skilled labour are included in the ₹10,000 package price."},
-                    {"q": "What are the payment terms?", "a": "50% advance upon vendor quote acceptance and remaining 50% after work completion."}
-                ]
-            },
-            {
-                "slug": "bathroom-tile-fixing-medium",
-                "name": "Bathroom Tile Fixing - Medium",
-                "price": 10000.00,
-                "duration": "Flexible",
-                "tag": "Medium Bathroom",
-                "image": "/mockups/aac_block_wall_construction.jpg",
-                "description": "Complete bathroom tile fixing for medium bathrooms. Combined price includes tiles, epoxy grout, and expert labour. 50% advance upon quote acceptance, 50% after work completion.",
-                "includes": [
-                    "Tiles included (combined material + labour)",
-                    "Epoxy waterproof grouting",
-                    "Expert mason labour & leveling",
+                    "Sizes: Small (₹10,000), Medium (₹10,000), Large (₹20,000)",
                     "No separate material or labour charges"
                 ],
                 "excludes": [
@@ -78,39 +49,12 @@ MASON_SERVICES_DATA = {
                     "Ensure water and electrical access"
                 ],
                 "reviews": [
+                    {"name": "Vikram Singh", "rating": 5, "text": "Very neat epoxy grouting and tile fixing. Great value!"},
                     {"name": "Priya D.", "rating": 4.9, "text": "Completed on time with perfect water-slope alignment."}
                 ],
                 "faqs": [
-                    {"q": "What materials are included?", "a": "Tiles, waterproof epoxy, and complete skilled labour are included in the ₹10,000 package price."},
-                    {"q": "What are the payment terms?", "a": "50% advance upon vendor quote acceptance and remaining 50% after work completion."}
-                ]
-            },
-            {
-                "slug": "bathroom-tile-fixing-large",
-                "name": "Bathroom Tile Fixing - Large",
-                "price": 20000.00,
-                "duration": "Flexible",
-                "tag": "Large Bathroom",
-                "image": "/mockups/aac_block_wall_construction.jpg",
-                "description": "Complete bathroom tile fixing for large bathrooms. Combined price includes tiles, epoxy grout, and expert labour. 50% advance upon quote acceptance, 50% after work completion.",
-                "includes": [
-                    "Tiles included (combined material + labour)",
-                    "Epoxy waterproof grouting",
-                    "Expert mason labour & leveling",
-                    "No separate material or labour charges"
-                ],
-                "excludes": [
-                    "Structural plumbing alterations"
-                ],
-                "ready": [
-                    "Clear bathroom of personal toiletries",
-                    "Ensure water and electrical access"
-                ],
-                "reviews": [
-                    {"name": "Suresh K.", "rating": 5, "text": "Master bathroom tiling done flawlessly. Very sturdy epoxy joints."}
-                ],
-                "faqs": [
-                    {"q": "What materials are included?", "a": "Tiles, waterproof epoxy, and complete skilled labour are included in the ₹20,000 package price."},
+                    {"q": "What materials are included?", "a": "Tiles, waterproof epoxy, and complete skilled labour are included in the package price."},
+                    {"q": "What are the pricing slabs?", "a": "Small: ₹10,000 | Medium: ₹10,000 | Large: ₹20,000 depending on your bathroom dimensions."},
                     {"q": "What are the payment terms?", "a": "50% advance upon vendor quote acceptance and remaining 50% after work completion."}
                 ]
             }
@@ -184,9 +128,7 @@ def seed():
     # Clean up any obsolete/extra mason packages so only the vendor's exact packages exist
     current_mason_pkgs = Package.objects.filter(service__category=category)
     valid_slugs = {
-        "bathroom-tile-fixing-small",
-        "bathroom-tile-fixing-medium",
-        "bathroom-tile-fixing-large",
+        "bathroom-tile-fixing",
         "minor-masonry"
     }
     obsolete = current_mason_pkgs.exclude(slug__in=valid_slugs)
