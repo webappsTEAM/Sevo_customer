@@ -96,10 +96,13 @@ export function BookingCancellationModal({
     }
 
     try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const token = urlParams.get("token") || sessionStorage.getItem("active_tracking_token") || ""
       const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel/`, {
         method: "POST",
         body: JSON.stringify({
           reason: finalReason,
+          token: token || undefined,
         }),
       })
 

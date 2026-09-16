@@ -554,6 +554,29 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
 
+    def get_payment_confirmation_otp(self, obj):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+            return None
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id = %s "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(obj.id)],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        return m.group(1)
+        except Exception:
+            pass
+        return None
+
     def get_customer_id(self, obj):
         try:
             if obj.customer and hasattr(obj.customer, "customer_id"):
@@ -627,6 +650,29 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         assignment = self._get_cached_assignment(obj)
         if assignment and assignment.technician_rating is not None:
             return float(assignment.technician_rating)
+        return None
+
+    def get_payment_confirmation_otp(self, obj):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+            return None
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id = %s "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(obj.id)],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        return m.group(1)
+        except Exception:
+            pass
         return None
 
     def get_technician(self, obj):
@@ -858,6 +904,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     feedback_token         = serializers.SerializerMethodField()
     feedback               = ServiceFeedbackNestedSerializer(read_only=True, allow_null=True)
     start_otp              = serializers.SerializerMethodField()
+    payment_confirmation_otp = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
     base_amount            = serializers.SerializerMethodField()
@@ -889,11 +936,34 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
             "logistics_leg", "logistics_leg_updated_at",
-            "start_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
+            "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "job_type", "estimation",
             "created_at", "updated_at",
         )
+
+    def get_payment_confirmation_otp(self, obj):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+            return None
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id = %s "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(obj.id)],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        return m.group(1)
+        except Exception:
+            pass
+        return None
 
     def get_customer_id(self, obj):
         try:
