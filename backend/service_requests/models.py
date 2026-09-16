@@ -558,6 +558,15 @@ class ServiceRequest(models.Model):
             models.Index(fields=["company", "payment_status", "created_at"]),
             models.Index(fields=["customer", "created_at"]),
             models.Index(fields=["phone"]),
+            models.Index(fields=["job_type", "status"], name="service_req_job_typ_6bd73d_idx"),
+            models.Index(fields=["job_type", "created_at"], name="service_req_job_typ_4f9cb8_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                condition=models.Q(idempotency_key__isnull=False) & ~models.Q(idempotency_key=""),
+                fields=["customer", "idempotency_key"],
+                name="unique_customer_idempotency_key",
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -1154,7 +1163,7 @@ class VendorCapabilityRequest(models.Model):
     class Meta:
         ordering = ["-requested_at"]
         unique_together = [["vendor_id", "service"]]
-        indexes = [models.Index(fields=["vendor_id", "status"])]
+        indexes = [models.Index(fields=["vendor_id", "status"], name="vcr_vendor_status_idx")]
         verbose_name = "Vendor Service Capability Request"
 
     def __str__(self):

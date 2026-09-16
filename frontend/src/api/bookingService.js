@@ -55,7 +55,6 @@ export async function cancelBooking(identifier, reason = "Customer requested can
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ""
   return apiRequest(`/booking/${identifier}/cancel/${tokenQuery}`, { method: "POST", json: payload })
 }
-}
 
 export async function getBookingStatus(identifier, token = "") {
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ""

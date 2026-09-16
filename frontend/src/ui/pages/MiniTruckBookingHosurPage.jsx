@@ -1425,9 +1425,7 @@ export function MiniTruckBookingHosurPage() {
       let timeString = "Immediate / Next Available"
       let slotValue = null
 
-
-      let dateString = todayDateString()
-      if (selectedDate && selectedDate.fullDate) {
+      if (bookingMode === "SCHEDULED" && selectedDate && selectedDate.fullDate) {
         const d = selectedDate.fullDate
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
