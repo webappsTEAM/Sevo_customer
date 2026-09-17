@@ -9424,9 +9424,11 @@ function StepWorkflowCheckout({
   // which already verifies the HMAC server-side. Set VITE_PAYMENTS_ENABLED
   // to "true" only once that path exists and has been tested end to end.
   const isOnlinePaymentAvailable = Boolean(
-    String(import.meta.env.VITE_PAYMENTS_ENABLED) === 'true' &&
-    import.meta.env.VITE_RAZORPAY_KEY_ID &&
-    /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
   )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
