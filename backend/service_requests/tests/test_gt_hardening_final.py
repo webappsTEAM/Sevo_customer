@@ -480,6 +480,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr = DummyBooking(7001, "GT7001")
         mock_save.return_value = mock_sr
@@ -565,6 +566,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr1 = DummyBooking(8001, "GT8001")
         mock_sr2 = DummyBooking(8002, "GT8002")

@@ -939,7 +939,7 @@ class BookingCreateView(APIView):
             logger.warning(
                 "Could not create Order/OrderItem for booking %s (service_request_id=%s, "
                 "customer_id=%s, at=%s): %r",
-                sr.request_id, sr.id, sr.customer_id, timezone.now().isoformat(), order_err,
+                sr.request_id, sr.id, getattr(sr, "customer_id", getattr(sr.customer, "id", None)), timezone.now().isoformat(), order_err,
             )
 
         # Dispatch booking notification to workforce management system.
