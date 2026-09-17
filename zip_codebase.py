@@ -17,7 +17,7 @@ import zipfile
 # Determine project root directory (directory where this script is located)
 SCRIPT_DIR = Path(__file__).resolve().parent
 CUSTOMER_DIR = SCRIPT_DIR
-VENDOR_DIR = (SCRIPT_DIR.parent / "Ven").resolve()
+VENDOR_DIR = Path(r"C:\Users\user\Desktop\SEVO\VEN\calservice-vendor").resolve()
 
 # Default directory patterns to exclude (installables, bloat, caches, build artifacts)
 DEFAULT_EXCLUDE_DIRS = {
@@ -96,9 +96,9 @@ DEFAULT_EXCLUDE_FILES = {
 
 def parse_args():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Default output: dedicated Desktop\SEVO_Backups\ folder (separate from Cus/Ven)
-    BACKUP_DIR = SCRIPT_DIR.parent / "SEVO_Backups"
-    BACKUP_DIR.mkdir(exist_ok=True)
+    # Default output: dedicated Desktop\sevo backup\ folder
+    BACKUP_DIR = Path(r"C:\Users\user\Desktop\sevo backup")
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     default_output = BACKUP_DIR / f"calservices_archive_{timestamp}.zip"
 
     parser = argparse.ArgumentParser(
@@ -178,7 +178,7 @@ def is_matching(filename: str, patterns: set) -> bool:
     return False
 
 
-def format_size(size_bytes: int) -> str:
+def format_size(size_bytes: int | float) -> str:
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{size_bytes:.2f} {unit}"

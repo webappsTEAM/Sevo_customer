@@ -2795,7 +2795,7 @@ class Estimation(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(ac_quantity__gte=1),
+                check=models.Q(ac_quantity__gte=1),
                 name="check_estimation_ac_quantity_gte_1"
             )
         ]
@@ -2859,7 +2859,7 @@ class EstimationFee(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(amount__gte=Decimal("0.00")),
+                check=models.Q(amount__gte=Decimal("0.00")),
                 name="check_estimation_fee_amount_gte_0"
             )
         ]
@@ -3063,23 +3063,23 @@ class EstimationQuotation(models.Model):
                 name="unique_estimation_quotation_version"
             ),
             models.CheckConstraint(
-                condition=models.Q(subtotal__gte=Decimal("0.00")),
+                check=models.Q(subtotal__gte=Decimal("0.00")),
                 name="check_quotation_subtotal_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+                check=models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quotation_tax_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+                check=models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quotation_discount_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(total_amount__gte=Decimal("0.00")),
+                check=models.Q(total_amount__gte=Decimal("0.00")),
                 name="check_quotation_total_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(version__gte=1),
+                check=models.Q(version__gte=1),
                 name="check_quotation_version_gte_1"
             ),
         ]
@@ -3127,23 +3127,23 @@ class EstimationQuotationItem(models.Model):
         ordering = ["sort_order", "id"]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(quantity__gt=Decimal("0.00")),
+                check=models.Q(quantity__gt=Decimal("0.00")),
                 name="check_quote_item_quantity_gt_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(unit_price__gte=Decimal("0.00")),
+                check=models.Q(unit_price__gte=Decimal("0.00")),
                 name="check_quote_item_unit_price_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+                check=models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quote_item_tax_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+                check=models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quote_item_discount_gte_0"
             ),
             models.CheckConstraint(
-                condition=models.Q(line_total__gte=Decimal("0.00")),
+                check=models.Q(line_total__gte=Decimal("0.00")),
                 name="check_quote_item_line_total_gte_0"
             ),
         ]
