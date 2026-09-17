@@ -2210,26 +2210,12 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    setPayPhase('processing')
-    setPayError('')
-    await new Promise(r => setTimeout(r, 2200))
-    const success = Math.random() > 0.05
-    if (success) {
-      setPayPhase('success')
-      if (bookingId) {
-        try {
-          await apiRequest('/payment/verify/', {
-            method: 'POST',
-            json: { booking_id: bookingId, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-          })
-        } catch (e) { /* non-critical */ }
-      }
-      await new Promise(r => setTimeout(r, 1200))
-      onConfirm('online')
-    } else {
-      setPayPhase('failed')
-      setPayError('Payment failed. Please check your details and try again.')
-    }
+    // This screen is unreachable while online payment is disabled above. It
+    // fails closed rather than simulating a result: nothing here has taken a
+    // payment, so it must never report one as taken. See the note on
+    // isOnlinePaymentAvailable for what a real implementation does.
+    setPayPhase('failed')
+    setPayError('Online payment is not available yet. Please choose Cash on Service.')
   }
 
   const options = [
@@ -9420,13 +9406,28 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  // Was gated on the key starting with "rzp_live_" specifically -- that
-  // hides "Pay Online" for every non-production environment, including
-  // local dev/staging configured with a perfectly valid Razorpay TEST key
-  // (VITE_RAZORPAY_KEY_ID=rzp_test_...), which is exactly the normal setup
-  // while building/testing. Accept any configured Razorpay key (test or
-  // live) instead -- production simply uses a live key in its own .env.
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID)))
+  // ONLINE PAYMENT IS DISABLED UNTIL A REAL GATEWAY FLOW IS WIRED.
+  //
+  // The "Pay via UPI" flow on this page never contacted a payment gateway.
+  // It waited 2.2 seconds, decided the outcome with `Math.random() > 0.05`,
+  // showed the customer a success screen, and posted an order id it had
+  // invented itself to /payment/verify/. The backend (correctly) rejects an
+  // order id it never issued, and that rejection was swallowed -- so a
+  // customer could be told their payment had succeeded while no money had
+  // moved and the server had recorded no payment at all. Roughly one booking
+  // in twenty was also told, at random, that payment had failed.
+  //
+  // Presenting that as a working payment method is worse than not offering
+  // one, so it is off. A real implementation calls the server for an order
+  // (PaymentInitiateView), opens Razorpay Checkout with that order id, and
+  // sends the gateway's own payment_id and signature to /payment/verify/,
+  // which already verifies the HMAC server-side. Set VITE_PAYMENTS_ENABLED
+  // to "true" only once that path exists and has been tested end to end.
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) === 'true' &&
+    import.meta.env.VITE_RAZORPAY_KEY_ID &&
+    /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -11462,16 +11463,11 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        if (backendPaymentMethod === "ONLINE") {
-          try {
-            await apiRequest('/payment/verify/', {
-              method: 'POST',
-              json: { booking_id: res.data.id, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-            })
-          } catch (e) {
-            console.error("Failed to verify online payment:", e)
-          }
-        }
+        // A client cannot verify its own payment. The order id here was
+        // invented in the browser, so the server rejects it -- and a booking
+        // that looked "paid online" was in fact unpaid. Payment is confirmed
+        // only by /payment/verify/ with a gateway-issued order id, payment id
+        // and signature, which nothing in this app produces yet.
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,
