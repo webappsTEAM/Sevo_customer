@@ -16,8 +16,8 @@ import zipfile
 
 # Determine project root directory (directory where this script is located)
 SCRIPT_DIR = Path(__file__).resolve().parent
-CUSTOMER_DIR = SCRIPT_DIR
-VENDOR_DIR = Path(r"C:\Users\user\Desktop\SEVO\VEN\calservice-vendor").resolve()
+CUSTOMER_DIR = (SCRIPT_DIR.parent.parent / "CUS" / "calservices").resolve() if (SCRIPT_DIR.parent.parent / "CUS" / "calservices").exists() else Path(r"C:\Users\user\Desktop\SEVO\CUS\calservices").resolve()
+VENDOR_DIR = (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").resolve() if (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").exists() else Path(r"C:\Users\user\Desktop\SEVO\VEN\calservice-vendor").resolve()
 
 # Default directory patterns to exclude (installables, bloat, caches, build artifacts)
 DEFAULT_EXCLUDE_DIRS = {
@@ -95,11 +95,10 @@ DEFAULT_EXCLUDE_FILES = {
 
 
 def parse_args():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Default output: dedicated Desktop\sevo backup\ folder
+    # Dedicated backup folder requested by user: Desktop\sevo backup\calservices_latest.zip
     BACKUP_DIR = Path(r"C:\Users\user\Desktop\sevo backup")
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    default_output = BACKUP_DIR / f"calservices_archive_{timestamp}.zip"
+    default_output = BACKUP_DIR / "calservices_latest.zip"
 
     parser = argparse.ArgumentParser(
         description="Pack the codebase into a clean, lightweight zip archive excluding installables while preserving .env files.",
@@ -109,7 +108,7 @@ def parse_args():
     parser.add_argument(
         "-o", "--output",
         default=str(default_output),
-        help="Name or path of the output zip file",
+        help="Name or path of the output zip file (default: calservices_latest.zip)",
     )
     parser.add_argument(
         "--target",
@@ -151,24 +150,33 @@ def parse_args():
         help="Include node_modules folders (Warning: very large)",
     )
     parser.add_argument(
+        "--timestamp",
+        action="store_true",
+        help="Create a new timestamped zip file instead of updating calservices_latest.zip",
+    )
+    parser.add_argument(
         "--exclude-assets",
         dest="exclude_assets",
         action="store_true",
-        default=True,
-        help="Exclude heavy image/media asset folders (ASSET IMAGES, mockups). Saves ~330 MB (default: True).",
+        help="Exclude heavy image/media asset folders (ASSET IMAGES, mockups) to save space",
     )
     parser.add_argument(
         "--include-assets",
         dest="exclude_assets",
         action="store_false",
-        help="Include heavy image/media asset folders in archive.",
+        help="Include heavy image/media asset folders in archive (default)",
     )
+    parser.set_defaults(exclude_assets=False)
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List files that would be archived without creating the zip file",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.timestamp and args.output == str(default_output):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.output = str(BACKUP_DIR / f"calservices_archive_{ts}.zip")
+    return args
 
 
 def is_matching(filename: str, patterns: set) -> bool:
@@ -178,12 +186,13 @@ def is_matching(filename: str, patterns: set) -> bool:
     return False
 
 
-def format_size(size_bytes: int | float) -> str:
+def format_size(size_bytes: float | int) -> str:
+    size = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.2f} TB"
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} TB"
 
 
 def collect_files(
@@ -398,14 +407,16 @@ def main():
     print(f" Saved Location  : {output_path}")
     print(f" Uncompressed    : {format_size(total_uncompressed)}")
     print(f" Compressed Size : {format_size(zip_size)}")
-    print(f" Space Reduction : {saved_pct:.1f}% saved")
     print(f" .env Files      : {total_env_files} included")
     latest_path = output_path.parent / "calservices_latest.zip"
-    try:
-        shutil.copy2(output_path, latest_path)
-        print(f" Latest Backup   : {latest_path}")
-    except Exception as e:
-        print(f" [Note] Could not update latest alias: {e}")
+    if output_path.resolve() != latest_path.resolve():
+        try:
+            shutil.copy2(output_path, latest_path)
+            print(f" Latest Backup   : {latest_path}")
+        except Exception as e:
+            print(f" [Note] Could not update latest alias: {e}")
+    else:
+        print(f" Latest Backup   : {output_path} (Updated directly)")
 
     print(f" Total Duration  : {elapsed:.2f}s")
     print("=" * 65 + "\n")

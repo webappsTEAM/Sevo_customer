@@ -375,6 +375,15 @@ class ServiceRequest(models.Model):
     LEG_SEQUENCE = [
         "EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED",
     ]
+    PM_LEG_SEQUENCE = [
+        "ASSIGNED", "TEAM_EN_ROUTE", "ARRIVED_PICKUP", "PACKING", "DISMANTLING",
+        "LOADING", "IN_TRANSIT", "ARRIVED_DROP", "UNLOADING", "REASSEMBLY",
+        "UNPACKING", "DELIVERED", "COMPLETED",
+    ]
+    PM_SPECIFIC_LEGS = {
+        "ASSIGNED", "TEAM_EN_ROUTE", "ARRIVED_PICKUP", "PACKING", "DISMANTLING",
+        "IN_TRANSIT", "ARRIVED_DROP", "REASSEMBLY", "UNPACKING", "COMPLETED",
+    }
 
     def set_logistics_leg(self, leg, actor=None, save=True):
         """
@@ -407,8 +416,13 @@ class ServiceRequest(models.Model):
         if self.logistics_leg == leg:
             return False
         if self.logistics_leg:
+            cat = (self.service_category or "").strip().lower()
+            if cat == "packers_movers" or self.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
+                seq = self.PM_LEG_SEQUENCE
+            else:
+                seq = self.LEG_SEQUENCE
             try:
-                if self.LEG_SEQUENCE.index(leg) < self.LEG_SEQUENCE.index(self.logistics_leg):
+                if seq.index(leg) < seq.index(self.logistics_leg):
                     return False
             except ValueError:
                 # A leg outside the ordered sequence: fall through and apply
