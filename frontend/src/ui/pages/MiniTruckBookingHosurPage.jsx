@@ -1565,14 +1565,26 @@ export function MiniTruckBookingHosurPage() {
         } catch (e) {}
       }
     } catch (err) {
-      console.warn("Booking creation fallback:", err)
-      const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
-      setLastBookingId(fallbackCRN)
-      setLastTrackingToken(null)
-      setVehicleSelectorOpen(false)
-      setSlotStepperOpen(false)
-      setGoodsTypeModalOpen(false)
-      setLookingForPartnerOpen(true)
+      // A booking exists only if the backend created the ServiceRequest.
+      console.error("Booking creation failed:", err)
+      let detail = err?.body?.detail
+      if (!detail && err?.body?.errors && typeof err.body.errors === "object") {
+        const firstField = Object.keys(err.body.errors)[0]
+        const firstErr = err.body.errors[firstField]
+        detail = Array.isArray(firstErr) ? firstErr[0] : String(firstErr)
+      }
+      if (!detail) {
+        detail =
+          err?.body?.message ||
+          (err?.status === 401
+            ? "Please sign in again to complete this booking."
+            : "")
+      }
+      setBookingError(
+        detail ||
+          "We couldn't confirm your booking just now. Nothing has been charged — please try again."
+      )
+      setLookingForPartnerOpen(false)
     } finally {
       setBookingSubmitting(false)
     }
