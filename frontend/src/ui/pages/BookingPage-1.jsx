@@ -9227,7 +9227,13 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -9266,6 +9272,17 @@ function StepWorkflowCheckout({
     price: (category?.id === "painting" || category?.id === "mason") ? 0 : 1198,
     quantity: 1
   }]
+
+  const categoryKey = useMemo(() => {
+    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
+    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
+    return "general";
+  }, [category, items]);
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const isPaintingOrMason = Boolean(
@@ -9343,17 +9360,6 @@ function StepWorkflowCheckout({
       { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
     ]
   };
-
-  const categoryKey = useMemo(() => {
-    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
-    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
-    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
-    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
-    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
-    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
-    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
-    return "general";
-  }, [category, items]);
 
   const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
 
@@ -10979,8 +10985,10 @@ export function BookingPage() {
   }
 
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
-    if (!user) {
-      // Save the full booking context before opening auth — it will be restored on success
+    console.log("DEBUG: performServiceSubmit triggered", { paymentMethod, selDate, selTime, phone: formData.phone, address: formData.address, user });
+    const rawPhone = String(formData.phone || user?.phone || "").trim().replace(/\D/g, "");
+    const hasValidPhone = rawPhone.length >= 10;
+    if (!user && !hasValidPhone) {
       savePendingIntent({
         type: "CONFIRM_BOOKING",
         returnPath: window.location.pathname + window.location.search,
@@ -10991,23 +10999,34 @@ export function BookingPage() {
         selTime,
         formData,
         paymentMethod,
-      })
-      setShowCustomerEntryModal(true)
-      return
+      });
+      setShowCustomerEntryModal(true);
+      return;
     }
+
+    if (!formData.address || !formData.address.trim() || formData.address === "Set location") {
+      setError("Please select a valid service address.");
+      return;
+    }
+
     if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
       setError("Please select an upcoming date and time slot.");
-      return
+      return;
     }
-    setLoading(true); setError(null)
+    setLoading(true); setError(null);
     // Map frontend choices to backend enum values
-    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
+    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD";
 
-    const data = new FormData()
-    data.append("customer_name", formData.customer_name)
-    data.append("phone", formData.phone)
-    data.append("email", formData.email || "")
-    data.append("service_category", category?.id || "general")
+    const finalCustomerName = (formData.customer_name && formData.customer_name.trim())
+      ? formData.customer_name.trim()
+      : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer");
+    const finalPhone = rawPhone ? rawPhone.slice(-10) : (user?.phone || "");
+
+    const data = new FormData();
+    data.append("customer_name", finalCustomerName);
+    data.append("phone", finalPhone);
+    data.append("email", formData.email || user?.email || "");
+    data.append("service_category", category?.id || "general");
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
@@ -11030,8 +11049,6 @@ export function BookingPage() {
       category?.slug === "painting" ||
       category?.slug === "mason" ||
       category?.slug === "masonry" ||
-      categoryKey === "painting" ||
-      categoryKey === "masonry" ||
       (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;

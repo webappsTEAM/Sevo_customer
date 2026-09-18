@@ -2210,26 +2210,12 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    setPayPhase('processing')
-    setPayError('')
-    await new Promise(r => setTimeout(r, 2200))
-    const success = Math.random() > 0.05
-    if (success) {
-      setPayPhase('success')
-      if (bookingId) {
-        try {
-          await apiRequest('/payment/verify/', {
-            method: 'POST',
-            json: { booking_id: bookingId, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-          })
-        } catch (e) { /* non-critical */ }
-      }
-      await new Promise(r => setTimeout(r, 1200))
-      onConfirm('online')
-    } else {
-      setPayPhase('failed')
-      setPayError('Payment failed. Please check your details and try again.')
-    }
+    // This screen is unreachable while online payment is disabled above. It
+    // fails closed rather than simulating a result: nothing here has taken a
+    // payment, so it must never report one as taken. See the note on
+    // isOnlinePaymentAvailable for what a real implementation does.
+    setPayPhase('failed')
+    setPayError('Online payment is not available yet. Please choose Cash on Service.')
   }
 
   const options = [
@@ -9420,13 +9406,30 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  // Was gated on the key starting with "rzp_live_" specifically -- that
-  // hides "Pay Online" for every non-production environment, including
-  // local dev/staging configured with a perfectly valid Razorpay TEST key
-  // (VITE_RAZORPAY_KEY_ID=rzp_test_...), which is exactly the normal setup
-  // while building/testing. Accept any configured Razorpay key (test or
-  // live) instead -- production simply uses a live key in its own .env.
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID)))
+  // ONLINE PAYMENT IS DISABLED UNTIL A REAL GATEWAY FLOW IS WIRED.
+  //
+  // The "Pay via UPI" flow on this page never contacted a payment gateway.
+  // It waited 2.2 seconds, decided the outcome with `Math.random() > 0.05`,
+  // showed the customer a success screen, and posted an order id it had
+  // invented itself to /payment/verify/. The backend (correctly) rejects an
+  // order id it never issued, and that rejection was swallowed -- so a
+  // customer could be told their payment had succeeded while no money had
+  // moved and the server had recorded no payment at all. Roughly one booking
+  // in twenty was also told, at random, that payment had failed.
+  //
+  // Presenting that as a working payment method is worse than not offering
+  // one, so it is off. A real implementation calls the server for an order
+  // (PaymentInitiateView), opens Razorpay Checkout with that order id, and
+  // sends the gateway's own payment_id and signature to /payment/verify/,
+  // which already verifies the HMAC server-side. Set VITE_PAYMENTS_ENABLED
+  // to "true" only once that path exists and has been tested end to end.
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -9465,6 +9468,17 @@ function StepWorkflowCheckout({
     price: (category?.id === "painting" || category?.id === "mason") ? 0 : 1198,
     quantity: 1
   }]
+
+  const categoryKey = useMemo(() => {
+    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
+    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
+    return "general";
+  }, [category, items]);
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const isPaintingOrMason = Boolean(
@@ -9542,17 +9556,6 @@ function StepWorkflowCheckout({
       { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
     ]
   };
-
-  const categoryKey = useMemo(() => {
-    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
-    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
-    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
-    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
-    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
-    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
-    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
-    return "general";
-  }, [category, items]);
 
   const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
 
@@ -10039,9 +10042,13 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon)}
+                      type="button"
+                      onClick={() => {
+                        console.log("Confirm Booking clicked!", { payMethod, code: appliedCoupon?.code, tipAmount });
+                        onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon);
+                      }}
                       disabled={loading}
-                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300 cursor-pointer"
                     >
                       {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
                     </button>
@@ -11202,16 +11209,14 @@ export function BookingPage() {
   // pause and ask -- the backend's unified checkout never infers this on
   // its own, so neither does this.
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
-    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
-      setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
-      return
-    }
     return performServiceSubmit(paymentMethod, couponCode, tipValue, couponObj, checkoutBothConfirmed)
   }
 
   const performServiceSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null, checkoutBoth = false) => {
-    if (!user) {
-      // Save the full booking context before opening auth — it will be restored on success
+    console.log("DEBUG: performServiceSubmit triggered", { paymentMethod, selDate, selTime, phone: formData.phone, address: formData.address, user });
+    const rawPhone = String(formData.phone || user?.phone || "").trim().replace(/\D/g, "");
+    const hasValidPhone = rawPhone.length >= 10;
+    if (!user && !hasValidPhone) {
       savePendingIntent({
         type: "CONFIRM_BOOKING",
         returnPath: window.location.pathname + window.location.search,
@@ -11222,23 +11227,34 @@ export function BookingPage() {
         selTime,
         formData,
         paymentMethod,
-      })
-      setShowCustomerEntryModal(true)
-      return
+      });
+      setShowCustomerEntryModal(true);
+      return;
     }
+
+    if (!formData.address || !formData.address.trim() || formData.address === "Set location") {
+      setError("Please select a valid service address.");
+      return;
+    }
+
     if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
       setError("Please select an upcoming date and time slot.");
-      return
+      return;
     }
-    setLoading(true); setError(null)
+    setLoading(true); setError(null);
     // Map frontend choices to backend enum values
-    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
+    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD";
 
-    const data = new FormData()
-    data.append("customer_name", formData.customer_name)
-    data.append("phone", formData.phone)
-    data.append("email", formData.email || "")
-    data.append("service_category", category?.id || "general")
+    const finalCustomerName = (formData.customer_name && formData.customer_name.trim())
+      ? formData.customer_name.trim()
+      : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer");
+    const finalPhone = rawPhone ? rawPhone.slice(-10) : (user?.phone || "");
+
+    const data = new FormData();
+    data.append("customer_name", finalCustomerName);
+    data.append("phone", finalPhone);
+    data.append("email", formData.email || user?.email || "");
+    data.append("service_category", category?.id || "general");
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
@@ -11261,8 +11277,6 @@ export function BookingPage() {
       category?.slug === "painting" ||
       category?.slug === "mason" ||
       category?.slug === "masonry" ||
-      categoryKey === "painting" ||
-      categoryKey === "masonry" ||
       (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
@@ -11462,16 +11476,11 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        if (backendPaymentMethod === "ONLINE") {
-          try {
-            await apiRequest('/payment/verify/', {
-              method: 'POST',
-              json: { booking_id: res.data.id, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-            })
-          } catch (e) {
-            console.error("Failed to verify online payment:", e)
-          }
-        }
+        // A client cannot verify its own payment. The order id here was
+        // invented in the browser, so the server rejects it -- and a booking
+        // that looked "paid online" was in fact unpaid. Payment is confirmed
+        // only by /payment/verify/ with a gateway-issued order id, payment id
+        // and signature, which nothing in this app produces yet.
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,
