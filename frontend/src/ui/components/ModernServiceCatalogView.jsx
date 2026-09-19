@@ -20,6 +20,11 @@ const SERVICE_ICON_MAP = {
   ac: Wrench,
   hvac: Wrench,
   heating: Wrench,
+  geyser: Wrench,
+  heater: Wrench,
+  purifier: Sparkles,
+  ro: Sparkles,
+  water: Sparkles,
   cleaning: Sparkles,
   fridge: Wrench,
   refrigerator: Wrench,
@@ -32,6 +37,14 @@ const SERVICE_ICON_MAP = {
   wash: Sparkles,
   micro: Wrench,
   tv: Layers,
+  room: Home,
+  sofa: Sparkles,
+  carpet: Sparkles,
+  curtain: Sparkles,
+  bath: Sparkles,
+  kitchen: Sparkles,
+  chimney: Wrench,
+  drain: Wrench,
 }
 
 function resolveServiceIcon(name = "") {
@@ -40,6 +53,86 @@ function resolveServiceIcon(name = "") {
     if (n.includes(k)) return Icon
   }
   return Wrench
+}
+
+function getCategorySymptomGuide(category) {
+  const k = (category?.slug || category?.id || category?.name || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
+  if (k.includes("ac") || k.includes("hvac") || k.includes("appliance")) {
+    return {
+      prompt: "What's wrong?",
+      subtitle: "Select your issue to find the exact diagnostic or maintenance package",
+      symptoms: [
+        { label: "❄️ AC Service & Gas", subtabQuery: "AC Service & Cleaning", keywords: ["ac service", "cleaning", "foam", "gas", "power jet"] },
+        { label: "🔧 AC Diagnostics & Repair", subtabQuery: "AC Repair & Diagnostics", keywords: ["repair", "diagnostic", "cooling", "leak"] },
+        { label: "⚡ Geyser / Water Heater", subtabQuery: "Geyser & Water Heater", keywords: ["geyser", "water heater", "heating", "thermostat"] },
+        { label: "💧 RO Water Purifier", subtabQuery: "Water Purifier RO", keywords: ["water purifier", "ro", "filter", "tds"] },
+        { label: "🧺 Washing Machine", subtabQuery: "Washing Machine", keywords: ["washing machine", "drain", "spin"] },
+        { label: "🧊 Refrigerator", subtabQuery: "Refrigerator", keywords: ["refrigerator", "fridge", "freezer"] },
+        { label: "📦 Install / Uninstall", subtabQuery: "Installation & Uninstallation", keywords: ["install", "uninstall"] },
+      ]
+    }
+  }
+  if (k.includes("clean") || k.includes("pest")) {
+    return {
+      prompt: "What do you need?",
+      subtitle: "Choose the area that requires professional deep sanitization",
+      symptoms: [
+        { label: "🛁 Bathroom & Weekly Plans", subtabQuery: "Bathroom Cleaning", keywords: ["bathroom", "washroom", "weekly", "limescale"] },
+        { label: "🍳 Kitchen & Appliances", subtabQuery: "Kitchen Cleaning", keywords: ["kitchen", "chimney", "appliance", "fridge", "stove"] },
+        { label: "🛋️ Sofa, Carpet & Curtains", subtabQuery: "Sofa, Carpet & Upholstery Cleaning", keywords: ["sofa", "carpet", "curtain", "upholstery", "stain"] },
+        { label: "🪟 Windows, Balcony & Room Care", subtabQuery: "Room Care & Mini Services", keywords: ["room", "window", "balcony", "living room", "bedroom", "fan"] },
+        { label: "🏠 Full Home Deep Clean", subtabQuery: "Full Home Deep Cleaning", keywords: ["full home", "house", "deep clean", "villa", "apartment"] },
+        { label: "🪳 Pest Control", subtabQuery: "Pest Control", keywords: ["pest", "cockroach", "termite", "bed bug"] },
+      ]
+    }
+  }
+  if (k.includes("paint")) {
+    return {
+      prompt: "What do you need?",
+      subtitle: "Book laser measurement consultation or room repainting",
+      symptoms: [
+        { label: "🏠 Interior painting", subtabQuery: "Interior Painting", keywords: ["interior"] },
+        { label: "🏢 Exterior painting", subtabQuery: "Exterior Painting", keywords: ["exterior"] },
+        { label: "💧 Waterproofing", subtabQuery: "Waterproofing", keywords: ["waterproofing", "damp", "seepage"] },
+        { label: "🪵 Wood & metal painting", subtabQuery: "Wood & Metal", keywords: ["wood", "metal", "enamel"] },
+      ]
+    }
+  }
+  if (k.includes("mason")) {
+    return {
+      prompt: "What do you need?",
+      subtitle: "Verified expert masons with laser measurements",
+      symptoms: [
+        { label: "🧱 Tile fixing", subtabQuery: "Tile Work", keywords: ["tile", "fixing", "laying"] },
+        { label: "🔨 Minor masonry work", subtabQuery: "Masonry Repair", keywords: ["masonry", "repair", "plaster", "wall"] },
+      ]
+    }
+  }
+  if (k.includes("transport") || k.includes("goods") || k.includes("truck") || k.includes("logistics")) {
+    return {
+      prompt: "What do you need?",
+      subtitle: "Doorstep transport with verified drivers and live GPS tracking",
+      symptoms: [
+        { label: "🚚 Move goods", route: "/trucks/hosur", keywords: ["truck", "goods"] },
+        { label: "📦 Send a package", route: "/two-wheelers/hosur", keywords: ["courier", "package"] },
+        { label: "🏠 Shift home", route: "/packers-and-movers/hosur", keywords: ["packers", "shift", "movers"] },
+        { label: "🛵 Two-wheeler delivery", route: "/two-wheelers/hosur", keywords: ["bike", "delivery"] },
+      ]
+    }
+  }
+  if (k.includes("elec") || k.includes("plumb") || k.includes("carpent") || k.includes("maint")) {
+    return {
+      prompt: "What needs fixing?",
+      subtitle: "Verified doorstep technicians, upfront rates & 30-day rework warranty",
+      symptoms: [
+        { label: "⚡ Switch / Socket / MCB", subtabQuery: "Electrician", keywords: ["switch", "socket", "mcb", "electric", "wiring"] },
+        { label: "🚰 Tap / Leak / Drain", subtabQuery: "Plumber", keywords: ["tap", "leak", "drain", "plumbing", "sink"] },
+        { label: "🚪 Door lock / Carpentry", subtabQuery: "Carpenter", keywords: ["door", "lock", "carpenter", "handle", "wood"] },
+        { label: "🌀 Fan installation", subtabQuery: "Electrician", keywords: ["fan", "regulator", "installation"] },
+      ]
+    }
+  }
+  return null
 }
 
 export function ModernServiceCatalogView({
@@ -152,6 +245,31 @@ export function ModernServiceCatalogView({
       setDetailsPackage(prev => patch(prev))
     } catch (err) {
       console.error("Failed to save package field:", err)
+    }
+  }
+
+  const symptomGuide = useMemo(() => getCategorySymptomGuide(category), [category])
+
+  const handleSymptomClick = (sym) => {
+    if (sym.route) {
+      navigate(sym.route)
+      return
+    }
+    if (services && services.length > 0) {
+      const found = services.find(s => {
+        const sName = (s.name || "").toLowerCase()
+        return (sym.keywords || []).some(kw => sName.includes(kw.toLowerCase())) ||
+               (sym.subtabQuery && sName.includes(sym.subtabQuery.toLowerCase()))
+      })
+      if (found) {
+        setActiveSubService(found)
+        setSearchParams(prev => {
+          const next = new URLSearchParams(prev)
+          next.set("subtab", found.name)
+          next.set("subTab", found.name)
+          return next
+        }, { replace: true })
+      }
     }
   }
 
@@ -268,6 +386,51 @@ export function ModernServiceCatalogView({
     })
   }
 
+  // Smart route forwarding for Goods & Transport packages to dedicated booking flows
+  const handleGoodsTransportProceed = (pkg) => {
+    const pkgName = (pkg?.name || "").toLowerCase()
+    const pkgSlug = (pkg?.slug || "").toLowerCase()
+    const subName = (activeSubService?.name || "").toLowerCase()
+    const subSlug = (activeSubService?.slug || "").toLowerCase()
+
+    if (
+      subSlug.includes("2_wheeler") ||
+      subSlug.includes("two_wheeler") ||
+      subName.includes("2-wheeler") ||
+      subName.includes("bike") ||
+      pkgSlug.includes("bike") ||
+      pkgSlug.includes("scooter") ||
+      pkgName.includes("bike") ||
+      pkgName.includes("scooter")
+    ) {
+      navigate("/two-wheelers/hosur")
+      return
+    }
+
+    if (
+      subSlug.includes("packers") ||
+      subName.includes("packers") ||
+      pkgSlug.includes("shifting") ||
+      pkgSlug.includes("packers") ||
+      pkgName.includes("shifting") ||
+      pkgName.includes("packers")
+    ) {
+      navigate("/packers-and-movers/hosur")
+      return
+    }
+
+    // Default to Mini Truck Hosur specialized booking page
+    navigate("/trucks/hosur")
+  }
+
+  const getLogisticsButtonText = (pkg) => {
+    const pkgName = (pkg?.name || "").toLowerCase()
+    const subName = (activeSubService?.name || "").toLowerCase()
+    if (subName.includes("packers") || pkgName.includes("shifting")) return "Book Shifting"
+    if (subName.includes("2-wheeler") || pkgName.includes("bike") || pkgName.includes("scooter")) return "Book Delivery"
+    return "Book Vehicle"
+  }
+
   const cartTotalQty = cartItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
   const cartSubtotal = cartItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
   // For consultation categories, convenience fee and GST apply only when beyond 15 km
@@ -292,6 +455,10 @@ export function ModernServiceCatalogView({
     appliance: "ac_appliance",
     appliance_repair: "ac_appliance",
     ac_appliance: "ac_appliance",
+    geyser: "ac_appliance",
+    water_heater: "ac_appliance",
+    water_purifier: "ac_appliance",
+    ro: "ac_appliance",
     cleaning: "home_pest_control",
     home_cleaning: "home_pest_control",
     pest_control: "home_pest_control",
@@ -301,9 +468,18 @@ export function ModernServiceCatalogView({
     sofa_cleaning: "home_pest_control",
     kitchen_cleaning: "home_pest_control",
     bathroom_cleaning: "home_pest_control",
-    plumbing: "home_pest_control",
-    electrical: "home_pest_control",
-    carpentry: "home_pest_control",
+    room_care: "home_pest_control",
+    room_care_mini_services: "home_pest_control",
+    mini_services: "home_pest_control",
+    balcony_cleaning: "home_pest_control",
+    window_cleaning: "home_pest_control",
+    plumbing: "electrician_plumbing_carpentry",
+    electrical: "electrician_plumbing_carpentry",
+    carpentry: "electrician_plumbing_carpentry",
+    electrician: "electrician_plumbing_carpentry",
+    plumber: "electrician_plumbing_carpentry",
+    carpenter: "electrician_plumbing_carpentry",
+    electrician_plumbing_carpentry: "electrician_plumbing_carpentry",
     painting: "paintings",
     paintings: "paintings",
     paint: "paintings",
@@ -530,17 +706,65 @@ export function ModernServiceCatalogView({
     )
   }, [activeSubService, packages, category?.id, category?.slug])
 
-  // 3. Keep selectedPackage in sync with active sub-service
+  // Available Service Groups for the active service (from Service.customization.subtabs)
+  const serviceGroups = useMemo(() => {
+    const rawTabs = activeSubService?.customization?.subtabs
+    if (!Array.isArray(rawTabs) || rawTabs.length <= 1) return []
+    return rawTabs.filter(t => t && t.enabled !== false)
+  }, [activeSubService])
+
+  // Active Service Group key
+  const urlGroup = searchParams.get("group") || searchParams.get("serviceGroup")
+  const [activeGroupKey, setActiveGroupKey] = useState(urlGroup || "all")
+
+  // Keep activeGroupKey in sync with active service and url
   useEffect(() => {
-    if (currentServicePackages.length > 0) {
-      const alreadySelected = currentServicePackages.find(p => p.id === selectedPackage?.id)
-      if (!alreadySelected) {
-        setSelectedPackage(currentServicePackages[0])
+    if (serviceGroups.length > 1) {
+      if (urlGroup && serviceGroups.some(g => g.id === urlGroup)) {
+        setActiveGroupKey(urlGroup)
+      } else if (activeGroupKey === "all" || !serviceGroups.some(g => g.id === activeGroupKey)) {
+        setActiveGroupKey(serviceGroups[0].id)
       }
+    } else {
+      setActiveGroupKey("all")
+    }
+  }, [serviceGroups, urlGroup, activeSubService?.id])
+
+  // Filtered packages by active service group
+  const displayedPackages = useMemo(() => {
+    if (!serviceGroups || serviceGroups.length <= 1 || activeGroupKey === "all") {
+      return currentServicePackages
+    }
+    const filtered = currentServicePackages.filter(p => p.sub_service_key === activeGroupKey)
+    return filtered.length > 0 ? filtered : currentServicePackages
+  }, [currentServicePackages, serviceGroups, activeGroupKey])
+
+  const handleSelectServiceGroup = (groupId) => {
+    setActiveGroupKey(groupId)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (groupId && groupId !== "all") {
+        next.set("group", groupId)
+      } else {
+        next.delete("group")
+      }
+      return next
+    }, { replace: true })
+  }
+
+  // 3. Keep selectedPackage in sync with displayed packages
+  useEffect(() => {
+    if (displayedPackages.length > 0) {
+      const alreadySelected = displayedPackages.find(p => p.id === selectedPackage?.id)
+      if (!alreadySelected) {
+        setSelectedPackage(displayedPackages[0])
+      }
+    } else if (currentServicePackages.length > 0) {
+      setSelectedPackage(currentServicePackages[0])
     } else {
       setSelectedPackage(null)
     }
-  }, [currentServicePackages])
+  }, [displayedPackages, currentServicePackages])
 
   // "What's Included" / "What You Need to Keep Ready" moved out of the
   // always-visible page body and into a per-package "See details" modal
@@ -570,6 +794,34 @@ export function ModernServiceCatalogView({
       "Post-service operational test & cooling/functional verification",
       "Clean-up of work area and verified digital service sign-off"
     ]
+  }
+
+  const getExcludesChecklist = (pkg) => {
+    if (Array.isArray(pkg?.excludes) && pkg.excludes.length > 0) {
+      return pkg.excludes
+    }
+    return [
+      "Spare parts, replacements & consumable components (billed as per rate card)",
+      "Major piping, external scaffolding or civil masonry modifications",
+      "Refrigerant gas top-up beyond basic diagnostic leak testing",
+      "Repairs for pre-existing external physical casing damage"
+    ]
+  }
+
+  const getPossibleCharges = (pkg) => {
+    return [
+      { item: "Spare parts / hardware replacement", fee: "As per SEVO standard rate card", note: "Approved with customer before installing" },
+      { item: "Refrigerant gas top-up (if required)", fee: "Market transparent unit rate", note: "Only charged if pressure test requires it" },
+      { item: "Height scaffolding above 10ft", fee: "₹150 height safety support", note: "Optional if customer provides ladder" },
+    ]
+  }
+
+  const getWarrantyDetails = (pkg) => {
+    return {
+      duration: "30-Day Doorstep Guarantee",
+      coverage: "Full service warranty covering service workmanship and diagnostic accuracy",
+      revisit: "Free revisit within 30 days if the exact issue recurs"
+    }
   }
 
   // Handle proceed to schedule -- checks out every item queued in the cart
@@ -670,6 +922,38 @@ export function ModernServiceCatalogView({
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-6">
+        {/* ── Human-Language Symptom Discovery Guide ── */}
+        {symptomGuide && (
+          <div className="mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-2xl bg-white border border-emerald-100 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  {symptomGuide.prompt}
+                </span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60 hidden sm:inline">
+                  Instant Match
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                {symptomGuide.subtitle}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+              {symptomGuide.symptoms.map((sym, sIdx) => (
+                <button
+                  key={sIdx}
+                  type="button"
+                  onClick={() => handleSymptomClick(sym)}
+                  className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-emerald-50 hover:border-emerald-500 border border-slate-200 text-slate-800 hover:text-emerald-900 text-xs font-bold shrink-0 transition-all cursor-pointer active:scale-95 shadow-2xs"
+                >
+                  {sym.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
           {/* ════ SERVICES SUBTABS (Mobile Horizontal Bar + Desktop Vertical Sidebar) ════ */}
@@ -925,7 +1209,7 @@ export function ModernServiceCatalogView({
                     </p>
                   )}
                 </div>
-                {currentServicePackages.length > 1 && (
+                {displayedPackages.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setIsCompareModalOpen(true)}
@@ -936,6 +1220,66 @@ export function ModernServiceCatalogView({
                   </button>
                 )}
               </div>
+
+              {/* ── 3-Tier Service Group Navigation Bar (Category -> Service -> Service Group -> Package) ── */}
+              {serviceGroups.length > 1 && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                    {serviceGroups.map(group => {
+                      const isSelected = activeGroupKey === group.id
+                      const groupCount = currentServicePackages.filter(p => p.sub_service_key === group.id).length
+                      return (
+                        <button
+                          key={group.id}
+                          type="button"
+                          onClick={() => handleSelectServiceGroup(group.id)}
+                          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
+                            isSelected
+                              ? "bg-slate-900 border-slate-900 text-white shadow-xs"
+                              : "bg-white border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span>{group.label}</span>
+                          {groupCount > 0 && (
+                            <span
+                              className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                                isSelected
+                                  ? "bg-white/20 text-white"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {groupCount}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectServiceGroup("all")}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
+                        activeGroupKey === "all"
+                          ? "bg-slate-900 border-slate-900 text-white shadow-xs"
+                          : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span>All ({currentServicePackages.length})</span>
+                    </button>
+                  </div>
+
+                  {/* Active Group Contextual Description Helper */}
+                  {(() => {
+                    const activeGroupObj = serviceGroups.find(g => g.id === activeGroupKey)
+                    if (!activeGroupObj || !activeGroupObj.description) return null
+                    return (
+                      <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 leading-snug">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-medium">{activeGroupObj.description}</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
 
               {/* Package List. Goods & Transport gets a "vehicle card" grid
                   (image up top, capacity/spec bullets, Starting-from price,
@@ -948,7 +1292,7 @@ export function ModernServiceCatalogView({
                 ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                 : "flex flex-col gap-3.5"
               }>
-                {currentServicePackages.map(pkg => {
+                {displayedPackages.map(pkg => {
                   const qty = getCartQty(pkg)
                   const isSelected = qty > 0
 
@@ -1048,6 +1392,21 @@ export function ModernServiceCatalogView({
                           )}
                         </div>
 
+                        {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
+                          <div className="space-y-1 mt-2.5">
+                            {pkg.includes.slice(0, 2).map((inc, i) => {
+                              const text = typeof inc === "object" ? (inc.text || inc.name || "") : String(inc || "")
+                              if (!text) return null
+                              return (
+                                <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                                  <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span className="truncate">{text}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
                         <div className="mt-3 pt-3 border-t border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                             Starting from
@@ -1086,39 +1445,17 @@ export function ModernServiceCatalogView({
                           >
                             Know More
                           </button>
-                          {qty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                addToCart(pkg)
-                              }}
-                              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1"
-                            >
-                              <span>Proceed to Booking</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <div className="flex-1 flex items-center justify-between gap-2 py-1.5 px-2 rounded-xl bg-emerald-600 text-white">
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); decrementCartItem(pkg) }}
-                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
-                                aria-label="Decrease quantity"
-                              >
-                                −
-                              </button>
-                              <span className="text-xs font-black">{qty}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); incrementCartItem(pkg) }}
-                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
-                                aria-label="Increase quantity"
-                              >
-                                +
-                              </button>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleGoodsTransportProceed(pkg)
+                            }}
+                            className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1"
+                          >
+                            <span>{getLogisticsButtonText(pkg)}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     )
@@ -1128,150 +1465,322 @@ export function ModernServiceCatalogView({
                     <div
                       key={pkg.id}
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`relative rounded-2xl border-2 bg-white transition-all flex flex-col sm:flex-row gap-4 p-4 sm:p-5 cursor-pointer ${
+                      className={`relative rounded-2xl border-2 bg-white transition-all p-3.5 sm:p-5 cursor-pointer ${
                         isSelected
                           ? "border-emerald-600 shadow-xs ring-1 ring-emerald-500/30"
                           : "border-slate-200/90 hover:border-slate-300 hover:shadow-2xs"
                       }`}
                     >
                       {pkg.popular && (
-                        <div className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black shadow-sm">
+                        <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-10 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-400 text-amber-950 text-[9px] sm:text-[10px] font-black shadow-sm">
                           Popular
                         </div>
                       )}
 
-                      {/* Package Image */}
-                      <div className="w-full sm:w-32 h-32 sm:h-auto shrink-0 rounded-xl overflow-hidden bg-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                        {serviceEditMode && pkg.id ? (
-                          <EditableImage
-                            active={true}
-                            value={pkg.image}
-                            alt={pkg.name}
-                            assetType="services"
-                            className="w-full h-full"
-                            imgClassName="w-full h-full object-cover"
-                            onSave={(v) => handleSaveServiceField(pkg, "image", v)}
-                          />
-                        ) : pkg.image ? (
-                          <img
-                            src={resolveImageUrl(pkg.image)}
-                            alt={pkg.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                            <Wrench className="w-8 h-8 text-emerald-700" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug pr-14 sm:pr-0" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                      {/* ── DESKTOP LAYOUT (>= sm: 640px) ── */}
+                      <div className="hidden sm:flex flex-row gap-4">
+                        {/* Package Image */}
+                        <div className="w-32 h-32 shrink-0 rounded-xl overflow-hidden bg-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
                           {serviceEditMode && pkg.id ? (
-                            <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
+                            <EditableImage
+                              active={true}
+                              value={pkg.image}
+                              alt={pkg.name}
+                              assetType="services"
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover"
+                              onSave={(v) => handleSaveServiceField(pkg, "image", v)}
+                            />
+                          ) : pkg.image ? (
+                            <img
+                              src={resolveImageUrl(pkg.image)}
+                              alt={pkg.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
+                              }}
+                            />
                           ) : (
-                            pkg.name
-                          )}
-                        </h4>
-                        <p className="text-xs text-slate-500 font-normal line-clamp-2 leading-relaxed" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                          {serviceEditMode && pkg.id ? (
-                            <EditableText active={true} value={pkg.description} multiline onSave={(v) => handleSaveServiceField(pkg, "description", v)} />
-                          ) : (
-                            pkg.short_description || pkg.description || "Comprehensive service with certified pro execution."
-                          )}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            setDetailsPackage(pkg)
-                          }}
-                          className="relative z-10 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline decoration-indigo-200 underline-offset-2 cursor-pointer"
-                        >
-                          See details
-                        </button>
-                      </div>
-
-                      {/* Price + Action */}
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:w-48 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                        <div className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0.5">
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-lg font-black text-slate-900">
-                              {serviceEditMode && pkg.id ? (
-                                <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
-                              ) : (
-                                `₹${finalPrice.toLocaleString("en-IN")}`
-                              )}
-                            </span>
-                            {isConsultationCategory && (
-                              <span className="text-xs font-bold text-slate-500">
-                                / sq.ft
-                              </span>
-                            )}
-                          </div>
-                          {isConsultationCategory ? (
-                            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
-                              Rate Card Unit
+                            <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                              <Wrench className="w-8 h-8 text-emerald-700" />
                             </div>
-                          ) : hasOffer ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold text-slate-400 line-through">
-                                ₹{mrp.toLocaleString("en-IN")}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
-                                {discountPct}% OFF
-                              </span>
-                            </div>
-                          ) : null}
+                          )}
                         </div>
 
-                        {/* Quantity stepper button (unified natural UI) */}
-                        {qty === 0 ? (
+                        {/* Info */}
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-base font-black text-slate-900 leading-snug" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                              {serviceEditMode && pkg.id ? (
+                                <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
+                              ) : (
+                                pkg.name
+                              )}
+                            </h4>
+                          </div>
+
+                          {/* Key Metrics */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs py-0.5">
+                            <span className="inline-flex items-center gap-1 text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
+                              <Clock className="w-3 h-3 text-emerald-600" />
+                              {pkg.duration || "45–60 min"}
+                            </span>
+                            {Boolean(pkg.rating || (category?.rating && category.rating !== "4.8")) && (
+                              <span className="inline-flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md">
+                                <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                                {pkg.rating || category.rating} {pkg.reviews_count ? `(${pkg.reviews_count})` : (category.reviews_count ? `(${category.reviews_count})` : "")}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              30-Day Guarantee
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-500 font-normal line-clamp-2 leading-relaxed" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                            {serviceEditMode && pkg.id ? (
+                              <EditableText active={true} value={pkg.description} multiline onSave={(v) => handleSaveServiceField(pkg, "description", v)} />
+                            ) : (
+                              pkg.short_description || pkg.description || "Comprehensive service with certified pro execution."
+                            )}
+                          </p>
+
+                          {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
+                            <div className="space-y-1 pt-1 pb-0.5">
+                              {pkg.includes.slice(0, 3).map((inc, i) => {
+                                const text = typeof inc === "object" ? (inc.text || inc.name || "") : String(inc || "")
+                                if (!text) return null
+                                return (
+                                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                                    <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span className="truncate">{text}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              addToCart(pkg)
+                              e.preventDefault()
+                              setDetailsPackage(pkg)
                             }}
-                            className="py-2 px-4 sm:w-full rounded-xl font-bold text-xs transition-colors cursor-pointer whitespace-nowrap border border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                            className="relative z-10 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/80 transition-colors cursor-pointer mt-1"
                           >
-                            + Add
+                            <Info className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>View Details & Inclusions</span>
                           </button>
-                        ) : (
-                          <div className="flex items-center justify-between gap-2 sm:w-full py-1.5 px-2 rounded-xl bg-emerald-600 text-white">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                decrementCartItem(pkg)
-                              }}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
-                              aria-label="Decrease quantity"
-                            >
-                              −
-                            </button>
-                            <span className="text-xs font-black min-w-[1.25rem] text-center">
-                              {qty}
+                        </div>
+
+                        {/* Price + Action Rail */}
+                        <div className="flex flex-col items-end justify-between w-44 shrink-0 border-l border-slate-100 pl-4" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                          <div className="flex flex-col items-end gap-0.5 w-full">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-xl font-black text-slate-900">
+                                {serviceEditMode && pkg.id ? (
+                                  <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
+                                ) : (
+                                  `₹${finalPrice.toLocaleString("en-IN")}`
+                                )}
+                              </span>
+                              {!isConsultationCategory && (
+                                <span className="text-xs font-bold text-slate-500">
+                                  onwards
+                                </span>
+                              )}
+                              {isConsultationCategory && (
+                                <span className="text-xs font-bold text-slate-500">
+                                  / sq.ft
+                                </span>
+                              )}
+                            </div>
+                            {hasOffer && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-slate-400 line-through">
+                                  ₹{mrp.toLocaleString("en-IN")}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                                  {discountPct}% OFF
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Stepper / Add button */}
+                          <div className="w-full mt-3">
+                            {qty === 0 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  addToCart(pkg)
+                                }}
+                                className="w-full py-2 px-3 rounded-xl font-extrabold text-xs transition-colors cursor-pointer whitespace-nowrap border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-center"
+                              >
+                                {isConsultationCategory ? "Book Consultation" : "+ Add"}
+                              </button>
+                            ) : (
+                              <div className="flex items-center justify-between w-full py-1.5 px-2 rounded-xl bg-emerald-600 text-white shadow-xs">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    decrementCartItem(pkg)
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                  aria-label="Decrease quantity"
+                                >
+                                  −
+                                </button>
+                                <span className="text-xs font-black min-w-[1.25rem] text-center">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    incrementCartItem(pkg)
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                  aria-label="Increase quantity"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── MOBILE SPLIT CARD LAYOUT (< sm: 640px) ── */}
+                      <div className="sm:hidden flex items-start justify-between gap-3">
+                        {/* Left Column (Content, Metrics, Price) */}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <h4 className="text-sm font-black text-slate-900 leading-snug pr-8 line-clamp-2">
+                            {pkg.name}
+                          </h4>
+
+                          {/* Compact Metrics */}
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 py-0.5">
+                            {Boolean(pkg.rating || (category?.rating && category.rating !== "4.8")) && (
+                              <>
+                                <span className="flex items-center gap-0.5 text-amber-700 font-extrabold bg-amber-50 px-1.5 py-0.2 rounded">
+                                  <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" />
+                                  {pkg.rating || category.rating}
+                                </span>
+                                <span>•</span>
+                              </>
+                            )}
+                            <span className="flex items-center gap-0.5 text-slate-600">
+                              <Clock className="w-2.5 h-2.5 text-emerald-600" />
+                              {pkg.duration || "45m"}
                             </span>
+                          </div>
+
+                          {/* Price & Offer */}
+                          <div className="flex items-baseline gap-1.5 pt-0.5">
+                            <span className="text-base font-black text-slate-900">
+                              ₹{finalPrice.toLocaleString("en-IN")}
+                            </span>
+                            {hasOffer && (
+                              <>
+                                <span className="text-[11px] font-semibold text-slate-400 line-through">
+                                  ₹{mrp.toLocaleString("en-IN")}
+                                </span>
+                                <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
+                                  {discountPct}% OFF
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* 1 Inclusions snippet */}
+                          {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
+                            <div className="text-[10.5px] text-slate-500 truncate pt-0.5">
+                              ✓ {typeof pkg.includes[0] === "object" ? (pkg.includes[0].text || pkg.includes[0].name || "") : String(pkg.includes[0] || "")}
+                            </div>
+                          )}
+
+                          {/* Details Link */}
+                          <div className="pt-1">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                incrementCartItem(pkg)
+                                setDetailsPackage(pkg)
                               }}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
-                              aria-label="Increase quantity"
+                              className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
                             >
-                              +
+                              View details →
                             </button>
                           </div>
-                        )}
+                        </div>
+
+                        {/* Right Column (Thumbnail + Action Button) */}
+                        <div className="w-24 shrink-0 flex flex-col items-center gap-2">
+                          <div className="w-22 h-22 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 shadow-2xs">
+                            {pkg.image ? (
+                              <img
+                                src={resolveImageUrl(pkg.image)}
+                                alt={pkg.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                                <Wrench className="w-6 h-6 text-emerald-700" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Button */}
+                          <div className="w-full">
+                            {qty === 0 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  addToCart(pkg)
+                                }}
+                                className="w-full py-1.5 px-2 rounded-xl font-black text-xs border-2 border-emerald-600 bg-white text-emerald-700 hover:bg-emerald-50 text-center shadow-xs cursor-pointer active:scale-95 transition-all"
+                              >
+                                {isConsultationCategory ? "Consult" : "+ Add"}
+                              </button>
+                            ) : (
+                              <div className="w-full flex items-center justify-between py-1 px-1.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow-xs">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    decrementCartItem(pkg)
+                                  }}
+                                  className="w-5 h-5 flex items-center justify-center rounded bg-white/20 font-black text-xs cursor-pointer"
+                                >
+                                  −
+                                </button>
+                                <span className="text-xs font-black min-w-[1rem] text-center">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    incrementCartItem(pkg)
+                                  }}
+                                  className="w-5 h-5 flex items-center justify-center rounded bg-white/20 font-black text-xs cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )
@@ -1671,18 +2180,21 @@ export function ModernServiceCatalogView({
           comment above for why AnimatePresence isn't used here either. */}
       {detailsPackage && createPortal(
           <div
-            className="fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            className="fixed inset-0 z-[10050] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs"
             onClick={() => setDetailsPackage(null)}
           >
             <motion.div
               key={detailsPackage.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.98 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+              className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden"
             >
-              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              {/* Mobile bottom sheet drag indicator handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
                     {serviceEditMode && detailsPackage.id ? (
@@ -1708,21 +2220,21 @@ export function ModernServiceCatalogView({
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto flex-1 space-y-5">
-                {/* What's Included */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                {/* 1. What's Included */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
-                      <Settings className="w-4 h-4 text-sky-600" />
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     </div>
                     <h4 className="text-sm sm:text-base font-black text-slate-900">
                       What's Included
                     </h4>
                   </div>
-                  <ul className="space-y-2.5">
+                  <ul className="space-y-2 pl-1">
                     {getIncludesChecklist(detailsPackage).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                         <span className="text-xs font-medium text-slate-700 leading-relaxed">
                           {typeof item === "string" ? item : (item?.text || "")}
                         </span>
@@ -1731,31 +2243,105 @@ export function ModernServiceCatalogView({
                   </ul>
                 </div>
 
-                {/* What You Need to Keep Ready */}
-                <div className="space-y-3">
+                {/* 2. What's Not Included */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                      <Home className="w-4 h-4 text-emerald-600" />
+                    <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+                      <X className="w-4 h-4 text-rose-600" />
                     </div>
                     <h4 className="text-sm sm:text-base font-black text-slate-900">
-                      What You Need to Keep Ready
+                      What's Not Included
                     </h4>
                   </div>
-                  <ul className="space-y-2.5">
-                    {getReadyChecklist(detailsPackage).map((item, idx) => (
+                  <ul className="space-y-2 pl-1">
+                    {getExcludesChecklist(detailsPackage).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span className="text-xs font-medium text-slate-700 leading-relaxed">
+                        <span className="w-4 h-4 rounded-full bg-rose-100 text-rose-600 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">✕</span>
+                        <span className="text-xs font-medium text-slate-600 leading-relaxed">
                           {typeof item === "string" ? item : (item?.text || "")}
                         </span>
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                {/* 3. Possible Additional Charges */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm sm:text-base font-black text-slate-900">
+                        Possible Additional Charges
+                      </h4>
+                      <p className="text-[11px] text-slate-500">Transparent policy — always confirmed with you before service</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {getPossibleCharges(detailsPackage).map((c, idx) => (
+                      <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <div className="font-bold text-slate-800">{c.item}</div>
+                          <div className="text-[11px] text-slate-500">{c.note}</div>
+                        </div>
+                        <span className="font-extrabold text-slate-900 shrink-0 text-right">{c.fee}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Warranty & Revisit Guarantee */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200/80 flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-white shadow-xs border border-teal-200 flex items-center justify-center text-[#0B8F7A] shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs sm:text-sm font-black text-slate-900">
+                      30-Day Doorstep Guarantee
+                    </h5>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                      If the same problem recurs within 30 days of completion, SEVO provides a certified technician revisit completely free of charge.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 5. Customer Reviews & Rating */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex text-amber-400">
+                        {"★★★★★".split("").map((s, i) => (
+                          <span key={i} className="text-sm leading-none">{s}</span>
+                        ))}
+                      </div>
+                      <span className="text-xs font-black text-slate-900">4.8 / 5</span>
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-500">Based on 1,240+ verified bookings</span>
+                  </div>
+                  <div className="text-xs text-slate-600 italic border-t border-slate-200/60 pt-2">
+                    "Specialist arrived promptly with complete tools, explained the diagnostic findings clearly, and completed the repair neatly. Highly recommended!"
+                  </div>
                 </div>
               </div>
 
               <div className="p-4 border-t border-slate-100">
                 {(() => {
+                  if (isGoodsTransportCategory) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsPackage(null)
+                          handleGoodsTransportProceed(detailsPackage)
+                        }}
+                        className="w-full py-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>{getLogisticsButtonText(detailsPackage)}</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )
+                  }
                   const dQty = getCartQty(detailsPackage)
                   if (dQty === 0) {
                     return (
@@ -1764,7 +2350,7 @@ export function ModernServiceCatalogView({
                         onClick={() => addToCart(detailsPackage)}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
                       >
-                        + Add to Booking
+                        {isConsultationCategory ? "Book Consultation Visit" : "+ Add to Booking"}
                       </button>
                     )
                   }
@@ -1821,7 +2407,7 @@ export function ModernServiceCatalogView({
                 if (summaryEl) {
                   summaryEl.scrollIntoView({ behavior: "smooth" });
                 } else {
-                  handleProceedToCheckout();
+                  handleProceedToSchedule();
                 }
               }}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"

@@ -58,6 +58,13 @@ const CAT_EMOJIS = {
   plumbing: "🔧", electrical: "⚡", carpentry: "🪵", hvac: "❄️",
   cleaning: "🧹", pest_control: "🦟", painting: "🎨",
   appliance_repair: "🏠", security: "📷", general: "🔨",
+  home_pest_control: "🧹", "cleaning_&_pest_control": "🧹",
+  paintings: "🎨", "painting_&_waterproofing": "🎨",
+  electrician_plumbing_carpentry: "⚡", "electrician,_plumber_&_carpenter": "⚡",
+  ac_appliance: "❄️", "ac_&_appliance_repair": "❄️",
+  mason: "🧱", "masonry_&_civil_work": "🧱",
+  goods_transports: "🚚", "goods_&_transport": "🚚",
+  vegetables_groceries: "🥦", "farm-fresh_vegetables_&_groceries": "🥦",
 }
 
 const PIPELINE_ORDER = [
@@ -329,9 +336,11 @@ export function ServiceRequestsPage() {
   const getCategoryInfo = (catIdOrSlug) => {
     if (!catIdOrSlug) return { name: "General", emoji: "🔧" }
     const key = catIdOrSlug.toString()
-    const name = categoriesMap[key]?.name || key.replace(/_/g, " ")
-    const slug = name.toLowerCase().replace(/ /g, "_")
-    const emoji = CAT_EMOJIS[slug] || "🔧"
+    const entry = categoriesMap[key]
+    const name = entry?.name || key.replace(/_/g, " ")
+    const entrySlug = entry?.slug || ""
+    const derivedSlug = name.toLowerCase().replace(/ /g, "_")
+    const emoji = CAT_EMOJIS[key] || CAT_EMOJIS[entrySlug] || CAT_EMOJIS[derivedSlug] || "🔧"
     return { name, emoji }
   }
 

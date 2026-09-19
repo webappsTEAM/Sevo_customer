@@ -26,6 +26,7 @@ import {
   searchHosurPlacesOnline,
   formatExactLocation,
   isHosurRouteServed,
+  resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
@@ -192,6 +193,19 @@ const TWO_WHEELER_DIAGRAM_BY_SLUG = {
   "2-wheeler-electric-express": <TwoWheelerDimensionDiagram />,
 }
 
+function TierImageFallback({ src, alt, fallback }) {
+  const [imgError, setImgError] = useState(false)
+  if (!src || imgError) return fallback
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setImgError(true)}
+      className="w-full max-w-[240px] h-[120px] object-contain"
+    />
+  )
+}
+
 /* ── Slots & Dates Helper ── */
 const DELIVERY_SLOTS = {
   "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
@@ -283,6 +297,11 @@ export function TwoWheelerBookingHosurPage() {
   // Form State
   const [pickup, setPickup] = useState("")
   const [drop, setDrop] = useState("")
+  const [pickupCoords, setPickupCoords] = useState(null)
+  const [dropCoords, setDropCoords] = useState(null)
+  const [serverQuote, setServerQuote] = useState(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [quoteError, setQuoteError] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [receiverName, setReceiverName] = useState("")
@@ -297,27 +316,22 @@ export function TwoWheelerBookingHosurPage() {
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [slotStepperOpen, setSlotStepperOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(3)
-  // Tracks whether the customer is booking for right now ("Book Now") or a
-  // future date/time via the schedule stepper -- used only to vary the
-  // success-screen copy and whether a delivery date/slot is shown there.
-  const [bookingMode, setBookingMode] = useState("IMMEDIATE")
-  const [selectedDate, setSelectedDate] = useState(DELIVERY_DATES[0])
-  const [selectedSlot, setSelectedSlot] = useState(() => {
-    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
-    return getFirstAvailableSlotAndCategory(defaultDate).slot
-  })
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => {
-    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
-    return getFirstAvailableSlotAndCategory(defaultDate).category
-  })
+  const [bookingMode, setBookingMode] = useState("IMMEDIATE") // "IMMEDIATE" | "SCHEDULED"
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
   useEffect(() => {
-    if (selectedDate) {
+    if (bookingMode === "SCHEDULED" && selectedDate?.fullDate) {
       const { category, slot } = getFirstAvailableSlotAndCategory(selectedDate.fullDate)
       setSelectedSlot(slot)
       setExpandedSlotCategory(category)
     }
-  }, [selectedDate])
+  }, [selectedDate, bookingMode])
+
+  useEffect(() => {
+    bookingAttemptKeyRef.current = null
+  }, [pickup, drop, selectedVehicle, bookingMode])
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
@@ -728,119 +742,30 @@ export function TwoWheelerBookingHosurPage() {
   ]
 
 
-  // Only use a stored coordinate if it was resolved for the address being
-  // used right now -- see the pickupCoords/dropCoords declaration above.
-  const usableCoords = (coords, address) =>
-    coords && coords.forAddress === address && coords.lat != null && coords.lng != null
-      ? { lat: Number(coords.lat), lng: Number(coords.lng) }
-      : null
-
-  const pickupAddressValue = pickup || ""
-  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
-  const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
-  const dropPoint = usableCoords(dropCoords, dropAddressValue)
-
-  // GT-B-01: pickup -> waypoints -> drop -> vehicle -> cargo items -> server distance -> server fare.
-  // Debounced, and guarded against out-of-order responses.
-  useEffect(() => {
-    const tierId = selectedVehicle?._tierId
-    if (!pickupPoint || !dropPoint || !tierId) {
-      setServerQuote(null)
-      setQuoteError("")
+  const resolvePickupLocation = async (value, targetAddress) => {
+    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
+    if (typeof value === "object" && value?.lat != null && value?.lng != null) {
+      setPickupCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
       return
     }
-    let cancelled = false
-    setQuoteLoading(true)
-    setServerQuote(null)
-
-    const validWaypoints = intermediateStops
-      .map((s) => usableCoords(s.coords, s.address))
-      .filter(Boolean)
-
-    const timer = setTimeout(async () => {
-      const res = await fetchLogisticsQuote({
-        serviceCategory: "goods_transport_two_wheeler",
-        tierId,
-        pickup: pickupPoint,
-        drop: dropPoint,
-        waypoints: validWaypoints,
-        stopCount: 2 + validWaypoints.length,
-        cargoItems: cargoItems.map((i) => ({
-          goods_item_id: i.goods_item_id || i.goods_item,
-          quantity: i.quantity,
-        })),
-        goodsCategoryId: selectedGoodsCategoryObj?.id,
-      })
-      if (cancelled) return
-      setQuoteLoading(false)
-      if (res?.error) {
-        setServerQuote(null)
-        setQuoteError(res.message || "")
-      } else {
-        setServerQuote(res)
-        setQuoteError("")
-      }
-    }, 350)
-    return () => { cancelled = true; clearTimeout(timer) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
-    selectedVehicle?._tierId,
-    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
-    JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
-    selectedGoodsCategoryObj?.id,
-  ])
-
-
-  // Live location fetch handler
-  const handleFetchLiveLocation = (e) => {
-    if (e) {
-      e.preventDefault()
-      e.stopPropagation()
+    setPickupCoords(null)
+    const coords = await resolveLocationCoords(value)
+    if (coords) {
+      setPickupCoords({ ...coords, forAddress: addr })
     }
-
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser. Please enter the pickup address manually.")
-      return
-    }
-
-    setIsDetectingLocation(true)
-    setLocationStatus("Detecting...")
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords
-        try {
-          const formatted = await getAddress(latitude, longitude)
-          setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-          setLocationStatus("Detected")
-          setTimeout(() => setLocationStatus(""), 2500)
-        } catch (err) {
-          console.warn("Reverse geocoding error:", err)
-          setPickup(`Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-          setLocationStatus("Detected")
-          setTimeout(() => setLocationStatus(""), 2500)
-        } finally {
-          setIsDetectingLocation(false)
-        }
-      },
-      (error) => {
-        console.error("Geolocation error:", error)
-        setIsDetectingLocation(false)
-        setLocationStatus("")
-        if (error.code === 1) {
-          alert("Location permission was denied. Please enter your pickup address manually.")
-        } else {
-          alert("GPS location unavailable. Please enter your pickup address manually.")
-        }
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    )
   }
-
-  // Static fallback — used only if the /api/logistics/ fetch above fails or
-  // hasn't resolved yet, so this page keeps working even if the backend is
-  // briefly unreachable.
+  const resolveDropLocation = async (value, targetAddress) => {
+    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
+    if (typeof value === "object" && value?.lat != null && value?.lng != null) {
+      setDropCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
+      return
+    }
+    setDropCoords(null)
+    const coords = await resolveLocationCoords(value)
+    if (coords) {
+      setDropCoords({ ...coords, forAddress: addr })
+    }
+  }
 
   const VEHICLE_SUITABILITY_MAP = {
     "2-wheeler": {
@@ -906,13 +831,8 @@ export function TwoWheelerBookingHosurPage() {
       suitableFor: suitableList,
       bestFor: bestForText,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-      // Prefer the admin's own uploaded Package Image (mirrored onto
-      // ServiceTier.image by the catalog sync bridge) over the built-in
-      // technical line-drawing, which now only covers the original launch
-      // vehicles by slug and would otherwise show for every newer/renamed
-      // package too.
       diagram: tier.image
-        ? <img src={tier.image} alt={tier.name} className="w-full max-w-[240px] h-[120px] object-contain" />
+        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />} />
         : (TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />),
       details: {
         name: tier.name,
@@ -928,8 +848,129 @@ export function TwoWheelerBookingHosurPage() {
   }
 
   const TWO_WHEELER_VEHICLES = fetchedTiers.map(tierToVehicle)
-
   const selectedVehicleEffective = selectedVehicle || TWO_WHEELER_VEHICLES[0]
+
+  useEffect(() => {
+    if (!selectedVehicle && TWO_WHEELER_VEHICLES.length > 0) {
+      setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
+    }
+  }, [selectedVehicle, TWO_WHEELER_VEHICLES])
+
+  // Only use a stored coordinate if it was resolved for the address being
+  // used right now -- see the pickupCoords/dropCoords declaration above.
+  const usableCoords = (coords, address) =>
+    coords && coords.forAddress === address && coords.lat != null && coords.lng != null
+      ? { lat: Number(coords.lat), lng: Number(coords.lng) }
+      : null
+
+  const pickupAddressValue = pickup || ""
+  const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
+  const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
+  const dropPoint = usableCoords(dropCoords, dropAddressValue)
+
+  // GT-B-01: pickup -> waypoints -> drop -> vehicle -> cargo items -> server distance -> server fare.
+  // Debounced, and guarded against out-of-order responses.
+  useEffect(() => {
+    const activeVehicle = selectedVehicle || selectedVehicleEffective
+    const tierId = activeVehicle?._tierId
+    if (!pickupPoint || !dropPoint || !tierId) {
+      setServerQuote(null)
+      setQuoteError("")
+      return
+    }
+    let cancelled = false
+    setQuoteLoading(true)
+    setServerQuote(null)
+
+    const validWaypoints = intermediateStops
+      .map((s) => usableCoords(s.coords, s.address))
+      .filter(Boolean)
+
+    const timer = setTimeout(async () => {
+      const res = await fetchLogisticsQuote({
+        serviceCategory: "goods_transport_two_wheeler",
+        tierId,
+        pickup: pickupPoint,
+        drop: dropPoint,
+        waypoints: validWaypoints,
+        stopCount: 2 + validWaypoints.length,
+        cargoItems: cargoItems.map((i) => ({
+          goods_item_id: i.goods_item_id || i.goods_item,
+          quantity: i.quantity,
+        })),
+        goodsCategoryId: selectedGoodsCategoryObj?.id,
+      })
+      if (cancelled) return
+      setQuoteLoading(false)
+      if (res?.error) {
+        setServerQuote(null)
+        setQuoteError(res.message || "")
+      } else {
+        setServerQuote(res)
+        setQuoteError("")
+      }
+    }, 350)
+    return () => { cancelled = true; clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
+    (selectedVehicle || selectedVehicleEffective)?._tierId,
+    JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
+    JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
+    selectedGoodsCategoryObj?.id,
+  ])
+
+
+  // Live location fetch handler
+  const handleFetchLiveLocation = (e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser. Please enter the pickup address manually.")
+      return
+    }
+
+    setIsDetectingLocation(true)
+    setLocationStatus("Detecting...")
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        try {
+          const formatted = await getAddress(latitude, longitude)
+          const pickupText = formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(pickupText)
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: pickupText })
+          setLocationStatus("Detected")
+          setTimeout(() => setLocationStatus(""), 2500)
+        } catch (err) {
+          console.warn("Reverse geocoding error:", err)
+          const pickupText = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          setPickup(pickupText)
+          setPickupCoords({ lat: latitude, lng: longitude, forAddress: pickupText })
+          setLocationStatus("Detected")
+          setTimeout(() => setLocationStatus(""), 2500)
+        } finally {
+          setIsDetectingLocation(false)
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error)
+        setIsDetectingLocation(false)
+        setLocationStatus("")
+        if (error.code === 1) {
+          alert("Location permission was denied. Please enter your pickup address manually.")
+        } else {
+          alert("GPS location unavailable. Please enter your pickup address manually.")
+        }
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
+  }
+
   const totalCargoWeightKg = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
   const totalCargoCftVal = cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0)
   const maxAllowed2WWeight = Number(selectedVehicleEffective?.max_weight_kg) || 0
@@ -1042,9 +1083,19 @@ export function TwoWheelerBookingHosurPage() {
 
       
       let dateString = todayDateString()
-      if (selectedDate && selectedDate.fullDate) {
-        const d = selectedDate.fullDate
+      let timeString = "Immediate / Next Available"
+      let slotValue = null
+
+      if (bookingMode === "SCHEDULED") {
+        if (!selectedDate || !selectedSlot) {
+          setBookingSubmitting(false)
+          setBookingError("Please select a date and time slot for your scheduled booking.")
+          return
+        }
+        const d = selectedDate.fullDate || new Date()
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        timeString = selectedSlot
+        slotValue = selectedSlot
       }
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
@@ -1128,7 +1179,7 @@ export function TwoWheelerBookingHosurPage() {
         longitude: Number(Number(pickupPoint.lng).toFixed(6)),
 
         preferred_date: dateString,
-        preferred_time: selectedSlot || "Immediate / Next Available",
+        preferred_time: timeString,
         total_amount: fare,
         payment_method: "COD",
 
@@ -1153,6 +1204,11 @@ export function TwoWheelerBookingHosurPage() {
       if (selectedGoodsCategoryObj?.id) payload.goods_category_id = selectedGoodsCategoryObj.id
       if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+      // Backend accepts these as optional; only send a real resolved point.
+      if (dropPoint?.lat != null && dropPoint?.lng != null) {
+        payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
+        payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
+      }
 
       if (!bookingAttemptKeyRef.current) {
         const randStr = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
@@ -1276,8 +1332,9 @@ export function TwoWheelerBookingHosurPage() {
     if (!selectedVehicle) {
       setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
     }
-    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
-    if (!selectedSlot) setSelectedSlot("9AM-10AM")
+    setBookingMode("IMMEDIATE")
+    setSelectedDate(null)
+    setSelectedSlot(null)
     setVehicleSelectorOpen(false)
     setStepperStep(4)
     setSlotStepperOpen(true)
@@ -1315,6 +1372,14 @@ export function TwoWheelerBookingHosurPage() {
 
     if (!selectedVehicle) {
       setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
+    }
+    setBookingMode("SCHEDULED")
+    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+    const defaultD = selectedDate?.fullDate || DELIVERY_DATES[0]?.fullDate || new Date()
+    const { category, slot } = getFirstAvailableSlotAndCategory(defaultD)
+    if (!selectedSlot) {
+      setSelectedSlot(slot)
+      setExpandedSlotCategory(category)
     }
     setVehicleSelectorOpen(false)
     setStepperStep(3)
@@ -1619,6 +1684,7 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setPickup(exact)
+                            resolvePickupLocation(loc, exact)
                             setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
@@ -1651,6 +1717,7 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(pickup)
                             setPickup(exact)
+                            resolvePickupLocation(exact, exact)
                             setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
@@ -1725,6 +1792,7 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(loc)
                             setDrop(exact)
+                            resolveDropLocation(loc, exact)
                             setDestinationError("")
                             setNoServiceRoute(false)
                             setShowDropSuggestions(false)
@@ -1758,6 +1826,7 @@ export function TwoWheelerBookingHosurPage() {
                             e.preventDefault()
                             const exact = formatExactLocation(drop)
                             setDrop(exact)
+                            resolveDropLocation(exact, exact)
                             setDestinationError("")
                             setNoServiceRoute(false)
                             setShowDropSuggestions(false)
@@ -1913,6 +1982,59 @@ export function TwoWheelerBookingHosurPage() {
               </button>
             </div>
           </form>
+
+          {/* Live Fare Card & CTA below estimate form */}
+          {pickupPoint && dropPoint && (quoteLoading || serverQuote || quoteError) && (
+            <div className="mt-4 p-4 rounded-2xl bg-white border border-emerald-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-200">
+              <div className="flex-1 w-full sm:w-auto">
+                {quoteLoading && (
+                  <div className="flex items-center gap-2 text-emerald-800 font-semibold text-xs sm:text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>Calculating authoritative fare for route…</span>
+                  </div>
+                )}
+                {!quoteLoading && serverQuote && (
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-800">
+                        Authoritative Fare:
+                      </span>
+                      <span className="text-xl sm:text-2xl font-black text-emerald-900">
+                        ₹{Number(serverQuote.total).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {serverQuote.breakdown && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        {serverQuote.breakdown.distance_km} km
+                        {serverQuote.breakdown.distance_source === "straight_line_estimate" ? " (est.)" : ""}
+                        {" • "}Base ₹{serverQuote.breakdown.base_fare}
+                        {Number(serverQuote.breakdown.distance_charge) > 0 ? ` • Distance ₹${serverQuote.breakdown.distance_charge}` : ""}
+                        {Number(serverQuote.breakdown.additional_stop_charge) > 0 ? ` • Stops ₹${serverQuote.breakdown.additional_stop_charge}` : ""}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!quoteLoading && !serverQuote && quoteError && (
+                  <div className="flex items-center gap-2 text-rose-700 text-xs font-bold">
+                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{quoteError}</span>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNoServiceRoute(false)
+                  setVehicleSelectorOpen(true)
+                }}
+                disabled={quoteLoading || serverQuote?.total == null}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                <span>Proceed to Booking</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* No-Service Route Warning */}
           {noServiceRoute && (
@@ -2474,21 +2596,54 @@ export function TwoWheelerBookingHosurPage() {
                   return (
                     <div className="border-t border-slate-200/80 pt-3 pb-2 space-y-1.5 text-xs text-slate-600">
                       <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                      <div className="flex justify-between">
-                        <span>Trip Fare (incl. Toll, if applicable)</span>
-                        <span className="font-semibold text-slate-800">₹{(baseFareNum + 29.89).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-emerald-600">
-                        <span>Coupon Discount - 2WLRBGLR34</span>
-                        <span className="font-semibold">- ₹30.00</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-200">
-                        <span>Net Fare</span>
-                        <span>₹{baseFareNum}.00</span>
-                      </div>
-                      <div className="flex justify-between font-extrabold text-slate-900 text-sm">
+                      {b ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Base Fare</span>
+                            <span className="font-semibold text-slate-800">{money(b.base_fare ?? 0)}</span>
+                          </div>
+                          {b.distance_charge != null && (
+                            <div className="flex justify-between">
+                              <span>
+                                Distance Charge
+                                {b.chargeable_km != null && b.rate_per_km != null && (
+                                  <span className="text-slate-400"> ({Number(b.chargeable_km).toFixed(1)} km × ₹{Number(b.rate_per_km).toFixed(0)}/km)</span>
+                                )}
+                              </span>
+                              <span className="font-semibold text-slate-800">{money(b.distance_charge)}</span>
+                            </div>
+                          )}
+                          {positive(b.loading_unloading) && (
+                            <div className="flex justify-between">
+                              <span>Loading &amp; Unloading</span>
+                              <span className="font-semibold text-slate-800">{money(b.loading_unloading)}</span>
+                            </div>
+                          )}
+                          {positive(b.additional_stop_charge) && (
+                            <div className="flex justify-between">
+                              <span>Additional Stops ({b.additional_stops || intermediateStops.length})</span>
+                              <span className="font-semibold text-slate-800">{money(b.additional_stop_charge)}</span>
+                            </div>
+                          )}
+                          {Number(b.surge_multiplier || 1) !== 1 && (
+                            <div className="flex justify-between text-amber-600">
+                              <span>Surge ({Number(b.surge_multiplier).toFixed(2)}×)</span>
+                              <span className="font-semibold">applied</span>
+                            </div>
+                          )}
+                          {b.minimum_fare_applied && (
+                            <p className="text-[10px] text-amber-600">Minimum fare applied for this trip.</p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span>Trip Fare</span>
+                          <span className="font-semibold text-slate-800">{money(q.total)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-slate-200">
                         <span>Amount Payable</span>
-                        <span>₹{baseFareNum}.00</span>
+                        <span>{money(q.total)}</span>
                       </div>
                     </div>
                   )
@@ -2540,7 +2695,7 @@ export function TwoWheelerBookingHosurPage() {
                           </p>
                           <button
                             type="button"
-                            onClick={() => navigate(routes.miniTruckBookingHosur())}
+                            onClick={() => navigate(routes.truck_booking_hosur)}
                             className="inline-flex items-center gap-1 mt-1 text-xs font-black text-emerald-800 hover:text-emerald-900 underline cursor-pointer"
                           >
                             <Truck className="w-3 h-3" /> Switch to Mini Truck Booking &rarr;
@@ -2557,7 +2712,7 @@ export function TwoWheelerBookingHosurPage() {
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={() => submitBooking()}
+                  onClick={handleBookNow}
 
                   disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
                   title={
@@ -2595,7 +2750,48 @@ export function TwoWheelerBookingHosurPage() {
                   <span>Schedule your booking</span>
                 </button>
               </div>
-              {isSignedIn && bookingError && (
+              {(quoteLoading || serverQuote || quoteError) && (
+                <div className="mt-3 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/80">
+                  {quoteLoading && (
+                    <p className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Calculating your fare…
+                    </p>
+                  )}
+                  {!quoteLoading && serverQuote && (
+                    <>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                          Your fare
+                        </span>
+                        <span className="text-base font-extrabold text-emerald-900">
+                          ₹ {Number(serverQuote.total).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      {serverQuote.breakdown && (
+                        <p className="text-[10px] text-emerald-700 mt-0.5">
+                          {serverQuote.breakdown.distance_km} km
+                          {serverQuote.breakdown.distance_source === "straight_line_estimate"
+                            ? " (estimated route)"
+                            : ""}
+                          {" · "}base ₹{serverQuote.breakdown.base_fare}
+                          {Number(serverQuote.breakdown.distance_charge) > 0
+                            ? ` · distance ₹${serverQuote.breakdown.distance_charge}`
+                            : ""}
+                          {Number(serverQuote.breakdown.additional_stop_charge) > 0
+                            ? ` · stops ₹${serverQuote.breakdown.additional_stop_charge}`
+                            : ""}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {!quoteLoading && !serverQuote && quoteError && (
+                    <p className="text-[11px] font-semibold text-slate-600">{quoteError}</p>
+                  )}
+                </div>
+              )}
+              {/* A failed booking must be reported to whoever attempted it;
+                  gating on isSignedIn hid it in exactly the 401 case. */}
+              {bookingError && (
                 <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
               )}
             </div>
@@ -2843,7 +3039,7 @@ export function TwoWheelerBookingHosurPage() {
                   >
                     <div>
                       <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "CRN288650604065"}</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
                   </button>
@@ -3248,17 +3444,74 @@ export function TwoWheelerBookingHosurPage() {
                           </div>
                         </div>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                              <Calendar className="w-4 h-4 text-indigo-600" />
+                        {bookingMode === "IMMEDIATE" ? (
+                          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                                <Zap className="w-4 h-4 text-[#0B8860]" />
+                              </div>
+                              <div>
+                                <span className="text-[13px] text-slate-800 font-bold block">
+                                  Immediate Dispatch (15–20 mins)
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  Nearest driver allocated right after booking
+                                </span>
+                              </div>
                             </div>
-                            <span className="text-[13px] text-slate-700 font-medium">
-                              {selectedDate ? `${selectedDate.value} | ` : ""}{selectedSlot || "Time not selected"}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBookingMode("SCHEDULED")
+                                if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+                                const defaultD = DELIVERY_DATES[0]?.fullDate || new Date()
+                                const { category, slot } = getFirstAvailableSlotAndCategory(defaultD)
+                                setSelectedSlot(slot)
+                                setExpandedSlotCategory(category)
+                                setStepperStep(3)
+                              }}
+                              className="text-[12px] font-bold text-[#0B8860] border border-[#0B8860]/30 px-3.5 py-1.5 rounded-full hover:bg-[#0B8860]/5 transition-colors cursor-pointer"
+                            >
+                              Schedule for Later
+                            </button>
                           </div>
-                          <button type="button" onClick={() => setStepperStep(3)} className="text-[13px] font-bold text-slate-500 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Explore Slots</button>
-                        </div>
+                        ) : (
+                          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                <Calendar className="w-4 h-4 text-indigo-600" />
+                              </div>
+                              <div>
+                                <span className="text-[13px] text-slate-800 font-bold block">
+                                  Scheduled: {selectedDate ? `${selectedDate.value} | ` : ""}{selectedSlot || "Time not selected"}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  Pickup scheduled for your chosen window
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBookingMode("IMMEDIATE")
+                                  setSelectedSlot(null)
+                                  setSelectedDate(null)
+                                }}
+                                className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer"
+                              >
+                                Switch to Immediate
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setStepperStep(3)}
+                                className="text-[12px] font-bold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer"
+                              >
+                                Change Slot
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Selected Vehicle Card */}

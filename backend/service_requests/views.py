@@ -1142,7 +1142,7 @@ class CustomerMyBookingsView(APIView):
 
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback", "estimation").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -1305,8 +1305,8 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
-            # Cancel job in workforce system
-            WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
+            # Cancel job in workforce system after transaction commits to prevent distributed deadlock
+            transaction.on_commit(lambda: WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason))
 
             # Fixes HS-C-04: cancelling an already-paid booking used to charge
             # and refund nothing automatically -- the customer or an admin had
@@ -1790,8 +1790,12 @@ def _build_tracking_payload(sr, has_full_access):
                 "freshness": freshness,
             }
 
-    # OTP is exposed to customer once partner ACCEPTS and booking is not cancelled/rejected
-    start_otp = sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
+    # OTP is exposed to customer once partner ACCEPTS, but MUST be hidden once
+    # the booking reaches any terminal state (completed, closed, cancelled,
+    # rejected, feedback_pending, feedback_received).  is_terminal is computed
+    # above at the same scope; reusing it avoids duplicating the status list.
+    # Audit finding: start_otp must not be visible after the booking is complete.
+    start_otp = sr.start_otp if (is_accepted and not is_terminal) else None
 
     # Retrieve Cash Payment Confirmation OTP if one was generated for this booking
     payment_confirmation_otp = None
@@ -2143,7 +2147,7 @@ class AdminSRListView(APIView):
         from rest_framework.pagination import PageNumberPagination
         from service_requests.models import BookingAssignment
 
-        qs = _sr_qs(request).select_related("customer", "feedback").prefetch_related(
+        qs = _sr_qs(request).select_related("customer", "feedback", "estimation").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -2813,7 +2817,7 @@ class CustomerActiveBookingsListView(APIView):
         allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way", "arrived", "in_progress", "proof_submitted", "unassigned"]
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).select_related("customer", "feedback").prefetch_related(
+        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).select_related("customer", "feedback", "estimation").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -2932,7 +2936,7 @@ class CustomerEligibleBookingsListView(APIView):
         bookings = ServiceRequest.objects.filter(
             query,
             status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
-        ).select_related("customer", "feedback").prefetch_related(
+        ).select_related("customer", "feedback", "estimation").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",

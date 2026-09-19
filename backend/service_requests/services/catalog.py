@@ -103,7 +103,7 @@ class LogisticsPricingPermissionError(PermissionError):
 _VERSION_FIELDS = {"base_price", "offer_price", "name", "includes", "excludes"}
 
 _PACKAGE_TRANSITIONS = {
-    PackageStatus.DRAFT: {PackageStatus.ACTIVE},
+    PackageStatus.DRAFT: {PackageStatus.ACTIVE, PackageStatus.ARCHIVED},
     PackageStatus.ACTIVE: {PackageStatus.INACTIVE, PackageStatus.ARCHIVED},
     PackageStatus.INACTIVE: {PackageStatus.ACTIVE, PackageStatus.ARCHIVED},
     PackageStatus.ARCHIVED: set(),
@@ -579,8 +579,31 @@ def update_package(package, data, actor, reason=None):
         _pre_tier = None
     if _pre_tier is not None:
         # Only gate on price-bearing fields that flow into the fare engine.
+        #
+        # GT audit follow-up to Updates 6-9: this originally checked only
+        # base_price/offer_price. But this same function later mirrors nine
+        # gt_* fields straight onto the linked ServiceTier's fare fields (see
+        # _gt_field_map below) with no other permission check in between --
+        # so a catalog:edit-only actor could set gt_per_km_rate/gt_base_fare/
+        # gt_surge_multiplier/etc. and silently move the live GT/P&M fare
+        # engine's rates, bypassing the modify_price control entirely. Seven
+        # of the nine gt_* fields are genuine money fields (the same ones
+        # PRICING_FIELDS in the now-dead logistics/pricing_admin.py already
+        # names); gt_weight_class and gt_dimensions_label are descriptive and
+        # correctly stay on plain catalog:edit. Listing them alongside
+        # base_price/offer_price keeps a mixed payload (e.g. a descriptive
+        # gt_dimensions_label change bundled with an unauthorized
+        # gt_per_km_rate change) from letting the price change slip through
+        # under cover of the legitimate one -- ANY of these fields changing
+        # trips the same gate, and the gate still runs before _apply_updates,
+        # so a denied request writes nothing at all.
         _price_fields_changing = {
-            f for f in ("base_price", "offer_price")
+            f for f in (
+                "base_price", "offer_price",
+                "gt_base_fare", "gt_per_km_rate", "gt_free_km",
+                "gt_loading_unloading_charge", "gt_additional_stop_charge",
+                "gt_surge_multiplier", "gt_minimum_fare",
+            )
             if f in data and data[f] != getattr(package, f)
         }
         if _price_fields_changing:
@@ -800,4 +823,28 @@ def create_addon(data, actor):
 
 
 def update_addon(addon, data, actor, reason=None):
+    # ── AddOn pricing permission gate ───────────────────────────────────────
+    # GT audit Update 9: AddOn.price is a real customer-facing charge, but
+    # this function used to be a bare pass-through to _apply_updates() with
+    # no price check at all -- unlike update_package() above, which at least
+    # gated base_price/offer_price. AdminAddOnDetailView.put() is only gated
+    # by catalog:edit, so without this check any catalog:edit-only actor
+    # could freely change price. Mirrors the same modify_price + reason
+    # requirement update_package() enforces for its price fields, and runs
+    # before _apply_updates() so a denied request writes nothing.
+    if "price" in data and data["price"] != getattr(addon, "price", None):
+        from accounts.permissions import can as _can
+        if not _can(actor, "pricing", "modify_price"):
+            raise LogisticsPricingPermissionError(
+                "Changing an add-on's price requires the 'modify_price' "
+                "permission on the Pricing module."
+            )
+        if not (reason or "").strip():
+            raise ValidationError(
+                {"reason": [
+                    "A reason is required when changing an add-on's price. "
+                    "It is recorded in the pricing audit trail."
+                ]}
+            )
+    # ── End AddOn permission gate ───────────────────────────────────────────
     return _apply_updates(addon, data, CatalogChangeLog.EntityType.ADDON, actor, reason=reason)

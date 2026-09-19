@@ -150,33 +150,37 @@ def parse_args():
         help="Include node_modules folders (Warning: very large)",
     )
     parser.add_argument(
-        "--timestamp",
-        action="store_true",
-        help="Create a new timestamped zip file instead of updating calservices_latest.zip",
-    )
-    parser.add_argument(
         "--exclude-assets",
         dest="exclude_assets",
         action="store_true",
-        help="Exclude heavy image/media asset folders (ASSET IMAGES, mockups) to save space",
+        default=True,
+        help="Exclude heavy image/media asset folders (ASSET IMAGES, mockups). Saves ~330 MB (default: True).",
     )
     parser.add_argument(
         "--include-assets",
         dest="exclude_assets",
         action="store_false",
-        help="Include heavy image/media asset folders in archive (default)",
+        help="Include heavy image/media asset folders in archive.",
     )
-    parser.set_defaults(exclude_assets=False)
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        default=True,
+        help="Use fast compression (level 1) for rapid packaging (default: True)",
+    )
+    parser.add_argument(
+        "--level",
+        type=int,
+        default=1,
+        choices=range(0, 10),
+        help="Compression level 0-9 (default: 1 for speed, 9 for maximum compression)",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List files that would be archived without creating the zip file",
     )
-    args = parser.parse_args()
-    if args.timestamp and args.output == str(default_output):
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = str(BACKUP_DIR / f"calservices_archive_{ts}.zip")
-    return args
+    return parser.parse_args()
 
 
 def is_matching(filename: str, patterns: set) -> bool:
@@ -186,13 +190,12 @@ def is_matching(filename: str, patterns: set) -> bool:
     return False
 
 
-def format_size(size_bytes: float | int) -> str:
-    size = float(size_bytes)
+def format_size(size_bytes: int) -> str:
     for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024.0:
-            return f"{size:.2f} {unit}"
-        size /= 1024.0
-    return f"{size:.2f} TB"
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.2f} TB"
 
 
 def collect_files(
@@ -386,7 +389,12 @@ def main():
     print(" [1/2] Compressing into zip archive...")
     start_time = datetime.now()
 
-    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+    compress_level = getattr(args, "level", 1)
+    if getattr(args, "fast", False):
+        compress_level = 1
+    print(f" -> Compression level: {compress_level} (fast mode enabled)")
+
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=compress_level) as zipf:
         total = len(files_to_zip)
         step = max(1, total // 10)
         for idx, (abs_path, arcname, _) in enumerate(files_to_zip, start=1):

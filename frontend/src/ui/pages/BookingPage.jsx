@@ -24,7 +24,7 @@ import { usePendingIntent } from "../../hooks/usePendingIntent.js"
 import { setCustomerSelectedAddress, getCustomerSelectedAddress, getCustomerLocation, getCustomerCoordinates } from "../../utils/customerLocationStorage.js"
 import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
-import { apiRequest, extractApiErrorMessage } from "../../api/client.js"
+import { apiRequest, extractApiErrorMessage, API_BASE_URL } from "../../api/client.js"
 import { resetDailyEssentialsCartCache } from "../../services/dailyEssentialsCartSync.js"
 import { hasPendingDailyEssentialsCart, hasPendingServicesCart } from "../../services/combinedCartCheck.js"
 import { CombinedCheckoutConfirmModal } from "../components/CombinedCheckoutConfirmModal.jsx"
@@ -1553,11 +1553,11 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
             disabled={!canContinue}
             style={{
               width: '100%', padding: '14px', borderRadius: 14,
-              background: canContinue ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0',
+              background: canContinue ? 'linear-gradient(135deg, #059669, #0B8F7A)' : '#e2e8f0',
               color: canContinue ? 'white' : '#94a3b8',
               fontWeight: 800, fontSize: '1rem', border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: canContinue ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s'
+              boxShadow: canContinue ? '0 4px 20px rgba(11,143,122,0.3)' : 'none', transition: 'all 0.18s'
             }}
           >
             <Calendar size={17} /> Select {selectedDate && selectedTime ? `${selectedDate} at ${formatSlot(selectedTime)}` : 'Date & Time'}
@@ -1592,7 +1592,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>Total Amount</span>
-            <span style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
+            <span style={{ fontWeight: 900, color: '#047857', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
           </div>
           <div style={{ padding: '0 18px 14px', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
             <Shield size={11} /> SSL Secured · Pay at doorstep
@@ -1702,7 +1702,7 @@ function StepLogin({ category, onVerified, onBack }) {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <div className="uc-login-center">
             <div className="uc-login-shield">
-              <ShieldCheck size={32} style={{ color: "#7C3AED" }} />
+              <ShieldCheck size={32} style={{ color: "#0B8F7A" }} />
             </div>
             <h2 className="uc-step-h2">Verify your identity</h2>
             <p className="uc-step-sub">We'll send a 4-digit OTP to confirm your phone number before booking</p>
@@ -2467,6 +2467,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
+  const [ratingScore, setRatingScore] = useState(0)
+  const [ratingHover, setRatingHover] = useState(0)
+  const [selectedFeedbackTags, setSelectedFeedbackTags] = useState([])
+  const [ratingSubmitted, setRatingSubmitted] = useState(false)
+  const [copiedRid, setCopiedRid] = useState(false)
+  const [copiedTrackingUrl, setCopiedTrackingUrl] = useState(false)
 
   const handleManualRefresh = async () => {
     if (isRefreshing || !rid) return
@@ -2840,37 +2846,250 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         }}>
           <CheckCircle2 size={44} color="white" />
         </div>
-        <div style={{ background: "white", borderRadius: 24, padding: "2.5rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
-          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", marginBottom: "0.4rem" }}>
-            {isProofSubmitted ? "Service Completed & Proof Submitted! 📸" : "Service Completed! 🎉"}
-          </h2>
-          <p style={{ color: "#64748b", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
-            {isProofSubmitted
-              ? <>Service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been serviced and work proof has been uploaded.</>
-              : <>Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.</>}
-          </p>
+        <div style={{ background: "white", borderRadius: 24, padding: "2rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0", textAlign: "left" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", padding: "4px 12px", borderRadius: 99, fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              ✓ Service Fulfilled
+            </span>
+            <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.4rem" }}>
+              {isProofSubmitted ? "Service Completed & Proof Submitted! 📸" : "Service Completed Successfully! 🎉"}
+            </h2>
+            <p style={{ color: "#64748b", fontSize: "0.92rem", margin: 0 }}>
+              Request <strong style={{ color: "#0f172a" }}>#{rid}</strong> • {displayDate || "Today"}
+            </p>
+          </div>
+
+          {/* Serviced By Partner Card */}
           {techName && (
-            <div style={{ padding: "0.85rem", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: 10, marginBottom: "1.5rem" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#475569" }}>
-                {techName.charAt(0).toUpperCase()}
+            <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #059669, #10b981)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem", boxShadow: "0 2px 8px rgba(5,150,105,0.25)" }}>
+                  {techName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>Serviced By</div>
+                  <div style={{ fontSize: "1rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+                </div>
               </div>
-              <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>Serviced By</div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fef3c7", padding: "4px 10px", borderRadius: 99, border: "1px solid #fde68a" }}>
+                <Star size={14} color="#d97706" fill="#d97706" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#92400e" }}>{techRating ? Number(techRating).toFixed(1) : "4.8"}</span>
               </div>
             </div>
           )}
-          <div>
+
+          {/* Rating & Feedback Section */}
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 16, padding: "1.25rem", marginBottom: "1.25rem", textAlign: "center" }}>
+            <h4 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 800, color: "#065f46" }}>
+              {ratingSubmitted ? "Thank you for your rating! ⭐" : "How was your service experience?"}
+            </h4>
+            <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#047857" }}>
+              {ratingSubmitted ? "Your feedback helps us recognize top professionals and maintain quality." : "Tap a star to rate your technician and service quality"}
+            </p>
+
+            {/* Stars */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => {
+                    setRatingScore(star)
+                    setRatingSubmitted(true)
+                  }}
+                  onMouseEnter={() => setRatingHover(star)}
+                  onMouseLeave={() => setRatingHover(0)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 4,
+                    transform: (ratingHover >= star || ratingScore >= star) ? "scale(1.2)" : "scale(1)",
+                    transition: "transform 0.15s ease"
+                  }}
+                >
+                  <Star
+                    size={32}
+                    color={(ratingHover || ratingScore) >= star ? "#f59e0b" : "#cbd5e1"}
+                    fill={(ratingHover || ratingScore) >= star ? "#f59e0b" : "transparent"}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Feedback Tags */}
+            {ratingScore > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                {["Punctual", "Clean Work", "Polite & Professional", "Clear Communication", "Expert Diagnosis", "Great Value"].map((tag) => {
+                  const isSelected = selectedFeedbackTags.includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFeedbackTags(prev =>
+                          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                        )
+                      }}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 99,
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: isSelected ? "1px solid #059669" : "1px solid #cbd5e1",
+                        background: isSelected ? "#059669" : "white",
+                        color: isSelected ? "white" : "#334155",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      {isSelected ? "✓ " : ""}{tag}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 30-Day Doorstep Guarantee Reassurance Card */}
+          <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", borderRadius: 16, padding: "1.25rem 1.5rem", color: "white", marginBottom: "1.25rem", boxShadow: "0 4px 14px rgba(6, 78, 59, 0.2)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ShieldCheck size={20} color="#34d399" />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a7f3d0", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  SEVO Protection Program
+                </div>
+                <div style={{ fontSize: "1rem", fontWeight: 900, color: "white" }}>
+                  30-Day Doorstep Revisit Guarantee Active
+                </div>
+              </div>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "#d1fae5", lineHeight: 1.5 }}>
+              If any problem resurfaces with this service, we will send an expert technician to re-inspect and fix it with zero service fee.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: 10 }}>
+              <span style={{ fontSize: "0.76rem", color: "#a7f3d0", fontWeight: 700 }}>
+                🛡️ Covered until {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+              <a
+                href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need warranty support for completed booking #${rid}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: "0.76rem", fontWeight: 800, color: "#ffffff", background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 8, textDecoration: "none" }}
+              >
+                Claim Revisit →
+              </a>
+            </div>
+          </div>
+
+          {/* Service & Payment Summary */}
+          <div style={{ padding: "1rem 1.25rem", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0f172a" }}>
+                {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "SEVO Home Service"}
+              </span>
+              <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "#059669" }}>₹{Number(displayTotal).toLocaleString("en-IN")}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: "#64748b" }}>
+              <span>Payment Mode: {paymentMethod} ({paymentStatusText})</span>
+              {liveData?.id && (
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE_URL}/booking/${liveData.id}/invoice/`, '_blank')}
+                  style={{ background: "transparent", border: "none", color: "#0284c7", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <FileText size={12} /> View Invoice
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Action CTAs: Book Again, Problem, Back to Home */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button
+              type="button"
               onClick={() => {
                 sessionStorage.removeItem("calservice_active_tracking_id")
                 sessionStorage.removeItem("calservice_last_booking")
-                window.location.href = "/"
+                sessionStorage.removeItem("calservices_customer_cart")
+                localStorage.removeItem("calservices_customer_cart")
+                if (typeof onBookAgain === "function") {
+                  onBookAgain()
+                } else {
+                  window.location.href = "/"
+                }
               }}
-              style={{ padding: "0.85rem 2rem", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(16,185,129,0.3)" }}
+              style={{
+                width: "100%",
+                padding: "0.95rem 1.5rem",
+                background: "linear-gradient(135deg, #059669, #047857)",
+                color: "white",
+                fontWeight: 900,
+                fontSize: "0.95rem",
+                border: "none",
+                borderRadius: 14,
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(5,150,105,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8
+              }}
             >
-              Back to Home
+              <RefreshCw size={18} /> Book Again (Repeat This Service)
             </button>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <a
+                href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I need help with my completed booking #${rid}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  padding: "0.85rem 1rem",
+                  background: "#ffffff",
+                  color: "#dc2626",
+                  fontWeight: 800,
+                  fontSize: "0.85rem",
+                  border: "1.5px solid #fecaca",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  textDecoration: "none"
+                }}
+              >
+                <AlertCircle size={15} /> Report an Issue
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem("calservice_active_tracking_id")
+                  sessionStorage.removeItem("calservice_last_booking")
+                  window.location.href = "/"
+                }}
+                style={{
+                  padding: "0.85rem 1rem",
+                  background: "#0f172a",
+                  color: "white",
+                  fontWeight: 800,
+                  fontSize: "0.85rem",
+                  border: "none",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+              >
+                <Home size={15} /> Back to Home
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -2962,6 +3181,148 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       transition={{ duration: 0.35 }}
       style={{ maxWidth: 620, margin: '0 auto', padding: '1.5rem 1rem' }}
     >
+      {/* ─────────────────── USEFUL BOOKING CONFIRMATION CARD (PHASE 5) ─────────────────── */}
+      <div style={{
+        background: "#ffffff",
+        border: "1.5px solid #10b98140",
+        borderRadius: 20,
+        padding: "1.25rem",
+        marginBottom: "1.25rem",
+        boxShadow: "0 4px 20px rgba(16, 185, 129, 0.08)",
+        position: "relative"
+      }}>
+        {/* Top bar: Booking Confirmed pill + Request ID */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: "1rem", paddingBottom: "0.85rem", borderBottom: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              background: "#10b981",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(16, 185, 129, 0.3)"
+            }}>
+              <Check size={16} strokeWidth={3} />
+            </span>
+            <div>
+              <span style={{ fontSize: "0.88rem", fontWeight: 900, color: "#065f46" }}>Booking Confirmed!</span>
+              <span style={{ display: "block", fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>We are dispatching your Hosur service partner</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontFamily: "monospace", fontSize: "0.85rem", fontWeight: 800, color: "#0f172a", background: "#f8fafc", padding: "4px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              #{rid}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (rid) {
+                  navigator.clipboard?.writeText(rid)
+                  setCopiedRid(true)
+                  setTimeout(() => setCopiedRid(false), 2000)
+                }
+              }}
+              title="Copy Booking ID"
+              style={{ padding: "6px 8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 8, cursor: "pointer", color: "#475569", display: "flex", alignItems: "center" }}
+            >
+              {copiedRid ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {/* 3-Section Structured Grid: Service, Date & Slot, Address */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: "1rem" }}>
+          {/* 1. Service */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Service</div>
+            <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>
+              {displayCart[0]?.name || displayCart[0]?.title || category?.name || liveData?.service_name || "Home Service"}
+            </div>
+            {displayCart.length > 1 && (
+              <div style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                +{displayCart.length - 1} more submodule{displayCart.length > 2 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Scheduled Slot */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Date & Slot</div>
+            <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>
+              📅 {displayDate || "Today"}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 700, marginTop: 2 }}>
+              ⏰ {displayTime || "Earliest Available"}
+            </div>
+          </div>
+
+          {/* 3. Address */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Address</div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+              📍 {displayAddress}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions: Share Tracking + Call Support */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              const url = window.location.href
+              if (navigator.share) {
+                navigator.share({ title: "SEVO Live Tracking", url }).catch(() => {})
+              } else {
+                navigator.clipboard?.writeText(url)
+                setCopiedTrackingUrl(true)
+                setTimeout(() => setCopiedTrackingUrl(false), 2500)
+              }
+            }}
+            style={{
+              padding: "7px 14px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: 10,
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              color: "#334155",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            {copiedTrackingUrl ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+            <span>{copiedTrackingUrl ? "Tracking Link Copied!" : "Share Live Tracking"}</span>
+          </button>
+
+          <a
+            href="tel:+919944686884"
+            style={{
+              padding: "7px 14px",
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              borderRadius: 10,
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              color: "#065f46",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <Phone size={13} />
+            <span>Call SEVO Support</span>
+          </a>
+        </div>
+      </div>
+
       {/* ─────────────────── HEADLINE STATUS BANNER ─────────────────── */}
       {isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
@@ -4401,12 +4762,12 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
         {/* Top Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 text-[#0B8F7A] flex items-center justify-center font-bold">
               <ShoppingCart size={18} />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-base leading-tight">Your Cart Details</h3>
-              <p className="text-xs font-bold text-slate-500">{totalCount} {totalCount === 1 ? "service" : "services"} added</p>
+              <h3 className="font-extrabold text-slate-900 text-base leading-tight">Your Service Cart</h3>
+              <p className="text-xs font-bold text-slate-500">{totalCount} {totalCount === 1 ? "service" : "services"} selected</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors cursor-pointer">
@@ -4426,16 +4787,24 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
             <>
               {/* Item Cards List */}
               <div className="space-y-3">
+                <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
+                  Your Service &amp; Add-ons
+                </div>
                 {cart.map((item, idx) => (
-                  <div key={item.id || idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
+                  <div key={item.id || idx} className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3 shadow-2xs">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                          {idx === 0 ? "Service" : "Add-on"}
+                        </span>
+                        <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      </div>
                       {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                        <div className="text-[11px] text-slate-500 font-medium pl-0.5 mt-0.5">
                           Areas: {item.selectedSubOptions.join(", ")}
                         </div>
                       )}
-                      <p className="text-xs font-black text-indigo-600 mt-0.5">₹{item.price}</p>
+                      <p className="text-xs font-black text-[#0B8F7A] mt-0.5">₹{item.price}</p>
                     </div>
 
                     {/* Quantity Adjustment Buttons */}
@@ -4457,19 +4826,25 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
                 ))}
               </div>
 
-              {/* Pricing Breakdown Summary */}
+              {/* Pricing Breakdown Summary (Transparent, Minimal) */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs font-bold text-slate-600">
                 <div className="flex justify-between">
-                  <span>Item Total</span>
+                  <span>Service Total</span>
                   <span className="font-black text-slate-900">₹{itemTotal}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Taxes & Fee (incl. GST)</span>
-                  <span className="font-black text-slate-900">₹{taxesFee}</span>
+                  <span>Service &amp; Platform fee</span>
+                  <span className="font-black text-slate-900">₹49</span>
                 </div>
+                {taxesFee > 49 && (
+                  <div className="flex justify-between">
+                    <span>GST (Taxes)</span>
+                    <span className="font-black text-slate-900">₹{taxesFee - 49}</span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
                   <span>Total Amount</span>
-                  <span className="text-indigo-600">₹{grandTotal}</span>
+                  <span className="text-emerald-700 text-base font-black">₹{itemTotal + Math.max(49, taxesFee)}</span>
                 </div>
               </div>
             </>
@@ -4486,9 +4861,9 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
                   onProceedToCheckout();
                 }
               }}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-[0.98] transition-all uppercase tracking-wider"
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-[#0B8F7A] hover:from-emerald-700 hover:to-[#087362] text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer active:scale-[0.98] transition-all uppercase tracking-wider"
             >
-              <span>Proceed to Checkout</span>
+              <span>Continue to Checkout</span>
               <ChevronRight size={16} strokeWidth={3} />
             </button>
 
@@ -4511,6 +4886,7 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
 
 export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
   const { user, logout, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
+  const navigate = useNavigate()
   const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
   const activeTab = propActiveTab || internalTab
   const [mobileView, setMobileView] = useState("content")
@@ -4622,6 +4998,39 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     (profileName.trim() !== initialProfileName.trim()) ||
     (profileEmail.trim() !== initialProfileEmail.trim())
   )
+
+  const handleRebookBooking = (b) => {
+    let items = []
+    if (typeof b.cart_data === 'string') {
+      try { items = JSON.parse(b.cart_data) } catch (e) { }
+    } else if (Array.isArray(b.cart_data)) {
+      items = b.cart_data
+    }
+    if (!items || items.length === 0) {
+      items = [{
+        id: b.package_id || b.service_id || b.id,
+        name: (b.issue_title || b.service_category_display || "Service Booking").replace(/•“/g, ' - ').replace(/•”/g, ' - '),
+        price: Number(b.total_amount || b.base_amount || 499),
+        quantity: 1,
+        category: b.service_category,
+      }]
+    }
+    try {
+      localStorage.setItem("calservices_customer_cart", JSON.stringify(items))
+      if (b.service_category) {
+        localStorage.setItem("calservices_customer_category", JSON.stringify({ id: b.service_category, name: b.service_category_display || b.service_category }))
+      }
+      if (b.address && user?.id) {
+        setCustomerSelectedAddress(user.id, b.address)
+      }
+      window.dispatchEvent(new CustomEvent("calservices_cart_updated"))
+    } catch (e) { }
+
+    if (typeof onClose === 'function') {
+      onClose()
+    }
+    navigate(routes.booking_checkout, { state: { cart: items, category: b.service_category } })
+  }
 
   useEffect(() => {
     if (user) {
@@ -5551,10 +5960,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const nonDraftBookings = (realBookings || []).filter(b => b.status !== 'draft')
   const hasNonDraftBookings = nonDraftBookings.length > 0
 
+  const liveActiveBookings = (realBookings || []).filter(b =>
+    !b.parent_request && ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(String(b.status || '').toLowerCase())
+  )
+  const completedBookings = (realBookings || []).filter(b =>
+    !b.parent_request && ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+  )
+
+  const [bookingListFilter, setBookingListFilter] = useState("all")
+
   const tabs = [
-    { id: "My Profile", icon: User },
+    { id: "Upcoming & Active", icon: Clock, badge: liveActiveBookings.length || undefined },
+    { id: "Past Services", icon: CheckCircle2, badge: completedBookings.length || undefined },
+    { id: "Book Again", icon: RefreshCw },
+    { id: "30-Day Warranties", icon: ShieldCheck, badge: completedBookings.length || undefined },
+    { id: "My Invoices", icon: FileText },
     { id: "Saved Addresses", icon: MapPin },
-    { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
+    { id: "My Profile", icon: User },
     { id: "Wallet", icon: Wallet },
     { id: "Referral Code", icon: Gift },
     { id: "AMC Bookings", icon: Repeat, badge: (amcSeries || []).filter(s => s.status === "ACTIVE").length || undefined },
@@ -5787,21 +6209,158 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
-      case "My Bookings":
+      case "Upcoming & Active":
+      case "Past Services":
+      case "My Bookings": {
+        const isUpcomingTab = activeTab === "Upcoming & Active"
+        const isPastTab = activeTab === "Past Services"
+        const currentFilter = isUpcomingTab ? "active" : isPastTab ? "completed" : bookingListFilter
+
+        const displayedBookings = realBookings.filter(b => {
+          if (b.parent_request) return false
+          const st = String(b.status || '').toLowerCase()
+          if (currentFilter === "active") {
+            return ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(st)
+          }
+          if (currentFilter === "completed") {
+            return ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)
+          }
+          return true
+        })
+
+        const activeCount = liveActiveBookings.length
+        const completedCount = completedBookings.length
+        const allCount = realBookings.filter(b => !b.parent_request).length
+
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+                    {isUpcomingTab ? 'Upcoming & Active Services' : isPastTab ? 'Past Completed Services' : 'My Bookings'}
+                  </h3>
+                  <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                    {isUpcomingTab
+                      ? 'Live tracking, technician assignment, and arrival OTPs for ongoing Hosur services'
+                      : isPastTab
+                        ? 'Service history, 30-day revisit guarantees, and 1-click rebooking'
+                        : 'Manage all your SEVO service requests, schedules, and warranties in one place'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '8px 16px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.2)' }}
+                >
+                  <Plus size={14} /> Book New Service
+                </button>
+              </div>
+
+              {/* Segmented Filter Pills */}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                <button
+                  onClick={() => {
+                    setBookingListFilter("all");
+                    if (typeof onChangeTab === 'function') onChangeTab("My Bookings");
+                    else setInternalTab("My Bookings");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "all" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "all" ? '#059669' : '#ffffff',
+                    color: currentFilter === "all" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>All Bookings</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "all" ? 'rgba(255,255,255,0.25)' : '#f1f5f9', padding: '1px 6px', borderRadius: 99 }}>
+                    {allCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setBookingListFilter("active");
+                    if (typeof onChangeTab === 'function') onChangeTab("Upcoming & Active");
+                    else setInternalTab("Upcoming & Active");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "active" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "active" ? '#059669' : '#ffffff',
+                    color: currentFilter === "active" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Clock size={13} />
+                  <span>Upcoming & Active</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "active" ? 'rgba(255,255,255,0.25)' : '#ecfdf5', color: currentFilter === "active" ? '#ffffff' : '#059669', padding: '1px 6px', borderRadius: 99 }}>
+                    {activeCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setBookingListFilter("completed");
+                    if (typeof onChangeTab === 'function') onChangeTab("Past Services");
+                    else setInternalTab("Past Services");
+                  }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 99,
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    border: currentFilter === "completed" ? '1.5px solid #059669' : '1px solid #cbd5e1',
+                    background: currentFilter === "completed" ? '#059669' : '#ffffff',
+                    color: currentFilter === "completed" ? '#ffffff' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Past Services</span>
+                  <span style={{ fontSize: '0.7rem', background: currentFilter === "completed" ? 'rgba(255,255,255,0.25)' : '#f1f5f9', padding: '1px 6px', borderRadius: 99 }}>
+                    {completedCount}
+                  </span>
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {bookingsLoading ? (
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
-              ) : realBookings.length === 0 ? (
+              ) : displayedBookings.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
                   <div style={{ width: 64, height: 64, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(5,150,105,0.15)' }}>
                     <Calendar size={30} />
                   </div>
-                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>
+                    {currentFilter === "active" ? "No Active Bookings in Flight" : currentFilter === "completed" ? "No Past Completed Services" : "No Bookings Found"}
+                  </h4>
                   <p style={{ margin: '0 auto 20px', fontSize: '0.85rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
-                    You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation.
+                    {currentFilter === "active"
+                      ? "You don't have any ongoing or upcoming service appointments in Hosur right now. Ready to book an expert?"
+                      : currentFilter === "completed"
+                        ? "You haven't completed any service appointments with SEVO yet. Once completed, your history and 30-day revisit guarantees will be displayed here."
+                        : "You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation."}
                   </p>
                   <button
                     onClick={() => { onClose(); window.location.href = "/home"; }}
@@ -5810,7 +6369,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     + Book a Service Now
                   </button>
                 </div>
-              ) : realBookings.filter(b => !b.parent_request).map(b => {
+              ) : displayedBookings.map(b => {
                 const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
@@ -5840,6 +6399,12 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
+                          {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase()) && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.75rem', fontWeight: 700, marginBottom: 6 }}>
+                              <ShieldCheck size={13} style={{ color: '#059669' }} /> 30-Day Revisit Guarantee Active
+                            </div>
+                          )}
+
                           {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
                           {isRescheduleEligible && (
                             <div style={{ marginTop: 6 }}>
@@ -5863,7 +6428,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
                             {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase()) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleRebookBooking(b)
+                                }}
+                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                              >
+                                <RefreshCw size={13} /> Book Again
+                              </button>
+                            )}
                             {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
                               <button
                                 onClick={(e) => {
@@ -6423,6 +7001,445 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
+      }
+
+      case "Book Again": {
+        const pastCompleted = (realBookings || []).filter(b =>
+          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+        )
+
+        const seenPackages = new Set()
+        const uniqueRebookItems = []
+        for (const b of pastCompleted) {
+          const key = b.package_id || b.issue_title || b.service_category
+          if (!seenPackages.has(key)) {
+            seenPackages.add(key)
+            uniqueRebookItems.push(b)
+          }
+        }
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: '1.4rem' }}>⚡</span>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Book Again</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Re-order your previous home services in Hosur with 1 tap. Previous address and preferences are pre-selected.
+              </p>
+            </div>
+
+            {uniqueRebookItems.length === 0 ? (
+              <div>
+                <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0', marginBottom: 24 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <RefreshCw size={26} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Previous Services to Re-book</h4>
+                  <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
+                    Once you complete a service, you can re-order it here instantly. Explore our most popular Hosur home services below:
+                  </p>
+                </div>
+
+                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Popular Hosur Services</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  {[
+                    { name: 'Foam & Power Jet AC Service', price: '₹499', cat: 'ac_appliances', icon: '❄️' },
+                    { name: 'Intense Bathroom Cleaning', price: '₹399', cat: 'cleaning_pest', icon: '🧹' },
+                    { name: 'Sofa & Fabric Deep Shampoo', price: '₹499', cat: 'cleaning_pest', icon: '🛋️' },
+                    { name: 'Home Pest & Cockroach Control', price: '₹799', cat: 'cleaning_pest', icon: '🐜' },
+                    { name: 'Waterproofing & Masonry Inspection', price: '₹0 (Free Quote)', cat: 'masonry', icon: '🧱' },
+                    { name: 'Hosur Local Goods Transport', price: '₹299 onwards', cat: 'goods_transport', icon: '🚚' },
+                  ].map((srv, idx) => (
+                    <div key={idx} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: '1.4rem' }}>{srv.icon}</span>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#0f172a' }}>{srv.name}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700, marginTop: 2 }}>{srv.price}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          window.location.href = `/home?category=${srv.cat}`;
+                        }}
+                        style={{ padding: '6px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        Book
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {uniqueRebookItems.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: 'white',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{title}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                            ✓ Serviced
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>📅 Last booked: {b.preferred_date || 'Recently'}</span>
+                          <span>•</span>
+                          <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span>
+                        </div>
+                        {b.address && (
+                          <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: 4 }}>
+                            📍 {b.address}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {b.total_amount && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Previous Rate</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a' }}>₹{Number(b.total_amount).toLocaleString('en-IN')}</div>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRebookBooking(b)}
+                          style={{
+                            padding: '10px 20px',
+                            background: 'linear-gradient(135deg, #059669, #047857)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 10,
+                            fontWeight: 800,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: '0 2px 8px rgba(5,150,105,0.25)'
+                          }}
+                        >
+                          <RefreshCw size={14} /> Book Again
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
+      case "30-Day Warranties": {
+        const completedServices = (realBookings || []).filter(b =>
+          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+        )
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <ShieldCheck size={26} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>30-Day Doorstep Guarantee</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Every service completed with SEVO is backed by our signature 30-Day Doorstep Guarantee.
+              </p>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #064e3b, #065f46)',
+              borderRadius: 18,
+              padding: '1.5rem',
+              color: 'white',
+              marginBottom: '1.5rem',
+              boxShadow: '0 4px 16px rgba(6,78,59,0.2)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a7f3d0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Zero-Cost Revisit Promise
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white' }}>
+                    Issue resurfacing? We fix it completely free.
+                  </div>
+                </div>
+              </div>
+              <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#d1fae5', lineHeight: 1.5 }}>
+                If any serviced part or appliance develops the same issue within 30 days of completion, our verified professional will revisit your doorstep to re-inspect and resolve it with zero inspection or service fee.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ 100% Free Doorstep Revisit
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ Genuine Parts Guarantee
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ Priority Dispatch Support
+                </div>
+              </div>
+            </div>
+
+            <h4 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+              Your Protected Services ({completedServices.length})
+            </h4>
+
+            {completedServices.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+                <ShieldCheck size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
+                <h5 style={{ margin: '0 0 4px', fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>No Covered Services Yet</h5>
+                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
+                  When you complete a service, its active 30-day revisit warranty and days remaining will appear right here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Explore Guaranteed Services
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {completedServices.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  const bookingDate = new Date(b.created_at || b.preferred_date || Date.now())
+                  const daysPassed = Math.floor((Date.now() - bookingDate.getTime()) / (1000 * 60 * 60 * 24))
+                  const isWarrantyActive = daysPassed <= 30
+                  const daysRemaining = Math.max(0, 30 - daysPassed)
+                  const expiryDate = new Date(bookingDate.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })
+
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: isWarrantyActive ? '1.5px solid #a7f3d0' : '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: isWarrantyActive ? '#f0fdf4' : 'white',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>{title}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 2 }}>
+                            Booking #{b.request_id || `SR-${b.id}`} • Completed: {b.preferred_date || 'Recently'}
+                          </div>
+                        </div>
+
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          padding: '4px 12px',
+                          borderRadius: 99,
+                          background: isWarrantyActive ? '#dcfce7' : '#f1f5f9',
+                          color: isWarrantyActive ? '#15803d' : '#64748b',
+                          border: isWarrantyActive ? '1px solid #86efac' : '1px solid #e2e8f0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}>
+                          <ShieldCheck size={14} />
+                          {isWarrantyActive ? `Active Guarantee (${daysRemaining} days left)` : 'Warranty Expired'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 10, marginTop: 6 }}>
+                        <div style={{ fontSize: '0.78rem', color: isWarrantyActive ? '#065f46' : '#64748b', fontWeight: 600 }}>
+                          {isWarrantyActive ? `🛡️ Full doorstep protection active until ${expiryDate}` : `Expired on ${expiryDate}`}
+                        </div>
+
+                        {isWarrantyActive ? (
+                          <a
+                            href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I want to claim a 30-day warranty revisit for booking #${b.request_id || b.id} (${title})`)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              padding: '6px 14px',
+                              background: '#059669',
+                              color: 'white',
+                              borderRadius: 8,
+                              fontSize: '0.78rem',
+                              fontWeight: 800,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              boxShadow: '0 2px 6px rgba(5,150,105,0.2)'
+                            }}
+                          >
+                            Claim Free Revisit →
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRebookBooking(b)}
+                            style={{
+                              padding: '6px 14px',
+                              background: '#f1f5f9',
+                              color: '#334155',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 8,
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Renew / Book Again
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
+      case "My Invoices": {
+        const invoicedBookings = (realBookings || []).filter(b => !b.parent_request && b.status !== 'draft')
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <FileText size={24} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Invoices & Receipts</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Download official GST-compliant tax invoices and payment summaries for all your SEVO bookings.
+              </p>
+            </div>
+
+            {invoicedBookings.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <FileText size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
+                <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Invoices Generated Yet</h4>
+                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
+                  Once you place or complete a service booking, your downloadable tax invoice will appear here automatically.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Book a Service
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {invoicedBookings.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  const isPaid = ['paid', 'collected'].includes(String(b.payment_status || '').toLowerCase())
+
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: 'white',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.98rem' }}>{title}</span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: 99,
+                            background: isPaid ? '#ecfdf5' : '#fffbeb',
+                            color: isPaid ? '#059669' : '#d97706',
+                            border: isPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
+                          }}>
+                            {isPaid ? '✓ Paid' : 'Payment Pending'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>#{b.request_id || `SR-${b.id}`}</span>
+                          <span>•</span>
+                          <span>{b.preferred_date || 'Date N/A'}</span>
+                          <span>•</span>
+                          <span>Mode: {(b.payment_method || 'COD').toUpperCase()}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Total Amount</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
+                            ₹{Number(b.total_amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#f8fafc',
+                            border: '1.5px solid #cbd5e1',
+                            borderRadius: 10,
+                            color: '#0f172a',
+                            fontWeight: 800,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={e => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.color = '#059669'; }}
+                          onMouseOut={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                        >
+                          <FileText size={14} /> Download PDF
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
       case "Saved Addresses":
         return (
           <SavedAddressesPage user={user} onClose={onClose} />

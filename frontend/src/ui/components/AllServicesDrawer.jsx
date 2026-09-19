@@ -1,72 +1,49 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import {
   X, ChevronRight, ChevronDown, User as UserIcon,
   Sparkles, Wind, Zap, Droplet, Hammer, Bug, PaintRoller,
-  Boxes, Wrench, ShoppingBag, LayoutGrid, Loader2, Package as PackageIcon
+  Boxes, Wrench, LayoutGrid, Loader2, Package as PackageIcon,
+  Truck, ShieldCheck
 } from "lucide-react"
 import { apiRequest } from "../../api/client.js"
-import { CATEGORIES } from "../pages/categoriesData.js"
 import { routes } from "../routes.js"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 
-// Icon per pillar-level category id (falls back to Wrench). Kept local and
-// small on purpose -- this drawer only needs a glance-icon per row, not the
-// full per-service icon logic BookingPage.jsx already owns.
-const CATEGORY_ICONS = {
-  cleaning: Sparkles,
-  sofa_cleaning: Sparkles,
-  kitchen_cleaning: Sparkles,
-  bathroom_cleaning: Sparkles,
-  plumbing: Droplet,
-  electrical: Zap,
-  carpentry: Hammer,
-  hvac: Wind,
-  pest_control: Bug,
-  painting: PaintRoller,
-  mason: Hammer,
-  appliance_repair: Boxes,
-  security: ShieldIconFallback,
-  general: Wrench,
+// Icon per category name / icon field (falls back to Wrench/Sparkles).
+function getCategoryIcon(cat) {
+  const iconStr = (cat?.icon || "").toLowerCase()
+  const nameStr = (cat?.name || "").toLowerCase()
+  if (iconStr === "truck" || nameStr.includes("truck") || nameStr.includes("transport") || nameStr.includes("goods")) return Truck
+  if (iconStr === "wind" || nameStr.includes("ac") || nameStr.includes("appliance") || nameStr.includes("hvac")) return Wind
+  if (iconStr === "sparkles" || nameStr.includes("clean") || nameStr.includes("pest")) return Sparkles
+  if (iconStr === "palette" || nameStr.includes("paint")) return PaintRoller
+  if (iconStr === "hammer" || nameStr.includes("mason")) return Hammer
+  if (nameStr.includes("plumb")) return Droplet
+  if (nameStr.includes("electr")) return Zap
+  if (nameStr.includes("security")) return ShieldCheck
+  return Wrench
 }
 
-function ShieldIconFallback(props) {
-  return <Wrench {...props} />
+function isGroceryCategory(cat) {
+  const s = (cat?.slug || "").toLowerCase()
+  const n = (cat?.name || "").toLowerCase()
+  const icon = (cat?.icon || "").toLowerCase()
+  return (
+    s.includes("vegetable") || s.includes("grocery") || s.includes("groceries") ||
+    s.includes("fruit") || n.includes("vegetable") || n.includes("grocery") ||
+    n.includes("groceries") || n.includes("fruit") || icon === "carrot"
+  )
 }
 
-// Fuzzy-match a local CATEGORIES entry (categoriesData.js -- this drawer's
-// own hardcoded id/name/icon list, independent of the backend's ids) to the
-// real backend CatalogCategory it corresponds to. Exact name match first,
-// then a word-overlap fallback for the few that are phrased differently
-// (e.g. local "Appliances" vs backend "Appliance Repair").
-function resolveRealCategory(localCat, realCategories) {
-  if (!realCategories.length) return null
-  const localName = localCat.name.toLowerCase()
-  const exact = realCategories.find((c) => (c.name || "").toLowerCase() === localName)
-  if (exact) return exact
-  const localWords = localName.split(/\s+/).filter((w) => w.length > 3)
-  if (!localWords.length) return null
-  return realCategories.find((c) => {
-    const cn = (c.name || "").toLowerCase()
-    return localWords.some((w) => cn.includes(w))
-  }) || null
-}
-
-// Sitewide "All Services" directory -- an Amazon-style slide-out panel
-// listing every category, and on request, the real catalog hierarchy
-// nested underneath it: Category -> Sub-Services (backend "Service" rows,
-// exactly what /api/catalog/sub-services/ calls them) -> Packages (the
-// actual bookable, priced items). Data comes straight from the public
-// catalog endpoints (same ones BookingPage.jsx already uses), so a
-// category/sub-service/package the admin adds or renames in the catalog
-// shows up here automatically on next open, no code change.
-//
-// Both inner levels load lazily, one API call per row the customer
-// actually expands, rather than one big upfront fetch of everything --
-// this panel is meant to be a quick glance-and-drill directory, not a
-// full catalog dump.
-export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, user }) {
-  const [realCategories, setRealCategories] = useState([])
-  const [categoriesLoaded, setCategoriesLoaded] = useState(false)
+// Sitewide "All Services" directory -- an Amazon/Urban-style slide-out panel
+// listing every service category from the live Admin Catalog, and on request,
+// the real catalog hierarchy nested underneath it:
+// Category -> Services (backend "Service" rows) -> Packages.
+// Data comes straight from the public catalog endpoints.
+export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, user, categories: categoriesProp }) {
+  const [realCategories, setRealCategories] = useState(() => Array.isArray(categoriesProp) && categoriesProp.length > 0 ? categoriesProp : [])
+  const [categoriesLoaded, setCategoriesLoaded] = useState(() => Array.isArray(categoriesProp) && categoriesProp.length > 0)
   const [expandedCats, setExpandedCats] = useState(() => new Set())
   const [expandedServices, setExpandedServices] = useState(() => new Set())
   // real CatalogCategory.id -> "loading" | Service[]
@@ -75,6 +52,11 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
   const [packagesByService, setPackagesByService] = useState({})
 
   useEffect(() => {
+    if (Array.isArray(categoriesProp) && categoriesProp.length > 0) {
+      setRealCategories(categoriesProp)
+      setCategoriesLoaded(true)
+      return
+    }
     if (!isOpen || categoriesLoaded) return
     apiRequest("/catalog/categories/")
       .then((res) => {
@@ -84,7 +66,12 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
       })
       .catch((err) => console.error("Failed to load categories for All Services drawer:", err))
       .finally(() => setCategoriesLoaded(true))
-  }, [isOpen, categoriesLoaded])
+  }, [isOpen, categoriesLoaded, categoriesProp])
+
+  // Filter out inactive and grocery categories
+  const serviceCategories = useMemo(() => {
+    return realCategories.filter((c) => c.is_active !== false && !isGroceryCategory(c))
+  }, [realCategories])
 
   useEffect(() => {
     if (!isOpen) return
@@ -99,8 +86,25 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
 
   if (!isOpen || typeof document === "undefined") return null
 
-  const goTo = (categoryId, subtab) => {
-    const qs = subtab ? `?category=${categoryId}&subtab=${encodeURIComponent(subtab)}` : `?category=${categoryId}`
+  const goTo = (categorySlug, subtabSlug) => {
+    const s = String(categorySlug || "").toLowerCase()
+    const sub = String(subtabSlug || "").toLowerCase()
+    if (s.includes("goods") || s.includes("transport") || s.includes("logistics") || s === "gt") {
+      onClose()
+      if (sub.includes("two-wheeler") || sub.includes("2-wheeler") || sub.includes("bike")) {
+        navigateProp(routes.two_wheeler_booking_hosur)
+      } else if (sub.includes("mini-truck") || sub.includes("truck")) {
+        navigateProp(routes.truck_booking_hosur)
+      } else if (sub.includes("packer") || sub.includes("mover")) {
+        navigateProp(routes.packers_movers_booking_hosur)
+      } else {
+        navigateProp("/home", { state: { openGoodsModal: true } })
+      }
+      return
+    }
+    const qs = subtabSlug
+      ? `?category=${encodeURIComponent(categorySlug)}&subtab=${encodeURIComponent(subtabSlug)}`
+      : `?category=${encodeURIComponent(categorySlug)}`
     navigateProp(`${routes.booking_services}${qs}`)
     onClose()
   }
@@ -131,22 +135,14 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
     }
   }
 
-  const onCategoryClick = (localCat) => {
-    const real = resolveRealCategory(localCat, realCategories)
-    if (!real) {
-      // Nothing in the live catalog matches this local category card yet --
-      // same behaviour as before: go straight to its page rather than
-      // opening onto an empty list.
-      goTo(localCat.id)
-      return
-    }
+  const onCategoryClick = (cat) => {
     setExpandedCats((prev) => {
       const next = new Set(prev)
-      if (next.has(localCat.id)) next.delete(localCat.id)
-      else next.add(localCat.id)
+      if (next.has(cat.id)) next.delete(cat.id)
+      else next.add(cat.id)
       return next
     })
-    if (!expandedCats.has(localCat.id)) loadSubServices(real)
+    if (!expandedCats.has(cat.id)) loadSubServices(cat)
   }
 
   const onServiceClick = (service) => {
@@ -166,7 +162,7 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
 
       {/* Slide-in Panel */}
       <div className="relative w-[86vw] max-w-sm h-full bg-[var(--sevo-surface,white)] shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
-        {/* Greeting Header (Amazon-style) */}
+        {/* Greeting Header */}
         <div className="bg-[var(--sevo-primary,#0f766e)] text-white px-4 py-4 flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0">
             <UserIcon className="w-5 h-5" />
@@ -175,7 +171,7 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
             <div className="text-base font-extrabold truncate">
               Hello, {user?.full_name || user?.fullName || user?.first_name || "sign in"}
             </div>
-            <div className="text-[11px] text-white/80 font-semibold">All Services</div>
+            <div className="text-[11px] text-white/80 font-semibold">Service Directory</div>
           </div>
           <button
             type="button"
@@ -191,15 +187,31 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 pt-3 pb-1">
             <span className="text-xs font-black uppercase tracking-wider text-[var(--sevo-text-muted,#64748b)]">
-              Browse Categories
+              Service Categories
             </span>
           </div>
-          {CATEGORIES.map((cat) => {
-            const Icon = CATEGORY_ICONS[cat.id] || LayoutGrid
+
+          {!categoriesLoaded && (
+            <div className="p-4 space-y-3">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <div key={n} className="flex items-center gap-3 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
+                  <div className="h-4 bg-slate-100 rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {categoriesLoaded && serviceCategories.length === 0 && (
+            <div className="p-6 text-center text-xs text-slate-400 font-medium">
+              No active services found in the catalog.
+            </div>
+          )}
+
+          {categoriesLoaded && serviceCategories.map((cat) => {
+            const Icon = getCategoryIcon(cat)
             const isExpanded = expandedCats.has(cat.id)
-            const real = resolveRealCategory(cat, realCategories)
-            const canExpand = categoriesLoaded && Boolean(real)
-            const subServices = real ? subServicesByCat[real.id] : undefined
+            const subServices = subServicesByCat[cat.id]
             const subServicesLoading = subServices === "loading"
             const subServiceRows = Array.isArray(subServices) ? subServices : []
 
@@ -210,35 +222,45 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
                   onClick={() => onCategoryClick(cat)}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--sevo-surface-raised,#f8fafc)] transition-colors cursor-pointer text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-[var(--sevo-primary-light,#f0fdfa)] text-[var(--sevo-primary,#0f766e)] flex items-center justify-center shrink-0">
-                    <Icon className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-lg bg-[var(--sevo-primary-light,#f0fdfa)] text-[var(--sevo-primary,#0f766e)] flex items-center justify-center shrink-0 overflow-hidden">
+                    {cat.image ? (
+                      <img
+                        src={resolveImageUrl(cat.image)}
+                        alt={cat.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'flex' }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full ${cat.image ? 'hidden' : 'flex'} items-center justify-center`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
                   </div>
                   <span className="flex-1 text-sm font-bold text-[var(--sevo-text-primary,#0f172a)] truncate">
                     {cat.name}
                   </span>
-                  {canExpand ? (
-                    isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  {isExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                   )}
                 </button>
 
-                {isExpanded && canExpand && (
+                {isExpanded && (
                   <div className="pb-2 bg-[var(--sevo-surface-raised,#f8fafc)]/60">
                     {subServicesLoading && (
                       <div className="flex items-center gap-2 pl-[52px] pr-4 py-2 text-xs text-slate-400">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Loading sub-services…</span>
+                        <span>Loading services…</span>
                       </div>
                     )}
 
                     {!subServicesLoading && subServiceRows.length === 0 && (
                       <button
                         type="button"
-                        onClick={() => goTo(cat.id)}
+                        onClick={() => goTo(cat.slug)}
                         className="w-full flex items-center gap-2 pl-[52px] pr-4 py-2 text-xs font-semibold text-[var(--sevo-text-secondary,#475569)] hover:text-[var(--sevo-primary,#0f766e)] transition-colors cursor-pointer text-left"
                       >
-                        View {cat.name} →
+                        Explore {cat.name} →
                       </button>
                     )}
 
@@ -278,23 +300,25 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
                                 <button
                                   key={pkg.id}
                                   type="button"
-                                  onClick={() => goTo(cat.id, svc.name)}
+                                  onClick={() => goTo(cat.slug, svc.slug)}
                                   className="w-full flex items-center gap-2 pl-[76px] pr-4 py-1.5 text-[11px] font-semibold text-[var(--sevo-text-secondary,#475569)] hover:text-[var(--sevo-primary,#0f766e)] transition-colors cursor-pointer text-left"
                                 >
                                   <PackageIcon className="w-3 h-3 text-slate-300 shrink-0" />
                                   <span className="truncate flex-1">{pkg.name}</span>
-                                  {pkg.price != null && (
-                                    <span className="text-slate-400 shrink-0">₹{Number(pkg.price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                                  {pkg.base_price != null && (
+                                    <span className="text-slate-500 font-bold shrink-0">
+                                      ₹{Number(pkg.offer_price || pkg.base_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                    </span>
                                   )}
                                 </button>
                               ))}
 
                               <button
                                 type="button"
-                                onClick={() => goTo(cat.id, svc.name)}
+                                onClick={() => goTo(cat.slug, svc.slug)}
                                 className="w-full flex items-center gap-2 pl-[76px] pr-4 py-1.5 text-[11px] font-black text-[var(--sevo-primary,#0f766e)] hover:underline transition-colors cursor-pointer text-left"
                               >
-                                View all {svc.name} →
+                                View all {svc.name} options →
                               </button>
                             </div>
                           )}
@@ -305,7 +329,7 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
                     {!subServicesLoading && subServiceRows.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => goTo(cat.id)}
+                        onClick={() => goTo(cat.slug)}
                         className="w-full flex items-center gap-2 pl-[44px] pr-4 py-2 text-xs font-black text-[var(--sevo-primary,#0f766e)] hover:underline transition-colors cursor-pointer text-left"
                       >
                         View all {cat.name} →
@@ -322,3 +346,4 @@ export function AllServicesDrawer({ isOpen, onClose, navigate: navigateProp, use
     document.body
   )
 }
+

@@ -32,6 +32,8 @@ if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
 else:
     ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
+if "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.

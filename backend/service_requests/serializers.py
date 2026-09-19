@@ -52,7 +52,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
         fields = [
             "id", "category", "category_slug", "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
-            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
+            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization", "sub_service_key",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
             "in_stock", "max_quantity",
@@ -644,7 +644,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return []
 
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query workforce_notification for COD-specific OTP states.
+        # "pending" is the default online-payment status and never has a
+        # PAYMENT_CONFIRMATION_OTP — querying for it caused one raw SQL call
+        # per booking in every listing endpoint (active, my-bookings, admin, etc.).
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
@@ -745,7 +749,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return None
 
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re
@@ -1054,7 +1059,8 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_payment_confirmation_otp(self, obj):
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
+        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
             return None
         try:
             import re

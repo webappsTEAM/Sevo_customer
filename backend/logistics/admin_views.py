@@ -632,6 +632,21 @@ class AdminGoodsItemDetailView(APIView):
                 if new_fee < Decimal("0"):
                     return _fail("Special handling charge cannot be negative.", "INVALID_HANDLING_FEE", status.HTTP_400_BAD_REQUEST)
                 if new_fee != item.special_handling_charge:
+                    # GT audit Update 8: special_handling_charge is a real
+                    # money field (feeds both GT and P&M fare calculations --
+                    # see cargo_fitment.py / packers_movers_pricing.py) but
+                    # this whole view was previously gated only on plain
+                    # "edit" at the top of patch(). Require modify_price
+                    # specifically for this field, checked here (before any
+                    # mutation or audit-log write for it) so the other
+                    # descriptive fields above/below stay on plain "edit".
+                    if not _can(request.user, "modify_price"):
+                        return _fail(
+                            "Changing a goods item's special handling charge "
+                            "requires the 'modify_price' permission on the "
+                            "Pricing module.",
+                            "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+                        )
                     CatalogChangeLog.objects.create(entity_type="GoodsItem", entity_id=item.id, field_name="special_handling_charge", old_value=str(item.special_handling_charge), new_value=str(new_fee), changed_by=request.user, reason=reason)
                     item.special_handling_charge = new_fee
                     if new_fee > 0:
@@ -716,6 +731,16 @@ class AdminPackersMoversConfigView(APIView):
         return _ok(PackersMoversConfigSerializer(config).data)
 
     def patch(self, request):
+        # GT audit Update 7: this used to gate the ENTIRE patch (including
+        # the six rate fields below, which are genuine live pricing inputs
+        # to the P&M fare engine -- see packers_movers_pricing.py) on plain
+        # "edit". Per the RBAC matrix (accounts/permissions.py), "manager"
+        # and "finance" both hold pricing:edit but explicitly NOT
+        # pricing:modify_price -- exactly the roles the modify_price split
+        # exists to keep away from rates. _can(request.user, "edit") alone
+        # is still the right gate for this endpoint to be reachable at all
+        # (and for survey_cft_threshold/is_active, which are not money), but
+        # the six rate fields need the stronger check below.
         if not _can(request.user, "edit"):
             return _fail("Permission denied to edit P&M pricing config.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
         data = request.data if isinstance(request.data, dict) else {}
@@ -740,27 +765,49 @@ class AdminPackersMoversConfigView(APIView):
             "unpacking_rate_cft": "unpacking_rate_cft",
             "gst_rate": "gst_rate",
         }
+
+        # ── Pricing permission gate (Update 7 fix) ──────────────────────────
+        # Parse and validate every rate field FIRST, without mutating config
+        # or writing any audit row, so a denied request leaves the database
+        # completely untouched -- not even a partial write of the fields the
+        # actor "would have" been allowed to change, since all six here are
+        # money. Only after confirming at least one rate field would actually
+        # change value do we require modify_price; a request that resends the
+        # same values needs no elevated permission.
+        _parsed_dec = {}
         for field_name, attr in dec_fields.items():
             if field_name in data:
                 try:
                     val = Decimal(str(data[field_name]))
-                    if val < Decimal("0"):
-                        return _fail(f"{field_name} cannot be negative.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
-                    old_val = getattr(config, attr)
-                    if val != old_val:
-                        CatalogChangeLog.objects.create(
-                            entity_type="PackersMoversConfig",
-                            entity_id=config.id,
-                            field_name=field_name,
-                            old_value=str(old_val),
-                            new_value=str(val),
-                            changed_by=request.user,
-                            reason=reason,
-                        )
-                        setattr(config, attr, val)
-                        changes.append(field_name)
                 except (InvalidOperation, TypeError, ValueError):
                     return _fail(f"Invalid decimal for {field_name}.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if val < Decimal("0"):
+                    return _fail(f"{field_name} cannot be negative.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if val != getattr(config, attr):
+                    _parsed_dec[field_name] = val
+        if _parsed_dec and not _can(request.user, "modify_price"):
+            return _fail(
+                "Changing Packers & Movers pricing rates requires the "
+                "'modify_price' permission on the Pricing module.",
+                "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+            )
+        # ── End pricing permission gate ─────────────────────────────────────
+
+        for field_name, attr in dec_fields.items():
+            if field_name in _parsed_dec:
+                val = _parsed_dec[field_name]
+                old_val = getattr(config, attr)
+                CatalogChangeLog.objects.create(
+                    entity_type="PackersMoversConfig",
+                    entity_id=config.id,
+                    field_name=field_name,
+                    old_value=str(old_val),
+                    new_value=str(val),
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                setattr(config, attr, val)
+                changes.append(field_name)
 
         if "survey_cft_threshold" in data:
             try:

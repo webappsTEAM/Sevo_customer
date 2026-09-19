@@ -6,6 +6,7 @@ from .models import Lane, ServiceArea, ServiceTier
 
 class ServiceTierSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source="get_category_display", read_only=True)
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceTier
@@ -16,6 +17,20 @@ class ServiceTierSerializer(serializers.ModelSerializer):
             "max_weight_kg", "max_cft",
             "duration", "updated_at",
         ]
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        url_str = str(obj.image)
+        if url_str.startswith("http://") or url_str.startswith("https://"):
+            return url_str
+        try:
+            import os
+            if hasattr(obj.image, "path") and os.path.exists(obj.image.path):
+                return obj.image.url
+        except Exception:
+            pass
+        return None
 
 
 class LaneSerializer(serializers.ModelSerializer):
