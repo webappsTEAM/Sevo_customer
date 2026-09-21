@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SECTIONS = {
     "hero", "categories", "offers", "why-choose-us",
-    "how-it-works", "featured-pros", "testimonials", "general"
+    "how-it-works", "featured-pros", "testimonials", "general",
+    # Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+    # ... give the access to upload the banners, advertisement, top cards
+    # [Groceries, Services] images"): these three back the new "Mobile App"
+    # admin nav section (HomePageCustomizerPage.jsx tabs mobileBanners /
+    # mobileAds / mobileTopCards) so mobile-only image uploads get their own
+    # Supabase Storage folder (homepage/mobile-*) instead of being mixed
+    # into the web's "offers"/"categories" folders.
+    "mobile-banners", "mobile-ads", "mobile-top-cards",
 }
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -215,6 +223,43 @@ class HomePageConfigAPIView(APIView):
                         "phone": "+91 98765 43210",
                         "email": "support@calservices.com",
                         "workingHours": "Mon – Sun (8 AM – 8 PM)"
+                    },
+                    # Added 2026-09-17: mobile-app-only assets, edited from the
+                    # admin's new "Mobile App" nav section. Kept separate from
+                    # "hero"/"offers"/"categories" (the web homepage's own
+                    # banners/categories) so an admin can upload different
+                    # creative for the app without touching the website, and
+                    # so the app never accidentally shows a web-only asset (or
+                    # vice versa). Consumed by the customer app's
+                    # homepage_repository.dart / home_screen.dart.
+                    "mobile": {
+                        # Home-screen banner carousel — same shape as
+                        # "offers.items" (single admin-uploaded image + an
+                        # optional click-through link, no code-drawn text).
+                        "banners": [],
+                        # In-app advertisement slot(s) — same shape as banners;
+                        # rendered as an extra promo card on the Home screen
+                        # when at least one enabled item has an image.
+                        "ads": [],
+                        # The quick-access card row at the top of the Home
+                        # screen. Fixed 2026-09-18 per explicit request
+                        # ("Top cards 'Groceries' and 'Services' could be
+                        # editable like add new, delete and make text also
+                        # editable from admin panel"): this used to be a
+                        # fixed {groceries, services} object with only an
+                        # image+link each (no editable label) — now a plain
+                        # list so the admin can add, delete and relabel any
+                        # number of cards. The mobile app falls back to the
+                        # matching catalog Category's own image whenever a
+                        # card's "image" is empty. The customer app's
+                        # homepage_repository.dart still accepts the older
+                        # object shape too, for any config saved before this
+                        # change, and upgrades it to this list shape the
+                        # next time the admin publishes.
+                        "topCards": [
+                            {"id": "groceries", "label": "Groceries", "image": "", "link": "", "enabled": True},
+                            {"id": "services", "label": "Services", "image": "", "link": "", "enabled": True}
+                        ]
                     }
                 }
                 return Response({
