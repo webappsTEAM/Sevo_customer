@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
+import MediaUploadField from "../components/MediaUploadField.jsx"
 import { AdminRecipesPage } from "./catalog/AdminRecipesPage.jsx"
 import { AdminRecommendationsPage } from "./catalog/AdminRecommendationsPage.jsx"
 
@@ -1184,7 +1185,7 @@ export default function HomePageCustomizerPage() {
                 </div>
                 <button
                   onClick={() => {
-                    const newBanner = { id: `mb-${Date.now()}`, image: "", link: "", enabled: true, flow: "both" }
+                    const newBanner = { id: `mb-${Date.now()}`, image: "", mediaType: "image", link: "", enabled: true, flow: "both" }
                     setConfig(prev => {
                       const next = { ...prev, mobile: { ...prev.mobile, banners: [...(prev.mobile?.banners || []), newBanner] } }
                       saveHomePageConfig(next)
@@ -1239,9 +1240,18 @@ export default function HomePageCustomizerPage() {
                         </div>
                       </div>
 
-                      <ImageUploadField
+                      <MediaUploadField
                         value={banner.image || ""}
-                        onChange={(newPath) => updateBannerField("image", newPath)}
+                        mediaType={banner.mediaType || "image"}
+                        onChange={(newPath, newMediaType) => {
+                          setConfig(prev => {
+                            const newItems = [...(prev.mobile?.banners || [])]
+                            newItems[idx] = { ...newItems[idx], image: newPath, mediaType: newMediaType || "image" }
+                            const next = { ...prev, mobile: { ...prev.mobile, banners: newItems } }
+                            saveHomePageConfig(next)
+                            return next
+                          })
+                        }}
                         section="mobile-banners"
                         fallbackSrc=""
                         aspectRatio="aspect-[16/9]"
@@ -1298,7 +1308,7 @@ export default function HomePageCustomizerPage() {
                 </div>
                 <button
                   onClick={() => {
-                    const newAd = { id: `ma-${Date.now()}`, image: "", link: "", enabled: true, flow: "both" }
+                    const newAd = { id: `ma-${Date.now()}`, image: "", mediaType: "image", link: "", enabled: true, flow: "both" }
                     setConfig(prev => {
                       const next = { ...prev, mobile: { ...prev.mobile, ads: [...(prev.mobile?.ads || []), newAd] } }
                       saveHomePageConfig(next)
@@ -1353,9 +1363,18 @@ export default function HomePageCustomizerPage() {
                         </div>
                       </div>
 
-                      <ImageUploadField
+                      <MediaUploadField
                         value={ad.image || ""}
-                        onChange={(newPath) => updateAdField("image", newPath)}
+                        mediaType={ad.mediaType || "image"}
+                        onChange={(newPath, newMediaType) => {
+                          setConfig(prev => {
+                            const newItems = [...(prev.mobile?.ads || [])]
+                            newItems[idx] = { ...newItems[idx], image: newPath, mediaType: newMediaType || "image" }
+                            const next = { ...prev, mobile: { ...prev.mobile, ads: newItems } }
+                            saveHomePageConfig(next)
+                            return next
+                          })
+                        }}
                         section="mobile-ads"
                         fallbackSrc=""
                         aspectRatio="aspect-[16/9]"
