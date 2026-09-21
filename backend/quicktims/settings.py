@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "workforce_integration",
     "customer_analytics",
     "platform_control",
+    "ai_assistant",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"

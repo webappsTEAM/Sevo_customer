@@ -1,0 +1,890 @@
+/* AIChatWidget.css - SEVO Design System Styled AI Assistant */
+
+/* Floating Trigger Button - Compact, Sleek & Blinking */
+.caltrack-ai-trigger {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0B8F7A 0%, #097A68 45%, #0F5FBF 100%);
+  color: #ffffff;
+  border: none;
+  outline: none;
+  border-radius: 9999px;
+  padding: 5px 14px 5px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 4px 16px -2px rgba(11, 143, 122, 0.4), 0 2px 6px rgba(11, 23, 42, 0.08);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: trigger-blink-glow 2.2s infinite ease-in-out;
+}
+
+.caltrack-ai-trigger:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 24px -2px rgba(11, 143, 122, 0.6), 0 4px 12px rgba(15, 95, 191, 0.25);
+  animation-play-state: paused;
+}
+
+.caltrack-ai-trigger:active {
+  transform: translateY(0) scale(0.97);
+}
+
+@keyframes trigger-blink-glow {
+  0%, 100% {
+    box-shadow: 0 4px 16px -2px rgba(11, 143, 122, 0.4), 0 0 0 0 rgba(11, 143, 122, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 6px 22px 2px rgba(11, 143, 122, 0.65), 0 0 0 7px rgba(11, 143, 122, 0);
+    transform: scale(1.03);
+  }
+}
+
+.caltrack-ai-trigger-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.caltrack-ai-blink-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #22c55e;
+  animation: live-beacon-blink 1.2s infinite ease-in-out;
+}
+
+@keyframes live-beacon-blink {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 6px #22c55e;
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.75);
+    box-shadow: 0 0 2px #22c55e;
+  }
+}
+
+.caltrack-ai-logo-img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  display: block;
+}
+
+.caltrack-ai-trigger-text {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+@keyframes pulse-gentle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Chat Backdrop for Mobile */
+.caltrack-ai-backdrop {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .caltrack-ai-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 23, 42, 0.5);
+    backdrop-filter: blur(3px);
+    z-index: 99998;
+    animation: fadeIn 0.2s ease-out;
+  }
+}
+
+/* Main Chat Modal Container */
+.caltrack-ai-window {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  width: 395px;
+  max-width: calc(100vw - 32px);
+  height: 610px;
+  max-height: calc(100vh - 110px);
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid #E2DDD5;
+  box-shadow: 0 24px 48px -12px rgba(11, 23, 42, 0.18), 0 4px 16px rgba(11, 143, 122, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 99999;
+  overflow: hidden;
+  animation: slideUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 640px) {
+  .caltrack-ai-window {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 86vh;
+    max-height: 86vh;
+    border-radius: 24px 24px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(11, 23, 42, 0.2);
+  }
+
+  .caltrack-ai-trigger {
+    bottom: 74px; /* Above mobile bottom nav */
+    right: 16px;
+    padding: 5px 12px 5px 5px;
+    font-size: 12px;
+  }
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Header - SEVO Signature Gradient */
+.caltrack-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #0B8F7A 0%, #087060 60%, #0F5FBF 100%);
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.caltrack-ai-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.caltrack-ai-avatar {
+  width: 40px;
+  height: 40px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.caltrack-ai-header-logo-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  display: block;
+}
+
+.caltrack-ai-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.caltrack-ai-subtitle {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.caltrack-ai-badge-dot {
+  width: 7px;
+  height: 7px;
+  background: #34D399;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #34D399;
+}
+
+.caltrack-ai-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.caltrack-ai-header-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.caltrack-ai-header-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.05);
+}
+
+/* Banner / Notification info */
+.caltrack-ai-notice {
+  background: #F0FDF9;
+  border-bottom: 1px solid #CCFBEF;
+  padding: 8px 16px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #0F766E;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Messages Scrollable Area - SEVO Warm Palette */
+.caltrack-ai-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #FAF7F0;
+  scroll-behavior: smooth;
+}
+
+/* Message Bubbles */
+.caltrack-ai-msg-row {
+  display: flex;
+  width: 100%;
+}
+
+.caltrack-ai-msg-row.user {
+  justify-content: flex-end;
+}
+
+.caltrack-ai-msg-row.assistant {
+  justify-content: flex-start;
+}
+
+.caltrack-ai-msg-bubble {
+  max-width: 84%;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.caltrack-ai-msg-row.user .caltrack-ai-msg-bubble {
+  background: linear-gradient(135deg, #0B8F7A 0%, #087060 100%);
+  color: #ffffff;
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 4px 12px rgba(11, 143, 122, 0.22);
+}
+
+.caltrack-ai-msg-row.assistant .caltrack-ai-msg-bubble {
+  background: #ffffff;
+  color: #0B172A;
+  border: 1px solid #E2DDD5;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 2px 8px rgba(11, 23, 42, 0.04);
+}
+
+.caltrack-ai-msg-bubble p {
+  margin: 0 0 8px 0;
+}
+
+.caltrack-ai-msg-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.caltrack-ai-msg-bubble strong {
+  font-weight: 700;
+  color: inherit;
+}
+
+.caltrack-ai-msg-bubble ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.caltrack-ai-msg-bubble li {
+  margin-bottom: 4px;
+}
+
+/* Sources Badge List */
+.caltrack-ai-sources {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #E2DDD5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.caltrack-ai-source-chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  background: #E6F6F3;
+  color: #0B8F7A;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  border: 1px solid #A7F0D9;
+}
+
+/* Clickable deep link inside message */
+.caltrack-ai-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #E6F6F3;
+  color: #0B8F7A;
+  border: 1px solid #A7F0D9;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.18s ease;
+}
+
+.caltrack-ai-link-btn:hover {
+  background: #0B8F7A;
+  color: #ffffff;
+  border-color: #0B8F7A;
+  transform: translateY(-1px);
+}
+
+/* Quick Starter Suggestions */
+.caltrack-ai-starters {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.caltrack-ai-starters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 2px 4px;
+}
+
+.caltrack-ai-starters-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+}
+
+.caltrack-ai-starters-sparkle {
+  color: #0B8F7A;
+}
+
+.caltrack-ai-starters-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0B8F7A;
+  background: #E6F6F3;
+  border: 1px solid #A7F0D9;
+  padding: 1.5px 8px;
+  border-radius: 9999px;
+}
+
+.caltrack-ai-starters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.caltrack-ai-starter-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #E2DDD5;
+  border-radius: 16px;
+  padding: 11px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(11, 23, 42, 0.03);
+  overflow: hidden;
+  width: 100%;
+}
+
+.caltrack-ai-starter-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3.5px;
+  height: 100%;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.caltrack-ai-starter-card:hover {
+  background: #FEFCF8;
+  border-color: #0B8F7A;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(11, 143, 122, 0.16), 0 2px 6px -1px rgba(11, 23, 42, 0.04);
+}
+
+.caltrack-ai-starter-card:hover::before {
+  background: #0B8F7A;
+}
+
+.caltrack-ai-starter-card:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.caltrack-ai-starter-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.caltrack-ai-starter-card:hover .caltrack-ai-starter-icon-wrap {
+  transform: scale(1.08);
+}
+
+.caltrack-ai-starter-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.caltrack-ai-starter-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.caltrack-ai-starter-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0B172A;
+  line-height: 1.3;
+}
+
+.caltrack-ai-starter-card:hover .caltrack-ai-starter-label {
+  color: #0B8F7A;
+}
+
+.caltrack-ai-starter-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #475569;
+  background: #F1F5F9;
+  border-radius: 6px;
+  padding: 1.5px 7px;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.caltrack-ai-starter-sub {
+  font-size: 11px;
+  color: #64748B;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caltrack-ai-starter-arrow {
+  color: #CBD5E1;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.caltrack-ai-starter-card:hover .caltrack-ai-starter-arrow {
+  color: #0B8F7A;
+  transform: translateX(3px);
+}
+
+/* Fallback for legacy button if referenced */
+.caltrack-ai-starter-btn {
+  background: #ffffff;
+  border: 1px solid #E2DDD5;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.caltrack-ai-starter-btn:hover {
+  background: #FAF7F0;
+  border-color: #0B8F7A;
+  color: #0B8F7A;
+  transform: translateX(2px);
+}
+
+/* Typing Indicator Animation */
+.caltrack-ai-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.caltrack-ai-dot {
+  width: 7px;
+  height: 7px;
+  background: #0B8F7A;
+  border-radius: 50%;
+  animation: typing-wave 1.3s infinite ease-in-out;
+}
+
+.caltrack-ai-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.caltrack-ai-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-wave {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* Input Bar - Matches SEVO Search Pill & Circle Button */
+.caltrack-ai-footer {
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid #E2DDD5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.caltrack-ai-input {
+  flex: 1;
+  border: 1.5px solid #E2DDD5;
+  background: #FAF7F0;
+  border-radius: 9999px;
+  padding: 11px 18px;
+  font-size: 13.5px;
+  outline: none;
+  color: #0B172A;
+  transition: all 0.2s ease;
+}
+
+.caltrack-ai-input::placeholder {
+  color: #94A3B8;
+}
+
+.caltrack-ai-input:focus {
+  border-color: #0B8F7A;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(11, 143, 122, 0.2);
+}
+
+/* Circular Emerald Send Button - Matches the SEVO search button */
+.caltrack-ai-send-btn {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #0B8F7A 0%, #087060 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(11, 143, 122, 0.35);
+}
+
+.caltrack-ai-send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #097A68 0%, #076556 100%);
+  transform: scale(1.06);
+  box-shadow: 0 6px 16px rgba(11, 143, 122, 0.45);
+}
+
+.caltrack-ai-send-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.caltrack-ai-send-btn:disabled {
+  background: #CBD5E1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* History Button Active State */
+.caltrack-ai-header-btn.active {
+  background: #ffffff;
+  color: #0B8F7A;
+  border-color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* History Panel */
+.caltrack-ai-history-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #FAF7F0;
+  overflow: hidden;
+}
+
+.caltrack-ai-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #ffffff;
+  border-bottom: 1px solid #E2DDD5;
+}
+
+.caltrack-ai-history-header-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0B172A;
+}
+
+.caltrack-ai-history-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(11, 143, 122, 0.1);
+  color: #0B8F7A;
+  border: 1px solid rgba(11, 143, 122, 0.25);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.caltrack-ai-history-new-btn:hover {
+  background: #0B8F7A;
+  color: #ffffff;
+  border-color: #0B8F7A;
+}
+
+.caltrack-ai-history-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px;
+}
+
+.caltrack-ai-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.caltrack-ai-history-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #E2DDD5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(11, 23, 42, 0.04);
+}
+
+.caltrack-ai-history-item:hover {
+  border-color: #0B8F7A;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(11, 143, 122, 0.1);
+}
+
+.caltrack-ai-history-item.active {
+  border-color: #0B8F7A;
+  background: #F0FDF4;
+  box-shadow: 0 0 0 1px #0B8F7A, 0 4px 12px rgba(11, 143, 122, 0.12);
+}
+
+.caltrack-ai-history-item-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(11, 143, 122, 0.1);
+  color: #0B8F7A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.caltrack-ai-history-item.active .caltrack-ai-history-item-icon {
+  background: #0B8F7A;
+  color: #ffffff;
+}
+
+.caltrack-ai-history-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.caltrack-ai-history-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0B172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.caltrack-ai-history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 3px;
+}
+
+.caltrack-ai-history-active-tag {
+  background: #059669;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 750;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.caltrack-ai-history-item-arrow {
+  color: #94A3B8;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.caltrack-ai-history-item:hover .caltrack-ai-history-item-arrow {
+  color: #0B8F7A;
+  transform: translateX(2px);
+}
+
+.caltrack-ai-history-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.caltrack-ai-history-empty-title {
+  font-size: 14.5px;
+  font-weight: 750;
+  color: #0B172A;
+  margin: 0 0 6px;
+}
+
+.caltrack-ai-history-empty-desc {
+  font-size: 12.5px;
+  color: #64748B;
+  line-height: 1.5;
+  margin: 0 0 16px;
+  max-width: 260px;
+}
+
+.caltrack-ai-history-login-btn {
+  background: linear-gradient(135deg, #0B8F7A 0%, #087060 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(11, 143, 122, 0.3);
+  transition: all 0.2s ease;
+}
+
+.caltrack-ai-history-login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(11, 143, 122, 0.4);
+}
+

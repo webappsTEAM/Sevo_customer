@@ -9267,6 +9267,17 @@ function StepWorkflowCheckout({
     quantity: 1
   }]
 
+  const categoryKey = useMemo(() => {
+    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
+    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
+    return "general";
+  }, [category, items]);
+
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const isPaintingOrMason = Boolean(
     category?.id === "painting" ||
@@ -9343,17 +9354,6 @@ function StepWorkflowCheckout({
       { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
     ]
   };
-
-  const categoryKey = useMemo(() => {
-    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
-    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
-    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
-    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
-    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
-    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
-    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
-    return "general";
-  }, [category, items]);
 
   const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
 
@@ -11024,14 +11024,15 @@ export function BookingPage() {
     }
 
     const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const catName = (category?.name || category?.id || category?.slug || (cart && cart[0]?.name) || "").toLowerCase();
     const isPaintingOrMason = Boolean(
       category?.id === "painting" ||
       category?.id === "mason" ||
       category?.slug === "painting" ||
       category?.slug === "mason" ||
       category?.slug === "masonry" ||
-      categoryKey === "painting" ||
-      categoryKey === "masonry" ||
+      catName.includes("paint") ||
+      catName.includes("mason") ||
       (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;

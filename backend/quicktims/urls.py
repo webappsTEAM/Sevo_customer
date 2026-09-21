@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/workforce-integration/", include("workforce_integration.urls")),
     path("api/customers/", include("customer_analytics.urls")),
     path("api/platform/", include("platform_control.urls")),
+    path("api/ai/", include("ai_assistant.urls")),
     path("api/", include("service_requests.urls")),
     re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": str(settings.BASE_DIR / "ASSET IMAGES")}),
 ]
