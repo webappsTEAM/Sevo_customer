@@ -280,6 +280,10 @@ class ServiceRequest(models.Model):
     photo            = models.ImageField(upload_to="service_requests/photos/", null=True, blank=True)
     total_amount     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cart_data        = models.JSONField(default=list, blank=True)
+    catalog_service_id = models.CharField(max_length=100, blank=True, default="")
+    package_display  = models.JSONField(default=dict, blank=True)
+    package_id       = models.CharField(max_length=100, blank=True, default="")
+    package_version  = models.CharField(max_length=50, blank=True, default="1.0")
 
     # Goods Transport (truck/two-wheeler) + Packers & Movers — optional, only
     # populated when service_category is one of the logistics categories.

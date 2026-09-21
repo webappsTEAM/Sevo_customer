@@ -14,6 +14,7 @@ import { apiRequest } from "../../api/client.js"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { EditableText, EditableImage } from "./SuperAdminEditControls.jsx"
 import { getCustomerSelectedAddress } from "../../utils/customerLocationStorage.js"
+import { CategoryServiceModal } from "./CategoryServiceModal.jsx"
 
 // Feature icons map for dynamic icon resolution
 const SERVICE_ICON_MAP = {
@@ -55,84 +56,65 @@ function resolveServiceIcon(name = "") {
   return Wrench
 }
 
-function getCategorySymptomGuide(category) {
-  const k = (category?.slug || category?.id || category?.name || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
-  if (k.includes("ac") || k.includes("hvac") || k.includes("appliance")) {
-    return {
-      prompt: "What's wrong?",
-      subtitle: "Select your issue to find the exact diagnostic or maintenance package",
-      symptoms: [
-        { label: "❄️ AC Service & Gas", subtabQuery: "AC Service & Cleaning", keywords: ["ac service", "cleaning", "foam", "gas", "power jet"] },
-        { label: "🔧 AC Diagnostics & Repair", subtabQuery: "AC Repair & Diagnostics", keywords: ["repair", "diagnostic", "cooling", "leak"] },
-        { label: "⚡ Geyser / Water Heater", subtabQuery: "Geyser & Water Heater", keywords: ["geyser", "water heater", "heating", "thermostat"] },
-        { label: "💧 RO Water Purifier", subtabQuery: "Water Purifier RO", keywords: ["water purifier", "ro", "filter", "tds"] },
-        { label: "🧺 Washing Machine", subtabQuery: "Washing Machine", keywords: ["washing machine", "drain", "spin"] },
-        { label: "🧊 Refrigerator", subtabQuery: "Refrigerator", keywords: ["refrigerator", "fridge", "freezer"] },
-        { label: "📦 Install / Uninstall", subtabQuery: "Installation & Uninstallation", keywords: ["install", "uninstall"] },
-      ]
-    }
+function getServiceDefaultVariants(serviceName = "") {
+  const n = (serviceName || "").toLowerCase()
+  if (n.includes("full home") || n.includes("home cleaning")) {
+    return [
+      { id: "apartment", label: "Full Apartment", keywords: ["apartment", "bhk", "flat", "furnished"], description: "Complete deep cleaning for 1, 2, 3+ BHK apartments" },
+      { id: "bungalow", label: "Full Bungalow / Duplex", keywords: ["bungalow", "duplex", "villa", "independent"], description: "Multi-floor villa and independent house deep cleaning" },
+      { id: "partial", label: "Partial Home Cleaning", keywords: ["partial", "room", "balcony", "window"], description: "Focused cleaning for specific rooms, balconies and areas" },
+    ]
   }
-  if (k.includes("clean") || k.includes("pest")) {
-    return {
-      prompt: "What do you need?",
-      subtitle: "Choose the area that requires professional deep sanitization",
-      symptoms: [
-        { label: "🛁 Bathroom & Weekly Plans", subtabQuery: "Bathroom Cleaning", keywords: ["bathroom", "washroom", "weekly", "limescale"] },
-        { label: "🍳 Kitchen & Appliances", subtabQuery: "Kitchen Cleaning", keywords: ["kitchen", "chimney", "appliance", "fridge", "stove"] },
-        { label: "🛋️ Sofa, Carpet & Curtains", subtabQuery: "Sofa, Carpet & Upholstery Cleaning", keywords: ["sofa", "carpet", "curtain", "upholstery", "stain"] },
-        { label: "🪟 Windows, Balcony & Room Care", subtabQuery: "Room Care & Mini Services", keywords: ["room", "window", "balcony", "living room", "bedroom", "fan"] },
-        { label: "🏠 Full Home Deep Clean", subtabQuery: "Full Home Deep Cleaning", keywords: ["full home", "house", "deep clean", "villa", "apartment"] },
-        { label: "🪳 Pest Control", subtabQuery: "Pest Control", keywords: ["pest", "cockroach", "termite", "bed bug"] },
-      ]
-    }
+  if (n.includes("bath")) {
+    return [
+      { id: "standard", label: "Standard Clean", keywords: ["standard", "regular", "basic"], description: "Deep cleaning of floor tiles, wall tiles, basin & WC" },
+      { id: "intense", label: "Intense Stain Removal", keywords: ["intense", "stain", "hard water", "deep"], description: "Heavy hard-water and limescale stain removal with machine scrubbing" },
+      { id: "movein", label: "Move-in Deep Clean", keywords: ["move-in", "movein", "vacant"], description: "Thorough sanitization before moving into a new home" },
+    ]
   }
-  if (k.includes("paint")) {
-    return {
-      prompt: "What do you need?",
-      subtitle: "Book laser measurement consultation or room repainting",
-      symptoms: [
-        { label: "🏠 Interior painting", subtabQuery: "Interior Painting", keywords: ["interior"] },
-        { label: "🏢 Exterior painting", subtabQuery: "Exterior Painting", keywords: ["exterior"] },
-        { label: "💧 Waterproofing", subtabQuery: "Waterproofing", keywords: ["waterproofing", "damp", "seepage"] },
-        { label: "🪵 Wood & metal painting", subtabQuery: "Wood & Metal", keywords: ["wood", "metal", "enamel"] },
-      ]
-    }
+  if (n.includes("kitchen")) {
+    return [
+      { id: "standard", label: "Standard Cleaning", keywords: ["standard", "regular"], description: "Surface degreasing of slab, sink, gas stove & exterior cabinets" },
+      { id: "deep", label: "Chimney & Degreasing", keywords: ["chimney", "oil", "grease", "deep"], description: "Heavy oil and grease removal from tiles and chimney" },
+      { id: "complete", label: "Full Modular Kitchen", keywords: ["modular", "complete", "inside", "full"], description: "Inside-out deep scrub including shelves, trolleys and appliances" },
+    ]
   }
-  if (k.includes("mason")) {
-    return {
-      prompt: "What do you need?",
-      subtitle: "Verified expert masons with laser measurements",
-      symptoms: [
-        { label: "🧱 Tile fixing", subtabQuery: "Tile Work", keywords: ["tile", "fixing", "laying"] },
-        { label: "🔨 Minor masonry work", subtabQuery: "Masonry Repair", keywords: ["masonry", "repair", "plaster", "wall"] },
-      ]
-    }
+  if (n.includes("sofa") || n.includes("carpet") || n.includes("upholstery")) {
+    return [
+      { id: "sofa", label: "Sofa Shampooing", keywords: ["sofa", "couch", "seating"], description: "Injection-extraction deep foam wash for fabric sofas" },
+      { id: "cushion", label: "Cushion & Recliner", keywords: ["cushion", "recliner", "chair"], description: "Delicate dry cleaning and stain treatment" },
+      { id: "carpet", label: "Carpet Deep Clean", keywords: ["carpet", "rug", "mat"], description: "High-power dust extraction and shampooing" },
+    ]
   }
-  if (k.includes("transport") || k.includes("goods") || k.includes("truck") || k.includes("logistics")) {
-    return {
-      prompt: "What do you need?",
-      subtitle: "Doorstep transport with verified drivers and live GPS tracking",
-      symptoms: [
-        { label: "🚚 Move goods", route: "/trucks/hosur", keywords: ["truck", "goods"] },
-        { label: "📦 Send a package", route: "/two-wheelers/hosur", keywords: ["courier", "package"] },
-        { label: "🏠 Shift home", route: "/packers-and-movers/hosur", keywords: ["packers", "shift", "movers"] },
-        { label: "🛵 Two-wheeler delivery", route: "/two-wheelers/hosur", keywords: ["bike", "delivery"] },
-      ]
-    }
+  if (n.includes("ac") && (n.includes("service") || n.includes("clean"))) {
+    return [
+      { id: "powerjet", label: "Power Jet Wash", keywords: ["power jet", "jet", "water"], description: "High-pressure water jet cleaning of indoor and outdoor coils" },
+      { id: "foam", label: "Foam Jet Deep Wash", keywords: ["foam", "antibacterial", "deep"], description: "Antibacterial foam wash for 2x deeper dirt removal" },
+      { id: "master", label: "Master Service + Checkup", keywords: ["master", "inspection", "comprehensive"], description: "Complete cleaning plus 12-point diagnostic check" },
+    ]
   }
-  if (k.includes("elec") || k.includes("plumb") || k.includes("carpent") || k.includes("maint")) {
-    return {
-      prompt: "What needs fixing?",
-      subtitle: "Verified doorstep technicians, upfront rates & 30-day rework warranty",
-      symptoms: [
-        { label: "⚡ Switch / Socket / MCB", subtabQuery: "Electrician", keywords: ["switch", "socket", "mcb", "electric", "wiring"] },
-        { label: "🚰 Tap / Leak / Drain", subtabQuery: "Plumber", keywords: ["tap", "leak", "drain", "plumbing", "sink"] },
-        { label: "🚪 Door lock / Carpentry", subtabQuery: "Carpenter", keywords: ["door", "lock", "carpenter", "handle", "wood"] },
-        { label: "🌀 Fan installation", subtabQuery: "Electrician", keywords: ["fan", "regulator", "installation"] },
-      ]
-    }
+  if (n.includes("ac") && (n.includes("repair") || n.includes("diagnos"))) {
+    return [
+      { id: "lesscooling", label: "Less / No Cooling", keywords: ["cooling", "compressor", "gas"], description: "Compressor, fan motor and gas pressure diagnosis" },
+      { id: "waterleak", label: "Water Leakage", keywords: ["leak", "water", "drain", "drip"], description: "Drain tray, drain pipe blockage and coil freezing fix" },
+      { id: "noise", label: "Noise / Smell / Power", keywords: ["noise", "smell", "power", "vibration"], description: "Vibration dampening, blower cleaning and electrical check" },
+    ]
   }
-  return null
+  if (n.includes("paint")) {
+    return [
+      { id: "fullhome", label: "Full Home Repaint", keywords: ["full home", "entire", "apartment"], description: "Laser measurement consultation for whole apartment" },
+      { id: "rooms", label: "1-2 Rooms / Rental", keywords: ["room", "rental", "tenant"], description: "Quick refresh painting for tenant handover" },
+      { id: "waterproofing", label: "Waterproofing & Seepage", keywords: ["waterproofing", "damp", "seepage", "terrace"], description: "Crack filling, dampness treatment and waterproof primer" },
+    ]
+  }
+  if (n.includes("pest")) {
+    return [
+      { id: "cockroach", label: "Cockroach Control", keywords: ["cockroach", "roach", "gel"], description: "Odorless gel baiting plus crack spray treatment" },
+      { id: "termite", label: "Termite Protection", keywords: ["termite", "wood", "drill"], description: "Drill-fill-seal barrier protection with warranty" },
+      { id: "bedbug", label: "Bed Bugs & Ants", keywords: ["bed bug", "ant", "spray"], description: "2-session intensive spray treatment for mattresses and furniture" },
+    ]
+  }
+  return []
 }
 
 export function ModernServiceCatalogView({
@@ -155,6 +137,7 @@ export function ModernServiceCatalogView({
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [detailsPackage, setDetailsPackage] = useState(null) // package currently shown in the "See details" modal
+  const [isChangeServiceModalOpen, setIsChangeServiceModalOpen] = useState(false)
 
   // categoryProp (from LandingPage's URL-based lookup against the old static
   // categoriesData.js list) almost never matches a real category for
@@ -248,30 +231,6 @@ export function ModernServiceCatalogView({
     }
   }
 
-  const symptomGuide = useMemo(() => getCategorySymptomGuide(category), [category])
-
-  const handleSymptomClick = (sym) => {
-    if (sym.route) {
-      navigate(sym.route)
-      return
-    }
-    if (services && services.length > 0) {
-      const found = services.find(s => {
-        const sName = (s.name || "").toLowerCase()
-        return (sym.keywords || []).some(kw => sName.includes(kw.toLowerCase())) ||
-               (sym.subtabQuery && sName.includes(sym.subtabQuery.toLowerCase()))
-      })
-      if (found) {
-        setActiveSubService(found)
-        setSearchParams(prev => {
-          const next = new URLSearchParams(prev)
-          next.set("subtab", found.name)
-          next.set("subTab", found.name)
-          return next
-        }, { replace: true })
-      }
-    }
-  }
 
   // Multi-item cart: any number of units of any package, across any service
   // or category, can be queued up before checkout -- replaces the old
@@ -328,6 +287,7 @@ export function ModernServiceCatalogView({
         const consultItem = {
           id: `pkg-${pkg.id}`,
           db_id: pkg.id,
+          package_id: pkg.id,
           name: `${pkg.name} (Site Consultation)`,
           price: consultationFeeDetails.fee,
           platform_fee: consultationFeeDetails.convenienceFee,
@@ -352,6 +312,7 @@ export function ModernServiceCatalogView({
       const item = {
         id: `pkg-${pkg.id}`,
         db_id: pkg.id,
+        package_id: pkg.id,
         name: pkg.name,
         price: unitPrice,
         platform_fee: parseFloat(pkg.platform_fee) || 29,
@@ -706,11 +667,13 @@ export function ModernServiceCatalogView({
     )
   }, [activeSubService, packages, category?.id, category?.slug])
 
-  // Available Service Groups for the active service (from Service.customization.subtabs)
+  // Available Service Groups / Variants for the active service (Admin DB tabs OR contextual live variants)
   const serviceGroups = useMemo(() => {
     const rawTabs = activeSubService?.customization?.subtabs
-    if (!Array.isArray(rawTabs) || rawTabs.length <= 1) return []
-    return rawTabs.filter(t => t && t.enabled !== false)
+    if (Array.isArray(rawTabs) && rawTabs.length > 1) {
+      return rawTabs.filter(t => t && t.enabled !== false)
+    }
+    return getServiceDefaultVariants(activeSubService?.name || "")
   }, [activeSubService])
 
   // Active Service Group key
@@ -719,24 +682,38 @@ export function ModernServiceCatalogView({
 
   // Keep activeGroupKey in sync with active service and url
   useEffect(() => {
-    if (serviceGroups.length > 1) {
-      if (urlGroup && serviceGroups.some(g => g.id === urlGroup)) {
+    if (serviceGroups.length > 0) {
+      if (urlGroup && (urlGroup === "all" || serviceGroups.some(g => g.id === urlGroup))) {
         setActiveGroupKey(urlGroup)
-      } else if (activeGroupKey === "all" || !serviceGroups.some(g => g.id === activeGroupKey)) {
-        setActiveGroupKey(serviceGroups[0].id)
+      } else {
+        setActiveGroupKey("all")
       }
     } else {
       setActiveGroupKey("all")
     }
   }, [serviceGroups, urlGroup, activeSubService?.id])
 
-  // Filtered packages by active service group
+  // Filtered packages by active service group / variant
   const displayedPackages = useMemo(() => {
-    if (!serviceGroups || serviceGroups.length <= 1 || activeGroupKey === "all") {
+    if (!serviceGroups || serviceGroups.length === 0 || activeGroupKey === "all") {
       return currentServicePackages
     }
-    const filtered = currentServicePackages.filter(p => p.sub_service_key === activeGroupKey)
-    return filtered.length > 0 ? filtered : currentServicePackages
+    // 1. Direct match on sub_service_key
+    const keyMatches = currentServicePackages.filter(p => p.sub_service_key === activeGroupKey)
+    if (keyMatches.length > 0) return keyMatches
+
+    // 2. Keyword match against package name, tag or description
+    const activeGroupObj = serviceGroups.find(g => g.id === activeGroupKey)
+    if (activeGroupObj) {
+      const keywords = (activeGroupObj.keywords || [activeGroupObj.label || ""]).map(k => k.toLowerCase())
+      const kwMatches = currentServicePackages.filter(p => {
+        const text = `${p.name} ${p.tag || ""} ${p.description || ""} ${p.short_description || ""}`.toLowerCase()
+        return keywords.some(kw => text.includes(kw))
+      })
+      if (kwMatches.length > 0) return kwMatches
+    }
+
+    return currentServicePackages
   }, [currentServicePackages, serviceGroups, activeGroupKey])
 
   const handleSelectServiceGroup = (groupId) => {
@@ -751,6 +728,49 @@ export function ModernServiceCatalogView({
       return next
     }, { replace: true })
   }
+
+  // Group packages into scannable sections (e.g. Full Apartment, Bungalow / Duplex, Partial Cleaning)
+  const packageSections = useMemo(() => {
+    if (isGoodsTransportCategory || !serviceGroups || serviceGroups.length <= 1) {
+      return [{ id: "all", label: "", description: "", packages: displayedPackages }]
+    }
+
+    // Always organize all packages into their respective variant section headings!
+    const sections = []
+    const assignedIds = new Set()
+
+    serviceGroups.forEach(grp => {
+      const keywords = (grp.keywords || [grp.label || ""]).map(k => k.toLowerCase())
+      const grpPkgs = currentServicePackages.filter(p => {
+        if (assignedIds.has(p.id)) return false
+        if (p.sub_service_key === grp.id) return true
+        const text = `${p.name} ${p.tag || ""} ${p.description || ""} ${p.short_description || ""}`.toLowerCase()
+        return keywords.some(kw => text.includes(kw))
+      })
+
+      if (grpPkgs.length > 0) {
+        grpPkgs.forEach(p => assignedIds.add(p.id))
+        sections.push({
+          id: grp.id,
+          label: grp.label,
+          description: grp.description,
+          packages: grpPkgs
+        })
+      }
+    })
+
+    const remaining = currentServicePackages.filter(p => !assignedIds.has(p.id))
+    if (remaining.length > 0) {
+      sections.push({
+        id: "other",
+        label: sections.length > 0 ? "Other Options" : "",
+        description: "",
+        packages: remaining
+      })
+    }
+
+    return sections.length > 0 ? sections : [{ id: "all", label: "", description: "", packages: currentServicePackages }]
+  }, [currentServicePackages, displayedPackages, serviceGroups, isGoodsTransportCategory])
 
   // 3. Keep selectedPackage in sync with displayed packages
   useEffect(() => {
@@ -836,123 +856,73 @@ export function ModernServiceCatalogView({
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
-      {/* ── 1. Top Breadcrumb & Category Hero Banner ── */}
-      <div className="bg-white border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-6">
-          {/* Breadcrumb - Compact on mobile */}
-          <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium mb-1.5 sm:mb-3 overflow-x-auto scrollbar-none whitespace-nowrap">
-            <button
-              type="button"
-              onClick={onClose}
-              className="hover:text-emerald-700 transition-colors shrink-0"
-            >
-              Home
-            </button>
-            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
-            <span className="hover:text-emerald-700 transition-colors shrink-0">Services</span>
-            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
-            <span className="text-slate-900 font-semibold truncate">{category?.name || "Services"}</span>
-          </nav>
-
-          {/* Hero Banner: Blinkit-style compact, responsive, fit-to-screen */}
-          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white border border-emerald-100/70 shadow-xs">
-            <div className="relative flex flex-col md:flex-row items-stretch">
-              <div className="flex-1 min-w-0 p-3 sm:p-5 lg:p-7 flex flex-col justify-center gap-1 sm:gap-3">
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
-                  {category?.name || "Professional Services"}
-                </h1>
-                <p className="text-[11px] sm:text-sm text-slate-600 font-normal leading-snug sm:leading-relaxed max-w-lg line-clamp-1 sm:line-clamp-2">
-                  {category?.desc || category?.description || "Professional care for a cleaner, healthier and more comfortable space."}
-                </p>
-
-                {/* Trust Badge Strip: Blinkit-style sleek horizontal micro-pills on mobile, grid on desktop */}
-                <div className="flex items-center gap-1.5 sm:gap-6 pt-1 sm:pt-2 overflow-x-auto scrollbar-none">
-                  {[
-                    { icon: ShieldCheck, label: "Verified Pros", label1: "Verified", label2: "Technicians" },
-                    { icon: Clock, label: "On-time", label1: "On-time", label2: "Service" },
-                    { icon: Wrench, label: "Genuine Spares", label1: "Genuine", label2: "Spare Parts" },
-                    { icon: Tag, label: "Transparent Price", label1: "Transparent", label2: "Pricing" },
-                  ].map((f, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-1 sm:gap-2 px-2 py-0.5 sm:px-0 sm:py-0 rounded-full sm:rounded-none bg-white/90 sm:bg-transparent border border-emerald-100/80 sm:border-0 shrink-0 shadow-2xs sm:shadow-none"
-                    >
-                      <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-emerald-50 sm:bg-white sm:shadow-xs sm:border sm:border-emerald-100 flex items-center justify-center shrink-0">
-                        <f.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-600" />
-                      </div>
-                      <span className="sm:hidden text-[10px] font-bold text-slate-700 whitespace-nowrap leading-none">
-                        {f.label}
+      {/* ── 1. Compact Modern Category Header (Brings packages immediately above the fold) ── */}
+      <div className="bg-white border-b border-slate-200/80 sticky top-0 z-30 backdrop-blur-md bg-white/95">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+            {/* Left: Back button + Title + Badges */}
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 -ml-1 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                aria-label="Back to home"
+              >
+                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">
+                    {category?.name || "Professional Services"}
+                  </h1>
+                  {activeSubService && (
+                    <>
+                      <span className="text-slate-300 font-bold hidden sm:inline">/</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg truncate hidden sm:inline">
+                        {activeSubService.name}
                       </span>
-                      <div className="hidden sm:block leading-tight">
-                        <div className="text-[11px] font-black text-slate-800">{f.label1}</div>
-                        <div className="text-[10px] font-medium text-slate-500">{f.label2}</div>
-                      </div>
-                    </div>
-                  ))}
+                    </>
+                  )}
+                  {Boolean(category?.rating) && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full shrink-0">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                      {category.rating} {category.jobs_count_str ? `• ${category.jobs_count_str}` : ""}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsChangeServiceModalOpen(true)}
+                    className="text-[10px] sm:text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50/90 hover:bg-emerald-100/80 border border-emerald-200/80 px-2.5 py-0.5 rounded-full transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    Change Service
+                  </button>
                 </div>
+                <p className="hidden sm:block text-xs text-slate-500 truncate max-w-xl mt-0.5">
+                  {category?.desc || category?.description || "Professional doorstep service with 30-day revisit warranty"}
+                </p>
               </div>
+            </div>
 
-              {/* Hero Photo + Tagline */}
-              <div className="relative hidden md:block md:w-[42%] shrink-0">
-                {category?.image ? (
-                  <img
-                    src={resolveImageUrl(category.image)}
-                    alt={category?.name || "Service banner"}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.style.display = "none" }}
-                  />
-                ) : (
-                  <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-emerald-100/70 to-teal-100/70 flex items-center justify-center">
-                    <Sparkles className="w-10 h-10 text-emerald-600/70" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-emerald-50/90" />
-                <div className="absolute top-6 left-6 max-w-[180px]">
-                  <div className="text-lg font-black text-slate-900 leading-tight drop-shadow-sm">
-                    Trusted Care,
-                  </div>
-                  <div className="text-lg font-black text-emerald-700 leading-tight drop-shadow-sm">
-                    Happier Living
-                  </div>
-                </div>
-              </div>
+            {/* Right: Sleek Trust Badges */}
+            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none py-0.5 shrink-0">
+              <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>30-Day Guarantee</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
+                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                <span>On-Time Arrival</span>
+              </span>
+              <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
+                <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Fixed Rate Card</span>
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-6">
-        {/* ── Human-Language Symptom Discovery Guide ── */}
-        {symptomGuide && (
-          <div className="mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-2xl bg-white border border-emerald-100 shadow-2xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  {symptomGuide.prompt}
-                </span>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60 hidden sm:inline">
-                  Instant Match
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">
-                {symptomGuide.subtitle}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-              {symptomGuide.symptoms.map((sym, sIdx) => (
-                <button
-                  key={sIdx}
-                  type="button"
-                  onClick={() => handleSymptomClick(sym)}
-                  className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-emerald-50 hover:border-emerald-500 border border-slate-200 text-slate-800 hover:text-emerald-900 text-xs font-bold shrink-0 transition-all cursor-pointer active:scale-95 shadow-2xs"
-                >
-                  {sym.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-5">
 
         {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
@@ -1083,82 +1053,7 @@ export function ModernServiceCatalogView({
           {/* ════ CONTENT + BOOKING SUMMARY ════ */}
           <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* ════ LEFT COLUMN (~68% width / 8 cols) ════ */}
-          <div className="lg:col-span-8 space-y-3 sm:space-y-6">
-            {/* Active Service Spotlight Card -- Blinkit-style compact, fit-to-screen */}
-            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[110px] sm:min-h-[220px] lg:min-h-[280px] flex items-end">
-              <img
-                key={selectedPackage?.image || activeSubService?.image || category?.image}
-                src={resolveImageUrl(selectedPackage?.image || activeSubService?.image || category?.image)}
-                alt={selectedPackage?.name || "Service hero"}
-                className="absolute inset-0 w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
-                }}
-              />
-              {/* Dark scrim */}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
-
-              {/* Floating highlight badge */}
-              <div className="hidden sm:flex absolute top-4 right-4 bg-white/95 backdrop-blur-xs rounded-xl px-3 py-1.5 shadow-md border border-slate-200/80 items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                </div>
-                <div className="text-left">
-                  <div className="text-[10px] font-black text-slate-900 leading-tight">
-                    {selectedPackage?.tag || "Top Rated Care"}
-                  </div>
-                  <div className="text-[9px] font-semibold text-emerald-700 leading-tight">
-                    Guaranteed Quality
-                  </div>
-                </div>
-              </div>
-
-              {/* Text content, overlaid on the image */}
-              <div className="relative z-10 p-3 sm:p-5 lg:p-7 w-full space-y-1 sm:space-y-2.5">
-                {/* Category / Sub-service Tag */}
-                <div className="flex items-center gap-1.5 text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-300">
-                  <span className="w-1 h-2.5 sm:h-3.5 bg-emerald-400 rounded-full" />
-                  <span>{activeSubService?.name || category?.name} PACKAGES</span>
-                </div>
-
-                {/* Spotlight Title */}
-                <h2 className="text-base sm:text-2xl lg:text-3xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
-                  {selectedPackage?.name || activeSubService?.name}
-                </h2>
-
-                {/* Spotlight Description: hidden on mobile to avoid redundant repetition & save screen height */}
-                {selectedPackage?.description && selectedPackage.description.toLowerCase() !== (selectedPackage.name || "").toLowerCase() && (
-                  <p className="hidden sm:block text-xs sm:text-sm text-white/85 leading-relaxed max-w-xl line-clamp-1 sm:line-clamp-2">
-                    {selectedPackage.description}
-                  </p>
-                )}
-
-                {/* 4 Feature Badges: Blinkit-style compact inline micro-pills on mobile, grid on desktop */}
-                <div className="flex sm:grid sm:grid-cols-4 items-center gap-1.5 sm:gap-2 pt-1 sm:pt-2.5 border-t border-white/15 overflow-x-auto scrollbar-none max-w-xl">
-                  {[
-                    { icon: Shield, title: "Certified", sub: "Technicians", short: "Certified Pros" },
-                    { icon: Clock, title: "Quick &", sub: "Hassle-free", short: "Quick & Easy" },
-                    { icon: Wrench, title: "Genuine", sub: "Spares & Tools", short: "Genuine Tools" },
-                    { icon: ShieldCheck, title: "Quality", sub: "Assurance", short: "Quality Assured" },
-                  ].map((b, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center sm:flex-col sm:items-center sm:text-center gap-1 sm:gap-0 px-2 py-0.5 sm:p-2 rounded-full sm:rounded-xl bg-white/10 backdrop-blur-xs border border-white/15 shrink-0"
-                    >
-                      <b.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-300 sm:mb-1 shrink-0" />
-                      <span className="sm:hidden text-[9px] font-bold text-white whitespace-nowrap leading-none">
-                        {b.short}
-                      </span>
-                      <div className="hidden sm:block leading-tight">
-                        <div className="text-[10px] font-black text-white leading-tight">{b.title}</div>
-                        <div className="text-[9px] text-white/70 font-medium">{b.sub}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+          <div className="lg:col-span-8 space-y-4">
 
             {/* Goods & Transport horizontal service pills -- replaces the
                 vertical Services sidebar (hidden above for this category)
@@ -1221,63 +1116,30 @@ export function ModernServiceCatalogView({
                 )}
               </div>
 
-              {/* ── 3-Tier Service Group Navigation Bar (Category -> Service -> Service Group -> Package) ── */}
-              {serviceGroups.length > 1 && (
-                <div className="space-y-2.5 pt-1">
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-                    {serviceGroups.map(group => {
-                      const isSelected = activeGroupKey === group.id
-                      const groupCount = currentServicePackages.filter(p => p.sub_service_key === group.id).length
-                      return (
-                        <button
-                          key={group.id}
-                          type="button"
-                          onClick={() => handleSelectServiceGroup(group.id)}
-                          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
-                            isSelected
-                              ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                              : "bg-white border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span>{group.label}</span>
-                          {groupCount > 0 && (
-                            <span
-                              className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                                isSelected
-                                  ? "bg-white/20 text-white"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {groupCount}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => handleSelectServiceGroup("all")}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
-                        activeGroupKey === "all"
-                          ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                          : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>All ({currentServicePackages.length})</span>
-                    </button>
-                  </div>
-
-                  {/* Active Group Contextual Description Helper */}
-                  {(() => {
-                    const activeGroupObj = serviceGroups.find(g => g.id === activeGroupKey)
-                    if (!activeGroupObj || !activeGroupObj.description) return null
+              {/* Quick Jump Bar -- only rendered when there are 3 or more distinct sections, acting as smooth anchor jumps without hiding packages */}
+              {!isGoodsTransportCategory && packageSections.length > 2 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
+                  {packageSections.map(section => {
+                    if (!section.label) return null
                     return (
-                      <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 leading-snug">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-medium">{activeGroupObj.description}</span>
-                      </div>
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`section-${section.id}`)
+                          if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "start" })
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap border bg-white border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-700 shrink-0 shadow-2xs hover:bg-emerald-50/50"
+                      >
+                        <span>{section.label}</span>
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
+                          {section.packages.length}
+                        </span>
+                      </button>
                     )
-                  })()}
+                  })}
                 </div>
               )}
 
@@ -1288,11 +1150,29 @@ export function ModernServiceCatalogView({
                   category keeps the horizontal-row layout. Same underlying
                   data/handlers (getCartQty/addToCart/setDetailsPackage/etc)
                   either way, just a different skin. */}
-              <div className={isGoodsTransportCategory
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                : "flex flex-col gap-3.5"
-              }>
-                {displayedPackages.map(pkg => {
+              {/* Package Sections -- groups packages under meaningful variant sections */}
+              <div className="space-y-6">
+                {packageSections.map(section => (
+                  <div key={section.id} id={`section-${section.id}`} className="space-y-3">
+                    {section.label && (
+                      <div className="pt-2 pb-1 border-b border-slate-100 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                        <h4 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>{section.label}</span>
+                        </h4>
+                        {section.description && (
+                          <span className="text-xs text-slate-500 font-medium">
+                            {section.description}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <div className={isGoodsTransportCategory
+                      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                      : "flex flex-col gap-3.5"
+                    }>
+                      {section.packages.map(pkg => {
                   const qty = getCartQty(pkg)
                   const isSelected = qty > 0
 
@@ -1344,7 +1224,7 @@ export function ModernServiceCatalogView({
                               className="w-full h-full object-contain p-2"
                               onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=400&q=80&fit=crop";
+                                e.target.src = "/assets/cat_goods_transport.jpg";
                               }}
                             />
                           ) : (
@@ -1465,94 +1345,82 @@ export function ModernServiceCatalogView({
                     <div
                       key={pkg.id}
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`relative rounded-2xl border-2 bg-white transition-all p-3.5 sm:p-5 cursor-pointer ${
+                      className={`relative rounded-3xl border bg-white transition-all p-4 sm:p-5 cursor-pointer ${
                         isSelected
-                          ? "border-emerald-600 shadow-xs ring-1 ring-emerald-500/30"
-                          : "border-slate-200/90 hover:border-slate-300 hover:shadow-2xs"
+                          ? "border-emerald-600 shadow-md ring-1 ring-emerald-500/20"
+                          : "border-slate-200/90 hover:border-slate-300 hover:shadow-xs"
                       }`}
                     >
                       {pkg.popular && (
-                        <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-10 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-400 text-amber-950 text-[9px] sm:text-[10px] font-black shadow-sm">
-                          Popular
+                        <div className="absolute top-3 left-4 z-10 px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                          Most Booked
                         </div>
                       )}
 
-                      {/* ── DESKTOP LAYOUT (>= sm: 640px) ── */}
-                      <div className="hidden sm:flex flex-row gap-4">
-                        {/* Package Image */}
-                        <div className="w-32 h-32 shrink-0 rounded-xl overflow-hidden bg-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                          {serviceEditMode && pkg.id ? (
-                            <EditableImage
-                              active={true}
-                              value={pkg.image}
-                              alt={pkg.name}
-                              assetType="services"
-                              className="w-full h-full"
-                              imgClassName="w-full h-full object-cover"
-                              onSave={(v) => handleSaveServiceField(pkg, "image", v)}
-                            />
-                          ) : pkg.image ? (
-                            <img
-                              src={resolveImageUrl(pkg.image)}
-                              alt={pkg.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                              <Wrench className="w-8 h-8 text-emerald-700" />
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex items-start justify-between gap-3 sm:gap-6">
+                        {/* ── LEFT COLUMN: Title, Metrics, Price, Inclusions, View details ── */}
+                        <div className="flex-1 min-w-0 space-y-1.5 pt-1">
+                          {/* Title */}
+                          <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                            {serviceEditMode && pkg.id ? (
+                              <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
+                            ) : (
+                              pkg.name
+                            )}
+                          </h4>
 
-                        {/* Info */}
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <h4 className="text-base font-black text-slate-900 leading-snug" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                              {serviceEditMode && pkg.id ? (
-                                <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
-                              ) : (
-                                pkg.name
-                              )}
-                            </h4>
-                          </div>
-
-                          {/* Key Metrics */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs py-0.5">
-                            <span className="inline-flex items-center gap-1 text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
-                              <Clock className="w-3 h-3 text-emerald-600" />
-                              {pkg.duration || "45–60 min"}
-                            </span>
-                            {Boolean(pkg.rating || (category?.rating && category.rating !== "4.8")) && (
-                              <span className="inline-flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md">
-                                <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
-                                {pkg.rating || category.rating} {pkg.reviews_count ? `(${pkg.reviews_count})` : (category.reviews_count ? `(${category.reviews_count})` : "")}
+                          {/* Metrics: Rating & Duration in a single clean line */}
+                          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                            {Boolean(pkg.rating || category?.rating) && (
+                              <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                <span>{pkg.rating || category.rating || "4.8"}</span>
+                                <span className="text-slate-400 font-normal">
+                                  {pkg.reviews_count ? `(${pkg.reviews_count})` : "(12K+)"}
+                                </span>
                               </span>
                             )}
-                            <span className="inline-flex items-center gap-1 text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md">
-                              <ShieldCheck className="w-3 h-3 text-teal-600" />
-                              30-Day Guarantee
+                            {Boolean(pkg.rating || category?.rating) && <span>•</span>}
+                            <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{pkg.duration || "45–60 min"}</span>
                             </span>
                           </div>
 
-                          <p className="text-xs text-slate-500 font-normal line-clamp-2 leading-relaxed" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                            {serviceEditMode && pkg.id ? (
-                              <EditableText active={true} value={pkg.description} multiline onSave={(v) => handleSaveServiceField(pkg, "description", v)} />
-                            ) : (
-                              pkg.short_description || pkg.description || "Comprehensive service with certified pro execution."
+                          {/* Price Row */}
+                          <div className="flex items-baseline gap-2 pt-0.5" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                            <span className="text-base sm:text-lg font-black text-slate-900">
+                              {serviceEditMode && pkg.id ? (
+                                <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
+                              ) : (
+                                `₹${finalPrice.toLocaleString("en-IN")}`
+                              )}
+                            </span>
+                            {hasOffer && (
+                              <>
+                                <span className="text-xs sm:text-sm font-semibold text-slate-400 line-through">
+                                  ₹{mrp.toLocaleString("en-IN")}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                                  {discountPct}% OFF
+                                </span>
+                              </>
                             )}
-                          </p>
+                            {isConsultationCategory && (
+                              <span className="text-[11px] font-bold text-slate-500">
+                                / sq.ft
+                              </span>
+                            )}
+                          </div>
 
+                          {/* 2-3 Concise Inclusions Bullets */}
                           {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
-                            <div className="space-y-1 pt-1 pb-0.5">
+                            <div className="space-y-1 pt-1">
                               {pkg.includes.slice(0, 3).map((inc, i) => {
                                 const text = typeof inc === "object" ? (inc.text || inc.name || "") : String(inc || "")
                                 if (!text) return null
                                 return (
-                                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                                  <div key={i} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-600">
                                     <Check className="w-3 h-3 text-emerald-600 shrink-0" />
                                     <span className="truncate">{text}</span>
                                   </div>
@@ -1561,56 +1429,54 @@ export function ModernServiceCatalogView({
                             </div>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              setDetailsPackage(pkg)
-                            }}
-                            className="relative z-10 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/80 transition-colors cursor-pointer mt-1"
-                          >
-                            <Info className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>View Details & Inclusions</span>
-                          </button>
+                          {/* View Details Link */}
+                          <div className="pt-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDetailsPackage(pkg)
+                              }}
+                              className="text-[11px] sm:text-xs font-extrabold text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>View details &amp; inclusions</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Price + Action Rail */}
-                        <div className="flex flex-col items-end justify-between w-44 shrink-0 border-l border-slate-100 pl-4" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                          <div className="flex flex-col items-end gap-0.5 w-full">
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-xl font-black text-slate-900">
-                                {serviceEditMode && pkg.id ? (
-                                  <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
-                                ) : (
-                                  `₹${finalPrice.toLocaleString("en-IN")}`
-                                )}
-                              </span>
-                              {!isConsultationCategory && (
-                                <span className="text-xs font-bold text-slate-500">
-                                  onwards
-                                </span>
-                              )}
-                              {isConsultationCategory && (
-                                <span className="text-xs font-bold text-slate-500">
-                                  / sq.ft
-                                </span>
-                              )}
-                            </div>
-                            {hasOffer && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold text-slate-400 line-through">
-                                  ₹{mrp.toLocaleString("en-IN")}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
-                                  {discountPct}% OFF
-                                </span>
+                        {/* ── RIGHT COLUMN: Thumbnail + Add Button / Stepper (Stacked) ── */}
+                        <div className="w-24 sm:w-32 shrink-0 flex flex-col items-center gap-2 pt-1" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                          <div className="w-24 h-24 sm:w-32 sm:h-28 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 shadow-2xs relative">
+                            {serviceEditMode && pkg.id ? (
+                              <EditableImage
+                                active={true}
+                                value={pkg.image}
+                                alt={pkg.name}
+                                assetType="services"
+                                className="w-full h-full"
+                                imgClassName="w-full h-full object-cover"
+                                onSave={(v) => handleSaveServiceField(pkg, "image", v)}
+                              />
+                            ) : pkg.image ? (
+                              <img
+                                src={resolveImageUrl(pkg.image)}
+                                alt={pkg.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "/assets/hero_illustration.jpg";
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                                <Wrench className="w-7 h-7 text-emerald-700" />
                               </div>
                             )}
                           </div>
 
-                          {/* Stepper / Add button */}
-                          <div className="w-full mt-3">
+                          {/* Stepper / Add Button */}
+                          <div className="w-full">
                             {qty === 0 ? (
                               <button
                                 type="button"
@@ -1618,19 +1484,19 @@ export function ModernServiceCatalogView({
                                   e.stopPropagation()
                                   addToCart(pkg)
                                 }}
-                                className="w-full py-2 px-3 rounded-xl font-extrabold text-xs transition-colors cursor-pointer whitespace-nowrap border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-center"
+                                className="w-full py-1.5 sm:py-2 px-3 rounded-xl font-black text-xs sm:text-sm border-2 border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer text-center shadow-2xs"
                               >
-                                {isConsultationCategory ? "Book Consultation" : "+ Add"}
+                                {isConsultationCategory ? "Consult" : "+ Add"}
                               </button>
                             ) : (
-                              <div className="flex items-center justify-between w-full py-1.5 px-2 rounded-xl bg-emerald-600 text-white shadow-xs">
+                              <div className="flex items-center justify-between w-full py-1 sm:py-1.5 px-2 rounded-xl bg-emerald-600 text-white shadow-xs">
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     decrementCartItem(pkg)
                                   }}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-xs cursor-pointer transition-colors"
                                   aria-label="Decrease quantity"
                                 >
                                   −
@@ -1644,136 +1510,8 @@ export function ModernServiceCatalogView({
                                     e.stopPropagation()
                                     incrementCartItem(pkg)
                                   }}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-xs cursor-pointer transition-colors"
                                   aria-label="Increase quantity"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ── MOBILE SPLIT CARD LAYOUT (< sm: 640px) ── */}
-                      <div className="sm:hidden flex items-start justify-between gap-3">
-                        {/* Left Column (Content, Metrics, Price) */}
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <h4 className="text-sm font-black text-slate-900 leading-snug pr-8 line-clamp-2">
-                            {pkg.name}
-                          </h4>
-
-                          {/* Compact Metrics */}
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 py-0.5">
-                            {Boolean(pkg.rating || (category?.rating && category.rating !== "4.8")) && (
-                              <>
-                                <span className="flex items-center gap-0.5 text-amber-700 font-extrabold bg-amber-50 px-1.5 py-0.2 rounded">
-                                  <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" />
-                                  {pkg.rating || category.rating}
-                                </span>
-                                <span>•</span>
-                              </>
-                            )}
-                            <span className="flex items-center gap-0.5 text-slate-600">
-                              <Clock className="w-2.5 h-2.5 text-emerald-600" />
-                              {pkg.duration || "45m"}
-                            </span>
-                          </div>
-
-                          {/* Price & Offer */}
-                          <div className="flex items-baseline gap-1.5 pt-0.5">
-                            <span className="text-base font-black text-slate-900">
-                              ₹{finalPrice.toLocaleString("en-IN")}
-                            </span>
-                            {hasOffer && (
-                              <>
-                                <span className="text-[11px] font-semibold text-slate-400 line-through">
-                                  ₹{mrp.toLocaleString("en-IN")}
-                                </span>
-                                <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
-                                  {discountPct}% OFF
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          {/* 1 Inclusions snippet */}
-                          {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
-                            <div className="text-[10.5px] text-slate-500 truncate pt-0.5">
-                              ✓ {typeof pkg.includes[0] === "object" ? (pkg.includes[0].text || pkg.includes[0].name || "") : String(pkg.includes[0] || "")}
-                            </div>
-                          )}
-
-                          {/* Details Link */}
-                          <div className="pt-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDetailsPackage(pkg)
-                              }}
-                              className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                            >
-                              View details →
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Right Column (Thumbnail + Action Button) */}
-                        <div className="w-24 shrink-0 flex flex-col items-center gap-2">
-                          <div className="w-22 h-22 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 shadow-2xs">
-                            {pkg.image ? (
-                              <img
-                                src={resolveImageUrl(pkg.image)}
-                                alt={pkg.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                                <Wrench className="w-6 h-6 text-emerald-700" />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Action Button */}
-                          <div className="w-full">
-                            {qty === 0 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  addToCart(pkg)
-                                }}
-                                className="w-full py-1.5 px-2 rounded-xl font-black text-xs border-2 border-emerald-600 bg-white text-emerald-700 hover:bg-emerald-50 text-center shadow-xs cursor-pointer active:scale-95 transition-all"
-                              >
-                                {isConsultationCategory ? "Consult" : "+ Add"}
-                              </button>
-                            ) : (
-                              <div className="w-full flex items-center justify-between py-1 px-1.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow-xs">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    decrementCartItem(pkg)
-                                  }}
-                                  className="w-5 h-5 flex items-center justify-center rounded bg-white/20 font-black text-xs cursor-pointer"
-                                >
-                                  −
-                                </button>
-                                <span className="text-xs font-black min-w-[1rem] text-center">
-                                  {qty}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    incrementCartItem(pkg)
-                                  }}
-                                  className="w-5 h-5 flex items-center justify-center rounded bg-white/20 font-black text-xs cursor-pointer"
                                 >
                                   +
                                 </button>
@@ -1785,43 +1523,121 @@ export function ModernServiceCatalogView({
                     </div>
                   )
                 })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
           </div>
 
-          {/* ════ RIGHT COLUMN (~32% width / 4 cols, sticky sidebar) ════ */}
-          <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
-            {/* Booking Summary Card */}
-            <div id="booking-summary-card" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-              <h3 className="text-base font-black text-slate-900">
-                Booking Summary
-                {cartTotalQty > 0 && (
-                  <span className="ml-1.5 text-[11px] font-bold text-emerald-700">
-                    ({cartTotalQty} item{cartTotalQty > 1 ? "s" : ""})
-                  </span>
-                )}
-              </h3>
+          {/* ════ RIGHT COLUMN (~32% width / 4 cols, sticky sidebar on desktop, hidden on mobile) ════ */}
+          <div className="hidden lg:block lg:col-span-4 space-y-4 lg:sticky lg:top-24">
+            {cartItems.length === 0 ? (
+              /* State A: SEVO Assurance & Service Guarantees (Discovery Mode) */
+              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-5">
+                <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 leading-tight">
+                      The SEVO Promise
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Doorstep service you can trust
+                    </p>
+                  </div>
+                </div>
 
-              {/* Cart Items -- every package + quantity queued so far,
-                  across any service/category, not just one selection. */}
-              {cartItems.length === 0 ? (
-                <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center">
-                  <p className="text-xs font-semibold text-slate-500">
-                    No packages added yet.
+                <div className="space-y-3.5 text-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
+                      🛡️
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 leading-tight">30-Day Revisit Guarantee</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Free technician revisit if the exact same issue recurs within 30 days.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
+                      ⭐
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 leading-tight">Verified & Trained Experts</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Strictly background-checked technicians with standard tools and uniforms.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
+                      ₹
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 leading-tight">Transparent Upfront Rates</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Fixed rate cards with no surprise charges or hidden consultation fees.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
+                      🔐
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 leading-tight">Secure Doorstep Start OTP</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Work begins only after you verify the professional via your booking OTP.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                  <p className="text-xs font-bold text-slate-700">
+                    Ready to book?
                   </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5">
-                    Tap "+ Add" on a package to start your booking.
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Click "+ Add" on any package to start your order.
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+              </div>
+            ) : (
+              /* State B: Active Cart Summary (Selection Mode) */
+              <div id="booking-summary-card" className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <span>Cart Summary</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {cartTotalQty} {cartTotalQty === 1 ? "item" : "items"}
+                    </span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cartItems.forEach(item => setCartLineQty(item.db_id, 0))
+                    }}
+                    className="text-[11px] font-bold text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                  >
+                    Clear all
+                  </button>
+                </div>
+
+                {/* Cart Items List */}
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
                   {cartItems.map(item => {
                     const isConsult = item.is_consultation || (item.name && item.name.includes("(Site Consultation"))
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 border border-slate-100"
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50/90 border border-slate-100"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -1836,32 +1652,34 @@ export function ModernServiceCatalogView({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-[11.5px] font-black text-slate-900 truncate">
+                            <div className="text-xs font-black text-slate-900 truncate">
                               {item.name}
                             </div>
-                            <div className="text-[10px] text-slate-500 font-medium">
+                            <div className="text-[11px] text-slate-600 font-bold">
                               {isConsult
-                                ? `${item.unit_rate_display || `₹${item.unit_rate || 18}/sq.ft`} × ${item.quantity}`
-                                : `₹${Number(item.price).toLocaleString("en-IN")} × ${item.quantity}`}
+                                ? `${item.unit_rate_display || `₹${item.unit_rate || 18}/sq.ft`}`
+                                : `₹${Number(item.price).toLocaleString("en-IN")}`}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+
+                        {/* Stepper */}
+                        <div className="flex items-center gap-1.5 shrink-0 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-2xs">
                           <button
                             type="button"
                             onClick={() => setCartLineQty(item.db_id, item.quantity - 1)}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-slate-900 font-black text-xs cursor-pointer transition-colors"
                             aria-label="Decrease quantity"
                           >
                             −
                           </button>
-                          <span className="text-[11px] font-black text-slate-900 min-w-[1rem] text-center">
+                          <span className="text-xs font-black text-slate-900 min-w-[1rem] text-center">
                             {item.quantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => setCartLineQty(item.db_id, item.quantity + 1)}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-slate-900 font-black text-xs cursor-pointer transition-colors"
                             aria-label="Increase quantity"
                           >
                             +
@@ -1871,155 +1689,46 @@ export function ModernServiceCatalogView({
                     )
                   })}
                 </div>
-              )}
 
-              {/* Selected Address Section */}
-              <div className="flex items-start justify-between gap-2.5 p-3 rounded-2xl bg-slate-50/80 border border-slate-100">
-                <div className="flex items-start gap-2 min-w-0">
-                  <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <span className="text-xs font-medium text-slate-700 line-clamp-2 leading-tight">
-                      {displayLocationText}
-                    </span>
-                    {isConsultationCategory && (
-                      <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
-                        {consultationFeeDetails.distanceKm > 0 ? `Distance: ~${consultationFeeDetails.distanceKm} km` : "Hosur Center"} • {consultationFeeDetails.isOver15km ? "Chargeable Visit (> 15 km)" : "Standard Consultation Zone (≤ 15 km)"}
-                      </div>
-                    )}
-                  </div>
+                {/* Subtotal */}
+                <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
+                  <span className="text-xs font-bold text-slate-600">Item Total</span>
+                  <span className="text-xl font-black text-slate-900">
+                    ₹{cartSubtotal.toLocaleString("en-IN")}
+                  </span>
                 </div>
-                {typeof onOpenAddressPicker === "function" && (
-                  <button
-                    type="button"
-                    onClick={onOpenAddressPicker}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer shrink-0"
-                  >
-                    Change
-                  </button>
-                )}
-              </div>
 
-              {/* Cost Breakdown */}
-              <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
-                {isConsultationCategory ? (
-                  <>
-                    <div className="flex items-center justify-between text-slate-600 font-medium">
-                      <div className="flex items-center gap-1">
-                        <span>Site Visit & Inspection</span>
-                        <span className="text-[10px] text-slate-400">
-                          ({consultationFeeDetails.distanceKm > 0 ? `${consultationFeeDetails.distanceKm} km` : "Hosur Area"})
-                        </span>
-                      </div>
-                      <span className="font-bold text-slate-900">
-                        {consultationFeeDetails.fee > 0 ? `₹${consultationFeeDetails.fee}` : "₹0 (≤ 15 km)"}
-                      </span>
-                    </div>
+                <p className="text-[11px] text-slate-400 font-medium text-center">
+                  Address, scheduling slot & coupons applied at checkout.
+                </p>
 
-                    {consultationFeeDetails.convenienceFee > 0 && (
-                      <div className="flex items-center justify-between text-slate-600 font-medium">
-                        <div className="flex items-center gap-1">
-                          <span>Convenience Fee</span>
-                          <Info className="w-3.5 h-3.5 text-slate-400" />
-                        </div>
-                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.convenienceFee}</span>
-                      </div>
-                    )}
+                {/* Proceed Button */}
+                <button
+                  type="button"
+                  onClick={handleProceedToSchedule}
+                  className="w-full py-3.5 px-4 rounded-xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-md bg-emerald-600 hover:bg-emerald-700 transition-all cursor-pointer active:scale-98"
+                >
+                  <span>{isConsultationCategory ? "Book Consultation Visit" : "Proceed to Checkout"}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
 
-                    {consultationFeeDetails.gst > 0 && (
-                      <div className="flex items-center justify-between text-slate-600 font-medium">
-                        <div className="flex items-center gap-1">
-                          <span>Taxes & GST (18%)</span>
-                        </div>
-                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.gst}</span>
-                      </div>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-sm font-black text-slate-900">Total Amount</span>
-                      <span className="text-xl font-black text-emerald-700">
-                        ₹{cartTotal.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[10.5px] text-amber-900 leading-snug">
-                      <span className="font-bold">Inspection Notice: </span>
-                      An expert will visit for precision digital laser measurement and generate an itemized quote based on rate card.
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between text-slate-600 font-medium">
-                      <span>Item Total</span>
-                      <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString("en-IN")}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-slate-600 font-medium">
-                      <div className="flex items-center gap-1">
-                        <span>Convenience Fee</span>
-                        <Info className="w-3.5 h-3.5 text-slate-400" />
-                      </div>
-                      <span className="font-bold text-slate-900">₹{cartConvenienceFee.toLocaleString("en-IN")}</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-sm font-black text-slate-900">Total Amount</span>
-                      <span className="text-xl font-black text-emerald-700">₹{cartTotal.toLocaleString("en-IN")}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Full-width CTA Button */}
-              <button
-                type="button"
-                onClick={handleProceedToSchedule}
-                disabled={cartItems.length === 0}
-                className={`w-full py-3.5 px-4 rounded-xl text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition-all ${
-                  cartItems.length === 0
-                    ? "bg-slate-300 cursor-not-allowed"
-                    : "bg-[#0A7E6C] hover:bg-[#086a5b] cursor-pointer hover:shadow-md"
-                }`}
-              >
-                <span>{isConsultationCategory ? "Book Consultation" : "Proceed to Schedule"}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              {/* 100% Safe & Secure Booking Guarantee */}
-              <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100">
-                <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0" />
-                <div>
-                  <div className="text-xs font-black text-emerald-950">100% Safe & Secure Booking</div>
-                  <div className="text-[10.5px] text-emerald-800 font-medium leading-tight">
-                    Your information is always protected with us.
-                  </div>
+                <div className="flex items-center justify-center gap-1.5 text-[10.5px] text-slate-500 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Verified pricing • 30-day doorstep warranty</span>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* "Why Choose Brand?" Card */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-              <h4 className="text-sm font-black text-slate-900">
-                Why Choose {brandName}?
-              </h4>
-              <div className="space-y-3.5">
-                {[
-                  { icon: Shield, label: "Verified & Trained Professionals", bg: "bg-emerald-50", fg: "text-emerald-700" },
-                  { icon: Clock, label: "On-time Service Guarantee", bg: "bg-teal-50", fg: "text-teal-700" },
-                  { icon: Wrench, label: "Genuine Parts & Tools", bg: "bg-sky-50", fg: "text-sky-700" },
-                  { icon: Headphones, label: "Dedicated Customer Support", bg: "bg-indigo-50", fg: "text-indigo-700" },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
-                      <item.icon className={`w-4 h-4 ${item.fg}`} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-800">
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
+            {/* Support Callout */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                <Headphones className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-slate-800">Need help booking?</div>
+                <div className="text-[11px] text-slate-500">Hosur customer care: 080-4824-SEVO</div>
               </div>
             </div>
-
           </div>
           </div>
         </div>
@@ -2325,57 +2034,94 @@ export function ModernServiceCatalogView({
                 </div>
               </div>
 
-              <div className="p-4 border-t border-slate-100">
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-4">
                 {(() => {
-                  if (isGoodsTransportCategory) {
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailsPackage(null)
-                          handleGoodsTransportProceed(detailsPackage)
-                        }}
-                        className="w-full py-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <span>{getLogisticsButtonText(detailsPackage)}</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    )
-                  }
-                  const dQty = getCartQty(detailsPackage)
-                  if (dQty === 0) {
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => addToCart(detailsPackage)}
-                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
-                      >
-                        {isConsultationCategory ? "Book Consultation Visit" : "+ Add to Booking"}
-                      </button>
-                    )
-                  }
+                  const dMrp = parseFloat(detailsPackage.base_price)
+                  const dOffer = parseFloat(detailsPackage.offer_price)
+                  const dHasOffer = !isNaN(dOffer) && dOffer > 0 && !isNaN(dMrp) && dOffer < dMrp
+                  const dFinalPrice = dHasOffer ? dOffer : (!isNaN(dMrp) ? dMrp : 0)
+                  const dDiscountPct = dHasOffer ? Math.round((1 - dOffer / dMrp) * 100) : 0
+
                   return (
-                    <div className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-emerald-600 text-white">
-                      <button
-                        type="button"
-                        onClick={() => decrementCartItem(detailsPackage)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-base cursor-pointer transition-colors"
-                        aria-label="Decrease quantity"
-                      >
-                        −
-                      </button>
-                      <span className="text-xs font-black">
-                        {dQty} added to booking
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => incrementCartItem(detailsPackage)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-base cursor-pointer transition-colors"
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
-                    </div>
+                    <>
+                      <div className="flex flex-col min-w-0">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Total Price
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-lg sm:text-xl font-black text-slate-900">
+                            ₹{dFinalPrice.toLocaleString("en-IN")}
+                          </span>
+                          {dHasOffer && (
+                            <span className="text-xs text-slate-400 line-through">
+                              ₹{dMrp.toLocaleString("en-IN")}
+                            </span>
+                          )}
+                          {isConsultationCategory && (
+                            <span className="text-xs font-semibold text-slate-500">
+                              / sq.ft
+                            </span>
+                          )}
+                        </div>
+                        {dHasOffer && (
+                          <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                            {dDiscountPct}% OFF
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-[140px] sm:min-w-[180px] shrink-0">
+                        {isGoodsTransportCategory ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailsPackage(null)
+                              handleGoodsTransportProceed(detailsPackage)
+                            }}
+                            className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
+                          >
+                            <span>{getLogisticsButtonText(detailsPackage)}</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        ) : (() => {
+                          const dQty = getCartQty(detailsPackage)
+                          if (dQty === 0) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => addToCart(detailsPackage)}
+                                className="w-full py-2.5 px-4 rounded-xl font-extrabold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs active:scale-95 text-center"
+                              >
+                                {isConsultationCategory ? "Book Consultation" : "+ Add to Booking"}
+                              </button>
+                            )
+                          }
+                          return (
+                            <div className="w-full flex items-center justify-between gap-2 py-1.5 px-3 rounded-xl bg-emerald-600 text-white shadow-xs">
+                              <button
+                                type="button"
+                                onClick={() => decrementCartItem(detailsPackage)}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 font-black text-base cursor-pointer transition-colors"
+                                aria-label="Decrease quantity"
+                              >
+                                −
+                              </button>
+                              <span className="text-xs font-black">
+                                {dQty} in cart
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => incrementCartItem(detailsPackage)}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 font-black text-base cursor-pointer transition-colors"
+                                aria-label="Increase quantity"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </>
                   )
                 })()}
               </div>
@@ -2383,6 +2129,43 @@ export function ModernServiceCatalogView({
           </div>,
           document.body
         )}
+
+      {/* ── Category Service Selection Modal (Change Service on Demand) ── */}
+      {isChangeServiceModalOpen && (
+        <CategoryServiceModal
+          isOpen={isChangeServiceModalOpen}
+          onClose={() => setIsChangeServiceModalOpen(false)}
+          category={category}
+          onSelectService={(catSlug, subtabName) => {
+            setIsChangeServiceModalOpen(false)
+            if (services && services.length > 0) {
+              const target = services.find(s =>
+                s.name.toLowerCase() === subtabName.toLowerCase() ||
+                s.name.toLowerCase().includes(subtabName.toLowerCase()) ||
+                subtabName.toLowerCase().includes(s.name.toLowerCase())
+              )
+              if (target) {
+                setActiveSubService(target)
+                setSearchParams(prev => {
+                  const next = new URLSearchParams(prev)
+                  next.set("subtab", target.name)
+                  next.set("subTab", target.name)
+                  return next
+                }, { replace: true })
+                return
+              }
+            }
+            setSearchParams(prev => {
+              const next = new URLSearchParams(prev)
+              next.set("subtab", subtabName)
+              next.set("subTab", subtabName)
+              return next
+            }, { replace: true })
+          }}
+          allBackendServices={services}
+        />
+      )}
+
       {/* ── Mobile Floating Cart Bar (Appears when items are in cart) ── */}
       {cartTotalQty > 0 && (
         <div className="lg:hidden fixed bottom-[calc(4.25rem+var(--safe-area-bottom))] left-3 right-3 z-40 animate-in slide-in-from-bottom-3 duration-300">
@@ -2402,17 +2185,10 @@ export function ModernServiceCatalogView({
             </div>
             <button
               type="button"
-              onClick={() => {
-                const summaryEl = document.getElementById("booking-summary-card");
-                if (summaryEl) {
-                  summaryEl.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  handleProceedToSchedule();
-                }
-              }}
+              onClick={handleProceedToSchedule}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
             >
-              <span>View Summary</span>
+              <span>View Cart & Checkout</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

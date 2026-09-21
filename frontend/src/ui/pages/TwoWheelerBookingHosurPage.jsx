@@ -21,7 +21,6 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { getAddress } from "../../api/geocoding.js"
 import {
-  HOSUR_LOCATIONS_DATABASE,
   filterLocationSuggestions,
   searchHosurPlacesOnline,
   formatExactLocation,

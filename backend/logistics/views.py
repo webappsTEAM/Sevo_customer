@@ -14,6 +14,7 @@ submits one) belongs in service_requests/services/, not here.
 import logging
 from decimal import Decimal, InvalidOperation
 
+from django.db.models import Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -42,6 +43,26 @@ class ServiceTierListView(APIView):
             qs = qs.filter(city__iexact=city)
         if weight_class:
             qs = qs.filter(weight_class=weight_class)
+
+        # GT audit Update 18: never offer a vehicle class that no driver can
+        # actually operate. ServiceTier.VehicleClass includes "heavy_truck",
+        # which the Vendor app's Vehicle.VehicleType has no member for -- a
+        # customer could pick it, pay, and then wait for a dispatch that can
+        # never happen. The booking-time resolver refuses it as well
+        # (assert_gt_booking_is_classifiable); this keeps it off the picker so
+        # the customer never sees a vehicle they cannot have.
+        #
+        # Tiers with a BLANK vehicle_class are left alone on purpose: Packers
+        # & Movers tiers are relocation packages (1BHK, Villa) that carry no
+        # vehicle class by design and are matched on payload instead.
+        from service_requests.services.logistics_pricing import (
+            DISPATCHABLE_VEHICLE_CLASSES,
+        )
+
+        qs = qs.exclude(
+            ~Q(vehicle_class="") & ~Q(vehicle_class__in=DISPATCHABLE_VEHICLE_CLASSES)
+        )
+
         qs = qs.order_by("order", "id")
         data = ServiceTierSerializer(qs, many=True).data
         return success_response(data=data)

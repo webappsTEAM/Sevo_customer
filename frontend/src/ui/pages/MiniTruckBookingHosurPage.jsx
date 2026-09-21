@@ -19,7 +19,6 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { getAddress } from "../../api/geocoding.js"
 import {
-  HOSUR_LOCATIONS_DATABASE,
   filterLocationSuggestions,
   searchHosurPlacesOnline,
   formatExactLocation,
@@ -1331,7 +1330,22 @@ export function MiniTruckBookingHosurPage() {
       })
     }
     setSelectedRoute(route)
-    resolvePickupLocation("Sipcot Industrial Area, Hosur")
+    // GT audit Update 17: picking a popular route used to overwrite the
+    // pickup with a hardcoded "Sipcot Industrial Area, Hosur" even when the
+    // customer had already entered their own. The backend prices whatever
+    // pickup it is finally given, so that silently re-quoted and would have
+    // charged the trip from an address the customer never chose.
+    //
+    // A Lane models a route and its origin CITY -- there is no depot or
+    // street-level origin in the catalog, and none is invented here. So: a
+    // pickup the customer has entered is always kept, and only an empty one
+    // is seeded, from the lane's own origin city when it carries one.
+    if (!pickup || !pickup.trim()) {
+      const laneOrigin = route.city || route.from || route.origin_city || ""
+      resolvePickupLocation(
+        laneOrigin ? `${laneOrigin}, Tamil Nadu` : "Hosur, Tamil Nadu"
+      )
+    }
     resolveDropLocation(`${route.to}, Tamil Nadu`)
     const bar = document.getElementById("estimate-bar")
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -2454,10 +2468,18 @@ export function MiniTruckBookingHosurPage() {
                     {vehicle.diagram}
                   </div>
 
-                  {/* Weight Pill Badge */}
-                  <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
-                    <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
-                    <span>{vehicle.capacity}</span>
+                  {/* Weight Pill Badge & Vehicle Suitability Explanation */}
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5">
+                      <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
+                      <span>{vehicle.capacity}</span>
+                    </div>
+                    {totalCargoWeightKg > 0 && !exceedsCap && (
+                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md inline-flex items-center gap-1 shadow-2xs">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Recommended for your goods ({totalCargoWeightKg.toFixed(0)} kg cargo ✓)</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Name & Price */}

@@ -17,7 +17,6 @@ import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import {
-  HOSUR_LOCATIONS_DATABASE,
   filterLocationSuggestions as filterHosurLocations,
   searchHosurPlacesOnline,
   formatExactLocation,
@@ -3252,18 +3251,48 @@ export function PackersMoversBookingHosurPage() {
                             <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
                               <ClipboardList className="w-5 h-5" />
                             </div>
-                            <div className="space-y-1">
-                              <h4 className="font-extrabold text-amber-950 text-sm">Survey Required</h4>
+                            <div className="space-y-1.5 flex-1">
+                              <h4 className="font-extrabold text-amber-950 text-sm">Pre-Move Survey Required</h4>
                               <p className="text-xs text-amber-900 font-semibold leading-relaxed">
-                                Your move needs a quick survey before the final price can be confirmed.
+                                Your move needs a quick assessment because the system needs additional information before confirming the final service and price.
                               </p>
                               <p className="text-[11px] text-amber-800 leading-normal">
                                 {pmServerQuote?.estimate_notice || "Due to large volume, uncataloged items, or road routing estimation, the price below is an indicative estimate. Our team will contact you to schedule a quick survey before final price confirmation."}
                               </p>
-                              <div className="pt-2 text-[11px] text-amber-900/90 font-medium space-y-0.5">
-                                <p>• Request was received upon submitting</p>
-                                <p>• Relocation coordinator will call to arrange survey</p>
-                                <p>• No payment required until final survey confirmation</p>
+                              
+                              {/* Transparent 6-step workflow roadmap */}
+                              <div className="pt-2.5 border-t border-amber-200/80 mt-2">
+                                <p className="text-[11px] font-extrabold text-amber-950 uppercase tracking-wider mb-2">What happens next?</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-amber-900 font-medium">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
+                                    <span>Submit move details</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
+                                    <span>SEVO reviews &amp; arranges survey</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
+                                    <span>Requirements confirmed</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">4</span>
+                                    <span>Final quote provided</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">5</span>
+                                    <span>You review &amp; approve</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">6</span>
+                                    <span>Move is scheduled</span>
+                                  </div>
+                                </div>
+                                <p className="text-[11px] text-emerald-800 font-bold mt-2.5 flex items-center gap-1">
+                                  <Check className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Zero upfront charges — pay only after you approve the final quote.</span>
+                                </p>
                               </div>
                             </div>
                           </div>

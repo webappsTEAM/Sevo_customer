@@ -22,6 +22,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from rest_framework.test import APITestCase
 
 from logistics.models import ServiceTier
@@ -517,12 +518,13 @@ class PackageGtPricingRbacTests(APITestCase):
     def test_malformed_rate_value_is_rejected(self):
         admin = _user("admin", 106)
         with self.assertRaises(Exception):
-            update_package(
-                package=self.package,
-                data={"gt_per_km_rate": "not-a-number"},
-                actor=admin,
-                reason="typo",
-            )
+            with transaction.atomic():
+                update_package(
+                    package=self.package,
+                    data={"gt_per_km_rate": "not-a-number"},
+                    actor=admin,
+                    reason="typo",
+                )
         self.package.refresh_from_db()
         self.assertEqual(self.package.gt_per_km_rate, Decimal("22.00"))
 

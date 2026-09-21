@@ -7,9 +7,21 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db.models import Sum, Q
+from django.core.exceptions import ObjectDoesNotExist
 
 from inventory.models import InventoryItem, StockMovement
 from inventory.utils.unit_conversion import format_grams_for_display, parse_pack_size_grams
+
+
+def _safe_get_stock_item(product) -> Optional[InventoryItem]:
+    """
+    Safely retrieves product.stock_item.
+    Handles ObjectDoesNotExist / InventoryItem.DoesNotExist which getattr does not catch.
+    """
+    try:
+        return getattr(product, "stock_item", None)
+    except ObjectDoesNotExist:
+        return None
 
 
 def get_stock_status(product) -> Dict[str, Any]:
@@ -21,7 +33,7 @@ def get_stock_status(product) -> Dict[str, Any]:
     - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
     - If stock_item.stock_quantity_grams <= 0 -> in_stock: False, max_quantity: 0
     """
-    item = getattr(product, "stock_item", None)
+    item = _safe_get_stock_item(product)
     if not item or item.stock_quantity_grams is None:
         return {"in_stock": True, "max_quantity": None}
 
@@ -52,7 +64,7 @@ def get_admin_stock_status(product, for_date: Optional[date] = None) -> Dict[str
     - offer_price & offer_percentage
     - vegetable_gram (pack size string e.g. "500 g", "1 kg")
     """
-    item = getattr(product, "stock_item", None)
+    item = _safe_get_stock_item(product)
     target_date = for_date or timezone.localdate()
 
     # Price & Offer % matching customer cards (e.g. Ash Gourd: Price=₹46, MRP=₹55, Offer=16% OFF)
@@ -195,7 +207,7 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     - sold_grams: sum of SOLD movement deltas (positive amount sold) that day.
     - closing_grams: balance_after of the latest movement that day (or live stock if date is today and no movements).
     """
-    item = getattr(product, "stock_item", None)
+    item = _safe_get_stock_item(product)
     if not item:
         return []
 

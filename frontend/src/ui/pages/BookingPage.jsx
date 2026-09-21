@@ -9417,36 +9417,36 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 
   const peopleAlsoTakeCatalog = useMemo(() => ({
     ac: [
-      { id: "pat-ac-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
-      { id: "pat-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-ac-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-ac-5", name: "AC Condenser Coil Jet Wash", price: 299, rating: "4.8", reviews: "15K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-ac-6", name: "AC Outdoor Unit Bracket Setup", price: 349, rating: "4.7", reviews: "11K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" }
+      { id: "pat-ac-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-ac-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-ac-5", name: "AC Condenser Coil Jet Wash", price: 299, rating: "4.8", reviews: "15K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-ac-6", name: "AC Outdoor Unit Bracket Setup", price: 349, rating: "4.7", reviews: "11K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" }
     ],
     cleaning: [
-      { id: "pat-cl-1", name: "Sofa deep cleaning", price: 499, rating: "4.85", reviews: "210K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop" },
-      { id: "pat-cl-2", name: "Kitchen deep cleaning", price: 999, rating: "4.81", reviews: "140K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop" },
-      { id: "pat-cl-3", name: "Bathroom deep cleaning", price: 399, rating: "4.88", reviews: "310K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-cl-4", name: "Balcony & window cleaning", price: 299, rating: "4.75", reviews: "65K", optionsText: null, image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" }
+      { id: "pat-cl-1", name: "Sofa deep cleaning", price: 499, rating: "4.85", reviews: "210K", optionsText: "2 options", image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "pat-cl-2", name: "Kitchen deep cleaning", price: 999, rating: "4.81", reviews: "140K", optionsText: "3 options", image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "pat-cl-3", name: "Bathroom deep cleaning", price: 399, rating: "4.88", reviews: "310K", optionsText: null, image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "pat-cl-4", name: "Balcony & window cleaning", price: 299, rating: "4.75", reviews: "65K", optionsText: null, image: "/mockups/category_home_repair_3d.jpg" }
     ],
     painting: [
-      { id: "pat-pt-1", name: "Wall crack & dampness repair", price: 499, rating: "4.80", reviews: "55K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop" },
-      { id: "pat-pt-2", name: "Wood polishing & lacquer", price: 799, rating: "4.77", reviews: "40K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop" },
-      { id: "pat-pt-3", name: "Metal grill anti-rust painting", price: 399, rating: "4.74", reviews: "30K", optionsText: null, image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=500&q=80&fit=crop" },
-      { id: "pat-pt-4", name: "Texture wall design", price: 1299, rating: "4.89", reviews: "75K", optionsText: "4 options", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=500&q=80&fit=crop" }
+      { id: "pat-pt-1", name: "Wall crack & dampness repair", price: 499, rating: "4.80", reviews: "55K", optionsText: "2 options", image: "/assets/Painting/Interior.webp" },
+      { id: "pat-pt-2", name: "Wood polishing & lacquer", price: 799, rating: "4.77", reviews: "40K", optionsText: "3 options", image: "/assets/Painting/Interior.webp" },
+      { id: "pat-pt-3", name: "Metal grill anti-rust painting", price: 399, rating: "4.74", reviews: "30K", optionsText: null, image: "/assets/Painting/Interior.webp" },
+      { id: "pat-pt-4", name: "Texture wall design", price: 1299, rating: "4.89", reviews: "75K", optionsText: "4 options", image: "/assets/Painting/Interior.webp" }
     ],
     plumbing: [
-      { id: "pat-pl-1", name: "Water heater geyser repair", price: 599, rating: "4.76", reviews: "100K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
-      { id: "pat-pl-2", name: "Tap & mixer replacement", price: 199, rating: "4.82", reviews: "110K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-      { id: "pat-pl-3", name: "Drain block removal", price: 299, rating: "4.79", reviews: "150K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-pl-4", name: "Water tank cleaning", price: 899, rating: "4.84", reviews: "90K", optionsText: null, image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop" }
+      { id: "pat-pl-1", name: "Water heater geyser repair", price: 599, rating: "4.76", reviews: "100K", optionsText: "3 options", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "pat-pl-2", name: "Tap & mixer replacement", price: 199, rating: "4.82", reviews: "110K", optionsText: null, image: "/assets/hero_pro_electrical.jpg" },
+      { id: "pat-pl-3", name: "Drain block removal", price: 299, rating: "4.79", reviews: "150K", optionsText: "2 options", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "pat-pl-4", name: "Water tank cleaning", price: 899, rating: "4.84", reviews: "90K", optionsText: null, image: "/assets/hero_pro_electrical.jpg" }
     ],
     general: [
-      { id: "pat-gn-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
-      { id: "pat-gn-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
-      { id: "pat-gn-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
-      { id: "pat-gn-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
+      { id: "pat-gn-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-gn-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-gn-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "pat-gn-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" }
     ]
   }), []);
 
@@ -10531,46 +10531,46 @@ function StepWorkflowCheckout({
 
   const relatedServicesCatalog = {
     ac: [
-      { id: "rel-ac-1", name: "Anti-Rust Protective Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
-      { id: "rel-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "24K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-ac-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "18K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "9K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
+      { id: "rel-ac-1", name: "Anti-Rust Protective Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "12K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "rel-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "24K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "rel-ac-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "18K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
+      { id: "rel-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "9K", image: "/assets/hvac/ac_inspection_banner_collage.png" }
     ],
     cleaning: [
-      { id: "rel-cl-1", name: "Kitchen Sink Drain Degrease", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&q=80&fit=crop" },
-      { id: "rel-cl-2", name: "Balcony Pressure Wash Polish", price: 299, origPrice: 499, duration: "25 mins", rating: "4.7", reviews: "21K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-cl-3", name: "Chimney Filter Oil Degreasing", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", reviews: "32K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" },
-      { id: "rel-cl-4", name: "Ceiling Fan & Light Wipe", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "10K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
+      { id: "rel-cl-1", name: "Kitchen Sink Drain Degrease", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "15K", image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "rel-cl-2", name: "Balcony Pressure Wash Polish", price: 299, origPrice: 499, duration: "25 mins", rating: "4.7", reviews: "21K", image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "rel-cl-3", name: "Chimney Filter Oil Degreasing", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", reviews: "32K", image: "/mockups/category_home_repair_3d.jpg" },
+      { id: "rel-cl-4", name: "Ceiling Fan & Light Wipe", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "10K", image: "/mockups/category_home_repair_3d.jpg" }
     ],
     painting: [
-      { id: "rel-pt-1", name: "Anti-Dampness Primer Shield", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", reviews: "14K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
-      { id: "rel-pt-2", name: "Furniture Masking Protection", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", reviews: "8K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
-      { id: "rel-pt-3", name: "Wall Crack Filler (2 Walls)", price: 299, origPrice: 499, duration: "25 mins", rating: "4.9", reviews: "27K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
-      { id: "rel-pt-4", name: "Post-Paint Floor Scrub Cleanup", price: 499, origPrice: 699, duration: "40 mins", rating: "4.8", reviews: "19K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
+      { id: "rel-pt-1", name: "Anti-Dampness Primer Shield", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", reviews: "14K", image: "/assets/Painting/Interior.webp" },
+      { id: "rel-pt-2", name: "Furniture Masking Protection", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", reviews: "8K", image: "/assets/Painting/Interior.webp" },
+      { id: "rel-pt-3", name: "Wall Crack Filler (2 Walls)", price: 299, origPrice: 499, duration: "25 mins", rating: "4.9", reviews: "27K", image: "/assets/Painting/Interior.webp" },
+      { id: "rel-pt-4", name: "Post-Paint Floor Scrub Cleanup", price: 499, origPrice: 699, duration: "40 mins", rating: "4.8", reviews: "19K", image: "/assets/Painting/Interior.webp" }
     ],
     plumbing: [
-      { id: "rel-pl-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "16K", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&q=80&fit=crop" },
-      { id: "rel-pl-2", name: "Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", reviews: "22K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
-      { id: "rel-pl-3", name: "High Pressure Pipe Seal Tape", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", reviews: "11K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-pl-4", name: "Tank Float Valve Safety Check", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "13K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" }
+      { id: "rel-pl-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "16K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-pl-2", name: "Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", reviews: "22K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-pl-3", name: "High Pressure Pipe Seal Tape", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", reviews: "11K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-pl-4", name: "Tank Float Valve Safety Check", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "13K", image: "/assets/hero_pro_electrical.jpg" }
     ],
     electrical: [
-      { id: "rel-el-1", name: "MCB Trip Switch Safety Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "17K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
-      { id: "rel-el-2", name: "Socket Voltage & Earthing Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "14K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-el-3", name: "Appliance Cable Concealing", price: 299, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "20K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
-      { id: "rel-el-4", name: "Fan Speed Regulator Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", reviews: "25K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" }
+      { id: "rel-el-1", name: "MCB Trip Switch Safety Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "17K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-el-2", name: "Socket Voltage & Earthing Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "14K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-el-3", name: "Appliance Cable Concealing", price: 299, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "20K", image: "/assets/hero_pro_electrical.jpg" },
+      { id: "rel-el-4", name: "Fan Speed Regulator Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", reviews: "25K", image: "/assets/hero_pro_electrical.jpg" }
     ],
     masonry: [
-      { id: "rel-ms-1", name: "Tile Joint Waterproof Grout", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "30K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
-      { id: "rel-ms-2", name: "Debris Bagging & Transport Prep", price: 349, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
-      { id: "rel-ms-3", name: "Wall Plastering Touch-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.7", reviews: "18K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
-      { id: "rel-ms-4", name: "Laser Level Surface Scan Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
+      { id: "rel-ms-1", name: "Tile Joint Waterproof Grout", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "30K", image: "/mockups/brick_wall_construction_red.jpg" },
+      { id: "rel-ms-2", name: "Debris Bagging & Transport Prep", price: 349, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "15K", image: "/mockups/brick_wall_construction_red.jpg" },
+      { id: "rel-ms-3", name: "Wall Plastering Touch-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.7", reviews: "18K", image: "/mockups/brick_wall_construction_red.jpg" },
+      { id: "rel-ms-4", name: "Laser Level Surface Scan Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "12K", image: "/mockups/brick_wall_construction_red.jpg" }
     ],
     general: [
-      { id: "rel-gn-1", name: "Post-Service Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "28K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
-      { id: "rel-gn-2", name: "Express Priority Slot Assurance", price: 149, origPrice: 249, duration: "Instant", rating: "4.9", reviews: "50K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" },
-      { id: "rel-gn-3", name: "Pre-Service Safety Inspection", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", reviews: "22K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
-      { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
+      { id: "rel-gn-1", name: "Post-Service Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "28K", image: "/assets/hero_illustration.jpg" },
+      { id: "rel-gn-2", name: "Express Priority Slot Assurance", price: 149, origPrice: 249, duration: "Instant", rating: "4.9", reviews: "50K", image: "/assets/hero_illustration.jpg" },
+      { id: "rel-gn-3", name: "Pre-Service Safety Inspection", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", reviews: "22K", image: "/assets/hero_illustration.jpg" },
+      { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "/assets/hero_illustration.jpg" }
     ]
   };
 
@@ -10582,7 +10582,7 @@ function StepWorkflowCheckout({
       try {
         const res = await apiRequest("/catalog/services/");
         if (res && isMounted) {
-          const list = Array.isArray(res) ? res : (res.results || []);
+          const list = Array.isArray(res) ? res : (res?.data || res?.results || []);
           if (list.length > 0) {
             const filtered = list.filter(s => {
               const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
@@ -10604,7 +10604,7 @@ function StepWorkflowCheckout({
                 origPrice: Math.round((parseFloat(s.price) || 249) * 1.35),
                 duration: s.duration || "20 mins",
                 icon: s.image ? null : (categoryKey === "ac" ? "❄️" : categoryKey === "cleaning" ? "🧼" : categoryKey === "painting" ? "🎨" : "✨"),
-                image: s.image || null
+                image: s.image || "/assets/hero_illustration.jpg"
               }));
               setDynamicRelatedServices(mapped);
             }
@@ -12372,11 +12372,15 @@ export function BookingPage() {
     if (discount > 0) data.append("discount_amount", discount)
     if (tipAmount > 0) data.append("tip_amount", tipAmount)
 
-    // Serialize cart_data with gst_rate and platform_fee as JSON string
+    // Serialize cart_data with package_id, addon_id, gst_rate, and platform_fee as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => {
       const isConsult = isPaintingOrMason || isConsultationItem(c, category);
+      const pkgId = c.package_id || c.db_id || (typeof c.id === 'string' && c.id.startsWith('pkg-') ? parseInt(c.id.replace('pkg-', '').split('-')[0]) : (Number.isInteger(Number(c.id)) ? Number(c.id) : undefined));
+      const addonId = c.addon_id || (typeof c.id === 'string' && c.id.startsWith('addon-') ? parseInt(c.id.replace('addon-', '')) : undefined);
       return {
         id: c.id,
+        package_id: pkgId || undefined,
+        addon_id: addonId || undefined,
         name: c.name,
         price: c.price,
         quantity: c.quantity || 1,
@@ -12432,15 +12436,21 @@ export function BookingPage() {
         platform_fee: platformFee,
         discount_amount: discount > 0 ? discount : undefined,
         tip_amount: tipAmount > 0 ? tipAmount : undefined,
-        cart_data: cart.map(c => ({
-          id: c.id,
-          name: c.name,
-          price: c.price,
-          quantity: c.quantity || 1,
-          gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
-          platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
-          categoryName: c.categoryName || category?.name || "",
-        })),
+        cart_data: cart.map(c => {
+          const pkgId = c.package_id || c.db_id || (typeof c.id === 'string' && c.id.startsWith('pkg-') ? parseInt(c.id.replace('pkg-', '').split('-')[0]) : (Number.isInteger(Number(c.id)) ? Number(c.id) : undefined));
+          const addonId = c.addon_id || (typeof c.id === 'string' && c.id.startsWith('addon-') ? parseInt(c.id.replace('addon-', '')) : undefined);
+          return {
+            id: c.id,
+            package_id: pkgId || undefined,
+            addon_id: addonId || undefined,
+            name: c.name,
+            price: c.price,
+            quantity: c.quantity || 1,
+            gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
+            platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
+            categoryName: c.categoryName || category?.name || "",
+          };
+        }),
         payment_method: backendPaymentMethod,
         coupon_code: couponCode || undefined,
       }
