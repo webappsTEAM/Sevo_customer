@@ -76,7 +76,7 @@ class OutputGuard:
         return [cls.sanitize_booking_data(b) for b in bookings]
 
     @classmethod
-    def sanitize_llm_response(cls, text: str) -> str:
+    def sanitize_llm_response(cls, text: str, is_followup: bool = False) -> str:
         """
         Cleans generated text response of any accidentally leaked OTPs, tokens, or fallback anomalies.
         """
@@ -98,5 +98,15 @@ class OutputGuard:
                 "A technician will be assigned shortly",
                 scrubbed,
             )
+
+        # Sanitize internal dev jargon leaked into text
+        scrubbed = re.sub(r"`?available_actions`?", "available options", scrubbed)
+        scrubbed = re.sub(r"`?status_display`?", "status", scrubbed)
+
+        # If this is an ongoing follow-up turn, strip repetitive greetings at the very beginning
+        if is_followup and scrubbed:
+            scrubbed = re.sub(r"^(?:Hello|Hi|Hey)(?:\s+[\w]+)?(?:\s*!\s*|\s*,\s*)", "", scrubbed.strip(), flags=re.IGNORECASE)
+            if scrubbed and scrubbed[0].islower():
+                scrubbed = scrubbed[0].upper() + scrubbed[1:]
 
         return scrubbed

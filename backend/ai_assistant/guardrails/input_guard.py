@@ -31,17 +31,34 @@ class InputGuard:
         r"(?i)\bact\s+as\s+superadmin\b",
     ]
 
-    # Patterns indicating write / CRUD actions disallowed in Phase 1
+    # Patterns indicating write / CRUD actions disallowed in Phase 1 (imperative commands)
     WRITE_ACTION_PATTERNS = [
         (r"(?i)\b(cancel|discontinue|stop)\s+(my\s+)?(booking|service|order|request)\b", "cancel"),
         (r"(?i)\b(reschedule|postpone|change\s+the\s+time|change\s+the\s+date)\b", "reschedule"),
         (r"(?i)\b(refund|return\s+my\s+money|chargeback)\b", "refund"),
         (r"(?i)\b(pay|make\s+payment|retry\s+payment|checkout)\b", "pay"),
-        (r"(?i)\b(create|book|new)\s+(a\s+)?(booking|service|request)\b", "create"),
+        (r"(?i)\b(confirm|finalize|place|execute)\s+(and\s+pay\s+for\s+)?(my\s+)?(booking|order)\s+(now|immediately)\b", "create"),
         (r"(?i)\b(assign|reassign)\s+(technician|worker|driver)\b", "assign"),
         (r"(?i)\b(approve|reject)\s+(quote|quotation|estimate|request)\b", "approve_reject"),
         (r"(?i)\b(delete|remove)\s+(my\s+)?(account|address|card)\b", "delete"),
         (r"(?i)\b(update|change)\s+(my\s+)?(address|phone|email|name)\b", "update"),
+    ]
+
+    # Patterns indicating informational queries, guidance, service discovery, or policy questions
+    INFORMATIONAL_PATTERNS = [
+        r"(?i)\bhow\s+(do|can|to|would|should|does)\s*(i|we|a\s+user|a\s+customer)?\b",
+        r"(?i)\bwhat\s+(is|are|services|packages|options|categories)\b",
+        r"(?i)\btell\s+me\s+(about|how|steps|what|more)\b",
+        r"(?i)\b(guide|help)\s+(me|us)?\b",
+        r"(?i)\b(steps?|instructions?|process|procedure|flow)\s+(to|for|of)\b",
+        r"(?i)\b(can|could)\s+i\s+(book|order|schedule|get|request|hire)\b",
+        r"(?i)\b(where|when)\s+(can|do|to)\s*(i)?\b",
+        r"(?i)\b(i\s+want\s+to|i\s+would\s+like\s+to|looking\s+to|need\s+to|wish\s+to)\s+(book|know|find|explore|schedule|order)\b",
+        r"(?i)\b(available\s+(services?|packages?)|(services?|packages?)\s+(available|list|options|offered|catalog))\b",
+        r"(?i)\b(explore|browse|view|show|list)\s+(services?|packages?|catalog|offerings?)\b",
+        r"(?i)\bpolicy\b",
+        r"(?i)\b(faq|question|inquiry)\b",
+        r"(?i)^(book|booking)\s+(services?|a\s+service|\w+\s+service)?\??$",
     ]
 
     @classmethod
@@ -67,15 +84,23 @@ class InputGuard:
                     category="injection",
                 )
 
-        # 2. Check for write / CRUD actions (Phase 1 Hard Scope Restriction)
-        # Exception: questions asking about policies (e.g., "What is the cancellation policy?" or "How can I cancel?")
-        # vs explicit imperative commands ("Cancel booking 123", "Please refund me")
-        is_policy_inquiry = bool(
-            re.search(r"(?i)\b(what\s+is|tell\s+me\s+about|policy|how\s+does|how\s+to|can\s+i|steps\s+to)\b", query_clean)
-            and not re.search(r"(?i)\b(please\s+cancel|cancel\s+(it|this|order|booking)\s*#?\d+|i\s+want\s+to\s+cancel\s+now)\b", query_clean)
+        # 2. Check if this is an informational / guidance query or service inquiry
+        is_informational = any(re.search(p, query_clean) for p in cls.INFORMATIONAL_PATTERNS)
+        is_imperative_write = bool(
+            re.search(
+                r"(?i)\b("
+                r"please\s+(cancel|refund|reschedule|delete)"
+                r"|cancel\s+(it|this|order|booking)\s*#?\d+"
+                r"|i\s+want\s+to\s+cancel\s+now"
+                r"|give\s+me\s+(a\s+)?refund"
+                r"|reschedule\s+(my\s+)?(appointment|booking)\s+to"
+                r")\b",
+                query_clean,
+            )
         )
 
-        if not is_policy_inquiry:
+        # Only evaluate write actions if it's an imperative mutation or not an informational inquiry
+        if is_imperative_write or not is_informational:
             for pattern, action_type in cls.WRITE_ACTION_PATTERNS:
                 if re.search(pattern, query_clean):
                     guidance_map = {
@@ -99,8 +124,14 @@ class InputGuard:
                             "To complete your payment securely, please visit your booking details page in the app."
                         ),
                         "create": (
-                            "I cannot directly create new bookings in chat. "
-                            "You can easily book any service by browsing our [Service Catalog](/booking)!"
+                            "I operate in read-only mode and cannot place orders directly inside the chat. "
+                            "However, booking a service is quick and easy:\n\n"
+                            "1. **Explore Catalog**: Browse our [Service Catalog](/booking) and pick your required category.\n"
+                            "2. **Select Package**: Choose your required service package with transparent upfront pricing.\n"
+                            "3. **Choose Date & Slot**: Pick your preferred appointment date and arrival time window.\n"
+                            "4. **Add Address**: Provide your service address (we verify serviceability instantly).\n"
+                            "5. **Secure Checkout**: Confirm your booking via UPI, Card, NetBanking, or COD.\n\n"
+                            "Once booked, you can track your assigned technician live right here in the app!"
                         ),
                         "assign": (
                             "Technician and workforce dispatch is handled automatically by the CalServices operations system."

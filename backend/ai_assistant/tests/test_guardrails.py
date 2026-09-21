@@ -30,6 +30,23 @@ class GuardrailsTests(TestCase):
         result = InputGuard.inspect("What is your cancellation policy?")
         self.assertFalse(result.is_blocked)
 
+    def test_informational_booking_queries_reach_llm(self):
+        """Customer questions about booking procedures and available services must flow to RAG + LLM."""
+        queries = [
+            "How do i book a service",
+            "how can i book a service",
+            "guide me to book a service",
+            "services available",
+            "book services",
+            "book a service",
+            "steps to book a service",
+            "i want to book a service",
+            "what services do you offer",
+        ]
+        for q in queries:
+            result = InputGuard.inspect(q)
+            self.assertFalse(result.is_blocked, f"Query '{q}' should not be blocked by InputGuard")
+
     def test_secrets_and_otps_are_scrubbed_from_output(self):
         """Rule #8: start_otp and tracking_token must never be surfaced."""
         dirty_booking = {

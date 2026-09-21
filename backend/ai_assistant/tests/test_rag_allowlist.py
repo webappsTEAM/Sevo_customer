@@ -45,7 +45,7 @@ class RAGAllowlistTests(TestCase):
             source_category=KnowledgeCategory.POLICY,
             title="Cancellation and Refund Policy",
             content="You can cancel free of charge if cancelled more than 2 hours before the scheduled appointment slot.",
-            embedding=[0.1] * 128,
+            embedding=Embedder.get_embedding("Cancellation and Refund Policy cancel free of charge appointment slot"),
         )
 
         results = KnowledgeRetriever.retrieve("What is the cancellation policy?", top_k=2)

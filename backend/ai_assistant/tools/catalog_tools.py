@@ -36,14 +36,32 @@ class SearchProductsTool(BaseTool):
         if category_slug:
             packages_qs = packages_qs.filter(service__category__slug=category_slug)
 
-        search_q = (
-            Q(name__icontains=q_clean)
-            | Q(description__icontains=q_clean)
-            | Q(tag__icontains=q_clean)
-            | Q(service__name__icontains=q_clean)
-            | Q(service__category__name__icontains=q_clean)
-        )
-        packages = packages_qs.filter(search_q)[:8]
+        import re
+        q_lower = q_clean.lower()
+
+        # Handle specific search for AC / HVAC services
+        if q_lower in {"ac", "hvac", "air conditioner", "ac service", "ac repair"} or re.search(r"\bac\b", q_lower):
+            search_q = (
+                Q(name__iregex=r"\bac\b")
+                | Q(service__category__slug__in=["ac_appliance", "hvac"])
+                | Q(service__slug__icontains="ac")
+                | Q(description__iregex=r"\bac\b")
+            )
+        elif len(q_clean) <= 3:
+            esc = re.escape(q_clean)
+            search_q = (
+                Q(name__iregex=r"\b" + esc + r"\b")
+                | Q(service__name__iregex=r"\b" + esc + r"\b")
+            )
+        else:
+            search_q = (
+                Q(name__icontains=q_clean)
+                | Q(description__icontains=q_clean)
+                | Q(tag__icontains=q_clean)
+                | Q(service__name__icontains=q_clean)
+            )
+
+        packages = packages_qs.filter(search_q)[:25]
 
         results = []
         for p in packages:

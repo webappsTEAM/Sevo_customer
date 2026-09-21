@@ -1,17 +1,27 @@
+import re
 from typing import List, Dict, Any, Optional
-from django.db.models import Q
 from ai_assistant.models import KnowledgeChunk
 from ai_assistant.rag.embedder import Embedder
+
+STOPWORDS = {
+    "what", "whats", "what's", "is", "are", "was", "were", "the", "a", "an",
+    "in", "on", "at", "to", "for", "of", "with", "by", "from", "about",
+    "how", "can", "could", "should", "would", "do", "does", "did", "have", "has",
+    "i", "me", "my", "we", "you", "your", "they", "them", "their", "it", "its",
+    "and", "or", "but", "so", "if", "included", "including", "please", "tell",
+    "want", "know", "there", "this", "that", "any", "some"
+}
 
 
 class KnowledgeRetriever:
     """
     Hybrid retriever combining text matching and vector cosine similarity
     over verified KnowledgeChunk records.
+    Uses Google's semantic embeddings + content-bearing token matching for accurate ranking.
     """
 
     @classmethod
-    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.15) -> List[Dict[str, Any]]:
+    def retrieve(cls, query: str, top_k: int = 3, min_score: float = 0.38) -> List[Dict[str, Any]]:
         clean_q = (query or "").strip()
         if not clean_q:
             return []
@@ -23,23 +33,34 @@ class KnowledgeRetriever:
         if not chunks.exists():
             return []
 
+        # Extract content-bearing tokens, removing generic stopwords
+        all_tokens = re.findall(r"\b[a-z0-9_]{2,}\b", clean_q.lower())
+        informative_tokens = [t for t in all_tokens if t not in STOPWORDS]
+
         scored_results = []
-        tokens = [t.lower() for t in clean_q.split() if len(t) > 2]
 
         for chunk in chunks:
-            # Vector similarity
+            # Vector cosine similarity
             vec_sim = Embedder.cosine_similarity(query_vec, chunk.embedding or [])
 
-            # Text keyword match score
+            # Text keyword match score with title boosting
             content_lower = chunk.content.lower()
             title_lower = chunk.title.lower()
-            kw_hits = sum(1 for t in tokens if t in content_lower or t in title_lower)
-            text_score = min(1.0, kw_hits / max(1, len(tokens)))
 
-            # Hybrid score (weighted combination)
-            composite_score = 0.4 * text_score + 0.6 * vec_sim
+            if informative_tokens:
+                title_hits = sum(1 for t in informative_tokens if t in title_lower)
+                content_hits = sum(1 for t in informative_tokens if t in content_lower)
+                raw_text_score = (2.5 * title_hits + 1.0 * content_hits) / max(1.0, 2.5 * len(informative_tokens))
+                text_score = min(1.0, raw_text_score)
+                composite_score = 0.4 * text_score + 0.6 * vec_sim
+            else:
+                text_score = 0.0
+                composite_score = vec_sim
 
-            if composite_score >= min_score or (text_score > 0.4):
+            # Filter out weak matches: must meet composite threshold and demonstrate genuine relevance
+            is_relevant = (composite_score >= min_score and (vec_sim >= 0.52 or text_score >= 0.30))
+
+            if is_relevant:
                 scored_results.append({
                     "chunk_id": chunk.id,
                     "source_id": chunk.source_id,
@@ -48,6 +69,8 @@ class KnowledgeRetriever:
                     "content": chunk.content,
                     "metadata": chunk.metadata,
                     "score": round(composite_score, 3),
+                    "vec_sim": round(vec_sim, 3),
+                    "text_score": round(text_score, 3),
                 })
 
         # Sort descending by composite score
@@ -69,3 +92,4 @@ class KnowledgeRetriever:
             context_lines.append("")
         context_lines.append("--- END KNOWLEDGE CONTEXT ---")
         return "\n".join(context_lines)
+

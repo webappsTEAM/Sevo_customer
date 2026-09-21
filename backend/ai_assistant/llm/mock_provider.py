@@ -191,7 +191,7 @@ class MockDeterministicProvider(BaseLLMProvider):
                 f"• **Technician:** {tech_display}\n"
                 f"• **Total Amount:** {price_display}\n"
                 f"• **Payment Status:** {o.get('payment_status')}\n"
-                f"• **Available Actions:** {', '.join(action_lines) if action_lines else 'None at current status'}"
+                f"• **What you can do:** {', '.join(action_lines) if action_lines else 'No modifications available at this stage'}"
             )
             return LLMResponse(content=resp, tool_calls=[])
 
@@ -278,6 +278,20 @@ class MockDeterministicProvider(BaseLLMProvider):
                     "• **Requirements:** Valid government photo ID (Aadhaar / PAN), verified trade experience, and your own tools.\n"
                     "• **Benefits:** Flexible schedule, steady local customer demand, and weekly direct bank payouts.\n"
                     "• **How to Apply:** Visit the partner portal at https://calservices-vendor.vercel.app to apply online."
+                ),
+                tool_calls=[],
+            )
+
+        if any(w in q_lower for w in ["how to book", "how do i book", "how can i book", "guide me to book", "steps to book", "book a service", "book services", "how does booking work"]):
+            return LLMResponse(
+                content=(
+                    "**How to Book a Doorstep Service on CalServices (Sevo):**\n\n"
+                    "1. **Explore the Catalog**: Browse service categories from our [Service Catalog](/booking) (Cleaning, HVAC/AC Repair, Plumbing, Painting, Masonry, Logistics).\n"
+                    "2. **Select Service & Package**: Choose your required package and review transparent pricing (all in INR ₹ with GST breakdown).\n"
+                    "3. **Choose Date & Slot**: Pick your convenient appointment date and preferred time slot.\n"
+                    "4. **Add Address & Verify Zone**: Enter your service address. Our system automatically confirms technician serviceability in your area.\n"
+                    "5. **Confirm & Checkout**: Complete your booking securely using UPI, Card, NetBanking, or Cash on Delivery (COD).\n\n"
+                    "Once confirmed, a verified professional will be assigned, and you can track their live GPS location and ETA right inside the app!"
                 ),
                 tool_calls=[],
             )

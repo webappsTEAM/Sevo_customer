@@ -121,12 +121,14 @@ class AIChatView(APIView):
         context["rag_context"] = rag_context
 
         # 5. Build System Prompt & History
-        system_prompt = AgentRouter.get_system_prompt(agent_type, context)
         past_msgs = list(
             conversation.messages.filter(sender__in=[SenderType.USER, SenderType.ASSISTANT])
             .order_by("-created_at")[:6]
         )
         past_msgs.reverse()
+        context["is_followup"] = len(past_msgs) > 0
+
+        system_prompt = AgentRouter.get_system_prompt(agent_type, context)
 
         history: List[Dict[str, str]] = []
         for pm in past_msgs:
@@ -229,7 +231,7 @@ class AIChatView(APIView):
                 final_answer = f"Based on CalServices information:\n\n{top_chunk.get('content', '')}"
 
         # 9. Output Guard: Scrub secrets, tokens, enforce 599 fallback and technician sentinel
-        safe_response = OutputGuard.sanitize_llm_response(final_answer)
+        safe_response = OutputGuard.sanitize_llm_response(final_answer, is_followup=context.get("is_followup", False))
 
         # Save assistant message
         msg_metadata = {}
@@ -288,11 +290,21 @@ class AIConversationListView(APIView):
         ]
         return Response({"success": True, "data": data}, status=status.HTTP_200_OK)
 
+    def delete(self, request):
+        Conversation.objects.filter(user=request.user).delete()
+        return Response(
+            {"success": True, "message": "All conversations deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
+
 
 class AIConversationDetailView(APIView):
     """
     GET /api/ai/conversations/<uuid:pk>/
     Retrieves full message history for a specific conversation owned by the customer or guest.
+
+    DELETE /api/ai/conversations/<uuid:pk>/
+    Deletes a specific conversation.
     """
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [permissions.AllowAny]
@@ -332,3 +344,23 @@ class AIConversationDetailView(APIView):
                 "messages": msg_list,
             },
         }, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk=None):
+        user = request.user
+        is_authenticated = bool(user and getattr(user, "is_authenticated", False))
+        try:
+            if is_authenticated:
+                conv = Conversation.objects.get(pk=pk, user=user)
+            else:
+                conv = Conversation.objects.get(pk=pk, user__isnull=True)
+        except Conversation.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Conversation not found or unauthorized."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        conv.delete()
+        return Response(
+            {"success": True, "message": "Conversation deleted successfully."},
+            status=status.HTTP_200_OK,
+        )

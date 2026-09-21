@@ -17,6 +17,7 @@ import {
   History,
   Plus,
   Clock,
+  Trash2,
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { useAuth } from "../../../state/auth/useAuth.js"
@@ -319,8 +320,59 @@ export function AIChatWidget() {
     setShowHistoryView(false)
   }
 
+  const handleDeleteCurrentChat = async () => {
+    if (conversationId) {
+      try {
+        await apiRequest(`/ai/conversations/${conversationId}/`, { method: "DELETE" })
+      } catch (err) {
+        console.warn("Failed to delete conversation on server:", err)
+      }
+    }
+    setConversationId(null)
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
+      sessionStorage.removeItem(STORAGE_KEY_MESSAGES)
+    } catch {}
+    setMessages([
+      {
+        id: `welcome_${Date.now()}`,
+        sender: "assistant",
+        content: "Chat history cleared! How can I help you today?",
+        sources: [],
+      },
+    ])
+    setConversationsList((prev) => prev.filter((c) => c.id !== conversationId))
+  }
+
+  const handleDeleteConversation = async (convId, e) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation()
+    }
+    if (!convId) return
+    try {
+      await apiRequest(`/ai/conversations/${convId}/`, { method: "DELETE" })
+      setConversationsList((prev) => prev.filter((c) => c.id !== convId))
+      if (convId === conversationId) {
+        handleDeleteCurrentChat()
+      }
+    } catch (err) {
+      console.warn("Failed to delete conversation:", err)
+    }
+  }
+
+  const handleClearAllHistory = async () => {
+    if (!window.confirm("Are you sure you want to delete all past chat history?")) return
+    try {
+      await apiRequest("/ai/conversations/", { method: "DELETE" })
+      setConversationsList([])
+      handleDeleteCurrentChat()
+    } catch (err) {
+      console.warn("Failed to delete all conversations:", err)
+    }
+  }
+
   const handleReset = () => {
-    handleNewChat()
+    handleDeleteCurrentChat()
   }
 
   const renderFormattedText = (rawContent) => {
@@ -490,6 +542,14 @@ export function AIChatWidget() {
               </button>
               <button
                 type="button"
+                onClick={handleDeleteCurrentChat}
+                className="caltrack-ai-header-btn caltrack-ai-header-btn-danger"
+                title="Delete current chat"
+              >
+                <Trash2 size={15} />
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 className="caltrack-ai-header-btn"
                 title="Close"
@@ -513,13 +573,25 @@ export function AIChatWidget() {
                   <Clock size={15} />
                   <span>Past Conversations</span>
                 </div>
-                <button
-                  type="button"
-                  className="caltrack-ai-history-new-btn"
-                  onClick={handleNewChat}
-                >
-                  <Plus size={13} /> New Chat
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {conversationsList.length > 0 && (
+                    <button
+                      type="button"
+                      className="caltrack-ai-history-clear-all-btn"
+                      onClick={handleClearAllHistory}
+                      title="Clear all saved chats"
+                    >
+                      <Trash2 size={12} /> Clear All
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="caltrack-ai-history-new-btn"
+                    onClick={handleNewChat}
+                  >
+                    <Plus size={13} /> New Chat
+                  </button>
+                </div>
               </div>
 
               {loadingConversations ? (
@@ -567,10 +639,14 @@ export function AIChatWidget() {
                         })
                       : ""
                     return (
-                      <button
+                      <div
                         key={conv.id}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleSelectConversation(conv)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") handleSelectConversation(conv)
+                        }}
                         className={`caltrack-ai-history-item ${isActive ? "active" : ""}`}
                       >
                         <div className="caltrack-ai-history-item-icon">
@@ -586,8 +662,16 @@ export function AIChatWidget() {
                             {isActive && <span className="caltrack-ai-history-active-tag">Current</span>}
                           </div>
                         </div>
-                        <ChevronRight size={14} className="caltrack-ai-history-item-arrow" />
-                      </button>
+                        <button
+                          type="button"
+                          className="caltrack-ai-history-delete-btn"
+                          onClick={(e) => handleDeleteConversation(conv.id, e)}
+                          title="Delete this chat"
+                          aria-label="Delete chat"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     )
                   })}
                 </div>

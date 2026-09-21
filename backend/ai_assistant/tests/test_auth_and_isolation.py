@@ -99,3 +99,28 @@ class AuthAndIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["data"]["blocked_by_guardrail"])
         self.assertIn("cannot fulfill this request", response.data["data"]["message"])
+
+    def test_customer_can_delete_conversation(self):
+        """Customer can delete their own chat session."""
+        conv = Conversation.objects.create(user=self.user_a, title="Test Chat")
+        self.client.force_authenticate(user=self.user_a)
+        response = self.client.delete(f"/api/ai/conversations/{conv.id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Conversation.objects.filter(id=conv.id).exists())
+
+    def test_customer_cannot_delete_other_customer_conversation(self):
+        """Customer A cannot delete Customer B's conversation."""
+        conv_b = Conversation.objects.create(user=self.user_b, title="Customer B Chat")
+        self.client.force_authenticate(user=self.user_a)
+        response = self.client.delete(f"/api/ai/conversations/{conv_b.id}/")
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Conversation.objects.filter(id=conv_b.id).exists())
+
+    def test_customer_can_delete_all_conversations(self):
+        """Customer can clear all their past conversation history."""
+        Conversation.objects.create(user=self.user_a, title="Chat 1")
+        Conversation.objects.create(user=self.user_a, title="Chat 2")
+        self.client.force_authenticate(user=self.user_a)
+        response = self.client.delete("/api/ai/conversations/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Conversation.objects.filter(user=self.user_a).count(), 0)
