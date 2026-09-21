@@ -153,13 +153,18 @@ class WorkforceWebhookView(APIView):
             return Response({"error": "Invalid payload format: Expected JSON object"}, status=status.HTTP_400_BAD_REQUEST)
 
         event_type = data.get("event") or data.get("event_type")
+        if not event_type:
+            return Response({"error": "Missing 'event' type in webhook payload"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Intercept Seller Hub Marketplace events before booking_id checks ──
+        if str(event_type).startswith("seller_order.") or str(event_type).startswith("marketplace."):
+            from orders.marketplace_events import handle_marketplace_webhook_event
+            return handle_marketplace_webhook_event(data)
+
         payload = data.get("payload") or data.get("data") or data
         if not isinstance(payload, dict):
             payload = data
         booking_id = payload.get("booking_id") or data.get("booking_id")
-
-        if not event_type:
-            return Response({"error": "Missing 'event' type in webhook payload"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not booking_id:
             return Response({"error": "Missing 'booking_id' in payload"}, status=status.HTTP_400_BAD_REQUEST)

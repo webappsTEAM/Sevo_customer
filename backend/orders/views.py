@@ -29,12 +29,13 @@ from inventory.services.vegetable_stock_service import (
 )
 from inventory.utils.unit_conversion import parse_pack_size_grams
 
-from .models import Order, GroceryOrder, GroceryOrderItem
+from .models import Order, GroceryOrder, GroceryOrderItem, MarketplaceOrder
 from .serializers import (
     GroceryOrderSerializer,
     GroceryCheckoutSerializer,
     serialize_service_order,
     serialize_grocery_order,
+    serialize_marketplace_order,
 )
 
 
@@ -153,10 +154,12 @@ class MyOrdersView(APIView):
     def get(self, request):
         service_orders = Order.objects.filter(customer=request.user).prefetch_related("items__service_request")
         grocery_orders = GroceryOrder.objects.filter(customer=request.user).prefetch_related("items__package")
+        marketplace_orders = MarketplaceOrder.objects.filter(customer=request.user).prefetch_related("items")
 
         merged = (
             [serialize_service_order(o) for o in service_orders]
             + [serialize_grocery_order(o) for o in grocery_orders]
+            + [serialize_marketplace_order(o) for o in marketplace_orders]
         )
         merged.sort(key=lambda entry: entry["created_at"], reverse=True)
 
