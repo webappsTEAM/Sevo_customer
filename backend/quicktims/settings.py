@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "service_requests",
     "logistics",
     "orders",
+    "carts",
     "customer_care",
     "reports",
     "workforce_integration",

@@ -49,6 +49,8 @@ urlpatterns = [
     path("api/settings/", include("settings_hub.urls")),
     path("api/trial/", include("trial_management.urls")),
     path("api/logistics/", include("logistics.urls")),
+    path("api/carts/", include("carts.urls")),
+    path("api/orders/", include("orders.urls")),
     path("api/customer-care/", include("customer_care.urls")),
     path("api/workforce-integration/", include("workforce_integration.urls")),
     path("api/customers/", include("customer_analytics.urls")),

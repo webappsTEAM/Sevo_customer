@@ -157,11 +157,24 @@ class VegetableStockTestSuite(TestCase):
         # Try booking 2 kg via BookingCreateView
         self.client.force_authenticate(user=self.customer_user)
         payload = {
-            "customer_name": "Test Customer",
+            # Not "Test Customer" -- validate_customer_name() on
+            # ServiceRequestPublicCreateSerializer deliberately blocklists
+            # that exact string (and other obvious placeholders) as an
+            # anti-fraud guard, which would fail this booking before the
+            # stock check under test ever runs.
+            "customer_name": "Priya Ramesh",
             "phone": "9876543210",
             "service_category": "vegetables",
             "issue_title": "Vegetable Delivery",
             "address": "123 Market St, Hosur",
+            # Required: BookingCreateView rejects a booking outright when
+            # coordinates are missing (HS-B-04 fix -- see service_requests/
+            # views.py), before the stock check under test ever runs. The
+            # test company has no ServiceZone rows, so the zone-eligibility
+            # engine treats this as open access regardless of the actual
+            # coordinate values.
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "preferred_date": timezone.localdate().strftime("%Y-%m-%d"),
             "cart_data": [
                 {"id": self.pkg_tomato.id, "name": self.pkg_tomato.name, "quantity": 2, "unit": "kg"}
@@ -482,15 +495,35 @@ class VegetableStockTestSuite(TestCase):
         self.assertEqual(day_report["sold_grams"], 6000)
         self.assertEqual(day_report["closing_grams"], 14000)
 
-    # 25. Multi-Tenant Catalog Cache Isolation Test
+    # 25. Catalog Cache Population Test
+    #
+    # Renamed from "multi-tenant cache isolation": Package/Service carry no
+    # company/org FK at all (CatalogServiceListView's queryset is
+    # `Package.objects.all()`, unfiltered by tenant), so the catalog this
+    # endpoint serves is genuinely shared across companies by design -- a
+    # leftover from before django-tenants was removed in favor of the
+    # current single-schema platform (see quicktims/settings.py's
+    # "Database Configuration" comment). There is no per-company catalog
+    # data here to isolate, so asserting distinct per-company cache keys
+    # was asserting a guarantee this endpoint never provides. What's
+    # actually worth covering is what the view really does: cache by query
+    # params only, and reuse that one entry for any caller (admin or
+    # otherwise) issuing the same query, regardless of company.
     @override_settings(DEBUG=False)
-    def test_multi_tenant_catalog_cache_isolation(self):
-        # Tenant 1 request
+    def test_catalog_list_is_cached_by_query_params_across_companies(self):
+        # First admin (company 1) request populates the cache.
         self.client.force_authenticate(user=self.admin_user)
         res1 = self.client.get(f"/api/catalog/services/?service_slug=vegetables&status=ACTIVE")
         self.assertEqual(res1.status_code, 200)
 
-        # Tenant 2 User & Request
+        cache_key = "catalog_services_list__vegetables_ACTIVE"
+        cached_payload = cache.get(cache_key)
+        self.assertIsNotNone(cached_payload)
+        self.assertEqual(cached_payload, res1.data)
+
+        # A second admin from a different company, issuing the identical
+        # query, hits the same shared cache entry -- since the underlying
+        # catalog isn't tenant-scoped, that's correct, not a leak.
         admin_user2 = User.objects.create_user(
             username="admin2",
             email="admin2@calservices.com",
@@ -501,9 +534,114 @@ class VegetableStockTestSuite(TestCase):
         self.client.force_authenticate(user=admin_user2)
         res2 = self.client.get(f"/api/catalog/services/?service_slug=vegetables&status=ACTIVE")
         self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.data, cached_payload)
 
-        # Confirm distinct cache keys exist per company
-        key1 = f"catalog_services_list_{self.company.id}__vegetables_ACTIVE"
-        key2 = f"catalog_services_list_{self.company2.id}__vegetables_ACTIVE"
-        self.assertIsNotNone(cache.get(key1))
-        self.assertIsNotNone(cache.get(key2))
+
+class VegetableStockWriteLockdownTestSuite(TestCase):
+    """
+    VENDOR_STOCK_MANAGEMENT_IMPLEMENTATION_PLAN.md Phase 2: stock/price writes
+    from the Customer app must stay refused (403) now that the Vendor app
+    owns them, while the read-only list/history endpoints keep working for
+    admin visibility.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+        self.company = Company.objects.create(company_name="CalServices Tamil Nadu", slug="calservices-tn-lockdown")
+        self.admin_user = User.objects.create_user(
+            username="lockdown_admin",
+            email="lockdown_admin@calservices.com",
+            password="Password123!",
+            role="admin",
+            company=self.company,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        self.category = CatalogCategory.objects.create(
+            name="Farm Produce Lockdown", slug="farm-produce-lockdown", is_active=True, sort_order=1,
+        )
+        self.veg_service = Service.objects.create(
+            category=self.category, name="Fresh Vegetables Lockdown", slug="vegetables", is_active=True,
+        )
+        self.pkg = Package.objects.create(
+            service=self.veg_service,
+            name="Lockdown Test Tomato",
+            slug="lockdown-test-tomato",
+            base_price=Decimal("40.00"),
+            duration="500 g",
+            status="ACTIVE",
+        )
+        self.item = InventoryItem.objects.create(
+            org=self.company,
+            name="Lockdown Test Tomato (Produce)",
+            category=InventoryItem.Category.CONSUMABLE,
+            sku="VEG-LOCKDOWN-TOMATO",
+            unit="kg",
+            stock_quantity_grams=5000,
+        )
+        self.pkg.stock_item = self.item
+        self.pkg.save(update_fields=["stock_item"])
+
+    def test_restock_endpoint_refuses_write(self):
+        res = self.client.post(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/restock/",
+            {"quantity": 5, "unit": "kg"}, format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(res.data["success"])
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock_quantity_grams, 5000)  # unchanged
+
+    def test_adjust_endpoint_refuses_write(self):
+        res = self.client.post(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/adjust/",
+            {"quantity": 0, "unit": "kg", "reason": "test"}, format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock_quantity_grams, 5000)  # unchanged
+
+    def test_set_default_endpoint_refuses_write(self):
+        res = self.client.post(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/set-default/",
+            {"quantity": 10, "unit": "kg", "apply_now": False}, format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_update_details_endpoint_refuses_write(self):
+        res = self.client.patch(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/update-details/",
+            {"price": "99.00"}, format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+        self.pkg.refresh_from_db()
+        self.assertEqual(self.pkg.base_price, Decimal("40.00"))  # unchanged
+
+    def test_inventory_item_viewset_write_actions_refuse(self):
+        create_res = self.client.post(
+            "/api/inventory/items/",
+            {"name": "New Item", "category": "consumable", "org": self.company.id}, format="json",
+        )
+        self.assertEqual(create_res.status_code, 403)
+
+        update_res = self.client.patch(
+            f"/api/inventory/items/{self.item.id}/", {"name": "Renamed"}, format="json",
+        )
+        self.assertEqual(update_res.status_code, 403)
+
+        delete_res = self.client.delete(f"/api/inventory/items/{self.item.id}/")
+        self.assertEqual(delete_res.status_code, 403)
+        self.assertTrue(InventoryItem.objects.filter(id=self.item.id).exists())
+
+    def test_read_only_endpoints_still_work(self):
+        list_res = self.client.get("/api/inventory/vegetable-stock/")
+        self.assertEqual(list_res.status_code, 200)
+        self.assertTrue(list_res.data["success"])
+
+        history_res = self.client.get(f"/api/inventory/vegetable-stock/{self.pkg.id}/history/")
+        self.assertEqual(history_res.status_code, 200)
+
+        items_list_res = self.client.get("/api/inventory/items/")
+        self.assertEqual(items_list_res.status_code, 200)

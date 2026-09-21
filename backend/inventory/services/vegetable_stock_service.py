@@ -9,6 +9,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from rest_framework.exceptions import ValidationError
 
 from inventory.models import InventoryItem, StockMovement
 from inventory.utils.unit_conversion import to_grams
