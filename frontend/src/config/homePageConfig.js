@@ -68,7 +68,8 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
     { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
     { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
-    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true }
+    { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true },
+    { id: "cat-12", name: "Groceries", image: "/mockups/groceries_realistic.png", link: "/marketplace", enabled: true }
   ],
   pillarModal: {
     badge: "⚡Core Specialized Pillars",
@@ -506,6 +507,23 @@ export function mergeWithDefaultConfig(parsed) {
       link: sanitizeCategoryLink(cat.link)
     }
   })
+
+  // A published config (saved earlier, e.g. via the Home Page Customizer)
+  // fully replaces the code defaults above -- so a category tile added to
+  // DEFAULT_HOME_PAGE_CONFIG after that config was last saved would never
+  // reach real users even though it's live in code. Backfill any default
+  // tile whose id isn't already present in the saved list (by id, falling
+  // back to link so a renamed default doesn't duplicate), appended at the
+  // end so existing admin ordering/edits are untouched.
+  const existingCategoryKeys = new Set(
+    mergedCategories.flatMap((cat) => [cat.id, cat.link].filter(Boolean))
+  )
+  const backfilledCategories = defaultCategories.filter(
+    (defCat) => defCat.enabled !== false && !existingCategoryKeys.has(defCat.id) && !existingCategoryKeys.has(defCat.link)
+  )
+  if (backfilledCategories.length > 0) {
+    mergedCategories.push(...backfilledCategories)
+  }
 
   const defaultOffers = DEFAULT_HOME_PAGE_CONFIG.offers
   const rawOffers = parsed.offers || {}
