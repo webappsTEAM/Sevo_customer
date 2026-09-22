@@ -1,0 +1,119 @@
+from django.urls import path
+from .views_catalog import ImageUploadView
+from .views_catalog_v2 import (
+    AdminCategoryListView, AdminCategoryDetailView,
+    AdminServiceListView, AdminServiceDetailView,
+    AdminPackageListView, AdminPackageDetailView, AdminPackageTransitionView,
+    AdminAddOnListView, AdminAddOnDetailView,
+    AdminCatalogChangeLogView,
+    AdminRecipeListView, AdminRecipeDetailView,
+    AdminRecommendationListView, AdminRecommendationDetailView,
+    PublicPackageListView, PublicCategoryListView,
+    AdminVendorCapabilityRequestListView, AdminVendorCapabilityRequestDecisionView,
+)
+from .views import (
+    NotificationPreferenceView,
+    SessionListView, SessionRevokeView, SessionRevokeAllView, LoginHistoryView,
+    APIKeyListCreateView, APIKeyRevokeView,
+    WebhookListCreateView, WebhookDetailView,
+    TeamMembersView, TeamMemberDetailView,
+    TeamInviteListCreateView, TeamInviteRevokeView,
+    BillingSubscriptionView, InvoiceListView,
+    DataExportView, AccountDeletionView, WorkspaceDeletionView, OwnerTransferView,
+)
+
+from .views_homepage import (
+    HomePageConfigAPIView,
+    HomePageImageUploadAPIView,
+    HomePageImageDeleteAPIView,
+    ACInspectionConfigAPIView,
+)
+from .views_service_zones import (
+    ServiceZoneListCreateView,
+    ServiceZoneDetailView,
+    ServiceZoneCheckView,
+    CityListView,
+)
+from .views_legal import PublicLegalConfigAPIView
+from service_requests.payment_views import InvoiceDownloadView
+
+urlpatterns = [
+    # AC Inspection & Diagnostic Configuration & Rate Card
+    path("ac-inspection/config/", ACInspectionConfigAPIView.as_view(), name="settings-ac-inspection-config"),
+
+    # Legal & Public Policy Config
+    path("legal/", PublicLegalConfigAPIView.as_view(), name="settings-public-legal"),
+
+    # Homepage Config & Storage APIs
+    path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
+    path("homepage/upload-image/", HomePageImageUploadAPIView.as_view(), name="settings-homepage-upload-image"),
+    path("homepage/images/<uuid:media_id>/", HomePageImageDeleteAPIView.as_view(), name="settings-homepage-image-delete"),
+    # Notifications
+    path("notifications/", NotificationPreferenceView.as_view(), name="notification-prefs"),
+
+    # Sessions
+    path("sessions/", SessionListView.as_view(), name="session-list"),
+    path("sessions/revoke-all/", SessionRevokeAllView.as_view(), name="session-revoke-all"),
+    path("sessions/<int:pk>/", SessionRevokeView.as_view(), name="session-revoke"),
+    path("login-history/", LoginHistoryView.as_view(), name="login-history"),
+
+    # API Keys
+    path("api-keys/", APIKeyListCreateView.as_view(), name="api-key-list"),
+    path("api-keys/<int:pk>/", APIKeyRevokeView.as_view(), name="api-key-revoke"),
+
+    # Webhooks
+    path("webhooks/", WebhookListCreateView.as_view(), name="webhook-list"),
+    path("webhooks/<int:pk>/", WebhookDetailView.as_view(), name="webhook-detail"),
+
+    # Team
+    path("team/members/", TeamMembersView.as_view(), name="team-members"),
+    path("team/members/<str:pk>/", TeamMemberDetailView.as_view(), name="team-member-detail"),
+    path("team/invites/", TeamInviteListCreateView.as_view(), name="team-invites"),
+    path("team/invites/<int:pk>/", TeamInviteRevokeView.as_view(), name="team-invite-revoke"),
+
+    # Billing
+    path("billing/subscription/", BillingSubscriptionView.as_view(), name="billing-subscription"),
+    path("invoices/", InvoiceListView.as_view(), name="invoice-list"),
+    path("invoices/download/", InvoiceDownloadView.as_view(), name="settings-invoice-download"),
+
+    # Catalog v2 (Category -> Service -> Package -> AddOn)
+    path("catalog/upload-image/", ImageUploadView.as_view(), name="settings-catalog-upload-image"),
+    path("catalog/v2/categories/", AdminCategoryListView.as_view(), name="settings-catalog-v2-categories-list"),
+    path("catalog/v2/categories/<str:pk>/", AdminCategoryDetailView.as_view(), name="settings-catalog-v2-categories-detail"),
+    path("catalog/v2/services/", AdminServiceListView.as_view(), name="settings-catalog-v2-services-list"),
+    path("catalog/v2/services/<str:pk>/", AdminServiceDetailView.as_view(), name="settings-catalog-v2-services-detail"),
+    path("catalog/v2/packages/", AdminPackageListView.as_view(), name="settings-catalog-v2-packages-list"),
+    path("catalog/v2/packages/<str:pk>/", AdminPackageDetailView.as_view(), name="settings-catalog-v2-packages-detail"),
+    path("catalog/v2/packages/<str:pk>/transition/", AdminPackageTransitionView.as_view(), name="settings-catalog-v2-packages-transition"),
+    path("catalog/v2/addons/", AdminAddOnListView.as_view(), name="settings-catalog-v2-addons-list"),
+    path("catalog/v2/addons/<str:pk>/", AdminAddOnDetailView.as_view(), name="settings-catalog-v2-addons-detail"),
+    path("catalog/v2/recipes/", AdminRecipeListView.as_view(), name="settings-catalog-v2-recipes-list"),
+    path("catalog/v2/recipes/<str:pk>/", AdminRecipeDetailView.as_view(), name="settings-catalog-v2-recipes-detail"),
+    path("catalog/v2/recommendations/", AdminRecommendationListView.as_view(), name="settings-catalog-v2-recommendations-list"),
+    path("catalog/v2/recommendations/<str:pk>/", AdminRecommendationDetailView.as_view(), name="settings-catalog-v2-recommendations-detail"),
+    path("catalog/v2/change-log/", AdminCatalogChangeLogView.as_view(), name="settings-catalog-v2-change-log"),
+
+    # Vendor skill/service approvals — admin reviews requests submitted by
+    # the Workforce (vendor) app's own vendor-facing endpoints (see
+    # workforce_integration/urls.py's vendor-capabilities/ + catalog/).
+    path("catalog/v2/vendor-capabilities/", AdminVendorCapabilityRequestListView.as_view(), name="settings-catalog-v2-vendor-capabilities-list"),
+    path("catalog/v2/vendor-capabilities/<int:pk>/decide/", AdminVendorCapabilityRequestDecisionView.as_view(), name="settings-catalog-v2-vendor-capabilities-decide"),
+
+    # Public (no-auth) read-only catalog — used by customer-facing booking UI
+    path("catalog/public/packages/", PublicPackageListView.as_view(), name="settings-catalog-public-packages"),
+    path("catalog/public/categories/", PublicCategoryListView.as_view(), name="settings-catalog-public-categories"),
+
+    # Data / Privacy
+    path("data/export/", DataExportView.as_view(), name="data-export"),
+    path("data/delete-account/", AccountDeletionView.as_view(), name="account-deletion"),
+    path("data/delete-workspace/", WorkspaceDeletionView.as_view(), name="workspace-deletion"),
+    path("data/transfer-ownership/", OwnerTransferView.as_view(), name="owner-transfer"),
+
+    # Service Area Geofencing
+    path("service-zones/", ServiceZoneListCreateView.as_view(), name="service-zone-list"),
+    path("service-zones/check/", ServiceZoneCheckView.as_view(), name="service-zone-check"),
+    path("service-zones/<int:pk>/", ServiceZoneDetailView.as_view(), name="service-zone-detail"),
+
+    # GT-B-06: public city registry
+    path("cities/", CityListView.as_view(), name="city-list"),
+]

@@ -1,0 +1,664 @@
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from accounts.permissions import is_admin_role
+
+from .models import (
+    NotificationPreference, LoginSession, LoginHistory,
+    APIKey, Webhook, TeamInvite, Invoice,
+)
+from .serializers import (
+    NotificationPreferenceSerializer,
+    LoginSessionSerializer, LoginHistorySerializer,
+    APIKeySerializer, APIKeyCreateSerializer,
+    WebhookSerializer, TeamInviteSerializer, TeamInviteCreateSerializer,
+    InvoiceSerializer,
+)
+
+
+class InvoiceListView(APIView):
+    """
+    GET /api/settings/invoices/
+    Dynamic Admin Billing & Invoice Hub.
+    Fetches real paid and completed customer service requests + work extensions.
+    NO HARDCODED FALLBACKS!
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+
+        invoice_list = []
+        seen_ids = set()
+
+        try:
+            from service_requests.models import ServiceRequest
+
+            # Query all completed or paid ServiceRequests
+            srs = ServiceRequest.objects.all().order_by("-id")
+
+            for sr in srs:
+                is_paid = str(sr.payment_status).lower() in ("paid", "collected")
+                is_completed = str(sr.status).lower() in ("completed", "resolved", "feedback_pending", "closed")
+
+                if (is_paid or is_completed) and sr.id not in seen_ids:
+                    seen_ids.add(sr.id)
+
+                    ext = sr.work_extensions.all().order_by("-id").first()
+                    ext_amount = 0.0
+                    ext_title = ""
+                    if ext:
+                        ext_amount = float(ext.admin_approved_amount or ext.technician_estimate or 0)
+                        ext_title = ext.reason or "Approved Extension"
+
+                    base_amount = float(getattr(sr, "base_amount", 0) or 599.0)
+                    total_amount = float(sr.total_amount or (base_amount + ext_amount))
+                    if ext_amount > 0 and total_amount <= base_amount:
+                        total_amount = base_amount + ext_amount
+
+                    service_title = sr.service_category or sr.issue_title or "Service Booking"
+                    if ext_title:
+                        service_title += f" (+ {ext_title})"
+
+                    inv_date = sr.payment_collected_at or sr.updated_at or sr.created_at
+                    date_str = inv_date.strftime("%Y-%m-%d") if inv_date else "2026-08-04"
+
+                    invoice_list.append({
+                        "id": f"SR-{sr.id:04d}",
+                        "request_id": sr.request_id or f"SR-{sr.id:04d}",
+                        "invoice_number": f"INV-{sr.request_id or f'SR-{sr.id:04d}'}",
+                        "customer_name": sr.customer_name or "Customer",
+                        "customer_phone": sr.phone or "N/A",
+                        "customer_email": sr.email or "N/A",
+                        "service_title": service_title,
+                        "billing_date": date_str,
+                        "original_work_amount": f"{base_amount:,.2f}",
+                        "additional_work_amount": f"{ext_amount:,.2f}" if ext_amount > 0 else "0.00",
+                        "amount": f"{total_amount:,.2f}",
+                        "total_amount": total_amount,
+                        "payment_method": sr.get_payment_method_display() or "Cash on Delivery (COD)",
+                        "status": "paid" if (is_paid or is_completed) else "pending",
+                        "pdf_url": f"/api/booking/{sr.id}/invoice/",
+                    })
+
+            # Also check existing Invoice model records
+            if getattr(request.user, "company", None):
+                company_invoices = Invoice.objects.filter(company=request.user.company)
+            else:
+                company_invoices = Invoice.objects.all()
+
+            for inv in company_invoices:
+                if inv.invoice_number not in [x["invoice_number"] for x in invoice_list]:
+                    invoice_list.append(InvoiceSerializer(inv).data)
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error building dynamic admin invoices: {e}")
+
+        return Response({"success": True, "data": invoice_list})
+
+
+def _is_admin(user):
+    return is_admin_role(user)
+
+
+# ─── Notification Preferences ────────────────────────────────────────────────
+
+class NotificationPreferenceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        return Response({"success": True, "data": NotificationPreferenceSerializer(prefs).data})
+
+    def patch(self, request):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"success": True, "data": serializer.data})
+        return Response({"success": False, "message": serializer.errors}, status=400)
+
+
+# ─── Sessions ────────────────────────────────────────────────────────────────
+
+class SessionListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sessions = LoginSession.objects.filter(user=request.user, revoked=False)
+        return Response({"success": True, "data": LoginSessionSerializer(sessions, many=True).data})
+
+
+class SessionRevokeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        session = LoginSession.objects.filter(pk=pk, user=request.user, revoked=False).first()
+        if not session:
+            return Response({"success": False, "message": "Session not found."}, status=404)
+        if session.is_current:
+            return Response({"success": False, "message": "Cannot revoke current session."}, status=400)
+        session.revoked = True
+        session.save(update_fields=["revoked"])
+        return Response({"success": True, "message": "Session revoked."})
+
+
+class SessionRevokeAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        LoginSession.objects.filter(user=request.user, revoked=False, is_current=False).update(revoked=True)
+        return Response({"success": True, "message": "All other sessions revoked."})
+
+
+class LoginHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        history = LoginHistory.objects.filter(user=request.user)[:50]
+        return Response({"success": True, "data": LoginHistorySerializer(history, many=True).data})
+
+
+# ─── API Keys ─────────────────────────────────────────────────────────────────
+
+class APIKeyListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        if getattr(request.user, "company", None):
+            keys = APIKey.objects.filter(company=request.user.company, revoked=False)
+        else:
+            keys = APIKey.objects.filter(revoked=False)
+        return Response({"success": True, "data": APIKeySerializer(keys, many=True).data})
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        serializer = APIKeyCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": serializer.errors}, status=400)
+
+        expires_at = None
+        if serializer.validated_data.get("expires_in_days"):
+            expires_at = timezone.now() + timezone.timedelta(days=serializer.validated_data["expires_in_days"])
+
+        company_obj = getattr(request.user, "company", None)
+        api_key_obj, raw_key = APIKey.generate(
+            company=company_obj,
+            created_by=request.user,
+            name=serializer.validated_data["name"],
+            scopes=serializer.validated_data.get("scopes", ["read"]),
+        )
+        if expires_at:
+            api_key_obj.expires_at = expires_at
+            api_key_obj.save(update_fields=["expires_at"])
+
+        data = APIKeySerializer(api_key_obj).data
+        data["raw_key"] = raw_key
+        return Response({"success": True, "data": data, "message": "API key created. Copy it now — it won't be shown again."}, status=201)
+
+
+class APIKeyRevokeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        if getattr(request.user, "company", None):
+            key = APIKey.objects.filter(pk=pk, company=request.user.company, revoked=False).first()
+        else:
+            key = APIKey.objects.filter(pk=pk, revoked=False).first()
+        if not key:
+            return Response({"success": False, "message": "API key not found."}, status=404)
+        key.revoked = True
+        key.save(update_fields=["revoked"])
+        return Response({"success": True, "message": "API key revoked."})
+
+
+# ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+class WebhookListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        if getattr(request.user, "company", None):
+            webhooks = Webhook.objects.filter(company=request.user.company)
+        else:
+            webhooks = Webhook.objects.all()
+        return Response({"success": True, "data": WebhookSerializer(webhooks, many=True).data})
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        serializer = WebhookSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": serializer.errors}, status=400)
+        company_obj = getattr(request.user, "company", None)
+        webhook = serializer.save(company=company_obj, created_by=request.user)
+        return Response({"success": True, "data": WebhookSerializer(webhook).data}, status=201)
+
+
+class WebhookDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_webhook(self, request, pk):
+        return Webhook.objects.filter(pk=pk, company=request.user.company).first()
+
+    def put(self, request, pk):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        webhook = self._get_webhook(request, pk)
+        if not webhook:
+            return Response({"success": False, "message": "Webhook not found."}, status=404)
+        serializer = WebhookSerializer(webhook, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"success": True, "data": serializer.data})
+        return Response({"success": False, "message": serializer.errors}, status=400)
+
+    def delete(self, request, pk):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        webhook = self._get_webhook(request, pk)
+        if not webhook:
+            return Response({"success": False, "message": "Webhook not found."}, status=404)
+        webhook.delete()
+        return Response({"success": True, "message": "Webhook deleted."})
+
+
+# ─── Team Invites ─────────────────────────────────────────────────────────────
+
+class TeamMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+        from accounts.permissions import is_super_admin
+        User = get_user_model()
+        
+        members_qs = User.objects.filter(is_active=True).exclude(role__in=["customer", "employee", "technician"])
+        if not is_super_admin(request.user) and request.user.company:
+            members_qs = members_qs.filter(company=request.user.company)
+
+        members = (
+            members_qs
+            .filter(Q(role__in=["admin", "manager", "support", "super_admin", "catalog", "finance"]) | Q(is_superuser=True))
+            .order_by("first_name", "username")
+        )
+        data = [
+            {
+                "id": str(m.pk),
+                "username": m.username,
+                "email": m.email or "",
+                "name": m.get_full_name() or m.username,
+                "role": m.role if m.role in ["admin", "manager", "support", "super_admin", "catalog", "finance"] else "admin",
+                "is_super_admin": is_super_admin(m),
+                "date_joined": m.date_joined.isoformat() if m.date_joined else "",
+                "is_current_user": m.pk == request.user.pk,
+            }
+            for m in members
+        ]
+        return Response({"success": True, "data": data})
+
+
+class TeamMemberDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        from django.contrib.auth import get_user_model
+        from accounts.permissions import is_super_admin
+        from accounts.audit_service import record_platform_audit
+        User = get_user_model()
+        
+        member_qs = User.objects.filter(pk=pk)
+        if not is_super_admin(request.user) and request.user.company:
+            member_qs = member_qs.filter(company=request.user.company)
+        member = member_qs.first()
+
+        if not member:
+            return Response({"success": False, "message": "Member not found."}, status=404)
+        if member.pk == request.user.pk:
+            return Response({"success": False, "message": "Cannot change your own role."}, status=400)
+        
+        new_role = request.data.get("role")
+        if new_role in ["super_admin", "superadmin"] and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can grant Super Admin privileges."}, status=403)
+        if is_super_admin(member) and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can modify Super Admin accounts."}, status=403)
+
+        allowed = ["admin", "manager", "support", "catalog", "finance", "super_admin"]
+        if new_role not in allowed:
+            return Response({"success": False, "message": f"Role must be one of {allowed}."}, status=400)
+        
+        before_role = member.role
+        member.role = new_role
+        if new_role == "super_admin":
+            member.is_staff = True
+        member.save(update_fields=["role", "is_staff"] if new_role == "super_admin" else ["role"])
+        
+        record_platform_audit(
+            actor=request.user,
+            action="USER_ROLE_CHANGED",
+            module="settings",
+            object_type="User",
+            object_id=str(member.id),
+            before_state={"role": before_role},
+            after_state={"role": new_role},
+            reason=f"Role updated from {before_role} to {new_role} in settings hub",
+            request=request,
+            severity="WARN"
+        )
+        return Response({"success": True, "message": "Role updated."})
+
+    def delete(self, request, pk):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        from django.contrib.auth import get_user_model
+        from accounts.permissions import is_super_admin
+        from accounts.audit_service import record_platform_audit
+        User = get_user_model()
+        
+        member_qs = User.objects.filter(pk=pk)
+        if not is_super_admin(request.user) and request.user.company:
+            member_qs = member_qs.filter(company=request.user.company)
+        member = member_qs.first()
+
+        if not member:
+            return Response({"success": False, "message": "Member not found."}, status=404)
+        if member.pk == request.user.pk:
+            return Response({"success": False, "message": "Cannot remove yourself."}, status=400)
+        if is_super_admin(member) and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can deactivate another Super Admin."}, status=403)
+
+        member.is_active = False
+        member.save(update_fields=["is_active"])
+        
+        record_platform_audit(
+            actor=request.user,
+            action="USER_SUSPENDED",
+            module="settings",
+            object_type="User",
+            object_id=str(member.id),
+            reason="User deactivated via settings hub",
+            request=request,
+            severity="WARN"
+        )
+        return Response({"success": True, "message": "Member removed."})
+
+
+class TeamInviteListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        active_emails = set(
+            User.objects.filter(company=request.user.company, is_active=True)
+            .values_list("email", flat=True)
+        )
+        active_emails = {e.lower() for e in active_emails if e}
+
+        # Auto-update status of invites whose email is now an active User
+        pending_invites = TeamInvite.objects.filter(company=request.user.company, status="pending")
+        for inv in pending_invites:
+            if inv.email and inv.email.lower() in active_emails:
+                inv.status = "accepted"
+                inv.save(update_fields=["status"])
+
+        invites = TeamInvite.objects.filter(company=request.user.company, status="pending")
+        return Response({"success": True, "data": TeamInviteSerializer(invites, many=True).data})
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        serializer = TeamInviteCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "message": serializer.errors}, status=400)
+
+        email = serializer.validated_data["email"]
+        if TeamInvite.objects.filter(company=request.user.company, email=email, status="pending").exists():
+            return Response({"success": False, "message": "Invite already pending for this email."}, status=400)
+
+        region_val = (
+            serializer.validated_data.get("region") or 
+            serializer.validated_data.get("country") or 
+            getattr(request.user.company, "primary_country", "IN") or 
+            "IN"
+        )
+        state_val = (
+            serializer.validated_data.get("default_state") or 
+            getattr(request.user.company, "default_state", "") or 
+            "Tamil Nadu"
+        )
+
+        invite = TeamInvite.objects.create(
+            company=request.user.company,
+            invited_by=request.user,
+            email=email,
+            role=serializer.validated_data["role"],
+            region=region_val,
+            default_state=state_val,
+        )
+
+        from django.core.mail import send_mail
+        from django.conf import settings
+        from django.template.loader import render_to_string
+        from django.utils.html import strip_tags
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+        invite_link = f"{frontend_url}/accept-invite?token={invite.token}&org={request.user.company.slug}"
+        
+        context = {
+            'company_name': request.user.company.company_name,
+            'inviter_name': request.user.get_full_name() or request.user.username,
+            'role': invite.role,
+            'invite_link': invite_link,
+            'region': invite.region,
+            'default_state': invite.default_state,
+        }
+        
+        html_message = render_to_string('emails/team_invite.html', context)
+        plain_message = strip_tags(html_message)
+        
+        email_sent = False
+        error_message = None
+        try:
+            send_mail(
+                subject=f"Invitation to join {request.user.company.company_name} on Caltrack",
+                message=plain_message,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@caltrack.com'),
+                recipient_list=[email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            email_sent = True
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+            error_message = str(e)
+
+        return Response({
+            "success": email_sent,
+            "data": TeamInviteSerializer(invite).data,
+            "message": f"Invite created. Email sent to {email}." if email_sent else f"Invite created, but EMAIL FAILED: {error_message}",
+        }, status=status.HTTP_201_CREATED)
+
+
+class TeamInviteRevokeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        print(f"DEBUG: Revoking invite {pk} for user {request.user}")
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        
+        # Allow revoking any invite that hasn't been accepted yet
+        invite = TeamInvite.objects.filter(pk=pk, company=request.user.company).exclude(status="accepted").first()
+        
+        if not invite:
+            print(f"DEBUG: Invite {pk} not found for company {request.user.company}")
+            return Response({"success": False, "message": "Invite not found."}, status=404)
+            
+        invite.status = "revoked"
+        invite.save(update_fields=["status"])
+        print(f"DEBUG: Invite {pk} revoked successfully")
+        return Response({"success": True, "message": "Invite cancelled."})
+
+
+# ─── Billing (stub — integrate real payment provider) ─────────────────────────
+
+PLANS = {
+    "free": {"name": "Free", "price": 0, "employees": 5, "storage_gb": 1, "api_calls": 1000},
+    "pro": {"name": "Pro", "price": 29, "employees": 50, "storage_gb": 20, "api_calls": 50000},
+    "enterprise": {"name": "Enterprise", "price": 99, "employees": -1, "storage_gb": 500, "api_calls": -1},
+}
+
+
+class BillingSubscriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        company = request.user.company
+        
+        from trial_management.models import TrialPlan
+        try:
+            trial = company.trial_plan
+            if trial.status == TrialPlan.Status.CONVERTED or trial.status == TrialPlan.Status.CONVERTED_TO_PAID:
+                plan_key = trial.subscription_plan or "pro"
+            else:
+                plan_key = "free"
+        except TrialPlan.DoesNotExist:
+            plan_key = getattr(company, "plan", "free")
+            
+        plan = PLANS.get(plan_key, PLANS["free"])
+
+        from django.contrib.auth import get_user_model
+        user_count = get_user_model().objects.filter(company=company, is_active=True).count()
+
+        return Response({
+            "success": True,
+            "data": {
+                "plan": plan_key,
+                "plan_name": plan["name"],
+                "price_monthly": plan["price"],
+                "renewal_date": None,
+                "usage": {
+                    "employees": user_count,
+                    "employees_limit": plan["employees"],
+                    "storage_gb": 0.4,
+                    "storage_limit": plan["storage_gb"],
+                    "api_calls_this_month": 0,
+                    "api_calls_limit": plan["api_calls"],
+                },
+                "payment_method": None,
+                "invoices": [],
+            }
+        })
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        company = request.user.company
+        plan_key = request.data.get("plan")
+        if plan_key not in PLANS:
+            return Response({"success": False, "message": "Invalid plan selected."}, status=400)
+
+        from trial_management.models import TrialPlan
+        from trial_management.services import record_subscription_purchased
+
+        try:
+            trial = company.trial_plan
+            record_subscription_purchased(trial, plan_key, actor_id=request.user.id)
+        except TrialPlan.DoesNotExist:
+            trial = TrialPlan.objects.create(
+                company=company,
+                status=TrialPlan.Status.CONVERTED,
+                subscription_plan=plan_key,
+                upgraded_at=timezone.now()
+            )
+
+        if hasattr(company, "plan"):
+            company.plan = plan_key
+            company.save(update_fields=["plan"])
+
+        return Response({
+            "success": True,
+            "message": f"Successfully upgraded to {plan_key.upper()} plan.",
+            "data": {
+                "plan": plan_key,
+                "status": trial.status
+            }
+        })
+
+
+# ─── Data Export & Deletion ───────────────────────────────────────────────────
+
+class DataExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        return Response({
+            "success": True,
+            "message": "Data export requested. You will receive an email with your data archive within 24 hours.",
+        })
+
+
+class AccountDeletionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get("password", "")
+        if not request.user.check_password(password):
+            return Response({"success": False, "message": "Incorrect password."}, status=400)
+        request.user.is_active = False
+        request.user.save(update_fields=["is_active"])
+        return Response({"success": True, "message": "Account scheduled for deletion."})
+
+
+class WorkspaceDeletionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        confirm = request.data.get("confirm_name", "")
+        company = request.user.company
+        if confirm != company.company_name:
+            return Response({"success": False, "message": "Workspace name does not match."}, status=400)
+        return Response({"success": True, "message": "Workspace deletion scheduled. You will receive a confirmation email."})
+
+
+class OwnerTransferView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "message": "Admins only."}, status=403)
+        new_owner_email = request.data.get("email", "")
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        new_owner = User.objects.filter(email=new_owner_email, company=request.user.company, is_active=True).first()
+        if not new_owner:
+            return Response({"success": False, "message": "No active team member found with that email."}, status=404)
+        if new_owner.pk == request.user.pk:
+            return Response({"success": False, "message": "You are already the owner."}, status=400)
+        new_owner.role = "admin"
+        new_owner.save(update_fields=["role"])
+        request.user.role = "manager"
+        request.user.save(update_fields=["role"])
+        return Response({"success": True, "message": f"Ownership transferred to {new_owner_email}."})

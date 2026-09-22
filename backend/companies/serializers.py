@@ -1,0 +1,104 @@
+from rest_framework import serializers
+from .models import Company, Region
+
+
+class RegionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Region
+        fields = [
+            "id",
+            "code",
+            "name",
+            "currency",
+            "currency_symbol",
+            "date_format",
+            "week_start",
+            "overtime_weekly_hours",
+            "max_weekly_hours",
+            "statutory_leave_days",
+            "tax_year_start_month",
+            "tax_year_start_day",
+            "payroll_frequency",
+            "min_wage",
+            "national_insurance_enabled",
+            "paye_enabled",
+            "flsa_enabled",
+            "state_tax_enabled",
+        ]
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    region_detail = RegionSerializer(source="region", read_only=True)
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = [
+            "id",
+            "company_name",
+            "display_id",
+            "slug",
+            "industry",
+            "website",
+            "timezone",
+            "data_region",
+            "address",
+            "logo",
+            "logo_url",
+            "primary_country",
+            "region",
+            "region_detail",
+            "default_state",
+            "compliance_mode",
+            "shift_enforcement_mode",
+            "allowed_countries",
+            "team_size",
+            "selected_modules",
+            "module_permissions",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "display_id", "slug", "region_detail", "created_at", "updated_at", "logo_url"]
+
+    def get_logo_url(self, obj):
+        if obj.logo:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.logo.url)
+            return obj.logo.url
+        return None
+
+    def validate(self, data):
+        primary_country = data.get("primary_country", getattr(self.instance, "primary_country", None))
+        default_state = data.get("default_state", getattr(self.instance, "default_state", None))
+
+        if primary_country in ["US", "IN"] and not default_state:
+            raise serializers.ValidationError(
+                {"default_state": f"Default state is required for {primary_country}-based companies."}
+            )
+        return data
+
+    def create(self, validated_data):
+        # Auto-resolve region from primary_country when not explicitly provided
+        if "region" not in validated_data:
+            country = validated_data.get("primary_country", "US")
+            try:
+                validated_data["region"] = Region.objects.get(code=country)
+            except Region.DoesNotExist:
+                pass
+        company = Company(**validated_data)
+        if self.context.get("skip_trial_activation"):
+            company._skip_trial_activation = True
+        company.save()
+        return company
+
+    def update(self, instance, validated_data):
+        # If primary_country changes, update region too
+        new_country = validated_data.get("primary_country")
+        if new_country and new_country != instance.primary_country:
+            try:
+                validated_data["region"] = Region.objects.get(code=new_country)
+            except Region.DoesNotExist:
+                pass
+        return super().update(instance, validated_data)
