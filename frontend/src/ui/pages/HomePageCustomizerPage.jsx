@@ -31,7 +31,7 @@ const HERO_ILLUSTRATION_PRESETS = [
   {
     id: "grocery",
     title: "Food, Health & Farm Fresh Delivery",
-    description: "Fresh groceries & vegetables delivery photo",
+    description: "Farm-fresh vegetables delivery photo",
     url: "/assets/sevo_photo_food_health.jpg"
   },
   {

@@ -36,6 +36,8 @@ from .serializers import (
     serialize_service_order,
     serialize_grocery_order,
 )
+from vegetable_orders.models import VegetableOrder, VegetableOrderItem
+from vegetable_orders.serializers import VegetableOrderSerializer, serialize_vegetable_order
 
 
 def _success(data=None, message="", status_code=200):
@@ -76,6 +78,7 @@ def _get_company(request):
 class GroceryCheckoutView(APIView):
     """
     POST /api/orders/grocery/checkout/
+    Checks out active daily essentials (vegetables) cart into a VegetableOrder.
     """
     permission_classes = [IsCustomer]
 
@@ -109,15 +112,15 @@ class GroceryCheckoutView(APIView):
 
         try:
             with transaction.atomic():
-                order = GroceryOrder.objects.create(
+                order = VegetableOrder.objects.create(
                     customer=request.user,
                     total_amount=total_amount,
                     delivery_address=delivery_address,
                 )
                 reserve_stock_for_booking_items(stock_request_items, company, booking_ref=order.order_number)
 
-                GroceryOrderItem.objects.bulk_create([
-                    GroceryOrderItem(
+                VegetableOrderItem.objects.bulk_create([
+                    VegetableOrderItem(
                         order=order,
                         package=ci.package,
                         quantity_grams=stock_request_items[i]["quantity"],
@@ -136,26 +139,32 @@ class GroceryCheckoutView(APIView):
                 errors=[{"product_name": exc.product_name, "requested_grams": exc.requested_grams}],
             )
 
-        return _success(GroceryOrderSerializer(order).data, status_code=status.HTTP_201_CREATED)
+        return _success(VegetableOrderSerializer(order).data, status_code=status.HTTP_201_CREATED)
 
 
 class MyOrdersView(APIView):
     """
     GET /api/orders/my/
 
-    Phase 6: read-only merge of Order (services) and GroceryOrder (daily
-    essentials) for the current customer, normalized into a common shape
-    and sorted by date. No writes happen through this endpoint -- the two
-    tables stay independent on the write side per the approved architecture.
+    Phase 6: read-only merge of Order (services), VegetableOrder (vegetables),
+    and legacy/standalone GroceryOrder for the current customer, normalized into
+    a common shape and sorted by date.
     """
     permission_classes = [IsCustomer]
 
     def get(self, request):
+        # Read-only merge across order families:
+        # - Order: Service bookings
+        # - VegetableOrder: Dedicated vegetable produce orders
+        # - GroceryOrder: Kept as a safety net / backward-compatibility hook for any future grocery
+        #   orders built by the grocery team (currently returns 0 rows after the vegetable migration).
         service_orders = Order.objects.filter(customer=request.user).prefetch_related("items__service_request")
+        vegetable_orders = VegetableOrder.objects.filter(customer=request.user).prefetch_related("items__package")
         grocery_orders = GroceryOrder.objects.filter(customer=request.user).prefetch_related("items__package")
 
         merged = (
             [serialize_service_order(o) for o in service_orders]
+            + [serialize_vegetable_order(o) for o in vegetable_orders]
             + [serialize_grocery_order(o) for o in grocery_orders]
         )
         merged.sort(key=lambda entry: entry["created_at"], reverse=True)

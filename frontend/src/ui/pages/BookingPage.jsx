@@ -4573,6 +4573,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   // write side per the architecture, this view only merges them visually.
   const [groceryOrders, setGroceryOrders] = useState([])
   const [groceryOrdersLoading, setGroceryOrdersLoading] = useState(false)
+  const [returnModalOrder, setReturnModalOrder] = useState(null)
+  const [returnItem, setReturnItem] = useState("")
+  const [returnReason, setReturnReason] = useState("DAMAGED_OR_SPOILED")
+  const [returnNotes, setReturnNotes] = useState("")
+  const [submittingReturn, setSubmittingReturn] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(null)
+  const [returnError, setReturnError] = useState(null)
   // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
   // each fetches only when its tab is activated, matching the existing
   // My Bookings fetch-on-activate pattern immediately above.
@@ -4798,7 +4805,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         apiRequest("/orders/my/")
           .then(res => {
             const merged = Array.isArray(res?.data) ? res.data : []
-            setGroceryOrders(merged.filter(o => o.order_type === "grocery"))
+            setGroceryOrders(merged.filter(o => o.order_type === "grocery" || o.order_type === "vegetable"))
           })
           .catch(console.error)
           .finally(() => {
@@ -6411,12 +6418,237 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             ))}
                           </div>
                         )}
-                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total</span>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total: </span>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                          </div>
+                          {String(o.status_label || '').toLowerCase().includes('delivered') && (
+                            <button
+                              onClick={() => {
+                                setReturnModalOrder(o)
+                                setReturnItem("")
+                                setReturnReason("DAMAGED_OR_SPOILED")
+                                setReturnNotes("")
+                                setReturnSuccess(null)
+                                setReturnError(null)
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Request Return
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Customer Return Request Modal */}
+              {returnModalOrder && (
+                <div style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 9999,
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 16,
+                }}>
+                  <div style={{
+                    background: 'white',
+                    borderRadius: 16,
+                    maxWidth: 440,
+                    width: '100%',
+                    padding: 20,
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                        Return Request for #{returnModalOrder.order_number}
+                      </h4>
+                      <button
+                        onClick={() => setReturnModalOrder(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#94a3b8' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {returnSuccess ? (
+                      <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.85rem', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>✅</div>
+                        <div style={{ fontWeight: 800, marginBottom: 4 }}>Return Request Submitted!</div>
+                        <div>Our support team will review your request and process resolution shortly.</div>
+                        <button
+                          onClick={() => setReturnModalOrder(null)}
+                          style={{
+                            marginTop: 12,
+                            padding: '8px 16px',
+                            borderRadius: 8,
+                            background: '#059669',
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault()
+                          setSubmittingReturn(true)
+                          setReturnError(null)
+                          try {
+                            const res = await apiRequest('/vegetable-orders/customer/returns/', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                order_id: returnModalOrder.id,
+                                item_id: returnItem ? parseInt(returnItem, 10) : null,
+                                reason: returnReason,
+                                customer_notes: returnNotes.trim(),
+                              }),
+                            })
+                            if (res?.success) {
+                              setReturnSuccess(true)
+                            } else {
+                              setReturnError(res?.message || 'Failed to submit return request.')
+                            }
+                          } catch (err) {
+                            setReturnError('Network error while submitting return.')
+                          } finally {
+                            setSubmittingReturn(false)
+                          }
+                        }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                      >
+                        {returnError && (
+                          <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: '0.78rem' }}>
+                            {returnError}
+                          </div>
+                        )}
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Which item is affected?
+                          </label>
+                          <select
+                            value={returnItem}
+                            onChange={(e) => setReturnItem(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="">Entire Order</option>
+                            {Array.isArray(returnModalOrder.detail?.items) && returnModalOrder.detail.items.map((it) => (
+                              <option key={it.id || it.package_id || it.package_name} value={it.id || ''}>
+                                {it.package_name} ({it.quantity_grams}g) — ₹{it.line_amount}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Reason for Return *
+                          </label>
+                          <select
+                            value={returnReason}
+                            onChange={(e) => setReturnReason(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="DAMAGED_OR_SPOILED">Damaged / Spoiled Produce</option>
+                            <option value="WRONG_ITEM">Wrong Item Received</option>
+                            <option value="SHORT_QUANTITY">Short Weight / Missing Item</option>
+                            <option value="POOR_QUALITY">Poor Quality / Stale</option>
+                            <option value="OTHER">Other Issue</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Additional Details
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder="Tell us what went wrong..."
+                            value={returnNotes}
+                            onChange={(e) => setReturnNotes(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnModalOrder(null)}
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              background: 'white',
+                              color: '#475569',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={submittingReturn}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#dc2626',
+                              color: 'white',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {submittingReturn ? 'Submitting...' : 'Submit Request'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}

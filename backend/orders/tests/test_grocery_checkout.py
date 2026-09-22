@@ -15,9 +15,10 @@ from rest_framework.test import APIClient
 from companies.models import Company
 from service_requests.models import CatalogCategory, Service, Package
 from inventory.services import vegetable_stock_service
-from inventory.models import StockMovement
+from inventory.models import VegetableStockMovement
 from carts.models import Cart, CartItem, CartType, CartStatus
 from orders.models import GroceryOrder, GroceryOrderItem
+from vegetable_orders.models import VegetableOrder, VegetableOrderItem
 
 User = get_user_model()
 
@@ -66,7 +67,7 @@ class GroceryCheckoutTests(TestCase):
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 0)
 
-        order = GroceryOrder.objects.get(id=res.data["data"]["id"])
+        order = VegetableOrder.objects.get(id=res.data["data"]["id"])
         self.assertEqual(order.items.count(), 1)
         self.assertEqual(order.items.first().quantity_grams, 1000)
 
@@ -102,8 +103,9 @@ class GroceryCheckoutTests(TestCase):
             "This quantity is no longer available. Please reduce the quantity and try again.",
         )
 
-        # Nothing persisted: no order, no order items, no stock movement, stock untouched
-        self.assertFalse(GroceryOrder.objects.exists())
+        # Nothing created
+        self.assertFalse(VegetableOrder.objects.exists())
+        self.assertFalse(VegetableOrderItem.objects.exists())
         self.assertFalse(GroceryOrderItem.objects.exists())
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 1000)
@@ -130,7 +132,7 @@ class GroceryCheckoutTests(TestCase):
         # Atomic rollback: tomato stock must remain untouched even though it had enough
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 10000)
-        self.assertFalse(GroceryOrder.objects.exists())
+        self.assertFalse(VegetableOrder.objects.exists())
 
     def test_checkout_with_empty_cart_rejected(self):
         res = self.client.post(
@@ -139,7 +141,7 @@ class GroceryCheckoutTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
-        self.assertFalse(GroceryOrder.objects.exists())
+        self.assertFalse(VegetableOrder.objects.exists())
 
     def test_checkout_requires_delivery_address(self):
         vegetable_stock_service.add_stock(self.pkg_tomato, 1, "kg", self.company)
@@ -147,7 +149,7 @@ class GroceryCheckoutTests(TestCase):
 
         res = self.client.post("/api/orders/grocery/checkout/", {}, format="json")
         self.assertEqual(res.status_code, 400)
-        self.assertFalse(GroceryOrder.objects.exists())
+        self.assertFalse(VegetableOrder.objects.exists())
 
     def test_checkout_booking_ref_matches_order_number_on_stock_movement(self):
         vegetable_stock_service.add_stock(self.pkg_tomato, 1, "kg", self.company)
@@ -159,8 +161,8 @@ class GroceryCheckoutTests(TestCase):
             format="json",
         )
         order_number = res.data["data"]["order_number"]
-        movement = StockMovement.objects.filter(
-            booking_ref=order_number, movement_type=StockMovement.MovementType.SOLD,
+        movement = VegetableStockMovement.objects.filter(
+            booking_ref=order_number, movement_type=VegetableStockMovement.MovementType.SOLD,
         ).first()
         self.assertIsNotNone(movement)
 
@@ -172,4 +174,4 @@ class GroceryCheckoutTests(TestCase):
         # No ACTIVE cart left -- a second checkout attempt is rejected as empty, not double-charged
         res = self.client.post("/api/orders/grocery/checkout/", {"delivery_address": "123 Market St"}, format="json")
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(GroceryOrder.objects.count(), 1)
+        self.assertEqual(VegetableOrder.objects.count(), 1)

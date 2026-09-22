@@ -43,14 +43,20 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     service_customization = serializers.JSONField(source="service.customization", read_only=True)
     service_sort_order = serializers.IntegerField(source="service.sort_order", read_only=True)
     service_image = serializers.CharField(source="service.image", read_only=True)
-    category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    category_slug = serializers.CharField(source="service.category.slug", read_only=True, default=None)
+    vegetable_category_name = serializers.CharField(source="stock_item.category.name", read_only=True, default=None)
+    vegetable_category_slug = serializers.CharField(source="stock_item.category.slug", read_only=True, default=None)
+    vegetable_category_parent_name = serializers.CharField(source="stock_item.category.parent.name", read_only=True, default=None)
+    vegetable_category_full_path = serializers.CharField(source="stock_item.category.full_path", read_only=True, default=None)
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
         fields = [
-            "id", "category", "category_slug", "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
+            "id", "category", "category_slug",
+            "vegetable_category_name", "vegetable_category_slug", "vegetable_category_parent_name", "vegetable_category_full_path",
+            "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
             "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",
@@ -174,6 +180,7 @@ class PackageSerializer(serializers.ModelSerializer):
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
+    vegetable_category = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
 
     class Meta:
@@ -193,6 +200,17 @@ class PackageSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
+
+    def get_vegetable_category(self, obj):
+        item = getattr(obj, "stock_item", None)
+        if item and item.category:
+            return {
+                "id": item.category.id,
+                "name": item.category.name,
+                "slug": item.category.slug,
+                "image": item.category.image,
+            }
+        return None
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
