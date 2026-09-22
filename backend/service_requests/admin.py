@@ -25,25 +25,6 @@ class CatalogCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceRequest)
 class ServiceRequestAdmin(admin.ModelAdmin):
-    list_display = (
-        'request_id', 'customer_name', 'phone', 'service_category',
-        'status', 'payment_status', 'dispatch_status', 'dispatch_attempts',
-        'workforce_job_id', 'created_at'
-    )
-    list_filter = ('dispatch_status', 'status', 'payment_status', 'service_category')
-    search_fields = ('request_id', 'customer_name', 'phone', 'workforce_job_id')
-    readonly_fields = ('last_dispatched_at', 'last_dispatch_error', 'dispatch_attempts')
-    actions = ['retry_workforce_dispatch']
-
-    @admin.action(description="Retry workforce dispatch for selected bookings")
-    def retry_workforce_dispatch(self, request, queryset):
-        from service_requests.tasks import async_dispatch_service_request
-        count = 0
-        for sr in queryset:
-            try:
-                async_dispatch_service_request.delay(sr.id)
-            except Exception:
-                async_dispatch_service_request(sr.id)
-            count += 1
-        self.message_user(request, f"Triggered workforce dispatch for {count} booking(s).")
-
+    list_display = ('request_id', 'customer_name', 'phone', 'service_category', 'status', 'payment_status', 'created_at')
+    list_filter = ('status', 'payment_status', 'service_category')
+    search_fields = ('request_id', 'customer_name', 'phone')
