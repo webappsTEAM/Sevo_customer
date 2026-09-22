@@ -803,8 +803,11 @@ export function ModernServiceCatalogView({
             {/* Active Service Spotlight Card -- Blinkit-style compact, fit-to-screen */}
             <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[110px] sm:min-h-[220px] lg:min-h-[280px] flex items-end">
               <img
-                key={selectedPackage?.image || activeSubService?.image || category?.image}
-                src={resolveImageUrl(selectedPackage?.image || activeSubService?.image || category?.image)}
+                key={selectedPackage?.image || activeSubService?.image || category?.image || "spotlight"}
+                src={resolveImageUrl(
+                  selectedPackage?.image || activeSubService?.image || category?.image,
+                  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+                )}
                 alt={selectedPackage?.name || "Service hero"}
                 className="absolute inset-0 w-full h-full object-cover"
                 onError={(e) => {

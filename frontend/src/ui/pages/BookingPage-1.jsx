@@ -2471,9 +2471,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
+  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
+  const [changeNotes, setChangeNotes] = useState("")
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
-  const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
@@ -2503,7 +2505,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
-      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
+      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token || liveData?.quote?.quote_number
       if (!quoteToken) return
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
@@ -2513,16 +2515,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         },
         body: JSON.stringify({
           decision,
+          action: decision === "CUSTOMER_ACCEPTED" ? "ACCEPT" : decision === "CHANGE_REQUESTED" ? "REQUEST_CHANGES" : "DECLINE",
           reason_code: reasonCode,
-          reason_notes: reasonNotes
+          reason_notes: reasonNotes,
+          notes: reasonNotes,
+          reason: reasonCode || reasonNotes,
+          customer_notes: reasonNotes,
+          decline_reason: reasonNotes,
         })
       })
-      const result = await response.json()
-      if (result.success) {
-        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
+      const result = await response.json().catch(() => ({}))
+      if (response.ok || result.success) {
+        const actionText = decision === "CUSTOMER_ACCEPTED" ? "accepted" : decision === "CHANGE_REQUESTED" ? "re-quotation requested" : "declined"
+        alert(`Quotation ${actionText} successfully!`)
         window.location.reload()
       } else {
-        alert("Error saving quote decision: " + (result.message || "Unknown error"))
+        alert("Error saving quote decision: " + (result.message || result.error || "Unknown error"))
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
@@ -2539,14 +2547,81 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     let isFetching = false
     const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
+    // Resolve initial token from props, URL query parameters, or sessionStorage cache
+    let initialToken = successData?.tracking_token || successData?.booking?.tracking_token || liveData?.tracking_token
+    if (!initialToken && typeof window !== "undefined") {
+      try {
+        const urlParams = new URLSearchParams(window.location.search)
+        initialToken = urlParams.get("token")
+      } catch (_) { }
+      if (!initialToken) {
+        try {
+          const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
+          if (cached?.request_id === rid || String(cached?.id) === String(rid)) {
+            initialToken = cached.tracking_token
+          }
+        } catch (_) { }
+      }
+    }
+
+    let activeToken = initialToken
+
+    const startWebSocket = (tokenToUse) => {
+      if (!isMounted) return
+      if (ws) {
+        try { ws.close() } catch (_) { }
+        ws = null
+      }
+      try {
+        ws = createTrackingWebSocket(
+          rid,
+          tokenToUse,
+          (eventType, eventData) => {
+            if (!isMounted || !eventData) return
+            setLiveData(prev => {
+              const merged = {
+                ...(prev || {}),
+                ...(eventData?.booking || eventData || {}),
+              }
+              if (eventData?.status || eventData?.booking?.status) {
+                merged.status = eventData.status || eventData.booking.status
+              }
+              if (eventData?.technician || eventData?.booking?.technician) {
+                merged.technician = {
+                  ...(prev?.technician || {}),
+                  ...(eventData.technician || eventData.booking?.technician || {})
+                }
+              }
+              if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
+                merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
+              }
+              try {
+                sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
+              } catch (_) { }
+              return merged
+            })
+          },
+          (state) => {
+            if (isMounted) setWsState(state)
+          }
+        )
+      } catch (err) {
+        console.warn("[LiveTrackingPage] WS init error:", err)
+      }
+    }
+
     const fetchStatus = async () => {
       if (isFetching) return          // skip cycle if previous request still in-flight
       isFetching = true
       try {
-        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+        const tokenQuery = activeToken ? `?token=${encodeURIComponent(activeToken)}` : ""
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
+          if (res.data.tracking_token && !activeToken) {
+            activeToken = res.data.tracking_token
+            startWebSocket(activeToken)
+          }
           try {
             sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
           } catch (_) { }
@@ -2567,42 +2642,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     // 2. High-frequency auto-refresh polling (every 2.5s)
     pollTimer = setInterval(fetchStatus, 2500)
 
-    // 3. Connect real-time WebSocket channel for instant push notifications
-    try {
-      ws = createTrackingWebSocket(
-        rid,
-        successData?.tracking_token,
-        (eventType, eventData) => {
-          if (!isMounted || !eventData) return
-          setLiveData(prev => {
-            const merged = {
-              ...(prev || {}),
-              ...(eventData?.booking || eventData || {}),
-            }
-            if (eventData?.status || eventData?.booking?.status) {
-              merged.status = eventData.status || eventData.booking.status
-            }
-            if (eventData?.technician || eventData?.booking?.technician) {
-              merged.technician = {
-                ...(prev?.technician || {}),
-                ...(eventData.technician || eventData.booking?.technician || {})
-              }
-            }
-            if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
-              merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
-            }
-            try {
-              sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
-            } catch (_) { }
-            return merged
-          })
-        },
-        (state) => {
-          if (isMounted) setWsState(state)
-        }
-      )
-    } catch (err) {
-      console.warn("[LiveTrackingPage] WS init error:", err)
+    // 3. Connect real-time WebSocket channel (when token is available, else fetchStatus will initiate it)
+    if (activeToken) {
+      startWebSocket(activeToken)
     }
 
     return () => {
@@ -3450,231 +3492,436 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       )}
 
       {/* ─────────────────── ACTIVE QUOTE DECISION CARD (PHASE 3) ─────────────────── */}
-      {liveData?.quote && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: '1.5rem',
-            marginBottom: '1rem',
-            boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
-            border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
-              }`,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Quotation Details
+      {liveData?.quote && (liveData.quote.id || liveData.quote.quote_id || liveData.quote.quote_number) && liveData.quote.has_quote !== false && (() => {
+        const q = liveData.quote
+        const qStatus = String(q.status || "").toUpperCase()
+        const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
+        const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
+        const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
+        const isPending = [
+          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
+          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
+          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
+          "DRAFT", "VIEWED", "NEW", "OPEN"
+        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        
+        const totalEst = q.grand_total || q.total_amount || q.net_payable || 0
+        const itemsList = Array.isArray(q.items) ? q.items : []
+        const measurementsList = Array.isArray(q.measurements) ? q.measurements : []
+        const totalArea = q.total_paintable_area || q.total_area || measurementsList.reduce((acc, m) => acc + (Number(m.final_area || m.calculated_area || 0)), 0)
+
+        return (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.4rem',
+              marginBottom: '1rem',
+              boxShadow: '0 8px 30px rgba(79, 70, 229, 0.12)',
+              border: `2px solid ${isPending ? "#4F46E5" : isAccepted ? "#10B981" : isChangesRequested ? "#F59E0B" : "#EF4444"}`,
+            }}
+          >
+            {/* Header: Title, Number, Status Badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Quotation Details
+                  </span>
+                  {q.quote_number && (
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 6, fontFamily: 'monospace' }}>
+                      #{q.quote_number} {q.quote_version > 1 ? `(v${q.quote_version})` : ''}
+                    </span>
+                  )}
+                </div>
+                <h3 style={{ margin: '4px 0 0', fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+                  Total Estimate: ₹{totalEst}
+                </h3>
               </div>
-              <h3 style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
-                Total Estimate: ₹{liveData.quote.total_amount}
-              </h3>
-            </div>
-            <span style={{
-              fontSize: '0.72rem',
-              padding: '4px 10px',
-              borderRadius: 8,
-              fontWeight: 800,
-              background:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              color:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
-            }}>
-              {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
-                  liveData.quote.status === "CONVERTED" ? "Converted to Work" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
-                      liveData.quote.status.replace(/_/g, " ")}
-            </span>
-          </div>
-
-          <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
-            Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
-          </div>
-
-          {/* Status-specific alert message */}
-          {liveData.quote.status !== "SENT_TO_CUSTOMER" && (
-            <div style={{
-              padding: '10px 14px',
-              borderRadius: 12,
-              marginBottom: 16,
-              textAlign: 'left',
-              background:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
-                }`,
-              color:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
-              fontSize: '0.82rem',
-              fontWeight: 700
-            }}>
-              {(liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED") && "✓ You have accepted this quotation. Creating your service booking..."}
-              {liveData.quote.status === "CONVERTED" && "✓ Booking confirmed! Your service request has been scheduled."}
-              {liveData.quote.status === "CHANGES_REQUESTED" && `⚠ Changes requested: "${liveData.quote.customer_notes || 'Please adjust the items'}"`}
-              {liveData.quote.status === "DECLINED" && `✗ You declined this quotation: "${liveData.quote.customer_decline_reason || 'Other reason'}"`}
-            </div>
-          )}
-
-          {/* Expandable items section */}
-          <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-            <button
-              onClick={() => setQuoteExpanded(!quoteExpanded)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px 14px',
-                background: '#f8fafc',
-                border: 'none',
-                cursor: 'pointer',
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '4px 10px',
+                borderRadius: 8,
                 fontWeight: 800,
-                fontSize: '0.82rem',
-                color: '#0f172a'
-              }}
-            >
-              <span>{quoteExpanded ? "Hide Line Items" : "View Line Items"}</span>
-              <span>{quoteExpanded ? "▲" : "▼"}</span>
-            </button>
-            {quoteExpanded && (
-              <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.items && liveData.quote.items.map((item, idx) => (
-                  <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                    <div>
-                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
-                        {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 900, color: '#0f172a' }}>
-                      ₹{item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "0" : (item.total_amount ?? ((item.unit_price ?? item.price ?? 0) * (item.quantity ?? 1)))}
-                    </div>
-                  </div>
-                ))}
+                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+              }}>
+                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+              </span>
+            </div>
+
+            {/* Quick Meta Specs (Validity, Area in Sq.Ft, Property Type, Warranty) */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontSize: '0.78rem', color: '#475569' }}>
+              {q.valid_until && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={12} color="#64748b" /> Valid till: <strong>{new Date(q.valid_until).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                </span>
+              )}
+              {totalArea > 0 && (
+                <span style={{ background: '#f0fdf4', color: '#166534', padding: '3px 8px', borderRadius: 6, border: '1px solid #bbf7d0', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  📐 Total Area: <strong>{totalArea} sq.ft</strong>
+                </span>
+              )}
+              {q.property_type && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🏠 <strong>{q.property_type}</strong>
+                </span>
+              )}
+              {q.warranty && (
+                <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: 6, border: '1px solid #a7f3d0', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🛡️ <strong>{q.warranty}</strong>
+                </span>
+              )}
+            </div>
+
+            {/* Advance & Balance Payment Schedule if applicable */}
+            {(Number(q.advance_amount || q.invoice?.advance_amount || 0) > 0 || Number(q.balance_amount || q.invoice?.balance_amount || 0) > 0) && (
+              <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 12, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                <span>💰 Advance (Booking/Materials): <strong style={{ color: '#0f172a' }}>₹{q.advance_amount || q.invoice?.advance_amount}</strong></span>
+                <span>Balance on Completion: <strong style={{ color: '#0f172a' }}>₹{q.balance_amount || q.invoice?.balance_amount}</strong></span>
               </div>
             )}
-          </div>
 
-          {/* PDF Download link */}
-          <div style={{ marginBottom: 16 }}>
-            <a
-              href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-            >
-              📄 Download PDF Quotation
-            </a>
-          </div>
-
-          {/* Quote Version History */}
-          {liveData.quote.history && liveData.quote.history.length > 0 && (
-            <div style={{ marginTop: 20, borderTop: '1px dashed #e2e8f0', paddingTop: 16, marginBottom: 16 }}>
-              <h4 style={{ fontSize: '0.78rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.5px' }}>
-                Previous Quotations ({liveData.quote.history.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.history.map((prevQuote) => {
-                  const isExpanded = expandedPrevQuotes[prevQuote.id];
-                  return (
-                    <div key={prevQuote.id} style={{ background: '#f8fafc', borderRadius: 10, padding: 12, border: '1px solid #f1f5f9' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
-                            {prevQuote.quote_number} (v{prevQuote.quote_version})
-                          </span>
-                          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
-                            {prevQuote.status.replace(/_/g, " ")}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <button
-                            onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [prevQuote.id]: !prev[prevQuote.id] }))}
-                            style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
-                          >
-                            {isExpanded ? "Hide Details" : "View Details"}
-                          </button>
-                          <a
-                            href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
-                          >
-                            📄 PDF
-                          </a>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', textAlign: 'left' }}>
-                          <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
-                            <strong>Description:</strong> {prevQuote.description || "No description"}
-                          </p>
-                          <p style={{ margin: '0 0 10px 0', color: '#475569' }}>
-                            <strong>Total Estimate:</strong> ₹{prevQuote.total_amount}
-                          </p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'white', padding: 8, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                            {prevQuote.items && prevQuote.items.map((item, idx) => (
-                              <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                                <span>
-                                  {item.name} (x{item.quantity})
-                                </span>
-                                <span style={{ fontWeight: 700 }}>
-                                  ₹{item.total_amount}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {/* Status-specific alert message (Only shown if NOT pending and has resolved state) */}
+            {(isAccepted || isChangesRequested || isDeclined) && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: 12,
+                marginBottom: 14,
+                textAlign: 'left',
+                background: isAccepted ? "#F0FDF4" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                border: `1px solid ${isAccepted ? "#DCFCE7" : isChangesRequested ? "#FEF3C7" : "#FEE2E2"}`,
+                color: isAccepted ? "#15803D" : isChangesRequested ? "#B45309" : "#C2410C",
+                fontSize: '0.82rem',
+                fontWeight: 700
+              }}>
+                {isAccepted && "✓ You have accepted this quotation. Your service booking is confirmed and scheduled."}
+                {isChangesRequested && `⚠ Re-quotation / Changes requested: "${q.customer_notes || 'Please adjust quotation items & measurements'}"`}
+                {isDeclined && `✗ You declined this quotation: "${q.customer_decline_reason || q.decline_reason || 'Declined by customer'}"`}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Accept / Decline / Request changes buttons */}
-          {liveData.quote.status === "SENT_TO_CUSTOMER" && (
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* ── Measurements Section (Square Feet Room-by-Room Breakdown) ── */}
+            {measurementsList.length > 0 && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#fafafa' }}>
+                <div style={{ padding: '8px 12px', background: '#f1f5f9', fontWeight: 800, fontSize: '0.78rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>📐 Room &amp; Area Measurements</span>
+                  <span style={{ color: '#4F46E5', fontFamily: 'monospace' }}>Total: {totalArea} sq.ft</span>
+                </div>
+                <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {measurementsList.map((m, mIdx) => (
+                    <div key={m.id || mIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', borderBottom: mIdx < measurementsList.length - 1 ? '1px dashed #e2e8f0' : 'none', paddingBottom: 4 }}>
+                      <div>
+                        <strong style={{ color: '#0f172a' }}>{m.area_name || `Area ${mIdx + 1}`}</strong>
+                        {m.length && m.width && (
+                          <span style={{ color: '#64748b', marginLeft: 6 }}>
+                            ({m.length}ft × {m.width}ft{m.height ? ` × ${m.height}ft` : ''})
+                          </span>
+                        )}
+                        {Number(m.deductions || 0) > 0 && (
+                          <span style={{ color: '#dc2626', marginLeft: 6 }}>
+                            (Deductions: -{m.deductions} sq.ft)
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                        {m.final_area || m.calculated_area} sq.ft
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Expandable Line Items Section with Rate, Quantity, Square Feet ── */}
+            <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <button
-                onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                onClick={() => setQuoteExpanded(!quoteExpanded)}
                 style={{
-                  flex: 1.2,
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                   padding: '10px 14px',
-                  background: 'linear-gradient(135deg, #10B981, #059669)',
-                  color: 'white',
+                  background: '#f8fafc',
+                  border: 'none',
+                  cursor: 'pointer',
                   fontWeight: 800,
                   fontSize: '0.82rem',
-                  border: 'none',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                  color: '#0f172a'
                 }}
               >
-                Accept Quote
+                <span>{quoteExpanded ? "Hide Line Items" : "View Line Items & Breakdown"} ({itemsList.length} items)</span>
+                <span>{quoteExpanded ? "▲" : "▼"}</span>
               </button>
+
+              {quoteExpanded && (
+                <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {itemsList.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '8px 0' }}>
+                      Complete package estimation provided.
+                    </div>
+                  ) : (
+                    itemsList.map((item, idx) => {
+                      const itemName = item.name || item.description || item.category || "Quotation Item"
+                      const itemDesc = item.description && item.description !== item.name ? item.description : (item.category || item.classification || "")
+                      const qty = Number(item.quantity) || 1
+                      const unit = item.unit || (item.category?.toLowerCase()?.includes('paint') ? 'sq.ft' : 'Unit')
+                      const rate = item.final_rate ?? item.unit_price ?? item.proposed_rate ?? item.base_rate ?? item.price ?? 0
+                      const itemTotalAmount = item.total_amount ?? item.amount ?? (rate * qty)
+
+                      return (
+                        <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.8rem', paddingBottom: 8, borderBottom: idx < itemsList.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                          <div style={{ flex: 1, paddingRight: 10 }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                              {itemName}
+                            </div>
+                            {itemDesc && (
+                              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+                                {itemDesc}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                              <span style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                                {qty} {unit} × ₹{rate}/{unit}
+                              </span>
+                              {item.classification && (
+                                <span style={{ color: '#059669', fontWeight: 700 }}>
+                                  ({item.classification === 'both' ? 'Material + Labour' : item.classification.toUpperCase()})
+                                </span>
+                              )}
+                              {(item.warranty_tier || item.warranty_months) && (
+                                <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                                  🛡️ {item.warranty_tier || `${item.warranty_months} mo warranty`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
+                            ₹{itemTotalAmount}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+
+                  {/* Financial calculation sub-breakdown */}
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: '#64748b' }}>
+                    {Number(q.subtotal || q.subtotal_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Subtotal</span>
+                        <span>₹{q.subtotal || q.subtotal_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.discount || q.discount_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                        <span>Discount</span>
+                        <span>-₹{q.discount || q.discount_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.tax || q.tax_amount || q.gst_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>GST / Taxes</span>
+                        <span>₹{q.tax || q.tax_amount || q.gst_amount}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '0.84rem', color: '#0f172a', borderTop: '1px solid #f1f5f9', paddingTop: 4 }}>
+                      <span>Net Total</span>
+                      <span>₹{totalEst}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PDF Download link */}
+            <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <a
+                href={`/api/booking/quote/${encodeURIComponent(q.decision_token || q.customer_decision_token || q.raw_quote_number || q.quote_number || q.quote_id)}/pdf/?download=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={`Quotation_${q.raw_quote_number || q.quote_number || 'Quotation'}.pdf`}
+                style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+              >
+                📄 Download PDF Quotation
+              </a>
+            </div>
+
+            {/* Quote Version History */}
+            {q.history && q.history.length > 0 && (
+              <div style={{ marginTop: 14, borderTop: '1px dashed #e2e8f0', paddingTop: 12, marginBottom: 14 }}>
+                <h4 style={{ fontSize: '0.75rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>
+                  Previous Revisions ({q.history.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {q.history.map((prevQuote) => {
+                    const isExpanded = expandedPrevQuotes[prevQuote.id]
+                    return (
+                      <div key={prevQuote.id} style={{ background: '#f8fafc', borderRadius: 10, padding: 10, border: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
+                              {prevQuote.quote_number} (v{prevQuote.quote_version})
+                            </span>
+                            <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
+                              {prevQuote.status?.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [prevQuote.id]: !prev[prevQuote.id] }))}
+                            style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                          >
+                            {isExpanded ? "Hide" : "View"}
+                          </button>
+                        </div>
+                        {isExpanded && (
+                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                            <p style={{ margin: '0 0 6px 0', color: '#475569' }}>
+                              <strong>Total Estimate:</strong> ₹{prevQuote.total_amount || prevQuote.grand_total}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Action Buttons: Accept Quote / Request Changes / Decline ── */}
+            {isPending && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                  style={{
+                    flex: '1.2 1 140px',
+                    padding: '11px 14px',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Check size={16} /> Accept Quote
+                </button>
+                <button
+                  onClick={() => setShowRequestChangesModal(true)}
+                  style={{
+                    flex: '1 1 120px',
+                    padding: '11px 14px',
+                    background: '#fffbeb',
+                    color: '#92400e',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fde68a',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <MessageSquare size={15} /> Request Changes
+                </button>
+                <button
+                  onClick={() => setShowDeclineReasonModal(true)}
+                  style={{
+                    flex: '0.9 1 100px',
+                    padding: '11px 14px',
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fecaca',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Ban size={15} /> Decline
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      })()}
+
+      {/* ── Request Changes / Re-Quote Modal Overlay ── */}
+      {showRequestChangesModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.75rem',
+              maxWidth: 440,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+              Request Changes / Re-Quotation
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#64748b' }}>
+              Tell our service professional what you would like modified (e.g. adjust square feet, change paint brand, remove an area, update pricing):
+            </p>
+
+            <textarea
+              placeholder="e.g., Please change the paint brand to Royal Luxury Emulsion, adjust square footage for living room to 350 sq.ft, and exclude balcony..."
+              value={changeNotes}
+              onChange={(e) => setChangeNotes(e.target.value)}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                height: 100,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1.5px solid #cbd5e1',
+                fontSize: '0.85rem',
+                fontFamily: 'inherit',
+                marginBottom: 16,
+                resize: 'none',
+                outline: 'none'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => {
-                  handleQuoteDecision("CHANGE_REQUESTED");
+                  setShowRequestChangesModal(false)
+                  setChangeNotes("")
                 }}
                 style={{
-                  flex: 1,
-                  padding: '10px 14px',
+                  padding: '9px 16px',
                   background: '#f1f5f9',
                   color: '#0f172a',
                   fontWeight: 800,
@@ -3684,27 +3931,34 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   cursor: 'pointer'
                 }}
               >
-                Request Changes
+                Cancel
               </button>
               <button
-                onClick={() => setShowDeclineReasonModal(true)}
+                onClick={() => {
+                  if (!changeNotes.trim()) {
+                    alert("Please enter what changes you would like to request.")
+                    return
+                  }
+                  handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
+                  setShowRequestChangesModal(false)
+                }}
                 style={{
-                  flex: 1,
-                  padding: '10px 14px',
-                  background: '#fef2f2',
-                  color: '#dc2626',
+                  padding: '9px 18px',
+                  background: '#f59e0b',
+                  color: 'white',
                   fontWeight: 800,
                   fontSize: '0.82rem',
                   border: 'none',
                   borderRadius: 10,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
                 }}
               >
-                Decline
+                Send Request
               </button>
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+        </div>
       )}
 
       {/* Decline Reason Modal Overlay */}
@@ -9267,6 +9521,17 @@ function StepWorkflowCheckout({
     quantity: 1
   }]
 
+  const categoryKey = useMemo(() => {
+    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
+    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
+    return "general";
+  }, [category, items]);
+
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const isPaintingOrMason = Boolean(
     category?.id === "painting" ||
@@ -9344,17 +9609,6 @@ function StepWorkflowCheckout({
     ]
   };
 
-  const categoryKey = useMemo(() => {
-    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
-    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
-    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
-    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
-    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
-    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
-    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
-    return "general";
-  }, [category, items]);
-
   const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
 
   useEffect(() => {
@@ -9400,19 +9654,20 @@ function StepWorkflowCheckout({
   }, [categoryKey, category]);
 
   const displayCategoryTitle = useMemo(() => {
+    if (category?.name && category.name !== "General Service") return category.name;
     if (cart && cart.length > 0) {
       if (cart[0].categoryName) return cart[0].categoryName;
       const first = (cart[0].id + " " + cart[0].name + " " + (cart[0].category || "")).toLowerCase();
+      if (first.includes("waterproof") || first.includes("tar sheet") || first.includes("terrace") || first.includes("seepage")) return "Waterproofing Services";
+      if (first.includes("paint") || first.includes("whitewash")) return "Painting & Wall Care";
+      if (first.includes("mason") || first.includes("tile") || first.includes("brick") || first.includes("plaster")) return "Masonry Services";
       if (first.includes("carp") || first.includes("lock") || first.includes("handle") || first.includes("door") || first.includes("furniture") || first.includes("hinge")) return "Carpentry Services";
-      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wire")) return "Electrical Services";
-      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("leak") || first.includes("mixer")) return "Plumbing Services";
-      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("appliance")) return "Appliance Service & Repair";
-      if (first.includes("ac") || first.includes("foam") || first.includes("jet") || first.includes("heating") || first.includes("hvac")) return "AC & Heating";
-      if (first.includes("clean") || first.includes("sofa") || first.includes("kitchen") || first.includes("bath")) return "Home Cleaning Services";
-      if (first.includes("paint") || first.includes("waterproof")) return "Painting & Waterproofing";
-      if (first.includes("mason") || first.includes("tile") || first.includes("brick")) return "Masonry Services";
+      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wiring")) return "Electrical Services";
+      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("mixer") || first.includes("flush")) return "Plumbing Services";
+      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("geyser") || first.includes("purifier") || first.includes("ro ") || first.includes("appliance")) return "Appliance Service & Repair";
+      if (/\b(ac|hvac|air conditioner|air conditioning)\b/i.test(first) || first.includes("foam jet") || first.includes("jet pump") || first.includes("heating")) return "AC & Heating";
+      if (first.includes("clean") || first.includes("sofa") || first.includes("carpet") || first.includes("pest")) return "Home Cleaning & Pest Control";
     }
-    if (category?.name && category.name !== "General Service") return category.name;
     return "Services Added";
   }, [category, cart]);
 
@@ -11003,14 +11258,34 @@ export function BookingPage() {
     // Map frontend choices to backend enum values
     const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
 
+    const effectiveCart = (cart && cart.length > 0) ? cart : [{
+      id: "def-1",
+      name: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
+      price: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? 0 : 1198,
+      quantity: 1,
+      gst_rate: (category?.id === "painting" || category?.id === "mason") ? 0 : 18,
+      platform_fee: (category?.id === "painting" || category?.id === "mason") ? 0 : 29,
+      is_consultation: Boolean(category?.is_consultation || category?.id === "painting" || category?.id === "mason")
+    }];
+
+    const customerName = (formData.customer_name || user?.name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : '') || user?.username || "Customer").trim();
+    const customerPhone = (formData.phone || user?.phone || user?.mobile_number || "").trim();
+    const customerEmail = (formData.email || user?.email || "").trim();
+
+    let savedAddr = null;
+    try { savedAddr = getCustomerSelectedAddress(user?.id); } catch (_) {}
+    const finalAddress = (formData.address || savedAddr?.formatted_address || savedAddr?.address || "Hosur, Tamil Nadu").trim();
+    const finalLat = formData.latitude || (savedAddr?.latitude ? String(savedAddr.latitude) : "12.740916");
+    const finalLng = formData.longitude || (savedAddr?.longitude ? String(savedAddr.longitude) : "77.825292");
+
     const data = new FormData()
-    data.append("customer_name", formData.customer_name)
-    data.append("phone", formData.phone)
-    data.append("email", formData.email || "")
+    data.append("customer_name", customerName)
+    data.append("phone", customerPhone)
+    data.append("email", customerEmail)
     data.append("service_category", category?.id || "general")
 
-    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
-    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const firstName = (effectiveCart[0]?.name) || (category?.name || "Service Booking");
+    const extraCount = effectiveCart.length > 1 ? effectiveCart.length - 1 : 0;
     const defaultTitle = extraCount > 0
       ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
       : firstName;
@@ -11023,20 +11298,18 @@ export function BookingPage() {
         : shortName;
     }
 
-    const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const itemTotal = effectiveCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const catSlug = (category?.slug || category?.id || "").toLowerCase();
     const isPaintingOrMason = Boolean(
-      category?.id === "painting" ||
-      category?.id === "mason" ||
-      category?.slug === "painting" ||
-      category?.slug === "mason" ||
-      category?.slug === "masonry" ||
-      categoryKey === "painting" ||
-      categoryKey === "masonry" ||
-      (cart && cart.some(c => isConsultationItem(c, category)))
+      category?.is_consultation ||
+      catSlug === "painting" ||
+      catSlug === "mason" ||
+      catSlug === "masonry" ||
+      effectiveCart.some(c => isConsultationItem(c, category))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
-    const nonConsultCart = cart.filter(i => !isConsultationItem(i, category));
-    const totalGst = isPaintingOrMason ? 0 : cart.reduce((s, i) => {
+    const nonConsultCart = effectiveCart.filter(i => !isConsultationItem(i, category));
+    const totalGst = isPaintingOrMason ? 0 : effectiveCart.reduce((s, i) => {
       if (isConsultationItem(i, category)) return s;
       return s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100));
     }, 0);
@@ -11062,12 +11335,12 @@ export function BookingPage() {
     console.log("CONFIRM BOOKING CLICKED");
     console.log("API URL: /api/booking/");
     console.log("METHOD: POST");
-    console.log("customer_name:", formData.customer_name);
-    console.log("phone:", formData.phone);
-    console.log("email:", formData.email);
+    console.log("customer_name:", customerName);
+    console.log("phone:", customerPhone);
+    console.log("email:", customerEmail);
     console.log("service_category:", category?.id || "general");
     console.log("issue_title:", finalIssueTitle);
-    console.log("cart_data item count:", cart?.length || 0);
+    console.log("cart_data item count:", effectiveCart.length);
     console.log("item_total:", itemTotal);
     console.log("gst_amount:", totalGst);
     console.log("platform_fee:", platformFee);
@@ -11083,7 +11356,7 @@ export function BookingPage() {
       finalDesc += `\n[Special Instructions: ${notes}]`;
     }
     data.append("description", finalDesc);
-    data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    data.append("address", formData.landmark ? finalAddress + " | " + formData.landmark : finalAddress)
     if (formData.flat_house_no) {
       data.append("flat_house_no", formData.flat_house_no)
     }
@@ -11093,14 +11366,10 @@ export function BookingPage() {
     if (formData.saved_address_id) {
       data.append("saved_address_id", formData.saved_address_id)
     }
-    if (formData.latitude) {
-      const parsedLat = parseFloat(formData.latitude);
-      data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : formData.latitude);
-    }
-    if (formData.longitude) {
-      const parsedLon = parseFloat(formData.longitude);
-      data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : formData.longitude);
-    }
+    const parsedLat = parseFloat(finalLat);
+    data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.740916");
+    const parsedLon = parseFloat(finalLng);
+    data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.825292");
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", calculatedGrandTotal)
@@ -11111,7 +11380,7 @@ export function BookingPage() {
     if (tipAmount > 0) data.append("tip_amount", tipAmount)
 
     // Serialize cart_data with gst_rate and platform_fee as JSON string
-    data.append("cart_data", JSON.stringify(cart.map(c => ({
+    data.append("cart_data", JSON.stringify(effectiveCart.map(c => ({
       id: c.id,
       name: c.name,
       price: c.price,
@@ -11333,6 +11602,26 @@ export function BookingPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Phase 3: ask before silently checking out only one cart when the other also has items. */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
 
       {/* Cart Summary Drawer Modal */}
       <AnimatePresence>

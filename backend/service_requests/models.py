@@ -494,10 +494,16 @@ class ServiceRequest(models.Model):
     parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
                                        null=True, blank=True,
                                        related_name="child_requests")
-    request_kind   = models.CharField(max_length=30, default="standard", db_index=True,
+    request_kind   = models.CharField(max_length=50, default="standard", db_index=True,
                                       choices=[("standard", "Standard"),
                                                ("inspection", "Inspection"),
-                                               ("quoted_work", "Quoted Work")])
+                                               ("quoted_work", "Quoted Work"),
+                                               ("ESTIMATION", "Estimation / Site Consultation"),
+                                               ("DIRECT", "Direct Standard Job"),
+                                               ("WORK", "Actual Work Execution Job")])
+    catalog_service_id = models.CharField(max_length=100, blank=True, default="", db_index=True,
+                                          help_text="Catalog service ID or package slug")
+    catalog_mapping_status = models.CharField(max_length=50, blank=True, default="UNMAPPED", db_index=True)
     quote_number   = models.CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
@@ -543,10 +549,27 @@ class ServiceRequest(models.Model):
         db_index=True,
         help_text="Client-supplied idempotency key to prevent duplicate bookings",
     )
+    class DispatchStatus(models.TextChoices):
+        PENDING       = "PENDING",       "Pending"
+        DISPATCHED    = "DISPATCHED",    "Dispatched"
+        PENDING_RETRY = "PENDING_RETRY", "Pending Retry"
+        FAILED        = "FAILED",        "Failed"
+
     vendor_id = models.CharField(max_length=100, blank=True, default="", help_text="Opaque vendor identifier")
     vendor_name = models.CharField(max_length=255, blank=True, default="", help_text="Vendor display name snapshot")
     vendor_confirmed_at = models.DateTimeField(null=True, blank=True)
 
+    # External Workforce Dispatch Tracking
+    dispatch_status = models.CharField(
+        max_length=30,
+        choices=DispatchStatus.choices,
+        default=DispatchStatus.PENDING,
+        db_index=True,
+        help_text="Current dispatch state to external workforce system",
+    )
+    dispatch_attempts = models.PositiveIntegerField(default=0, help_text="Number of dispatch attempts")
+    last_dispatch_error = models.TextField(blank=True, default="", help_text="Last recorded dispatch error message")
+    last_dispatched_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of latest dispatch attempt")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -558,6 +581,7 @@ class ServiceRequest(models.Model):
             models.Index(fields=["company", "payment_status", "created_at"]),
             models.Index(fields=["customer", "created_at"]),
             models.Index(fields=["phone"]),
+            models.Index(fields=["dispatch_status", "created_at"], name="service_req_disp_stat_idx"),
             models.Index(fields=["job_type", "status"], name="service_req_job_typ_6bd73d_idx"),
             models.Index(fields=["job_type", "created_at"], name="service_req_job_typ_4f9cb8_idx"),
         ]
