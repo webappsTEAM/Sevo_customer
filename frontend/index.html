@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en" class="overflow-x-hidden">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="SEVO — Professional Home & Repair Services at Your Doorstep" />
+  <link rel="icon" type="image/png" href="/assets/sevo_logo.png" />
+
+  <!--
+      Performance: resource hints
+      ─────────────────────────────────────────────────────────────────────────
+      preconnect  — opens TLS + DNS before the browser needs the resource
+      dns-prefetch — resolves DNS only (cheaper fallback for older browsers)
+    -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- API origin — production backend URL -->
+  <link rel="dns-prefetch" href="https://caldimproducts.com" />
+
+  <!--
+      Google Fonts — display=swap is already in the URL (font-display: swap).
+      This means text renders immediately in a fallback font while the custom
+      font downloads, eliminating the invisible-text flash (FOIT) that blocks
+      Largest Contentful Paint.
+
+      Only the weights actually used in styles.css are requested so the
+      browser doesn't download unused font files.
+    -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap"
+    rel="stylesheet" />
+
+
+
+  <!-- Google Identity Services SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <title>Sevo | Professional Services at Your Doorstep</title>
+  <style>
+    @media (max-width: 768px), (pointer: coarse) {
+      html, body, #root, * {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+      ::-webkit-scrollbar, *::-webkit-scrollbar {
+        display: none !important;
+        width: 0px !important;
+        height: 0px !important;
+        background: transparent !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="overflow-x-hidden w-full max-w-full">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>

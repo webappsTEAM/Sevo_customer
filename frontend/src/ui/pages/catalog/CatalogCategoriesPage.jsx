@@ -1,0 +1,147 @@
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { Plus, Edit2, Trash2, ArrowUpRight } from "lucide-react"
+import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
+import { Card, Button, Input, TextArea, Modal, Pill } from "../../components/kit.jsx"
+import { Table } from "../../components/Table.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
+import { useToast, ToastBanner } from "./useToast.jsx"
+import { routes } from "../../routes.js"
+
+const EMPTY_CATEGORY = { name: "", slug: "", icon: "", image: "", description: "", is_active: true, sort_order: 0 }
+
+export function CatalogCategoriesPage() {
+  const navigate = useNavigate()
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [toast, showToast] = useToast()
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const res = await apiRequest("/settings/catalog/v2/categories/")
+      if (res && res.success) setCategories(res.data)
+    } catch (err) {
+      // Suppress 401 auth errors — they self-resolve on login/session refresh
+      if (err?.status !== 401) {
+        showToast("Failed to load categories", "error")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    try {
+      const payload = { ...editing }
+      let res
+      if (editing.id) {
+        res = await apiRequest(`/settings/catalog/v2/categories/${editing.id}/`, { method: "PUT", json: payload })
+      } else {
+        res = await apiRequest("/settings/catalog/v2/categories/", { method: "POST", json: payload })
+      }
+      if (res.success) {
+        showToast(editing.id ? "Category updated" : "Category created")
+        setEditing(null)
+        load()
+      } else {
+        showToast(res.message || "Save failed", "error")
+      }
+    } catch (err) {
+      showToast(extractApiErrorMessage(err, "Save failed"), "error")
+    }
+  }
+
+  const handleDelete = async (cat, cascade = false) => {
+    if (!cascade && !window.confirm(`Delete category "${cat.name}"? This is blocked if it still has services.`)) return
+    try {
+      const qs = cascade ? "?cascade=true" : ""
+      const res = await apiRequest(`/settings/catalog/v2/categories/${cat.id}/${qs}`, { method: "DELETE" })
+      if (res.success) {
+        showToast(cascade ? "Category and all its services/packages deleted" : "Category deleted")
+        load()
+      } else {
+        showToast(res.message || "Delete blocked", "error")
+      }
+    } catch (err) {
+      const reason = extractApiErrorMessage(err, "Delete failed")
+      if (/still has services/i.test(reason)) {
+        if (window.confirm(`${reason}\n\nDelete "${cat.name}" AND every service (and their packages) inside it? This cannot be undone.`)) {
+          return handleDelete(cat, true)
+        }
+        return
+      }
+      showToast(reason, "error")
+    }
+  }
+
+  return (
+    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto space-y-6">
+      <ToastBanner toast={toast} />
+      <Card
+        title="Categories"
+        actions={<Button onClick={() => setEditing({ ...EMPTY_CATEGORY })}><Plus size={14} className="mr-1" /> Add Category</Button>}
+      >
+        {loading ? (
+          <div className="text-center py-10 text-sm text-slate-500">Loading…</div>
+        ) : (
+          <Table
+            emptyMessage="No categories yet."
+            columns={[
+              { key: "name", label: "Name" },
+              { key: "slug", label: "Slug" },
+              { key: "sort_order", label: "Order" },
+              { key: "status", label: "Status", render: c => <Pill tone={c.is_active ? "good" : "bad"}>{c.is_active ? "Active" : "Inactive"}</Pill> },
+            ]}
+            rows={categories}
+            actions={cat => (
+              <>
+                <Button
+                  variant="ghost"
+                  title="Manage this category's services"
+                  onClick={() => navigate(`${routes.catalog_services}?category=${cat.id}`)}
+                >
+                  Manage Services <ArrowUpRight size={14} className="ml-1" />
+                </Button>
+                <Button variant="ghost" onClick={() => setEditing(cat)}><Edit2 size={14} /></Button>
+                <Button variant="ghost" onClick={() => handleDelete(cat)}><Trash2 size={14} className="text-rose-500" /></Button>
+              </>
+            )}
+          />
+        )}
+      </Card>
+
+      {editing && (
+        <Modal title={editing.id ? "Edit Category" : "New Category"} onClose={() => setEditing(null)}>
+          <form onSubmit={handleSave} className="flex flex-col gap-4">
+            <Input label="Name" required value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+            <Input label="Slug" required value={editing.slug} onChange={e => setEditing({ ...editing, slug: e.target.value })} />
+            <TextArea label="Description" value={editing.description || ""} onChange={e => setEditing({ ...editing, description: e.target.value })} />
+            <Input label="Icon" value={editing.icon || ""} onChange={e => setEditing({ ...editing, icon: e.target.value })} />
+            <ImageUploader
+              label="Category Image"
+              description="Upload the image customers see for this category. Automatically optimized to WebP."
+              assetType="categories"
+              fallbackSrc="/mockups/service_cleaning.png"
+              value={editing.image || ""}
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
+            <Input label="Sort Order" type="number" value={editing.sort_order ?? 0} onChange={e => setEditing({ ...editing, sort_order: Number(e.target.value) })} />
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={!!editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
+              Active
+            </label>
+            <div className="flex gap-3 justify-end mt-2">
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button type="submit">Save</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,1930 @@
+diff --git a/frontend/src/ui/pages/DashboardPage.jsx b/frontend/src/ui/pages/DashboardPage.jsx
+index 2169466..cd10d84 100644
+--- a/frontend/src/ui/pages/DashboardPage.jsx
++++ b/frontend/src/ui/pages/DashboardPage.jsx
+@@ -1,65 +1,128 @@
+ import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from "react"
+ import { useNavigate } from "react-router-dom"
+ import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion"
+-import { Clock, Users, Briefcase, CalendarDays, DollarSign, Loader2, AlertCircle, Timer, Activity, MapPin, ShieldAlert, TrendingUp, FileWarning, BadgeCheck, XCircle, CheckCircle2, ClipboardList, UserCheck, ArrowRight } from "lucide-react"
++import { 
++  Clock, Users, Briefcase, CalendarDays, DollarSign, Loader2, AlertCircle, Timer, 
++  Activity, MapPin, ShieldAlert, TrendingUp, FileWarning, BadgeCheck, XCircle, 
++  CheckCircle2, ClipboardList, UserCheck, ArrowRight, ArrowUpRight, ArrowDownRight, 
++  Award, BookOpen, Percent, Phone, ShieldCheck, ChevronRight, LogIn, Lock, Trash2, 
++  Calendar, Eye
++} from "lucide-react"
+ 
+ import { apiRequest, unwrapResults } from "../../api/client.js"
+ import { useAuth } from "../../state/auth/useAuth.js"
+ import { useRole } from "../../state/auth/useRole.js"
+ import { routes } from "../routes.js"
++import { BarChart, LineChart, DoughnutChart } from "../components/DashboardCharts.jsx"
+ 
+ // ─── Employee Personal Dashboard ────────────────────────────
+-function StatCard({ icon, label, value, sub, color, onClick }) {
++
++function LiveClock() {
++  const [time, setTime] = useState(new Date())
++  useEffect(() => {
++    const t = setInterval(() => setTime(new Date()), 1000)
++    return () => clearInterval(t)
++  }, [])
++  return (
++    <span style={{ fontVariantNumeric: "tabular-nums" }}>
++      {time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
++    </span>
++  )
++}
++
++function QuickNavBtn({ icon, label, color, gradient, onClick, badge }) {
++  const [hovered, setHovered] = useState(false)
++  return (
++    <button
++      onClick={onClick}
++      onMouseEnter={() => setHovered(true)}
++      onMouseLeave={() => setHovered(false)}
++      style={{
++        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
++        gap: 10, padding: "20px 12px", borderRadius: 20, border: "1.5px solid",
++        borderColor: hovered ? `${color}60` : `${color}28`,
++        background: hovered ? `linear-gradient(145deg, ${color}18, ${color}0a)` : `${color}0d`,
++        cursor: "pointer", transition: "all 0.22s cubic-bezier(0.34,1.56,0.64,1)",
++        transform: hovered ? "translateY(-4px) scale(1.04)" : "none",
++        boxShadow: hovered ? `0 12px 32px ${color}28, 0 2px 8px ${color}18` : "0 2px 8px rgba(0,0,0,0.04)",
++        position: "relative", flex: 1, minWidth: 90,
++      }}
++    >
++      {badge > 0 && (
++        <div style={{
++          position: "absolute", top: 10, right: 10, minWidth: 18, height: 18,
++          background: "#ef4444", borderRadius: 9, fontSize: 10, fontWeight: 900,
++          color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
++          padding: "0 4px", lineHeight: 1, boxShadow: "0 2px 8px rgba(239,68,68,0.4)",
++        }}>{badge}</div>
++      )}
++      <div style={{
++        width: 48, height: 48, borderRadius: 16, display: "flex", alignItems: "center",
++        justifyContent: "center", background: `linear-gradient(135deg, ${color}30, ${color}15)`,
++        border: `1.5px solid ${color}35`, color,
++        boxShadow: hovered ? `0 4px 16px ${color}30` : "none",
++        transition: "box-shadow 0.22s",
++      }}>
++        {icon}
++      </div>
++      <span style={{ fontSize: 11, fontWeight: 800, color: hovered ? color : "var(--muted)", letterSpacing: "0.01em", textAlign: "center" }}>
++        {label}
++      </span>
++    </button>
++  )
++}
++
++function StatPill({ label, value, color, icon, onClick }) {
++  const [hovered, setHovered] = useState(false)
+   return (
+     <div
+       onClick={onClick}
++      onMouseEnter={() => setHovered(true)}
++      onMouseLeave={() => setHovered(false)}
+       style={{
+-        background: "#fff",
+-        border: "1.5px solid #e2e8f0",
+-        borderRadius: 20,
+-        padding: "24px 28px",
+-        display: "flex",
+-        alignItems: "center",
+-        gap: 20,
++        display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
++        background: "var(--surface)", borderRadius: 18, border: "1.5px solid",
++        borderColor: hovered ? `${color}50` : "var(--stroke)",
++        boxShadow: hovered ? `0 8px 24px ${color}20, 0 2px 8px rgba(0,0,0,0.04)` : "0 2px 8px rgba(0,0,0,0.04)",
+         cursor: onClick ? "pointer" : "default",
+-        transition: "box-shadow 0.2s, transform 0.2s",
+-        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
++        transform: hovered && onClick ? "translateY(-2px)" : "none",
++        transition: "all 0.2s ease",
+       }}
+-      onMouseEnter={e => { if (onClick) { e.currentTarget.style.boxShadow = "0 8px 28px rgba(0,0,0,0.10)"; e.currentTarget.style.transform = "translateY(-2px)" } }}
+-      onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.04)"; e.currentTarget.style.transform = "none" }}
+     >
+       <div style={{
+-        width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+-        background: `${color}18`, border: `1.5px solid ${color}30`,
+-        display: "flex", alignItems: "center", justifyContent: "center",
+-        color,
++        width: 44, height: 44, borderRadius: 14, background: `linear-gradient(135deg, ${color}20, ${color}10)`,
++        border: `1.5px solid ${color}30`, display: "flex", alignItems: "center",
++        justifyContent: "center", color, flexShrink: 0,
+       }}>
+         {icon}
+       </div>
+-      <div style={{ flex: 1 }}>
+-        <div style={{ fontSize: 10, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
++      <div style={{ flex: 1, minWidth: 0 }}>
++        <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+           {label}
+         </div>
+-        <div style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>
++        <div style={{ fontSize: 22, fontWeight: 900, color: "var(--fg)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+           {value}
+         </div>
+-        {sub && <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginTop: 4 }}>{sub}</div>}
+       </div>
+-      {onClick && <ArrowRight size={18} style={{ color: "#cbd5e1", flexShrink: 0 }} />}
++      {onClick && <ArrowRight size={16} style={{ color: "#cbd5e1", flexShrink: 0 }} />}
+     </div>
+   )
+ }
+ 
+-function TaskStatusRow({ label, count, color }) {
+-  if (!count) return null
++function LeaveStatusBadge({ status }) {
++  const cfg = {
++    pending: { bg: "var(--warn-bg)", color: "var(--warn-text)", label: "Pending" },
++    approved: { bg: "var(--good-bg)", color: "var(--good-text)", label: "Approved" },
++    rejected: { bg: "var(--bad-bg)", color: "var(--bad-text)", label: "Rejected" },
++  }[status] || { bg: "var(--bg2)", color: "var(--muted)", label: status }
+   return (
+-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f1f5f9" }}>
+-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+-        <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>{label}</span>
+-      </div>
+-      <span style={{ fontSize: 13, fontWeight: 900, color }}>{count}</span>
+-    </div>
++    <span style={{
++      display: "inline-block", padding: "3px 10px", borderRadius: 20,
++      background: cfg.bg, color: cfg.color, fontSize: 10, fontWeight: 800,
++      textTransform: "uppercase", letterSpacing: "0.06em",
++    }}>
++      {cfg.label}
++    </span>
+   )
+ }
+ 
+@@ -71,6 +134,7 @@ function EmployeeDashboard() {
+   const [loading, setLoading] = useState(true)
+   const hour = new Date().getHours()
+   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
++  const greetingEmoji = hour < 12 ? "☀️" : hour < 17 ? "👋" : "🌙"
+ 
+   useEffect(() => {
+     async function load() {
+@@ -99,218 +163,341 @@ function EmployeeDashboard() {
+ 
+   const pendingLeaves = leaves.filter(l => l.status === "pending").length
+   const approvedLeaves = leaves.filter(l => l.status === "approved").length
+-  const totalLeaves = leaves.length
++  const recentLeaves = leaves.slice(0, 3)
+ 
+-  const firstName = user?.firstName || user?.username || "there"
++  const firstName = user?.firstName || user?.first_name || user?.username || "there"
++  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+ 
+   return (
+-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8fafc", overflow: "auto" }}>
+-      {/* Header */}
+-      <div style={{
+-        background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+-        padding: "36px 48px 48px",
+-        position: "relative",
+-        overflow: "visible",
+-      }}>
+-        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle at 80% 50%, rgba(255,255,255,0.06) 0%, transparent 60%)", pointerEvents: "none" }} />
+-        <div style={{ position: "relative", zIndex: 1 }}>
+-          <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.6)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
+-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
++    <div className="p-6 w-full flex flex-col gap-6 bg-bg dark:bg-bg">
++
++      {/* ── Hero Header ─────────────────────────────────── */}
++      <div
++        className="relative overflow-hidden rounded-3xl"
++        style={{
++          background: "linear-gradient(135deg, #312e81 0%, #4f46e5 45%, #7c3aed 100%)",
++          padding: "32px 32px 80px",
++        }}
++      >
++        {/* Decorative orbs */}
++        <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
++        <div style={{ position: "absolute", bottom: -80, left: 120, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
++        <div style={{ position: "absolute", top: 20, right: 200, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)", pointerEvents: "none" }} />
++
++        <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
++          <div>
++            <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
++              {today}
++            </div>
++            <h1 style={{ fontSize: 30, fontWeight: 900, color: "#fff", margin: 0, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
++              {greeting}, {firstName} {greetingEmoji}
++            </h1>
++            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 500, marginTop: 8, marginBottom: 0 }}>
++              Here's your personal workspace for today.
++            </p>
++          </div>
++
++          {/* Live clock widget */}
++          <div style={{
++            background: "rgba(255,255,255,0.1)", backdropFilter: "blur(20px)",
++            WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.2)",
++            borderRadius: 20, padding: "16px 24px", textAlign: "center",
++            boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
++          }}>
++            <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", letterSpacing: "0.04em", fontVariantNumeric: "tabular-nums" }}>
++              <LiveClock />
++            </div>
++            <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>
++              Local Time
++            </div>
+           </div>
+-          <h1 style={{ fontSize: 28, fontWeight: 900, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
+-            {greeting}, {firstName} 👋
+-          </h1>
+-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 500, marginTop: 8 }}>
+-            Here's your personal overview for today.
+-          </p>
+         </div>
+ 
+-        {/* Floating alert for pending tasks */}
++        {/* Alert pill for pending tasks */}
+         {pendingAcceptance > 0 && (
+           <div
+             onClick={() => navigate(routes.tasks)}
+             style={{
+-              position: "absolute", bottom: 16, right: 48,
+-              background: "rgba(255, 255, 255, 0.12)",
+-              backdropFilter: "blur(16px)",
+-              WebkitBackdropFilter: "blur(16px)",
+-              borderRadius: 16, padding: "12px 20px",
+-              boxShadow: "0 10px 32px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.2)",
+-              display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+-              border: "1px solid rgba(255, 255, 255, 0.25)",
+-              zIndex: 10,
+-              transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s, border-color 0.25s, box-shadow 0.25s",
+-            }}
+-            onMouseEnter={e => {
+-              e.currentTarget.style.transform = "translateY(-3px) scale(1.03)"
+-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.18)"
+-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.45)"
+-              e.currentTarget.style.boxShadow = "0 15px 35px rgba(0, 0, 0, 0.22), 0 0 15px rgba(255, 255, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.3)"
+-            }}
+-            onMouseLeave={e => {
+-              e.currentTarget.style.transform = "none"
+-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.12)"
+-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)"
+-              e.currentTarget.style.boxShadow = "0 10px 32px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.2)"
++              position: "absolute", bottom: 16, right: 32,
++              background: "rgba(239,68,68,0.9)", backdropFilter: "blur(12px)",
++              border: "1px solid rgba(255,255,255,0.25)", borderRadius: 16,
++              padding: "10px 18px", display: "flex", alignItems: "center",
++              gap: 10, cursor: "pointer", boxShadow: "0 8px 24px rgba(239,68,68,0.4)",
++              zIndex: 10, transition: "transform 0.2s",
+             }}
++            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
++            onMouseLeave={e => e.currentTarget.style.transform = "none"}
+           >
+-            <div style={{
+-              width: 38, height: 38, borderRadius: 12,
+-              background: "rgba(255, 255, 255, 0.2)",
+-              display: "flex", alignItems: "center", justifyContent: "center",
+-              border: "1px solid rgba(255, 255, 255, 0.3)",
+-              boxShadow: "inset 0 1px 2px rgba(255,255,255,0.15)",
+-              flexShrink: 0,
+-            }}>
+-              <ClipboardList size={18} style={{ color: "#ffffff" }} />
+-            </div>
+-            <div>
+-              <div style={{ fontSize: 13, fontWeight: 900, color: "#ffffff", letterSpacing: "-0.01em", textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
+-                {pendingAcceptance} task{pendingAcceptance > 1 ? "s" : ""} need{pendingAcceptance === 1 ? "s" : ""} your response
+-              </div>
+-              <div style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.8)", fontWeight: 700, letterSpacing: "0.02em" }}>
+-                Tap to accept or decline
+-              </div>
+-            </div>
+-            <ArrowRight size={16} style={{ color: "#ffffff", marginLeft: 4 }} />
++            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff", animation: "pulse 1.5s infinite" }} />
++            <span style={{ fontSize: 12, fontWeight: 800, color: "#fff" }}>
++              {pendingAcceptance} task{pendingAcceptance > 1 ? "s" : ""} awaiting your response
++            </span>
++            <ArrowRight size={14} style={{ color: "rgba(255,255,255,0.8)" }} />
+           </div>
+         )}
+       </div>
+ 
+-      {/* Content */}
+-      <div style={{ padding: "48px 48px 40px", display: "flex", flexDirection: "column", gap: 32, flex: 1 }}>
++      {/* ── Quick Nav Cards (overlapping hero) ───────────── */}
++      <div style={{ padding: "0 32px", marginTop: -52, position: "relative", zIndex: 5 }}>
++        <div className="bg-surface dark:bg-slate-900/80 backdrop-blur-xl border border-stroke dark:border-slate-800 shadow-xl shadow-indigo-500/5 rounded-3xl" style={{
++          padding: "20px 24px",
++        }}>
++          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
++            <QuickNavBtn
++              icon={<Clock size={22} />}
++              label="Clock In/Out"
++              color="#f59e0b"
++              onClick={() => navigate(routes.time)}
++            />
++            <QuickNavBtn
++              icon={<ClipboardList size={22} />}
++              label="My Tasks"
++              color="#4f46e5"
++              onClick={() => navigate(routes.tasks)}
++              badge={pendingAcceptance}
++            />
++            <QuickNavBtn
++              icon={<CalendarDays size={22} />}
++              label="My Leaves"
++              color="#ec4899"
++              onClick={() => navigate(routes.leaves)}
++              badge={pendingLeaves}
++            />
++            <QuickNavBtn
++              icon={<UserCheck size={22} />}
++              label="My Profile"
++              color="#10b981"
++              onClick={() => navigate(routes.settings_profile)}
++            />
++            <QuickNavBtn
++              icon={<Activity size={22} />}
++              label="Time Logs"
++              color="#6366f1"
++              onClick={() => navigate(routes.time)}
++            />
++            <QuickNavBtn
++              icon={<MapPin size={22} />}
++              label="Locations"
++              color="#0ea5e9"
++              onClick={() => navigate(routes.locations)}
++            />
++          </div>
++        </div>
++      </div>
+ 
+-        {loading ? (
+-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0", color: "#94a3b8", gap: 12 }}>
+-            <Loader2 className="animate-spin" size={24} />
+-            <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your dashboard…</span>
++      {/* ── Main Content ────────────────────────────────── */}
++      {loading ? (
++        <div style={{ display: "flex", alignItems: "center", justify: "center", padding: "56px 0", color: "#94a3b8", gap: 12 }}>
++          <Loader2 style={{ animation: "spin 0.7s linear infinite" }} size={24} />
++          <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your workspace…</span>
++        </div>
++      ) : (
++        <>
++          {/* ── Stats Row ─────────────────────────────── */}
++          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
++            <StatPill
++              icon={<ClipboardList size={20} />}
++              label="Active Tasks"
++              value={activeTasks}
++              color="#4f46e5"
++              onClick={() => navigate(routes.tasks)}
++            />
++            <StatPill
++              icon={<UserCheck size={20} />}
++              label="Needs Response"
++              value={pendingAcceptance}
++              color={pendingAcceptance > 0 ? "#ef4444" : "#10b981"}
++              onClick={pendingAcceptance > 0 ? () => navigate(routes.tasks) : null}
++            />
++            <StatPill
++              icon={<CalendarDays size={20} />}
++              label="My Leaves"
++              value={leaves.length}
++              color="#ec4899"
++              onClick={() => navigate(routes.leaves)}
++            />
++            <StatPill
++              icon={<CheckCircle2 size={20} />}
++              label="Completed Today"
++              value={completedToday}
++              color="#10b981"
++            />
+           </div>
+-        ) : (
+-          <>
+-            {/* KPI Row */}
+-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
+-              <StatCard
+-                icon={<ClipboardList size={22} />}
+-                label="Active Tasks"
+-                value={activeTasks}
+-                sub={completedToday > 0 ? `${completedToday} completed today` : "No completions today"}
+-                color="#4f46e5"
+-                onClick={() => navigate(routes.tasks)}
+-              />
+-              <StatCard
+-                icon={<UserCheck size={22} />}
+-                label="Awaiting Response"
+-                value={pendingAcceptance}
+-                sub={pendingAcceptance > 0 ? "Action required" : "All caught up"}
+-                color={pendingAcceptance > 0 ? "#d97706" : "#059669"}
+-                onClick={pendingAcceptance > 0 ? () => navigate(routes.tasks) : null}
+-              />
+-              <StatCard
+-                icon={<CalendarDays size={22} />}
+-                label="My Leaves"
+-                value={totalLeaves}
+-                sub={`${pendingLeaves} pending · ${approvedLeaves} approved`}
+-                color="#ec4899"
+-                onClick={() => navigate(routes.leaves)}
+-              />
+-              <StatCard
+-                icon={<Clock size={22} />}
+-                label="Clock In/Out"
+-                value="Time"
+-                sub="Tap to open attendance"
+-                color="#f59e0b"
+-                onClick={() => navigate(routes.time)}
+-              />
+-            </div>
+ 
+-            {/* Tasks breakdown */}
+-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+-              {/* Tasks breakdown card */}
+-              <div style={{ background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 20, padding: "24px 28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+-                  <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>My Task Breakdown</div>
+-                  <button
+-                    onClick={() => navigate(routes.tasks)}
+-                    style={{ fontSize: 11, fontWeight: 800, color: "#4f46e5", background: "#ede9fe", border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}
+-                  >
+-                    View All
+-                  </button>
+-                </div>
+-                <TaskStatusRow label="Awaiting Acceptance" count={pendingAcceptance} color="#d97706" />
+-                <TaskStatusRow label="In Progress" count={inProgress} color="#2563eb" />
+-                <TaskStatusRow label="Completed Today" count={completedToday} color="#059669" />
+-                {tasks.length === 0 && (
+-                  <div style={{ textAlign: "center", padding: "24px 0", color: "#cbd5e1", fontSize: 13, fontWeight: 600 }}>
+-                    No tasks assigned yet
++          {/* ── Two-column area ───────────────────────── */}
++          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
++
++            {/* Task Summary */}
++            <div
++              className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 shadow-sm"
++              style={{
++                borderRadius: 24, padding: "24px 28px",
++              }}
++            >
++              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
++                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
++                  <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg, #4f46e540, #4f46e515)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid #4f46e520" }}>
++                    <ClipboardList size={18} style={{ color: "#4f46e5" }} />
+                   </div>
+-                )}
++                  <div>
++                    <div style={{ fontSize: 13, fontWeight: 900, color: "var(--fg)" }}>My Tasks</div>
++                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{tasks.length} total assigned</div>
++                  </div>
++                </div>
++                <button
++                  onClick={() => navigate(routes.tasks)}
++                  style={{ fontSize: 11, fontWeight: 800, color: "#4f46e5", background: "linear-gradient(135deg, #ede9fe, #e0e7ff)", border: "1px solid #c7d2fe", borderRadius: 10, padding: "5px 12px", cursor: "pointer" }}
++                >
++                  View All →
++                </button>
+               </div>
+ 
+-              {/* Leave summary card */}
+-              <div style={{ background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 20, padding: "24px 28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+-                  <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>My Leave Requests</div>
+-                  <button
+-                    onClick={() => navigate(routes.leaves)}
+-                    style={{ fontSize: 11, fontWeight: 800, color: "#ec4899", background: "#fdf2f8", border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}
+-                  >
+-                    View All
+-                  </button>
++              {tasks.length === 0 ? (
++                <div style={{ textAlign: "center", padding: "28px 0" }}>
++                  <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
++                  <div style={{ color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>All clear! No tasks assigned yet.</div>
+                 </div>
+-                <TaskStatusRow label="Pending Approval" count={pendingLeaves} color="#d97706" />
+-                <TaskStatusRow label="Approved" count={approvedLeaves} color="#059669" />
+-                <TaskStatusRow label="Rejected" count={leaves.filter(l => l.status === "rejected").length} color="#dc2626" />
+-                {leaves.length === 0 && (
+-                  <div style={{ textAlign: "center", padding: "24px 0", color: "#cbd5e1", fontSize: 13, fontWeight: 600 }}>
+-                    No leave requests yet
+-                  </div>
+-                )}
+-              </div>
++              ) : (
++                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
++                  {[
++                    { label: "Awaiting Acceptance", count: pendingAcceptance, color: "#ef4444", icon: "🔴" },
++                    { label: "In Progress", count: inProgress, color: "#2563eb", icon: "🔵" },
++                    { label: "Completed Today", count: completedToday, color: "#10b981", icon: "🟢" },
++                    { label: "Total Active", count: activeTasks - completedToday, color: "#6366f1", icon: "🟣" },
++                  ].filter(x => x.count > 0).map(item => (
++                    <div key={item.label} style={{
++                      display: "flex", alignItems: "center", justifyContent: "space-between",
++                      padding: "10px 16px", borderRadius: 14,
++                      background: `${item.color}08`, border: `1px solid ${item.color}20`,
++                    }}>
++                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
++                        <span style={{ fontSize: 13 }}>{item.icon}</span>
++                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fg2)" }}>{item.label}</span>
++                      </div>
++                      <span style={{ fontSize: 15, fontWeight: 900, color: item.color }}>{item.count}</span>
++                    </div>
++                  ))}
++                </div>
++              )}
+             </div>
+ 
+-            {/* Quick actions */}
+-            <div>
+-              <div style={{ fontSize: 10, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>
+-                Quick Actions
++            {/* Leave Summary */}
++            <div
++              className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 shadow-sm"
++              style={{
++                borderRadius: 24, padding: "24px 28px",
++              }}
++            >
++              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
++                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
++                  <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg, #ec489940, #ec489915)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid #ec489920" }}>
++                    <CalendarDays size={18} style={{ color: "#ec4899" }} />
++                  </div>
++                  <div>
++                    <div style={{ fontSize: 13, fontWeight: 900, color: "var(--fg)" }}>My Leaves</div>
++                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{leaves.length} total requests</div>
++                  </div>
++                </div>
++                <button
++                  onClick={() => navigate(routes.leaves)}
++                  style={{ fontSize: 11, fontWeight: 800, color: "#ec4899", background: "linear-gradient(135deg, #fdf2f8, #fce7f3)", border: "1px solid #fbcfe8", borderRadius: 10, padding: "5px 12px", cursor: "pointer" }}
++                >
++                  Request Leave →
++                </button>
+               </div>
+-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
++
++              {/* Leave status summary pills */}
++              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                 {[
+-                  { label: "Clock In / Out", to: routes.time, color: "#f59e0b", icon: <Clock size={15} /> },
+-                  { label: "My Tasks", to: routes.tasks, color: "#4f46e5", icon: <ClipboardList size={15} /> },
+-                  { label: "Request Leave", to: routes.leaves, color: "#ec4899", icon: <CalendarDays size={15} /> },
+-                  { label: "My Profile", to: routes.settings_profile, color: "#64748b", icon: <UserCheck size={15} /> },
+-                ].map(({ label, to, color, icon }) => (
+-                  <button
+-                    key={to}
+-                    onClick={() => navigate(to)}
+-                    style={{
+-                      display: "flex", alignItems: "center", gap: 8,
+-                      padding: "10px 20px", borderRadius: 12,
+-                      background: `${color}12`, border: `1.5px solid ${color}30`,
+-                      color, fontSize: 12, fontWeight: 800, cursor: "pointer",
+-                      transition: "all 0.15s",
+-                    }}
+-                    onMouseEnter={e => { e.currentTarget.style.background = `${color}22`; e.currentTarget.style.transform = "translateY(-1px)" }}
+-                    onMouseLeave={e => { e.currentTarget.style.background = `${color}12`; e.currentTarget.style.transform = "none" }}
+-                  >
+-                    {icon} {label}
+-                  </button>
++                  { label: "Pending", count: pendingLeaves, bg: "var(--warn-bg)", color: "var(--warn-text)" },
++                  { label: "Approved", count: approvedLeaves, bg: "var(--good-bg)", color: "var(--good-text)" },
++                  { label: "Rejected", count: leaves.filter(l => l.status === "rejected").length, bg: "var(--bad-bg)", color: "var(--bad-text)" },
++                ].map(s => (
++                  <div key={s.label} style={{
++                    flex: 1, textAlign: "center", padding: "10px 8px",
++                    background: s.bg, borderRadius: 14,
++                  }}>
++                    <div style={{ fontSize: 18, fontWeight: 900, color: s.color }}>{s.count}</div>
++                    <div style={{ fontSize: 10, fontWeight: 800, color: s.color, opacity: 0.8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</div>
++                  </div>
+                 ))}
+               </div>
++
++              {/* Recent leaves */}
++              {recentLeaves.length > 0 ? (
++                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
++                  <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Recent Requests</div>
++                  {recentLeaves.map((lv, i) => (
++                    <div key={lv.id || i}
++                      className="bg-surface2 dark:bg-slate-950/40 border border-stroke dark:border-slate-800"
++                      style={{
++                        display: "flex", alignItems: "center", justifyContent: "space-between",
++                        padding: "10px 14px", borderRadius: 12,
++                      }}
++                    >
++                      <div>
++                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg)" }}>
++                          {lv.leave_type_name || lv.type || "Leave Request"}
++                        </div>
++                        <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginTop: 2 }}>
++                          {lv.start_date} → {lv.end_date || "TBD"}
++                        </div>
++                      </div>
++                      <LeaveStatusBadge status={lv.status} />
++                    </div>
++                  ))}
++                </div>
++              ) : (
++                <div style={{ textAlign: "center", padding: "20px 0" }}>
++                  <div style={{ fontSize: 28, marginBottom: 8 }}>🏖️</div>
++                  <div style={{ color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>No leave requests yet.</div>
++                </div>
++              )}
+             </div>
+-          </>
+-        )}
+-      </div>
++          </div>
++
++          {/* ── Productivity Banner ───────────────────── */}
++          <div style={{
++            background: "linear-gradient(135deg, #312e81 0%, #4338ca 50%, #6d28d9 100%)",
++            borderRadius: 24, padding: "24px 32px",
++            display: "flex", alignItems: "center", justifyContent: "space-between",
++            flexWrap: "wrap", gap: 16,
++            boxShadow: "0 8px 32px rgba(79,70,229,0.25)",
++            position: "relative", overflow: "hidden",
++          }}>
++            <div style={{ position: "absolute", right: -30, top: -30, width: 180, height: 180, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
++            <div style={{ position: "relative", zIndex: 1 }}>
++              <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Your Progress Today</div>
++              <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", marginBottom: 4 }}>
++                {completedToday > 0 ? `🎉 ${completedToday} task${completedToday > 1 ? "s" : ""} completed!` : activeTasks > 0 ? `💪 ${activeTasks} task${activeTasks > 1 ? "s" : ""} in progress` : "🌟 Ready to start your day?"}
++              </div>
++              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", fontWeight: 500 }}>
++                {pendingAcceptance > 0 ? `You have ${pendingAcceptance} task${pendingAcceptance > 1 ? "s" : ""} awaiting your acceptance.` : "You're all caught up on task responses."}
++              </div>
++            </div>
++            <button
++              onClick={() => navigate(routes.tasks)}
++              style={{
++                padding: "12px 28px", borderRadius: 16,
++                background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)",
++                color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
++                backdropFilter: "blur(8px)", transition: "all 0.2s",
++              }}
++              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.25)"; e.currentTarget.style.transform = "scale(1.04)" }}
++              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; e.currentTarget.style.transform = "none" }}
++            >
++              Open Tasks →
++            </button>
++          </div>
++        </>
++      )}
+     </div>
+   )
+ }
+ 
++
+ // Lazy-loaded sub-modules
+ const DashboardMap = lazy(() => import("./DashboardMap.jsx"))
+-const BarChart = lazy(() => import("../components/DashboardCharts.jsx").then(m => ({ default: m.BarChart })))
+-const LineChart = lazy(() => import("../components/DashboardCharts.jsx").then(m => ({ default: m.LineChart })))
+-const DoughnutChart = lazy(() => import("../components/DashboardCharts.jsx").then(m => ({ default: m.DoughnutChart })))
+-const PieChart = lazy(() => import("../components/DashboardCharts.jsx").then(m => ({ default: m.DoughnutChart }))) // Pie is similar to Doughnut
+ 
+ // ── Shared Chart Defaults ──
+ const CHART_COLORS = {
+@@ -354,6 +541,13 @@ const sharedGrid = {
+   drawBorder: false,
+ }
+ 
++const tickOptions = {
++  color: "#94A3B8",
++  font: { size: 10 },
++}
++
++const gridOptions = sharedGrid
++
+ function formatHours(h) {
+   if (h == null) return "—"
+   return `${h.toFixed(1)}h`
+@@ -556,6 +750,142 @@ function AdminDashboard() {
+     }
+   }, [notifications])
+ 
++  // --- Onboarding & Verification Center interactive states ---
++  const [verificationQueue, setVerificationQueue] = useState({
++    documents: 18,
++    training: 12,
++    interview: 8,
++    ready: 6
++  })
++  
++  const [interviewsToday, setInterviewsToday] = useState([
++    { id: 1, time: "09:00 AM", name: "Surya", role: "Electrician", status: "Scheduled" },
++    { id: 2, time: "10:30 AM", name: "Kalyani", role: "Tester", status: "Scheduled" },
++    { id: 3, time: "11:00 AM", name: "Madhan", role: "Electrician", status: "Scheduled" }
++  ])
++
++  const [verificationCenterCandidate, setVerificationCenterCandidate] = useState({
++    name: "Surya",
++    role: "Electrician",
++    registration: "Complete",
++    documents: "Verified",
++    training: "Completed",
++    interview: "Pending",
++  })
++
++  const [approvalCenterReview, setApprovalCenterReview] = useState({
++    name: "Surya",
++    role: "Electrician",
++    identity: "Verified",
++    training: "Completed",
++    interview: "Passed",
++    trustScore: 98,
++    status: "Reviewing"
++  })
++
++  const [aiInsightsRecommendation, setAiInsightsRecommendation] = useState("Reduce interview waiting time.")
++
++  const [recentActivities, setRecentActivities] = useState([
++    { id: 1, time: "11:10 AM", event: "Employee Activated", desc: "Surya pass activated" },
++    { id: 2, time: "11:00 AM", event: "Interview Passed", desc: "Surya L1 interview logged" },
++    { id: 3, time: "10:00 AM", event: "Training Completed", desc: "Surya video modules done" },
++    { id: 4, time: "09:25 AM", event: "Documents Approved", desc: "OCR verification green light" },
++    { id: 5, time: "09:15 AM", event: "Documents Uploaded", desc: "Aadhaar/PAN card uploaded" },
++    { id: 6, time: "09:10 AM", event: "New Registration", desc: "Surya registered on app" }
++  ])
++
++  const [auditTab, setAuditTab] = useState("login")
++  const [hoveredLoc, setHoveredLoc] = useState(null)
++
++  const [auditLogs, setAuditLogs] = useState({
++    login: [
++      { id: 1, time: "13:30 PM", user: "Admin (Jasmine)", action: "Logged in via Web", ip: "192.168.1.45" },
++      { id: 2, time: "11:15 AM", user: "Manager (Ramesh)", action: "Logged in via Android", ip: "192.168.1.12" },
++      { id: 3, time: "08:00 AM", user: "Admin (Jasmine)", action: "Logged in via Web", ip: "192.168.1.45" }
++    ],
++    approvals: [
++      { id: 1, time: "11:10 AM", candidate: "Surya", approvedBy: "Admin (Jasmine)", role: "Electrician" },
++      { id: 2, time: "Yesterday", candidate: "Anjali Devi", approvedBy: "Admin (Jasmine)", role: "Plumber" },
++      { id: 3, time: "2 days ago", candidate: "Vikram Singh", approvedBy: "Manager (Ramesh)", role: "Security Guard" }
++    ],
++    rejections: [
++      { id: 1, time: "10:45 AM", candidate: "Kunal Sharma", rejectedBy: "Admin (Jasmine)", reason: "Blurred document scan" },
++      { id: 2, time: "3 days ago", candidate: "Amit Patel", rejectedBy: "Manager (Ramesh)", reason: "Failed video mesh biometric check" }
++    ],
++    docs: [
++      { id: 1, time: "09:25 AM", candidate: "Surya", field: "OCR Document Check", status: "Approved" },
++      { id: 2, time: "09:15 AM", candidate: "Surya", field: "Aadhaar Front/Back", status: "Uploaded" },
++      { id: 3, time: "Yesterday", candidate: "Riya Verma", field: "Selfie Biometrics", status: "Failed (Mesh <90%)" }
++    ],
++    interviews: [
++      { id: 1, time: "11:00 AM", candidate: "Surya", interviewer: "Manager (Ramesh)", rating: "4.5/5 (Good)", notes: "Strong technical knowledge, recommended." },
++      { id: 2, time: "Yesterday", candidate: "Anjali Devi", interviewer: "Admin (Jasmine)", rating: "5/5 (Excellent)", notes: "Perfect communication, prompt answers." }
++    ]
++  })
++
++  // Handlers
++  const handleApproveCandidate = (name) => {
++    setApprovalCenterReview(prev => ({ ...prev, status: "Approved", trustScore: 100 }))
++    setVerificationCenterCandidate(prev => ({ ...prev, interview: "Passed" }))
++    setVerificationQueue(prev => ({ ...prev, ready: Math.max(0, prev.ready - 1) }))
++    
++    // Add to recent activity
++    const nowStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
++    setRecentActivities(prev => [
++      { id: Math.random(), time: nowStr, event: "Employee Activated", desc: `${name} approved and activated` },
++      ...prev
++    ])
++
++    // Add to audit approvals
++    setAuditLogs(prev => ({
++      ...prev,
++      approvals: [
++        { id: Math.random(), time: nowStr, candidate: name, approvedBy: "Admin (Jasmine)", role: "Electrician" },
++        ...prev.approvals
++      ]
++    }))
++  }
++
++  const handleRejectCandidate = (name, reason = "Failed interview criteria") => {
++    setApprovalCenterReview(prev => ({ ...prev, status: "Rejected" }))
++    setVerificationCenterCandidate(prev => ({ ...prev, interview: "Rejected" }))
++    setVerificationQueue(prev => ({ ...prev, ready: Math.max(0, prev.ready - 1) }))
++    
++    // Add to recent activity
++    const nowStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
++    setRecentActivities(prev => [
++      { id: Math.random(), time: nowStr, event: "Application Rejected", desc: `${name} review rejected` },
++      ...prev
++    ])
++
++    // Add to audit rejections
++    setAuditLogs(prev => ({
++      ...prev,
++      rejections: [
++        { id: Math.random(), time: nowStr, candidate: name, rejectedBy: "Admin (Jasmine)", reason: reason },
++        ...prev.rejections
++      ]
++    }))
++  }
++
++  const handlePassInterview = (id, name) => {
++    setInterviewsToday(prev => prev.map(i => i.id === id ? { ...i, status: "Passed" } : i))
++    if (name === "Surya") {
++      setVerificationCenterCandidate(prev => ({ ...prev, interview: "Passed" }))
++    }
++  }
++
++  const handleRejectInterview = (id, name) => {
++    setInterviewsToday(prev => prev.map(i => i.id === id ? { ...i, status: "Rejected" } : i))
++    if (name === "Surya") {
++      setVerificationCenterCandidate(prev => ({ ...prev, interview: "Rejected" }))
++    }
++  }
++
++  const handleStartCall = (id, name) => {
++    setInterviewsToday(prev => prev.map(i => i.id === id ? { ...i, status: "In Call" } : i))
++  }
++
+   const kpi = analytics?.kpi || {}
+ 
+   const kpiCards = [
+@@ -859,6 +1189,7 @@ function AdminDashboard() {
+       tooltip: sharedTooltip,
+     },
+   }
++  const doughnutOptions = donutOptions
+ 
+   // ── Leave Status (Pie Chart) ──
+   const leaveStatus = analytics?.leave_status || {}
+@@ -1161,20 +1492,6 @@ function AdminDashboard() {
+     },
+   }
+ 
+-
+-  const [hoveredLoc, setHoveredLoc] = useState(null)
+-
+-  if (loading) {
+-    return (
+-      <div className="p-6 max-w-[1600px] mx-auto flex flex-col gap-6 bg-bg dark:bg-bg min-h-screen">
+-        <div className="flex items-center justify-center gap-3 h-[50vh] text-slate-500 dark:text-slate-400 text-lg font-medium">
+-          <Loader2 className="animate-spin" size={24} />
+-          <span>Loading analytics…</span>
+-        </div>
+-      </div>
+-    )
+-  }
+-
+   return (
+     <div className="p-6 max-w-[1600px] mx-auto flex flex-col gap-6 bg-bg dark:bg-bg min-h-screen">
+       {/* ── Onboarding Progress Banner (Top Simple View) ── */}
+@@ -1323,64 +1640,810 @@ function AdminDashboard() {
+         </div>
+       )}
+ 
+-      <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 overflow-hidden transition-all duration-500">
+-        <div className="px-6 pt-5 pb-1.5">
+-          <div className="text-[1.25rem] professional-title text-slate-900 dark:text-white">Key Performance Indicators</div>
+-          <div className="text-[0.9rem] text-slate-400 dark:text-slate-500 font-medium mt-1">Strategic overview</div>
++      {/* ── Section 1: Executive Overview ── */}
++      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
++        {[
++          { label: "Total Employees", value: "1,245", change: "+14", trend: "up", icon: <Users size={20} />, color: "#3b82f6", desc: "Approved roster + candidates" },
++          { label: "Active Employees", value: "1,080", change: "+8", trend: "up", icon: <UserCheck size={20} />, color: "#10b981", desc: "Currently clocked in / active" },
++          { label: "Pending Verification", value: `${verificationQueue.documents + verificationQueue.training + verificationQueue.interview + verificationQueue.ready}`, change: "-3", trend: "down", icon: <AlertCircle size={20} />, color: "#f59e0b", desc: "Dossiers awaiting admin review" },
++          { label: "Interviews Today", value: `${interviewsToday.filter(i => i.status === "Scheduled" || i.status === "In Call").length}`, change: "0", trend: "up", icon: <Phone size={20} />, color: "#8b5cf6", desc: "Scheduled calls logged" },
++          { label: "Approved This Month", value: "185", change: "+24", trend: "up", icon: <CheckCircle2 size={20} />, color: "#10b981", desc: "Onboarding success count" },
++          { label: "Rejected This Month", value: "24", change: "+2", trend: "up", icon: <XCircle size={20} />, color: "#ef4444", desc: "Applications flagged with anomalies" },
++        ].map((item) => (
++          <div
++            key={item.label}
++            className="p-5 bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
++          >
++            <div className="flex justify-between items-start">
++              <div
++                className="w-10 h-10 rounded-xl flex items-center justify-center border"
++                style={{
++                  background: `${item.color}15`,
++                  borderColor: `${item.color}25`,
++                  color: item.color,
++                }}
++              >
++                {item.icon}
++              </div>
++              <span
++                className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 ${
++                  item.trend === "up"
++                    ? "bg-emerald-500/10 text-emerald-500"
++                    : "bg-rose-500/10 text-rose-500"
++                }`}
++              >
++                {item.trend === "up" ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
++                {item.change}
++              </span>
++            </div>
++            <div className="mt-4">
++              <div className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
++                {item.label}
++              </div>
++              <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
++                {item.value}
++              </div>
++              <div className="text-[11px] font-bold text-slate-400 dark:text-slate-650 mt-1">
++                {item.desc}
++              </div>
++            </div>
++          </div>
++        ))}
++      </div>
++
++      {/* ── Section 2 & 3: Onboarding Pipeline ── */}
++      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
++        {/* Funnel Chart (2/3 width) */}
++        <div className="lg:col-span-2 bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-4">
++              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++                <TrendingUp size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Employee Activation Funnel
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Candidate drop-off checkpoints across the recruitment pipeline
++                </p>
++              </div>
++            </div>
++            {/* Custom Funnel visual rendering */}
++            <div className="flex flex-col gap-4 mt-6">
++              {[
++                { stage: "Registered", count: 1250, percent: 100, color: "#3b82f6" },
++                { stage: "Documents Verified", count: 1180, percent: 94, color: "#6366f1" },
++                { stage: "Training Completed", count: 1120, percent: 90, color: "#8b5cf6" },
++                { stage: "Interview Completed", count: 1090, percent: 87, color: "#ec4899" },
++                { stage: "Approved", count: 1055, percent: 84, color: "#10b981" }
++              ].map((item, idx) => (
++                <div key={item.stage} className="flex items-center gap-4">
++                  <div className="w-40 text-xs font-bold text-slate-600 dark:text-slate-450 uppercase tracking-wide truncate">{item.stage}</div>
++                  <div className="flex-1 h-8 bg-slate-100 dark:bg-slate-850 rounded-lg overflow-hidden relative border border-stroke dark:border-slate-800/80">
++                    <motion.div
++                      initial={{ width: 0 }}
++                      animate={{ width: `${item.percent}%` }}
++                      transition={{ duration: 0.8, delay: idx * 0.1 }}
++                      className="h-full rounded-lg"
++                      style={{
++                        background: `linear-gradient(90deg, ${item.color}cc, ${item.color})`
++                      }}
++                    />
++                    <div className="absolute inset-y-0 left-3 flex items-center text-xs font-black text-white drop-shadow-sm">
++                      {item.count.toLocaleString()}
++                    </div>
++                  </div>
++                  <div className="w-12 text-right text-xs font-black text-slate-900 dark:text-white">{item.percent}%</div>
++                </div>
++              ))}
++            </div>
++          </div>
+         </div>
+ 
+-        <div className="p-8 pb-12 grid grid-cols-1 lg:grid-cols-[1fr_260px_1fr] lg:grid-rows-[repeat(3,minmax(110px,auto))] gap-x-6 gap-y-10 items-center">
+-          <div className="flex justify-center items-center max-lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-span-3">
+-            <motion.div
+-              initial={{ scale: 0.8, opacity: 0 }}
+-              animate={{ scale: 1, opacity: 1 }}
+-              transition={{ duration: 1, type: "spring" }}
+-              className="relative w-[180px] h-[180px] grid place-items-center"
++        {/* Verification Queue (1/3 width) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-500">
++                <ClipboardList size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Verification Queue
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Onboarding tasks awaiting admin action
++                </p>
++              </div>
++            </div>
++
++            <div className="flex flex-col gap-4">
++              <div className="flex items-center justify-between p-3.5 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-800/80 hover:border-indigo-500/30 transition-all">
++                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Documents Pending</span>
++                <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">{verificationQueue.documents}</span>
++              </div>
++              <div className="flex items-center justify-between p-3.5 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-800/80 hover:border-indigo-500/30 transition-all">
++                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Training Pending</span>
++                <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-purple-500/10 text-purple-500 border border-purple-500/20">{verificationQueue.training}</span>
++              </div>
++              <div className="flex items-center justify-between p-3.5 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-800/80 hover:border-indigo-500/30 transition-all">
++                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Interview Pending</span>
++                <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-pink-500/10 text-pink-500 border border-pink-500/20">{verificationQueue.interview}</span>
++              </div>
++              <div className="flex items-center justify-between p-3.5 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-800/80 hover:border-indigo-500/30 transition-all">
++                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Ready For Approval</span>
++                <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">{verificationQueue.ready}</span>
++              </div>
++            </div>
++          </div>
++
++          <div className="grid grid-cols-2 gap-2 mt-6">
++            <button
++              onClick={() => alert("Loading document review wizard...")}
++              className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-98"
++            >
++              Review Docs
++            </button>
++            <button
++              onClick={() => alert("Opening interview scheduler calendar...")}
++              className="py-2.5 px-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-98"
+             >
+-              <div className="absolute inset-0 rounded-full border-2 border-dashed border-slate-400/60 dark:border-slate-700/60 animate-[spin_20s_linear_infinite]">
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] -top-[7px] left-1/2 -translate-x-1/2" style={{ backgroundColor: kpiEmp.color }} />
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] top-[24px] right-[12px]" style={{ backgroundColor: kpiHrs.color }} />
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] top-1/2 -right-[7px] -translate-y-1/2" style={{ backgroundColor: kpiPay.color }} />
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] bottom-[24px] right-[12px]" style={{ backgroundColor: kpiShft.color }} />
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] -bottom-[7px] left-1/2 -translate-x-1/2" style={{ backgroundColor: kpiLvs.color }} />
+-                <span className="absolute w-[14px] h-[14px] rounded-full border-[3px] border-surface dark:border-slate-800 shadow-[0_0_15px_rgba(0,0,0,0.1)] top-1/2 -left-[7px] -translate-y-1/2" style={{ backgroundColor: kpiTsk.color }} />
++              Schedule Interview
++            </button>
++            <button
++              onClick={() => handleApproveCandidate("Surya")}
++              disabled={verificationQueue.ready === 0 || approvalCenterReview.status === "Approved"}
++              className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-98"
++            >
++              Approve Employee
++            </button>
++            <button
++              onClick={() => handleRejectCandidate("Surya")}
++              disabled={verificationQueue.ready === 0 || approvalCenterReview.status === "Rejected"}
++              className="py-2.5 px-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-98"
++            >
++              Reject Employee
++            </button>
++          </div>
++        </div>
++      </div>
++
++      {/* ── Section 4 & 5: Interview Management & AI Insights ── */}
++      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
++        {/* Today's Interviews */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++                <Clock size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Today's Interviews
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Onboarding validation calls scheduled for today
++                </p>
++              </div>
++            </div>
++
++            <div className="overflow-x-auto w-full">
++              <table className="w-full text-left border-collapse">
++                <thead>
++                  <tr className="border-b border-stroke dark:border-slate-800/80 text-[10px] font-black text-slate-400 uppercase tracking-widest">
++                    <th className="pb-3">Time</th>
++                    <th className="pb-3">Candidate</th>
++                    <th className="pb-3">Role</th>
++                    <th className="pb-3">Status</th>
++                    <th className="pb-3 text-right">Actions</th>
++                  </tr>
++                </thead>
++                <tbody className="divide-y divide-stroke/40 dark:divide-slate-800/40">
++                  {interviewsToday.map((int) => (
++                    <tr key={int.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
++                      <td className="py-4 font-mono text-[11px] text-indigo-500">{int.time}</td>
++                      <td className="py-4 font-bold text-slate-900 dark:text-white">{int.name}</td>
++                      <td className="py-4 text-slate-500">{int.role}</td>
++                      <td className="py-4">
++                        <span
++                          className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
++                            int.status === "Passed"
++                              ? "bg-emerald-500/10 text-emerald-500"
++                              : int.status === "Rejected"
++                              ? "bg-rose-500/10 text-rose-500"
++                              : int.status === "In Call"
++                              ? "bg-indigo-500/15 text-indigo-500 animate-pulse"
++                              : "bg-amber-500/10 text-amber-500"
++                          }`}
++                        >
++                          {int.status}
++                        </span>
++                      </td>
++                      <td className="py-4 text-right">
++                        <div className="flex gap-1.5 justify-end">
++                          <button
++                            onClick={() => handleStartCall(int.id, int.name)}
++                            disabled={int.status !== "Scheduled" && int.status !== "In Call"}
++                            className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all"
++                            title="Start Call"
++                          >
++                            <Phone size={11} />
++                          </button>
++                          <button
++                            onClick={() => handlePassInterview(int.id, int.name)}
++                            disabled={int.status !== "Scheduled" && int.status !== "In Call"}
++                            className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all"
++                            title="Pass"
++                          >
++                            <CheckCircle2 size={11} />
++                          </button>
++                          <button
++                            onClick={() => handleRejectInterview(int.id, int.name)}
++                            disabled={int.status !== "Scheduled" && int.status !== "In Call"}
++                            className="p-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg transition-all"
++                            title="Reject"
++                          >
++                            <XCircle size={11} />
++                          </button>
++                          <button
++                            onClick={() => alert(`Rescheduling ${int.name}'s interview...`)}
++                            className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 rounded-lg transition-all text-[9px] font-black uppercase tracking-wider"
++                          >
++                            Resched
++                          </button>
++                        </div>
++                      </td>
++                    </tr>
++                  ))}
++                </tbody>
++              </table>
++            </div>
++          </div>
++        </div>
++
++        {/* AI Workforce Insights */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
++          {/* Neon decorative background glow */}
++          <div className="absolute -right-16 -top-16 w-36 h-36 bg-indigo-500/10 blur-3xl rounded-full group-hover:bg-indigo-500/20 transition-all duration-700 pointer-events-none" />
++          
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center border border-violet-500/20 text-violet-500">
++                <Activity size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  AI Workforce Insights
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Real-time analytics metrics with AI analysis
++                </p>
++              </div>
++            </div>
++
++            <div className="grid grid-cols-2 gap-4">
++              <div className="p-4 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850">
++                <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">Approval Rate</span>
++                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">92%</div>
++                <div className="w-full bg-slate-150 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden mt-2">
++                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: "92%" }} />
++                </div>
+               </div>
+-              <motion.div
+-                whileHover={{ scale: 1.1, rotate: 5 }}
+-                className="w-[96px] h-[96px] rounded-3xl bg-surface dark:bg-slate-800 border border-stroke dark:border-slate-700 shadow-[0_15px_40px_rgba(0,0,0,0.1)] flex items-center justify-center text-slate-900 dark:text-white z-10 relative overflow-hidden group"
++              <div className="p-4 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850">
++                <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">Interview Success</span>
++                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">89%</div>
++                <div className="w-full bg-slate-150 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden mt-2">
++                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: "89%" }} />
++                </div>
++              </div>
++              <div className="p-4 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850">
++                <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">Training Completion</span>
++                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">96%</div>
++                <div className="w-full bg-slate-150 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden mt-2">
++                  <div className="h-full bg-purple-500 rounded-full" style={{ width: "96%" }} />
++                </div>
++              </div>
++              <div className="p-4 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850">
++                <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">Avg Approval Time</span>
++                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">2.4 Days</div>
++                <div className="text-[10px] text-emerald-500 font-bold mt-2">▼ 0.3d improvement</div>
++              </div>
++            </div>
++          </div>
++
++          {aiInsightsRecommendation && (
++            <div className="mt-6 p-4 bg-indigo-500/5 border border-indigo-500/25 rounded-2xl flex items-center justify-between">
++              <div>
++                <span className="text-[9px] font-black uppercase text-indigo-500 tracking-widest">AI Smart Recommendation</span>
++                <div className="text-xs font-bold text-slate-800 dark:text-white mt-1">{aiInsightsRecommendation}</div>
++              </div>
++              <button
++                onClick={() => setAiInsightsRecommendation("")}
++                className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase tracking-widest px-3 py-1.5 bg-indigo-500/10 rounded-lg"
+               >
+-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+-                <Activity size={32} className="text-indigo-600 dark:text-indigo-400 group-hover:animate-pulse" />
+-              </motion.div>
+-
+-              {/* Outer Pulse Rings */}
+-              <motion.div
+-                animate={{ scale: [1, 1.4, 1], opacity: [0.1, 0, 0.1] }}
+-                transition={{ duration: 4, repeat: Infinity }}
+-                className="absolute w-[120px] h-[120px] rounded-full border border-indigo-200"
+-              />
+-            </motion.div>
++                Dismiss
++              </button>
++            </div>
++          )}
++        </div>
++      </div>
++
++      {/* ── Section 6 & 7: Verification & Approval Decision Centers ── */}
++      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
++        {/* Employee Verification Center */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++                <UserCheck size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Employee Verification Center
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Real-time screening checklist status for active candidates
++                </p>
++              </div>
++            </div>
++
++            <div className="p-5 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850 flex flex-col gap-4">
++              <div className="flex justify-between items-center pb-3 border-b border-stroke dark:border-slate-850">
++                <div>
++                  <div className="font-extrabold text-slate-900 dark:text-white text-base uppercase tracking-wider">{verificationCenterCandidate.name}</div>
++                  <div className="text-[10px] text-slate-455 font-bold uppercase tracking-widest mt-0.5">{verificationCenterCandidate.role}</div>
++                </div>
++                <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-black uppercase tracking-wider border border-amber-500/20">In Review</span>
++              </div>
++
++              <div className="grid grid-cols-2 gap-y-3.5 gap-x-6 text-xs font-semibold mt-2">
++                <div className="flex items-center justify-between">
++                  <span className="text-slate-500">Registration</span>
++                  <span className="font-bold text-emerald-500">✅ Complete</span>
++                </div>
++                <div className="flex items-center justify-between">
++                  <span className="text-slate-500">Documents</span>
++                  <span className="font-bold text-emerald-500">✅ Verified</span>
++                </div>
++                <div className="flex items-center justify-between">
++                  <span className="text-slate-500">Training</span>
++                  <span className="font-bold text-emerald-500">✅ Completed</span>
++                </div>
++                <div className="flex items-center justify-between">
++                  <span className="text-slate-500">Interview</span>
++                  <span className={`font-bold ${
++                    verificationCenterCandidate.interview === "Passed"
++                      ? "text-emerald-500"
++                      : verificationCenterCandidate.interview === "Rejected"
++                      ? "text-rose-500"
++                      : "text-amber-500"
++                  }`}>
++                    {verificationCenterCandidate.interview === "Passed" ? "✅ Passed" : verificationCenterCandidate.interview === "Rejected" ? "❌ Failed" : "🟡 Pending"}
++                  </span>
++                </div>
++              </div>
++            </div>
+           </div>
+ 
+-          <div className="max-lg:col-span-1 lg:col-start-1 lg:row-start-1">
+-            <KpiDiagramSide card={kpiEmp} side="left" />
++          <button
++            onClick={() => alert(`Navigating to profile detail of ${verificationCenterCandidate.name}...`)}
++            className="w-full py-3 mt-6 bg-slate-105 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm"
++          >
++            View Profile
++          </button>
++        </div>
++
++        {/* Approval Center */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500">
++                <CheckCircle2 size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Approval Center
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Onboarding dossier decision panel
++                </p>
++              </div>
++            </div>
++
++            <div className="p-5 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-855 flex flex-col gap-3">
++              <div className="text-[10px] font-black uppercase text-slate-455 dark:text-slate-500 tracking-widest">Employee Review</div>
++              
++              <div className="flex flex-col gap-2 text-xs font-semibold mt-2">
++                <div className="flex justify-between items-center py-1">
++                  <span className="text-slate-500">Identity Status</span>
++                  <span className="font-bold text-slate-900 dark:text-white">{approvalCenterReview.identity}</span>
++                </div>
++                <div className="flex justify-between items-center py-1">
++                  <span className="text-slate-500">Training Status</span>
++                  <span className="font-bold text-slate-900 dark:text-white">{approvalCenterReview.training}</span>
++                </div>
++                <div className="flex justify-between items-center py-1">
++                  <span className="text-slate-500">Interview Status</span>
++                  <span className={`font-bold ${
++                    verificationCenterCandidate.interview === "Passed" ? "text-emerald-500" : verificationCenterCandidate.interview === "Rejected" ? "text-rose-500" : "text-amber-500"
++                  }`}>
++                    {verificationCenterCandidate.interview === "Passed" ? "Passed" : verificationCenterCandidate.interview === "Rejected" ? "Failed" : "Pending"}
++                  </span>
++                </div>
++                <div className="flex justify-between items-center py-1">
++                  <span className="text-slate-500">Trust Score</span>
++                  <span className="font-black text-indigo-500 text-sm">{approvalCenterReview.trustScore}%</span>
++                </div>
++              </div>
++            </div>
+           </div>
+-          <div className="max-lg:col-span-1 lg:col-start-3 lg:row-start-1">
+-            <KpiDiagramSide card={kpiHrs} side="right" />
++
++          <div className="grid grid-cols-2 gap-4 mt-6">
++            <button
++              onClick={() => handleApproveCandidate(approvalCenterReview.name)}
++              disabled={approvalCenterReview.status !== "Reviewing"}
++              className="py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-98"
++            >
++              {approvalCenterReview.status === "Approved" ? "APPROVED" : "APPROVE"}
++            </button>
++            <button
++              onClick={() => handleRejectCandidate(approvalCenterReview.name)}
++              disabled={approvalCenterReview.status !== "Reviewing"}
++              className="py-3.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-98"
++            >
++              {approvalCenterReview.status === "Rejected" ? "REJECTED" : "REJECT"}
++            </button>
+           </div>
++        </div>
++      </div>
+ 
+-          <div className="max-lg:col-span-1 lg:col-start-1 lg:row-start-2">
+-            <KpiDiagramSide card={kpiTsk} side="left" />
++      {/* ── Section 8 & 10: Recent Activity & Audit Security Logs ── */}
++      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
++        {/* Recent Activity Timeline */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm">
++          <div className="flex items-center gap-3 mb-6">
++            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++              <Activity size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Recent Onboarding Activity
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                Live stream log of recent verification actions
++              </p>
++            </div>
+           </div>
+-          <div className="max-lg:col-span-1 lg:col-start-3 lg:row-start-2">
+-            <KpiDiagramSide card={kpiPay} side="right" />
++
++          <div className="flex flex-col gap-4 max-h-[320px] overflow-y-auto pr-1">
++            {recentActivities.map((act, idx) => (
++              <div key={act.id} className="flex gap-4 relative">
++                {/* Timeline vertical connector line */}
++                {idx < recentActivities.length - 1 && (
++                  <div className="absolute left-[17px] top-6 bottom-[-20px] w-0.5 bg-stroke dark:bg-slate-800/80" />
++                )}
++                
++                <div className="w-9 h-9 rounded-full bg-slate-50 dark:bg-slate-850 border border-stroke dark:border-slate-800 flex items-center justify-center text-xs font-black text-indigo-500 shadow-sm flex-shrink-0 z-10">
++                  {act.time.split(" ")[0]}
++                </div>
++                
++                <div className="flex-1 p-3 bg-bg dark:bg-slate-950/20 rounded-2xl border border-stroke dark:border-slate-850">
++                  <div className="font-extrabold text-xs text-slate-900 dark:text-white uppercase tracking-wide">{act.event}</div>
++                  <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{act.desc}</div>
++                </div>
++              </div>
++            ))}
+           </div>
++        </div>
+ 
+-          <div className="max-lg:col-span-1 lg:col-start-1 lg:row-start-3">
+-            <KpiDiagramSide card={kpiLvs} side="left" />
++        {/* Audit & Security Log Tabs */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
++          <div>
++            <div className="flex items-center gap-3 mb-6">
++              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++                <Lock size={16} />
++              </div>
++              <div>
++                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                  Audit & Security
++                </h3>
++                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                  Historical security logs, application outcomes, and reviewer notes
++                </p>
++              </div>
++            </div>
++
++            {/* Log Tabs */}
++            <div className="flex gap-1.5 overflow-x-auto pb-3 mb-4 scrollbar-none border-b border-stroke dark:border-slate-800/60">
++              {[
++                { id: "login", label: "Admin Logins" },
++                { id: "approvals", label: "Approvals" },
++                { id: "rejections", label: "Rejections" },
++                { id: "docs", label: "Doc Changes" },
++                { id: "interviews", label: "Interview Notes" }
++              ].map((tab) => (
++                <button
++                  key={tab.id}
++                  onClick={() => setAuditTab(tab.id)}
++                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
++                    auditTab === tab.id
++                      ? "bg-indigo-600 text-white shadow-sm"
++                      : "bg-slate-50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
++                  }`}
++                >
++                  {tab.label}
++                </button>
++              ))}
++            </div>
++
++            <div className="max-h-[220px] overflow-y-auto pr-1">
++              {auditTab === "login" && (
++                <div className="flex flex-col gap-2">
++                  {auditLogs.login.map((log) => (
++                    <div key={log.id} className="flex justify-between items-center p-3 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-850 text-xs font-semibold">
++                      <div>
++                        <span className="font-bold text-slate-900 dark:text-white">{log.user}</span>
++                        <span className="text-[10px] text-slate-400 uppercase tracking-wider ml-2">{log.action}</span>
++                      </div>
++                      <span className="font-mono text-[10px] text-slate-550">{log.time} · {log.ip}</span>
++                    </div>
++                  ))}
++                </div>
++              )}
++
++              {auditTab === "approvals" && (
++                <div className="flex flex-col gap-2">
++                  {auditLogs.approvals.map((log) => (
++                    <div key={log.id} className="flex justify-between items-center p-3 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-850 text-xs font-semibold">
++                      <div>
++                        <span className="font-bold text-emerald-500">Approved</span>
++                        <span className="font-black text-slate-900 dark:text-white ml-2">{log.candidate}</span>
++                        <span className="text-[10px] text-slate-400 uppercase tracking-wider ml-1">({log.role})</span>
++                      </div>
++                      <span className="text-[10px] text-slate-500 font-bold">{log.approvedBy} · {log.time}</span>
++                    </div>
++                  ))}
++                </div>
++              )}
++
++              {auditTab === "rejections" && (
++                <div className="flex flex-col gap-2">
++                  {auditLogs.rejections.map((log) => (
++                    <div key={log.id} className="flex flex-col p-3 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-855 text-xs font-semibold gap-1">
++                      <div className="flex justify-between items-center">
++                        <div>
++                          <span className="font-bold text-rose-500">Rejected</span>
++                          <span className="font-black text-slate-900 dark:text-white ml-2">{log.candidate}</span>
++                        </div>
++                        <span className="text-[10px] text-slate-550 font-bold">{log.rejectedBy} · {log.time}</span>
++                      </div>
++                      <div className="text-[10px] text-slate-500 italic mt-0.5">Reason: {log.reason}</div>
++                    </div>
++                  ))}
++                </div>
++              )}
++
++              {auditTab === "docs" && (
++                <div className="flex flex-col gap-2">
++                  {auditLogs.docs.map((log) => (
++                    <div key={log.id} className="flex justify-between items-center p-3 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-850 text-xs font-semibold">
++                      <div>
++                        <span className="font-bold text-slate-900 dark:text-white">{log.candidate}</span>
++                        <span className="text-[10px] text-slate-450 uppercase tracking-wider ml-2">{log.field}</span>
++                      </div>
++                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
++                        log.status === "Approved" ? "bg-emerald-500/10 text-emerald-500" : log.status === "Failed (Mesh <90%)" ? "bg-rose-500/10 text-rose-500" : "bg-blue-500/10 text-blue-500"
++                      }`}>{log.status}</span>
++                    </div>
++                  ))}
++                </div>
++              )}
++
++              {auditTab === "interviews" && (
++                <div className="flex flex-col gap-2">
++                  {auditLogs.interviews.map((log) => (
++                    <div key={log.id} className="flex flex-col p-3 bg-bg dark:bg-slate-950/20 rounded-xl border border-stroke dark:border-slate-850 text-xs font-semibold gap-1">
++                      <div className="flex justify-between items-center">
++                        <div>
++                          <span className="font-bold text-indigo-500">{log.candidate}</span>
++                          <span className="text-[10px] text-slate-450 uppercase tracking-wider ml-2">Rating: {log.rating}</span>
++                        </div>
++                        <span className="text-[10px] text-slate-550 font-bold">Interviewer: {log.interviewer}</span>
++                      </div>
++                      <div className="text-[10px] text-slate-500 italic mt-0.5">Notes: {log.notes}</div>
++                    </div>
++                  ))}
++                </div>
++              )}
++            </div>
++          </div>
++        </div>
++      </div>
++
++      {/* ── Visual Charts Row (Grid of 5 remaining charts) ── */}
++      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
++        {/* Registration Trend (Line Chart) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm">
++          <div className="flex items-center gap-3 mb-4">
++            <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-500">
++              <TrendingUp size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Registration Trend
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                New employee registrations over time
++              </p>
++            </div>
++          </div>
++          <div className="h-[220px] w-full">
++            <LineChart
++              data={{
++                labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"],
++                datasets: [{
++                  label: "New Registrations",
++                  data: [150, 280, 410, 630, 890, 1050, 1180, 1250],
++                  borderColor: "#3b82f6",
++                  backgroundColor: "rgba(59, 130, 246, 0.1)",
++                  fill: true,
++                  tension: 0.4,
++                  borderWidth: 3
++                }]
++              }}
++              options={{
++                responsive: true,
++                maintainAspectRatio: false,
++                plugins: { legend: { display: false } },
++                scales: {
++                  x: { grid: { display: false }, ticks: tickOptions },
++                  y: { grid: gridOptions, ticks: tickOptions, beginAtZero: true }
++                }
++              }}
++            />
++          </div>
++        </div>
++
++        {/* Approval vs Rejection (Doughnut Chart) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm">
++          <div className="flex items-center gap-3 mb-4">
++            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500">
++              <CheckCircle2 size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Approval vs Rejection
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                Clearance and validation outcome ratios
++              </p>
++            </div>
+           </div>
+-          <div className="max-lg:col-span-1 lg:col-start-3 lg:row-start-3">
+-            <KpiDiagramSide card={kpiShft} side="right" />
++          <div className="h-[220px] w-full relative flex items-center justify-center">
++            <DoughnutChart
++              data={{
++                labels: ["Approved", "Rejected", "In Review"],
++                datasets: [{
++                  data: [1055, 124, 71],
++                  backgroundColor: ["#10b981", "#ef4444", "#f59e0b"],
++                  borderWidth: 0
++                }]
++              }}
++              options={doughnutOptions}
++            />
++          </div>
++        </div>
++
++        {/* Interview Success Rate (Doughnut Chart) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm">
++          <div className="flex items-center gap-3 mb-4">
++            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
++              <Award size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Interview Success Rate
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                Onboarding interviewer outcome stats
++              </p>
++            </div>
++          </div>
++          <div className="h-[220px] w-full relative flex items-center justify-center">
++            <DoughnutChart
++              data={{
++                labels: ["Pass", "Fail", "Pending/No Show"],
++                datasets: [{
++                  data: [89, 11, 5],
++                  backgroundColor: ["#8b5cf6", "#ef4444", "#64748b"],
++                  borderWidth: 0
++                }]
++              }}
++              options={doughnutOptions}
++            />
++          </div>
++        </div>
++
++        {/* Training Completion Rate (Bar Chart) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm">
++          <div className="flex items-center gap-3 mb-4">
++            <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center border border-violet-500/20 text-violet-500">
++              <BookOpen size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Training Completion Rate
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                Courses completed by functional domain
++              </p>
++            </div>
++          </div>
++          <div className="h-[220px] w-full">
++            <BarChart
++              data={{
++                labels: ["Safety", "Customer Serv.", "Technical", "Compliance"],
++                datasets: [{
++                  label: "Completion %",
++                  data: [96, 94, 91, 98],
++                  backgroundColor: "#10b981",
++                  borderRadius: 6,
++                  barThickness: 24
++                }]
++              }}
++              options={{
++                responsive: true,
++                maintainAspectRatio: false,
++                plugins: { legend: { display: false } },
++                scales: {
++                  x: { grid: { display: false }, ticks: tickOptions },
++                  y: { grid: gridOptions, ticks: tickOptions, beginAtZero: true, max: 100 }
++                }
++              }}
++            />
++          </div>
++        </div>
++
++        {/* Workforce Attendance Trend (Line Chart) */}
++        <div className="bg-surface dark:bg-slate-900/40 border border-stroke dark:border-slate-800 rounded-2xl p-6 shadow-sm md:col-span-2 lg:col-span-1">
++          <div className="flex items-center gap-3 mb-4">
++            <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-500">
++              <Clock size={16} />
++            </div>
++            <div>
++              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
++                Workforce Attendance Trend
++              </h3>
++              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
++                Average shift logins over the last month
++              </p>
++            </div>
++          </div>
++          <div className="h-[220px] w-full">
++            <LineChart
++              data={{
++                labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
++                datasets: [{
++                  label: "Attendance Rate %",
++                  data: [94, 96, 95, 97],
++                  borderColor: "#f59e0b",
++                  backgroundColor: "rgba(245, 158, 11, 0.1)",
++                  fill: true,
++                  tension: 0.3,
++                  borderWidth: 3
++                }]
++              }}
++              options={{
++                responsive: true,
++                maintainAspectRatio: false,
++                plugins: { legend: { display: false } },
++                scales: {
++                  x: { grid: { display: false }, ticks: tickOptions },
++                  y: { grid: gridOptions, ticks: tickOptions, beginAtZero: true, max: 100 }
++                }
++              }}
++            />
+           </div>
+         </div>
+       </div>
+@@ -1547,170 +2610,10 @@ function AdminDashboard() {
+         </AnimatePresence>
+       </div>
+ 
+-      {/* ── Row 1: Hours by Employee + Task Status Donut + Leave Status Pie ── */}
+-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-[2fr_1fr_1fr]">
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Hours by Employee</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Last 30 days</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {hoursByEmployee.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={hbeData} options={hbeOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-950/40 rounded-lg border border-dashed border-stroke dark:border-slate-800">No time data available</div>
+-            )}
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Task Status</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {tsLabels.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <DoughnutChart data={tsData} options={donutOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No tasks</div>
+-            )}
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Leave Status</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {lsLabels.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <DoughnutChart data={lsData} options={pieOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No leave data</div>
+-            )}
+-          </div>
+-        </div>
+-      </div>
+-
+-      {/* ── Row 2: Daily Hours Trend (full width) ── */}
+-      <div className="grid gap-6 grid-cols-1">
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Daily Hours Trend</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Last 30 days</span>
+-          </div>
+-          <div className="p-5 h-[280px] relative">
+-            <Suspense fallback={<ChartPlaceholder />}>
+-              <LineChart data={trendData} options={trendOptions} />
+-            </Suspense>
+-          </div>
+-        </div>
+-      </div>
+-
+-      {/* ── Row 3: Attendance + Task Category + Payroll Trend ── */}
+-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Daily Attendance</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Last 7 days</span>
+-          </div>
+-          <div className="p-5 h-[280px] relative">
+-            <Suspense fallback={<ChartPlaceholder />}>
+-              <BarChart data={attData} options={attOptions} />
+-            </Suspense>
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Tasks by Category</span>
+-          </div>
+-          <div className="p-5 h-[280px] relative">
+-            {tcLabels.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={tcData} options={tcOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-950/40 rounded-lg border border-dashed border-stroke dark:border-slate-800">No categorized tasks</div>
+-            )}
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Payroll Trend</span>
+-          </div>
+-          <div className="p-5 h-[280px] relative">
+-            {payrollTrend.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={ptData} options={ptOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No payroll data</div>
+-            )}
+-          </div>
+-        </div>
+-      </div>
+-
+-      {/* ── Row 4: Location-wise Analysis ── */}
+-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Employees by Location</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">{employeesByLoc.length} locations</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {employeesByLoc.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={empLocData} options={empLocOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No locations configured</div>
+-            )}
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Tasks by Location</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Active vs Total</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {tasksByLoc.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={taskLocData} options={taskLocOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No location task data</div>
+-            )}
+-          </div>
+-        </div>
+-
+-        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
+-          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
+-            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Hours by Location</span>
+-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Last 30 days</span>
+-          </div>
+-          <div className="p-5 h-[300px] relative">
+-            {hoursByLoc.length ? (
+-              <Suspense fallback={<ChartPlaceholder />}>
+-                <BarChart data={hrsLocData} options={hrsLocOptions} />
+-              </Suspense>
+-            ) : (
+-              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-900/50 rounded-lg border border-dashed border-stroke dark:border-slate-800">No location hours data</div>
+-            )}
+-          </div>
+-        </div>
+-      </div>
+-
+-      {/* ── Row 5: Location Map — Innovative Full-Width ── */}
++      {/* ── Section 9: Location Intelligence & Map ── */}
+       <div className="grid gap-6 grid-cols-1">
+         <div className="bg-surface dark:bg-slate-900/40 rounded-2xl shadow-sm border border-stroke dark:border-slate-800 overflow-hidden">
+-          {/* White Header */}
++          {/* Header */}
+           <div className="bg-surface dark:bg-slate-900/60 border-b border-stroke dark:border-slate-800 px-7 py-5 flex justify-between items-center flex-wrap gap-3">
+             <div className="flex flex-col gap-1">
+               <div className="flex items-center gap-2.5 text-[1.15rem] professional-title text-slate-900 dark:text-white">
+@@ -1819,6 +2722,25 @@ function AdminDashboard() {
+         </div>
+       </div>
+ 
++      {/* ── Row 5c: Hours by Location ── */}
++      <div className="grid gap-6 grid-cols-1">
++        <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">
++          <div className="px-6 py-5 border-b border-stroke dark:border-slate-800 flex justify-between items-center">
++            <span className="text-[1.05rem] font-bold text-slate-800 dark:text-slate-200">Hours by Location</span>
++            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">Last 30 Days</span>
++          </div>
++          <div className="p-5 h-[300px] relative">
++            {hoursByLoc.length ? (
++              <Suspense fallback={<ChartPlaceholder />}>
++                <BarChart data={hrsLocData} options={hrsLocOptions} />
++              </Suspense>
++            ) : (
++              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 text-sm italic bg-bg dark:bg-slate-950/40 rounded-lg border border-dashed border-stroke dark:border-slate-800">No hours data</div>
++            )}
++          </div>
++        </div>
++      </div>
++
+       {/* ── Row 6: Location Summary Table ── */}
+       <div className="grid gap-6 grid-cols-1">
+         <div className="bg-surface dark:bg-slate-900/40 rounded-xl shadow-sm border border-stroke dark:border-slate-800 flex flex-col overflow-hidden">

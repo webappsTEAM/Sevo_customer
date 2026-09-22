@@ -1,0 +1,77 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+backend/.venv/
+**/__pycache__/
+*.pyc
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Django
+media/
+!backend/media/catalog/
+!backend/media/catalog/**
+staticfiles/
+
+# Environment Variables — never commit real secrets
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+backend/.env.*
+frontend/.env.*
+backend/*scratch*.env
+*.bak
+patch_otp.py
+# Allow example/template files
+!backend/.env.example
+!frontend/.env.example
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+
+# Build
+dist/
+build/
+__pycache__/
+*.pyc
+
+.claude/
+backend/.env.bak
+*.bak
+frontend/parse_check.cjs
+
+# Runtime data files — should not be version-controlled
+backend/caltrack_activation_dossier.json
+*.zip
+*.tar.gz
+*.rar
+*.apk
+*.ipa
+*.tmp
+*.log
+
+# Scratch, Local Tunneling & Agent Directories
+scratch/
+**/scratch/
+/src/
+start_db_tunnel.ps1
+tunnel_daemon.py
+
+# Local keys and AI agent outputs
+.ssh/
+Claude outputs/

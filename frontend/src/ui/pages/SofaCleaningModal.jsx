@@ -1,0 +1,1119 @@
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
+import { apiRequest } from "../../api/client.js";
+import { resolveImageUrl } from "../../utils/imageUrl.js";
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
+import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx";
+import { useEditMode } from "../../state/editMode/useEditMode.js";
+import { SOFA_DETAIL_DATA } from "./catalog/sofaDetailData.js";
+import sofaCleaningImg from "../../assets/cleaning/sofa_cleaning.png";
+import mattressCleaningImg from "../../assets/cleaning/mattress_cleaning.png";
+import carpetCleaningImg from "../../assets/cleaning/carpet_cleaning.png";
+import quickExtraServicesImg from "../../assets/cleaning/quick_extra_services.png";
+
+const BOOKING_CURRENCY_SYMBOL = "₹";
+
+const SOFA_SUB_TABS = [
+  {
+    id: "sofa",
+    name: "Sofa Cleaning",
+    image: sofaCleaningImg,
+  },
+  {
+    id: "mattress",
+    name: "Mattress Cleaning",
+    image: mattressCleaningImg,
+  },
+  {
+    id: "carpet",
+    name: "Carpet Cleaning",
+    image: carpetCleaningImg,
+  },
+  {
+    id: "addons",
+    name: "Quick Extra Services",
+    image: quickExtraServicesImg,
+  }
+];
+
+const SOFA_CLEANING_SERVICES = [
+  {
+    id: "fabric-sofa-clean",
+    name: "Fabric Sofa Cleaning",
+    price: 329,
+    duration: "1 hr",
+    description: "Deep foam cleaning and vacuuming to revitalize fabric sofas.",
+    image: "/mockups/sofa_cleaning.png",
+    includes: [
+      "Foam cleaning of sofa seats and backrests",
+      "Deep vacuuming to remove dust and dirt",
+      "Cleaning of light stains and marks",
+      "Loose/removable cushions not included"
+    ]
+  },
+  {
+    id: "fabric-sofa-cushion-clean",
+    name: "Fabric Sofa & Cushion Cleaning",
+    price: 599,
+    duration: "1.5 hrs",
+    description: "Complete foam cleaning of fabric sofas including all loose cushions.",
+    image: "/mockups/sofa_cleaning.png",
+    includes: [
+      "Foam cleaning of sofa seats and backrests",
+      "Deep wet & dry vacuuming",
+      "Cleaning of light stains and marks",
+      "Loose/removable sofa cushions included"
+    ]
+  },
+  {
+    id: "leather-sofa-clean",
+    name: "Leather Sofa Cleaning",
+    price: 349,
+    duration: "1 hr",
+    description: "Gentle cleaning and conditioning to restore leather shine.",
+    image: "/mockups/leather_sofa_cleaning.png",
+    includes: [
+      "Gentle cleaning of leather sofa surfaces",
+      "Removal of dust and everyday dirt",
+      "Cleaning of seats and backrests",
+      "Leather-safe conditioning"
+    ]
+  },
+  {
+    id: "leather-sofa-cushion-clean",
+    name: "Leather Sofa & Cushion Cleaning",
+    price: 619,
+    duration: "1.5 hrs",
+    description: "Comprehensive leather cleaning and conditioning including cushions.",
+    image: "/mockups/leather_sofa_cleaning.png",
+    includes: [
+      "Gentle cleaning of leather sofa seats and backrests",
+      "Cleaning of loose/removable leather cushions",
+      "Leather-safe conditioning",
+      "Soft finishing for a clean appearance"
+    ]
+  }
+];
+
+const MATTRESS_SERVICES = [
+  {
+    id: "mattress-deep",
+    name: "Mattress Deep Cleaning",
+    price: 389,
+    duration: "1 hr",
+    description: "Deep vacuuming and shampoo wash to remove dust mites and stains.",
+    image: "/mockups/mattress_deep_cleaning.png",
+    includes: [
+      "Deep vacuuming to remove dust and dirt",
+      "Shampoo cleaning of the mattress surface",
+      "Treatment for common stains and marks",
+      "Wet vacuuming to remove dirt and moisture"
+    ]
+  },
+  {
+    id: "mattress-pillow-refresh",
+    name: "Mattress & Pillow Refresh",
+    price: 499,
+    duration: "1.5 hrs",
+    description: "Complete mattress shampooing and pillow deep cleaning.",
+    image: "/mockups/mattress_pillow_refresh.png",
+    includes: [
+      "Deep vacuuming of mattress and pillows",
+      "Shampoo cleaning for visible stains",
+      "Odour and dirt removal",
+      "Wet vacuuming for a fresher finish"
+    ]
+  }
+];
+
+const CARPET_SERVICES = [
+  {
+    id: "carpet-deep",
+    name: "Carpet Cleaning",
+    price: 369,
+    duration: "1 hr",
+    description: "Deep foam shampoo wash to extract deep-seated dirt from carpets.",
+    image: "/mockups/carpet_cleaning.png",
+    includes: [
+      "Removal of accumulated dust particles, dirt",
+      "Foam based shampooing on the carpet using a sponge",
+      "Vacuuming & wiping shampoo"
+    ]
+  }
+];
+
+const SOFA_ADDONS_SERVICES = [
+  {
+    id: "quick-dining-table",
+    name: "Dining Table & Chairs Cleaning",
+    price: 449,
+    duration: "30 mins",
+    description: "Detailed dining table and chairs surface cleaning and grease removal.",
+    image: "/mockups/quick_extra_services_hero.png",
+    includes: [
+      "Surface cleaning, sanitation, and wood/glass polishing"
+    ]
+  },
+  {
+    id: "quick-fan-clean",
+    name: "Ceiling Fan Cleaning",
+    price: 89,
+    duration: "15 mins",
+    description: "Detailed ceiling fan dusting and blade wipe down.",
+    image: "/mockups/ceiling_fan.png",
+    includes: [
+      "Fan blades, motor housing, and cover deep dusting"
+    ]
+  },
+  {
+    id: "quick-door-clean",
+    name: "Door Cleaning",
+    price: 89,
+    duration: "10 mins",
+    description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
+    image: "/mockups/door_cleaning.png",
+    includes: [
+      "Door frames, panels, hinges dusting, and handle polishing"
+    ]
+  },
+  {
+    id: "fridge-clean",
+    name: "Fridge cleaning",
+    rating: "4.83",
+    reviews: "167K reviews",
+    price: 399,
+    options: "3 options",
+    duration: "1.5 hrs",
+    description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+    image: "/mockups/appliance_cleaning_thumb.png",
+    includes: [
+      "Interior & exterior cleaning",
+      "Shelves, trays & compartments cleaning",
+      "Door seal & stain cleaning"
+    ],
+    subOptions: [
+      {
+        id: "fridge-single",
+        name: "Single door",
+        price: 399,
+        rating: "4.85",
+        reviews: "65K reviews",
+        image: "/mockups/fridge_single_door.jpg",
+        duration: "1 hr"
+      },
+      {
+        id: "fridge-double",
+        name: "Double door",
+        price: 549,
+        rating: "4.83",
+        reviews: "93K reviews",
+        image: "/mockups/fridge_double_door.jpg",
+        duration: "1.5 hrs"
+      },
+      {
+        id: "fridge-triple",
+        name: "Side by side/ Triple door",
+        price: 799,
+        rating: "4.80",
+        reviews: "9K reviews",
+        image: "/mockups/fridge_triple_door.jpg",
+        duration: "2 hrs"
+      }
+    ]
+  },
+  {
+    id: "quick-balcony-upto-4ft",
+    name: "Balcony Cleaning: Upto 4 ft Width",
+    price: 399,
+    duration: "30 mins",
+    description: "Washing and scrubbing of balcony floor and railings.",
+    image: "/mockups/balcony_cleaning.png",
+    includes: [
+      "Balcony floor washing, scrubbing, and railing dusting"
+    ]
+  },
+  {
+    id: "quick-balcony-above-4ft",
+    name: "Balcony Cleaning: Above 4 ft Width",
+    price: 549,
+    duration: "50 mins",
+    description: "Deep floor scrubbing and mesh cleaning for large balconies.",
+    image: "/mockups/balcony_cleaning.png",
+    includes: [
+      "Balcony floor washing, scrubbing, and railing dusting"
+    ]
+  }
+];
+
+
+// Inline edit controls (EditableText/EditableImage/EditModeToggleBar) now
+// come from the shared ../components/SuperAdminEditControls.jsx so every
+// service modal uses the identical, correctly-implemented pattern instead
+// of each file having its own (previously incomplete) local copy.
+
+export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
+  const [activeTab, setActiveTab] = useState("sofa");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
+  const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  // ── Super Admin Customer Web Edit Mode (Services) ───────────────────
+  // Smallest safe rollout of the same pattern already shipped for
+  // Groceries/Products (VegetableFullScreenPage): reuses the SAME catalog
+  // Package model/API (PUT /settings/catalog/v2/packages/<id>/), gated
+  // server-side by RequireModuleAccess("catalog","edit"). Only items that
+  // matched a real DB package (item.db_id set above) are editable -- a
+  // customer never sees this, canEnterServiceEditMode is false unless
+  // isSuperAdmin(user).
+  const { canEdit: canEnterServiceEditMode, isEditMode: serviceEditMode, setEditMode: setServiceEditMode } = useEditMode();
+  const [saveNotice, setSaveNotice] = useState(null);
+
+  const handleSaveServiceField = async (item, field, value) => {
+    if (!canEnterServiceEditMode || !item.db_id) return;
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${item.db_id}/`, {
+        method: "PUT",
+        json: { [field]: value },
+      });
+      if (res && res.success && res.data) {
+        const pkg = res.data;
+        setDbPackages((prev) => prev.map((p) => (p.id === item.db_id ? { ...p, ...pkg } : p)));
+        setSaveNotice({ type: "success", text: `Saved "${pkg.name}" — customers will see this on next load.` });
+      } else {
+        setSaveNotice({ type: "error", text: res?.message || "Save failed." });
+      }
+    } catch (err) {
+      setSaveNotice({ type: "error", text: err?.body?.message || "Save failed — you may not have permission to edit the catalog." });
+    } finally {
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
+  };
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
+
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
+
+  const addItemToCart = (id, name, price, duration, gst_rate, platform_fee) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { id, name, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
+    });
+  };
+
+  const removeItemFromCart = (id) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (!existing) return prev;
+      if (existing.quantity === 1) return prev.filter(i => i.id !== id);
+      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
+
+  const getDynamicServices = () => {
+    const hardcodedList = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
+    let list = JSON.parse(JSON.stringify(hardcodedList));
+
+    // dbPackages here is unscoped (ALL platform packages), so before we can
+    // safely treat this tab as admin-driven we need to know which
+    // service/category it actually corresponds to. Discover that anchor
+    // from whichever hardcoded items on this tab already resolve to a real
+    // DB row -- WITHOUT mutating `list` yet, so we can decide below whether
+    // to go fully DB-driven or fall back to the hardcoded placeholder.
+    const seenServiceSlugs = new Set();
+    const seenCategorySlugs = new Set();
+    if (dbPackages.length > 0) {
+      const collectAnchor = (dbMatch) => {
+        if (!dbMatch) return;
+        if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+        if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+      };
+      hardcodedList.forEach(item => {
+        if (Array.isArray(item.subOptions)) {
+          collectAnchor(dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id)));
+          item.subOptions.forEach(subOpt => collectAnchor(dbPackages.find(p => p.slug === subOpt.id)));
+        } else {
+          collectAnchor(dbPackages.find(p => p.slug === item.id));
+        }
+      });
+    }
+
+    const dbItemsForTab = (seenServiceSlugs.size > 0 || seenCategorySlugs.size > 0)
+      ? dbPackages.filter(p => (p.service_slug && seenServiceSlugs.has(p.service_slug)) || (p.category_slug && seenCategorySlugs.has(p.category_slug)))
+      : [];
+
+    // Fully admin-driven once this tab's service/category is known to exist
+    // in the catalog: render straight from the database so add/edit/remove
+    // all just work, with nothing hardcoded lingering behind. The hardcoded
+    // list above is only a bootstrap placeholder for a tab nobody has
+    // populated in the catalog yet.
+    if (dbItemsForTab.length > 0) {
+      return dbItemsForTab.map(p => ({
+        id: p.slug || String(p.id),
+        db_id: p.id,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "1 hr",
+        description: p.description || "",
+        image: p.image || SOFA_SUB_TABS.find(t => t.id === activeTab)?.image || "",
+        includes: Array.isArray(p.includes) ? p.includes : [],
+        tools: Array.isArray(p.tools) ? p.tools : [],
+        ready: Array.isArray(p.ready) ? p.ready : [],
+        reviews_list: Array.isArray(p.reviews) ? p.reviews : [],
+        faqs: Array.isArray(p.faqs) ? p.faqs : [],
+        gst_rate: p.gst_rate !== undefined && p.gst_rate !== null ? parseFloat(p.gst_rate) : 18,
+        platform_fee: p.platform_fee !== undefined && p.platform_fee !== null ? parseFloat(p.platform_fee) : 29,
+      }));
+    }
+
+    if (dbPackages.length > 0) {
+      const seenDbIds = new Set();
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
+          if (parentDbMatch) {
+            seenDbIds.add(parentDbMatch.id);
+            if (parentDbMatch.service_slug) seenServiceSlugs.add(parentDbMatch.service_slug);
+            if (parentDbMatch.category_slug) seenCategorySlugs.add(parentDbMatch.category_slug);
+            // Real Package row id -- needed so Super Admin Edit Mode can PUT
+            // back to the exact row this card's content came from.
+            item.db_id = parentDbMatch.id;
+            item.name = parentDbMatch.name;
+            item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
+            item.platform_fee = parentDbMatch.platform_fee !== undefined && parentDbMatch.platform_fee !== null ? parseFloat(parentDbMatch.platform_fee) : 29;
+            item.duration = parentDbMatch.duration || item.duration;
+            item.description = parentDbMatch.description || item.description;
+            item.image = parentDbMatch.image || item.image;
+            item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
+            if (Array.isArray(parentDbMatch.tools) && parentDbMatch.tools.length > 0) item.tools = parentDbMatch.tools;
+            if (Array.isArray(parentDbMatch.ready) && parentDbMatch.ready.length > 0) item.ready = parentDbMatch.ready;
+            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews_list = parentDbMatch.reviews;
+            if (Array.isArray(parentDbMatch.faqs) && parentDbMatch.faqs.length > 0) item.faqs = parentDbMatch.faqs;
+          }
+
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              seenDbIds.add(dbMatch.id);
+              if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+              if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+              const updatedSub = {
+                ...subOpt,
+                // Real Package row id for THIS sub-option -- without this,
+                // nested sub-options (e.g. "Single door" / "Double door"
+                // under Fridge Cleaning) could never be individually
+                // edited in Super Admin Edit Mode even though the parent
+                // card was.
+                db_id: dbMatch.id,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
+                platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
+                duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
+                image: dbMatch.image || subOpt.image,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes,
+              };
+              if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) updatedSub.tools = dbMatch.tools;
+              if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) updatedSub.ready = dbMatch.ready;
+              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews_list = dbMatch.reviews;
+              if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) updatedSub.faqs = dbMatch.faqs;
+              return updatedSub;
+            }
+            return {
+              ...subOpt,
+              gst_rate: subOpt.gst_rate || 18,
+              platform_fee: subOpt.platform_fee || 29,
+            };
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+            item.gst_rate = item.subOptions[0].gst_rate || 18;
+            item.platform_fee = item.subOptions[0].platform_fee || 29;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            seenDbIds.add(dbMatch.id);
+            if (dbMatch.service_slug) seenServiceSlugs.add(dbMatch.service_slug);
+            if (dbMatch.category_slug) seenCategorySlugs.add(dbMatch.category_slug);
+            // Real Package row id -- needed so Super Admin Edit Mode can
+            // PUT back to the exact row this card's content came from
+            // (item.id above stays the local UI slug, e.g. "fridge-clean",
+            // not the database id).
+            item.db_id = dbMatch.id;
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.image = dbMatch.image || item.image;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
+            if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
+            if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          } else {
+            item.gst_rate = item.gst_rate || 18;
+            item.platform_fee = item.platform_fee || 29;
+          }
+        }
+        return item;
+      });
+    }
+    return list;
+  };
+
+  const currentServicesList = getDynamicServices();
+
+  const activeServices = currentServicesList.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (Array.isArray(s.includes) && s.includes.some(inc => {
+      const text = typeof inc === "string" ? inc : (inc?.text || "");
+      return text.toLowerCase().includes(searchQuery.toLowerCase());
+    }))
+  );
+
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  return (
+    <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
+      {/* Super Admin Customer Web Edit Mode toggle -- never rendered for a
+          normal customer; canEnterServiceEditMode is false unless
+          isSuperAdmin(user). Only items matched to a real catalog Package
+          (service.db_id) show edit controls when this is on. */}
+      <EditModeToggleBar
+        visible={canEnterServiceEditMode}
+        active={serviceEditMode}
+        onToggle={() => setServiceEditMode((v) => !v)}
+      />
+      <SaveNoticeToast notice={saveNotice} />
+      {/* Sticky Header + Tabs */}
+      <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md shadow-xs border-b border-[var(--sevo-border)]">
+        <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <ChevronLeft size={14} /> Back to Services
+            </button>
+            <h2 className="text-xl font-black text-[var(--sevo-text-primary)]">Sofa Cleaning</h2>
+          </div>
+        </div>
+        <div className="flex gap-4 pb-2 pt-1 px-4 sm:px-6 border-b border-[var(--sevo-border)] justify-start bg-[var(--sevo-surface)] overflow-x-auto scrollbar-none">
+          {SOFA_SUB_TABS.map(tab => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group outline-none"
+              >
+                <div className="w-14 h-14 mb-1 flex items-center justify-center transition-transform duration-200">
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = sofaCleaningImg;
+                    }}
+                    className={`w-full h-full object-contain transition-all duration-200 ${
+                      isSelected
+                        ? "scale-110 drop-shadow-md"
+                        : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    }`}
+                  />
+                </div>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-emerald-700 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
+                }`}>
+                  {tab.name}
+                </span>
+                {isSelected ? (
+                  <div className="w-7 h-1 rounded-full bg-emerald-600 mt-1" />
+                ) : (
+                  <div className="w-7 h-1 rounded-full bg-transparent mt-1" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-6 px-4 sm:px-6 max-w-7xl mx-auto pb-20">
+
+        {/* Left Column */}
+        <div className="flex-1 space-y-5 lg:pr-6 w-full">
+
+          {/* Section title */}
+          <div className="pt-1">
+            <h3 className="text-sm font-bold text-[var(--sevo-text-primary)] flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-[var(--sevo-primary)] rounded-full" />
+              {activeTab === "sofa" ? "Sofa Cleaning" : activeTab === "mattress" ? "Mattress Cleaning" : "Carpet Cleaning"}
+            </h3>
+          </div>
+
+          <div className="space-y-4">
+            {activeServices.map((service, idx) => {
+              const count = getCount(service.id);
+              const isFirst = idx === 0 && !searchQuery;
+              return (
+                <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 shadow-xs hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
+                  {/* First item image hero */}
+                  {isFirst && (
+                    <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-4 border border-[var(--sevo-border)] flex items-center justify-center p-4 bg-white">
+                      <img
+                        src={resolveImageUrl((() => {
+                          const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
+                          if (activeTab === "sofa") return customB.sofa || sofaCleaningImg;
+                          if (activeTab === "mattress") return customB.mattress || mattressCleaningImg;
+                          return customB.carpet || carpetCleaningImg;
+                        })(), sofaCleaningImg)}
+                        alt={service.name}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = sofaCleaningImg;
+                        }}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">
+                        <EditableText
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.name}
+                          onSave={(v) => handleSaveServiceField(service, "name", v)}
+                        />
+                      </h4>
+
+                      {(service.description || (serviceEditMode && service.db_id)) && (
+                        <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">
+                          <EditableText
+                            active={Boolean(serviceEditMode && service.db_id)}
+                            value={service.description}
+                            onSave={(v) => handleSaveServiceField(service, "description", v)}
+                            multiline
+                            placeholder="Add a description…"
+                          />
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                        <span className="text-base font-black text-[var(--sevo-text-primary)]">
+                          {serviceEditMode && service.db_id ? (
+                            <EditableText
+                              active={true}
+                              type="number"
+                              prefix="₹"
+                              value={service.price}
+                              onSave={(v) => handleSaveServiceField(service, "base_price", v)}
+                            />
+                          ) : (
+                            service.options ? `Starts at ₹${service.price}` : `₹${service.price}`
+                          )}
+                        </span>
+                        <span className="text-[var(--sevo-border)]">•</span>
+                        <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
+                      </div>
+
+                      {service.includes && service.includes.length > 0 && (
+                        <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
+                          {service.includes
+                            .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
+                            .map(inc => typeof inc === "string" ? inc : inc.text)
+                            .map((item, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                      <button 
+                        onClick={() => setSelectedServiceDetails(service)}
+                        className="text-xs font-semibold text-[var(--sevo-primary)] mt-2 hover:underline bg-transparent border-0 cursor-pointer"
+                      >
+                        View details
+                      </button>
+                    </div>
+
+                    {/* Image + add button */}
+                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] flex items-center justify-center">
+                        <EditableImage
+                          active={Boolean(serviceEditMode && service.db_id)}
+                          value={service.image}
+                          onSave={(url) => handleSaveServiceField(service, "image", url)}
+                          assetType="services"
+                          alt={service.name}
+                          className="w-full h-full"
+                          imgClassName="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                        {count > 0 ? (
+                          <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
+                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer">-</button>
+                            <span>{count}</span>
+                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer">+</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (service.subOptions) {
+                                setSelectedServiceDetails(service);
+                              } else {
+                                addItemToCart(service.id, service.name, service.price, service.duration);
+                              }
+                            }}
+                            className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-[11px] py-1.5 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                          >
+                            <ShoppingCart size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+                      {service.options && (
+                        <p className="absolute bottom-0 text-[10px] text-[var(--sevo-text-muted)] text-center font-bold tracking-tight w-full">{service.options}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Column: Order Summary */}
+        <div className="w-full lg:w-[350px] shrink-0 sticky top-[100px] self-start bg-[var(--sevo-surface)] border border-[var(--sevo-border)] p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
+          <div className="space-y-4">
+            <div className="bg-[var(--sevo-surface)] border border-[var(--sevo-border)] rounded-2xl p-4 shadow-xs space-y-3">
+              <div className="border-b border-[var(--sevo-border-subtle)] pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-[var(--sevo-text-primary)] uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-[var(--sevo-text-muted)]">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-[var(--sevo-text-primary)] block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-[var(--sevo-text-muted)] block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-[var(--sevo-text-primary)]">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-[var(--sevo-text-muted)] text-xs">
+                  No services added. Select from the left.
+                </div>
+              )}
+
+              {cart.length > 0 ? (() => {
+                const itemTotal = cart.reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+                const totalGst = cart.reduce((s, i) => s + Math.round((i.price * (i.quantity || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+                const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+                const grandTotal = itemTotal + totalGst + platformFee;
+                return (
+                  <div className="border-t border-[var(--sevo-border-subtle)] pt-2.5 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
+                      <span>Item Total</span>
+                      <span className="text-[var(--sevo-text-primary)] font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
+                      <span>Taxes & GST (18%)</span>
+                      <span className="text-[var(--sevo-secondary)] font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
+                      <span>Platform Fee</span>
+                      <span className="text-[var(--sevo-primary)] font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm border-t border-[var(--sevo-border-subtle)] pt-2">
+                      <span>Total Amount</span>
+                      <span className="text-[var(--sevo-primary)]">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="border-t border-[var(--sevo-border-subtle)] pt-2.5 space-y-1.5 text-xs">
+                  <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-1">
+                    <span>Total Amount</span>
+                    <span>₹0</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-[var(--sevo-border-subtle)]">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3.5 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] disabled:bg-[var(--sevo-surface-raised)] disabled:text-[var(--sevo-text-muted)] disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <AppBannerAndFooter />
+
+      {/* Details modal overlay */}
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
+            {/* Close button */}
+            <button 
+              onClick={() => setSelectedServiceDetails(null)} 
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors border-none"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header: full width hero image */}
+            <div className="w-full h-36 border-b border-slate-100 shrink-0 bg-slate-100">
+              <img 
+                src={selectedServiceDetails.image} 
+                alt={selectedServiceDetails.name} 
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+              {/* Title, rating and add wrap */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
+                
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                  <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
+                  <span className="text-slate-800">4.82</span>
+                  <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
+                </div>
+
+                {!selectedServiceDetails.subOptions ? (
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">
+                        ₹{selectedServiceDetails.price}
+                        <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-24">
+                      {getCount(selectedServiceDetails.id) > 0 ? (
+                        <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                          <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
+                          <span>{getCount(selectedServiceDetails.id)}</span>
+                          <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
+                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer border-none"
+                        >
+                          <ShoppingCart size={13} /> Add
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100/80 rounded-2xl p-4 text-center">
+                    <span className="text-xs font-bold text-slate-500">Please select an option below</span>
+                  </div>
+                )}
+              </div>
+
+
+                            {/* Sub-options selector */}
+              {selectedServiceDetails.subOptions && (
+                <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider mb-3">Choose Variant</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedServiceDetails.subOptions.map(sub => {
+                      const subCount = getCount(sub.id);
+                      return (
+                        <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
+                          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
+                            <EditableImage
+                              active={Boolean(serviceEditMode && sub.db_id)}
+                              value={sub.image}
+                              onSave={(url) => handleSaveServiceField(sub, "image", url)}
+                              assetType="services"
+                              alt={sub.name}
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">
+                                <EditableText
+                                  active={Boolean(serviceEditMode && sub.db_id)}
+                                  value={sub.name}
+                                  onSave={(v) => handleSaveServiceField(sub, "name", v)}
+                                />
+                              </h5>
+                            </div>
+                            <div className="w-full mt-auto">
+                              <div className="text-xs font-black text-slate-900 mb-2">
+                                {serviceEditMode && sub.db_id ? (
+                                  <EditableText
+                                    active={true}
+                                    type="number"
+                                    prefix="₹"
+                                    value={sub.price}
+                                    onSave={(v) => handleSaveServiceField(sub, "base_price", v)}
+                                  />
+                                ) : (
+                                  `₹${sub.price}`
+                                )}
+                              </div>
+                              {subCount > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
+                                  <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
+                                  <span>{subCount}</span>
+                                  <button onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)} className="hover:text-emerald-900">+</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[10px] py-1 rounded-lg hover:bg-slate-50 transition-all shadow-sm uppercase flex items-center justify-center gap-0.5"
+                                >
+                                  Add
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tools & Products We Use */}
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const rawTools = Array.isArray(selectedServiceDetails.tools)
+                  ? selectedServiceDetails.tools
+                  : (SOFA_DETAIL_DATA[id]?.tools || []);
+                const tools = rawTools
+                  .filter(t => typeof t === 'string' ? true : t.enabled !== false)
+                  .map(t => typeof t === 'string' ? t : t.text);
+                if (tools.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                    <div className="space-y-2">
+                      {tools.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* What You Need to Keep Ready */}
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const rawReady = Array.isArray(selectedServiceDetails.ready)
+                  ? selectedServiceDetails.ready
+                  : (SOFA_DETAIL_DATA[id]?.ready || []);
+                const readyList = rawReady
+                  .filter(r => typeof r === 'string' ? true : r.enabled !== false)
+                  .map(r => typeof r === 'string' ? r : r.text);
+                if (readyList.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                    <div className="space-y-2">
+                      {readyList.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Reviews */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                {(() => {
+                  const id = selectedServiceDetails.id;
+                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews_list) && selectedServiceDetails.reviews_list.length > 0)
+                    ? selectedServiceDetails.reviews_list
+                    : (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!SOFA_DETAIL_DATA[id]?.reviews || selectedServiceDetails.reviews.length >= SOFA_DETAIL_DATA[id].reviews.length))
+                      ? selectedServiceDetails.reviews
+                      : (SOFA_DETAIL_DATA[id]?.reviews || []);
+                  const reviews = rawReviews.filter(r => r.enabled !== false);
+                  return reviews.map((rev, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                          <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                          <span>{rev.rating}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed italic">
+                        {rev.text}
+                      </p>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* Frequently Asked Questions */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                <div className="space-y-2">
+                  {(() => {
+                    const id = selectedServiceDetails.id;
+                    const rawFaqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0 && (!SOFA_DETAIL_DATA[id]?.faqs || selectedServiceDetails.faqs.length >= SOFA_DETAIL_DATA[id].faqs.length))
+                      ? selectedServiceDetails.faqs
+                      : (SOFA_DETAIL_DATA[id]?.faqs || []);
+                    const faqs = rawFaqs.filter(f => f.enabled !== false);
+                    return faqs.map((faq, idx) => {
+                      const isFaqOpen = activeFaq === idx;
+                      return (
+                        <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                          <button
+                            onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50 border-none"
+                          >
+                            <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
+                            <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
+                          </button>
+                          {isFaqOpen && (
+                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                              {faq.a}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Footer with teal proceed button */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+              {(() => {
+                if (selectedServiceDetails.subOptions) {
+                  const subTotalVal = selectedServiceDetails.subOptions.reduce((acc, sub) => {
+                    return acc + (sub.price * getCount(sub.id));
+                  }, 0);
+                  const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                  const gstAmt = Math.round(subTotalVal * (gstPct / 100));
+                  const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                  const total = subTotalVal > 0 ? (subTotalVal + gstAmt + platFee) : 0;
+                  return subTotalVal > 0 ? (
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                        <span>Fare: ₹{subTotalVal}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                  );
+                }
+                const baseFare = selectedServiceDetails.price || 0;
+                const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                const gstAmt = Math.round(baseFare * (gstPct / 100));
+                const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                const total = baseFare + gstAmt + platFee;
+                return (
+                  <div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                      <span>Fare: ₹{baseFare}</span>
+                      <span>•</span>
+                      <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                      <span>•</span>
+                      <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                    </div>
+                    <div className="text-sm font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                  </div>
+                );
+              })()}
+              <button
+                onClick={() => {
+                  if (!selectedServiceDetails.subOptions) {
+                    if (getCount(selectedServiceDetails.id) === 0) {
+                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration, selectedServiceDetails.gst_rate, selectedServiceDetails.platform_fee);
+                    }
+                  }
+                  setSelectedServiceDetails(null);
+                }}
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer border-none active:scale-95"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
