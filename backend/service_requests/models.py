@@ -376,12 +376,6 @@ class ServiceRequest(models.Model):
         "EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED",
     ]
 
-    # Workforce dispatch fields
-    dispatch_attempts = models.IntegerField(default=0)
-    dispatch_status = models.CharField(max_length=50, default="PENDING")
-    last_dispatch_error = models.TextField(blank=True, default="")
-    last_dispatched_at = models.DateTimeField(null=True, blank=True)
-
     def set_logistics_leg(self, leg, actor=None, save=True):
         """
         Advance this booking's logistics leg, appending to the audit trail.
@@ -500,10 +494,16 @@ class ServiceRequest(models.Model):
     parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
                                        null=True, blank=True,
                                        related_name="child_requests")
-    request_kind   = models.CharField(max_length=30, default="standard", db_index=True,
+    request_kind   = models.CharField(max_length=50, default="standard", db_index=True,
                                       choices=[("standard", "Standard"),
                                                ("inspection", "Inspection"),
-                                               ("quoted_work", "Quoted Work")])
+                                               ("quoted_work", "Quoted Work"),
+                                               ("ESTIMATION", "Estimation / Site Consultation"),
+                                               ("DIRECT", "Direct Standard Job"),
+                                               ("WORK", "Actual Work Execution Job")])
+    catalog_service_id = models.CharField(max_length=100, blank=True, default="", db_index=True,
+                                          help_text="Catalog service ID or package slug")
+    catalog_mapping_status = models.CharField(max_length=50, blank=True, default="UNMAPPED", db_index=True)
     quote_number   = models.CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
@@ -529,16 +529,6 @@ class ServiceRequest(models.Model):
     service_zone_id_snapshot   = models.IntegerField(null=True, blank=True, db_index=False)
     service_zone_name_snapshot = models.CharField(max_length=150, blank=True, default="")
 
-    # Multi-service booking / technician delay signaling (Sept 2026).
-    # Deliberately NOT part of Status/ALLOWED_TRANSITIONS (state_machine.py) --
-    # a technician being late must never block their own or another
-    # technician's task from progressing through the real state machine, so
-    # this is an additive flag layered alongside `status`, set by the vendor
-    # app's WorkforceJobReportDelayView and read by admin/customer surfaces.
-    is_delayed          = models.BooleanField(default=False, db_index=True)
-    delay_reason        = models.CharField(max_length=255, blank=True, default="")
-    delay_reported_at   = models.DateTimeField(null=True, blank=True)
-
     class JobType(models.TextChoices):
         SERVICE = "SERVICE", "Service"
         ESTIMATION = "ESTIMATION", "Estimation"
@@ -559,10 +549,27 @@ class ServiceRequest(models.Model):
         db_index=True,
         help_text="Client-supplied idempotency key to prevent duplicate bookings",
     )
+    class DispatchStatus(models.TextChoices):
+        PENDING       = "PENDING",       "Pending"
+        DISPATCHED    = "DISPATCHED",    "Dispatched"
+        PENDING_RETRY = "PENDING_RETRY", "Pending Retry"
+        FAILED        = "FAILED",        "Failed"
+
     vendor_id = models.CharField(max_length=100, blank=True, default="", help_text="Opaque vendor identifier")
     vendor_name = models.CharField(max_length=255, blank=True, default="", help_text="Vendor display name snapshot")
     vendor_confirmed_at = models.DateTimeField(null=True, blank=True)
 
+    # External Workforce Dispatch Tracking
+    dispatch_status = models.CharField(
+        max_length=30,
+        choices=DispatchStatus.choices,
+        default=DispatchStatus.PENDING,
+        db_index=True,
+        help_text="Current dispatch state to external workforce system",
+    )
+    dispatch_attempts = models.PositiveIntegerField(default=0, help_text="Number of dispatch attempts")
+    last_dispatch_error = models.TextField(blank=True, default="", help_text="Last recorded dispatch error message")
+    last_dispatched_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of latest dispatch attempt")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -574,6 +581,7 @@ class ServiceRequest(models.Model):
             models.Index(fields=["company", "payment_status", "created_at"]),
             models.Index(fields=["customer", "created_at"]),
             models.Index(fields=["phone"]),
+            models.Index(fields=["dispatch_status", "created_at"], name="service_req_disp_stat_idx"),
             models.Index(fields=["job_type", "status"], name="service_req_job_typ_6bd73d_idx"),
             models.Index(fields=["job_type", "created_at"], name="service_req_job_typ_4f9cb8_idx"),
         ]
@@ -2757,154 +2765,6 @@ class TechnicianLocation(models.Model):
         return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
 
 # ==============================================================================
-# AC REPAIR & SPARE PARTS RATE CARD MODEL
-# ==============================================================================
-
-class ACRepairRateCard(models.Model):
-    """
-    Dedicated database table storing AC spare parts, repair rates, and service options.
-    Admin can edit, add, or toggle active status of any rate card line item.
-    """
-    CATEGORY_CHOICES = [
-        ("installation", "Installation / Re-installation"),
-        ("electrical", "Electrical Parts"),
-        ("minor", "Minor Parts"),
-        ("gas_refrigeration", "Gas / Refrigeration Parts"),
-        ("fans_motors", "Fans / Motors"),
-        ("other_parts", "Other Parts"),
-        ("adjustment_basic", "Adjustment / Basic Services"),
-    ]
-
-    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, db_index=True)
-    category_name = models.CharField(max_length=100, blank=True, default="")
-    item_code = models.CharField(max_length=50, blank=True, default="", db_index=True)
-    name = models.CharField(max_length=200)
-    price = models.CharField(max_length=100)
-    base_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    note = models.TextField(blank=True, default="")
-    is_active = models.BooleanField(default=True, db_index=True)
-    sort_order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["sort_order", "id"]
-        verbose_name = "AC Repair Rate Card Item"
-        verbose_name_plural = "AC Repair Rate Card Items"
-        indexes = [
-            models.Index(fields=["category", "is_active"]),
-            models.Index(fields=["item_code"]),
-        ]
-
-    def __str__(self):
-        return f"[{self.category}] {self.name} ({self.price})"
-
-
-# ==============================================================================
-# AC INSPECTION & SPARE PARTS RATE CARD RELATIONAL MODELS (SINGLE SOURCE OF TRUTH)
-# ==============================================================================
-
-class ACInspectionRateCategory(models.Model):
-    """
-    Relational category for AC spare parts and repair services.
-    PostgreSQL is the single source of truth (no hardcoded category list).
-    """
-    name = models.CharField(max_length=150)
-    slug = models.SlugField(max_length=100, unique=True, db_index=True)
-    description = models.TextField(blank=True, default="")
-    display_order = models.PositiveIntegerField(default=0)
-    is_active = models.BooleanField(default=True, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["display_order", "id"]
-        verbose_name = "AC Inspection Rate Category"
-        verbose_name_plural = "AC Inspection Rate Categories"
-
-    def __str__(self):
-        return f"{self.name} ({self.slug})"
-
-
-class ACInspectionRateItem(models.Model):
-    """
-    Individual spare part or repair service item stored in PostgreSQL.
-    Validated DecimalField for money, units, service types, and display ordering.
-    """
-    SERVICE_TYPE_CHOICES = [
-        ("SPARE_PART", "Spare Part"),
-        ("LABOR", "Labor / Service"),
-        ("REPAIR", "Repair"),
-        ("INSTALLATION", "Installation"),
-        ("ADJUSTMENT", "Adjustment / Maintenance"),
-    ]
-
-    category = models.ForeignKey(
-        ACInspectionRateCategory,
-        on_delete=models.PROTECT,
-        related_name="items",
-        help_text="Category this rate item belongs to"
-    )
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True, default="")
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    unit = models.CharField(max_length=50, blank=True, default="per piece")
-    service_type = models.CharField(max_length=50, blank=True, default="SPARE_PART", choices=SERVICE_TYPE_CHOICES)
-    display_order = models.PositiveIntegerField(default=0)
-    is_active = models.BooleanField(default=True, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["display_order", "id"]
-        verbose_name = "AC Inspection Rate Item"
-        verbose_name_plural = "AC Inspection Rate Items"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(price__gte=Decimal("0.00")),
-                name="check_ac_rate_item_price_gte_0"
-            )
-        ]
-        indexes = [
-            models.Index(fields=["category", "is_active"]),
-            models.Index(fields=["is_active", "display_order"]),
-        ]
-
-    def __str__(self):
-        return f"[{self.category.name}] {self.name} (₹{self.price})"
-
-
-class ACInspectionConfiguration(models.Model):
-    """
-    Authoritative configuration for AC Inspection & Diagnostic fees.
-    """
-    diagnostic_fee = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("199.00"),
-        help_text="Authoritative doorstep inspection fee"
-    )
-    currency = models.CharField(max_length=10, default="INR")
-    is_active = models.BooleanField(default=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "AC Inspection Configuration"
-        verbose_name_plural = "AC Inspection Configurations"
-
-    @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(
-            id=1,
-            defaults={"diagnostic_fee": Decimal("199.00"), "currency": "INR", "is_active": True}
-        )
-        return obj
-
-    def __str__(self):
-        return f"AC Inspection Fee: {self.currency} {self.diagnostic_fee}"
-
-
-# ==============================================================================
 # AC INSPECTION / ESTIMATION SYSTEM MODELS (PHASE 2)
 # ==============================================================================
 
@@ -3274,20 +3134,8 @@ class EstimationQuotationItem(models.Model):
         blank=True,
         related_name="quotation_items"
     )
-    rate_item = models.ForeignKey(
-        "ACInspectionRateItem",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="quotation_snapshots",
-        help_text="Reference to original AC rate item if quoted from rate card"
-    )
     catalog_service_id = models.CharField(max_length=100, blank=True, default="", help_text="Catalog service or package ID")
     service_name = models.CharField(max_length=255, help_text="Snapshot of service name")
-    item_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of part/service name at quote creation")
-    category_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of category name at quote creation")
-    unit_price_snapshot = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Immutable snapshot of unit price")
-    selected_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when technician selected this item")
     description = models.TextField(blank=True, default="")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
     unit = models.CharField(max_length=50, blank=True, default="job")
@@ -3369,107 +3217,3 @@ class EventOutbox(models.Model):
 
     def __str__(self):
         return f"Event {self.event_type} [{self.status}] on {self.aggregate_type}:{self.aggregate_id}"
-
-
-class CustomerInspection(models.Model):
-    """
-    Booking-specific customer inspection record.
-    1:1 relationship with ServiceRequest (service_request_id).
-    Common/unified model generic across service categories (AC, TV, Electrical, etc.).
-    Holds authoritative immutable snapshot of diagnostic fee and name at booking time.
-    """
-    class Status(models.TextChoices):
-        BOOKED      = "BOOKED",      "Booked"
-        ASSIGNED    = "ASSIGNED",    "Assigned"
-        IN_PROGRESS = "IN_PROGRESS", "In Progress"
-        COMPLETED   = "COMPLETED",   "Completed"
-        CANCELLED   = "CANCELLED",   "Cancelled"
-
-    service_request = models.OneToOneField(
-        "ServiceRequest",
-        on_delete=models.CASCADE,
-        related_name="customer_inspection",
-        db_index=True,
-        help_text="The parent booking this inspection belongs to",
-    )
-    inspection_configuration = models.ForeignKey(
-        "ACInspectionConfiguration",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="customer_inspections",
-        db_index=True,
-        help_text="Reference to the master configuration used at booking time",
-    )
-    inspection_name_snapshot = models.CharField(
-        max_length=200,
-        default="AC Inspection & Diagnostic Visit",
-        help_text="Authoritative immutable snapshot of inspection title at booking time",
-    )
-    diagnostic_fee_snapshot = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("199.00"),
-        help_text="Authoritative diagnostic fee snapshot captured at booking confirmation",
-    )
-    currency = models.CharField(max_length=10, default="INR")
-    quantity = models.PositiveIntegerField(default=1)
-    status = models.CharField(
-        max_length=30,
-        choices=Status.choices,
-        default=Status.BOOKED,
-        db_index=True,
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["service_request"]),
-            models.Index(fields=["inspection_configuration"]),
-            models.Index(fields=["status"]),
-        ]
-
-    def __str__(self):
-        return f"CustomerInspection #{self.id} for SR #{self.service_request_id} ({self.status}) - Fee: ₹{self.diagnostic_fee_snapshot}"
-
-
-class CustomerInspectionRateSnapshot(models.Model):
-    """
-    Relational rate-card item snapshot created at the moment of customer booking confirmation.
-    Contains individual relational rows for all active master rate-card items.
-    Allows vendor and technician applications to query the exact historical rate-card snapshot.
-    """
-    customer_inspection = models.ForeignKey(
-        CustomerInspection,
-        on_delete=models.CASCADE,
-        related_name="rate_snapshots",
-        db_index=True,
-    )
-    rate_item = models.ForeignKey(
-        "ACInspectionRateItem",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="customer_snapshots",
-        db_index=True,
-    )
-    category_name_snapshot = models.CharField(max_length=150)
-    item_name_snapshot = models.CharField(max_length=200)
-    description_snapshot = models.TextField(blank=True, default="")
-    price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
-    unit_snapshot = models.CharField(max_length=50, default="fixed")
-    service_type_snapshot = models.CharField(max_length=50, default="SPARE_PART")
-    display_order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["display_order", "id"]
-        indexes = [
-            models.Index(fields=["customer_inspection"]),
-            models.Index(fields=["rate_item"]),
-        ]
-
-    def __str__(self):
-        return f"RateSnapshot #{self.id}: {self.item_name_snapshot} @ ₹{self.price_snapshot} (Inspection #{self.customer_inspection_id})"

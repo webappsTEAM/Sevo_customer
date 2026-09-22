@@ -17,11 +17,11 @@ service checkout, per the approved two-cart architecture.
 import os
 
 from django.db import transaction
-from rest_framework import permissions, status
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsCustomer, IsAdminRole
+from accounts.permissions import IsCustomer
 from carts.models import Cart, CartType, CartStatus
 from inventory.services.vegetable_stock_service import (
     reserve_stock_for_booking_items,
@@ -29,13 +29,13 @@ from inventory.services.vegetable_stock_service import (
 )
 from inventory.utils.unit_conversion import parse_pack_size_grams
 
-from .models import Order, GroceryOrder, GroceryOrderItem
+from .models import Order, GroceryOrder, GroceryOrderItem, MarketplaceOrder
 from .serializers import (
     GroceryOrderSerializer,
     GroceryCheckoutSerializer,
-    OrderDetailSerializer,
     serialize_service_order,
     serialize_grocery_order,
+    serialize_marketplace_order,
 )
 
 
@@ -154,40 +154,13 @@ class MyOrdersView(APIView):
     def get(self, request):
         service_orders = Order.objects.filter(customer=request.user).prefetch_related("items__service_request")
         grocery_orders = GroceryOrder.objects.filter(customer=request.user).prefetch_related("items__package")
+        marketplace_orders = MarketplaceOrder.objects.filter(customer=request.user).prefetch_related("items")
 
         merged = (
             [serialize_service_order(o) for o in service_orders]
             + [serialize_grocery_order(o) for o in grocery_orders]
+            + [serialize_marketplace_order(o) for o in marketplace_orders]
         )
         merged.sort(key=lambda entry: entry["created_at"], reverse=True)
 
         return _success(merged)
-
-
-class AdminOrderDetailView(APIView):
-    """
-    GET /api/admin/orders/<id>/
-    Admin/dispatch view of one parent booking and all of its service tasks.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def get(self, request, pk):
-        order = Order.objects.filter(pk=pk).prefetch_related("items__service_request").first()
-        if not order:
-            return Response({"success": False, "message": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response({"success": True, "data": OrderDetailSerializer(order).data})
-
-
-class CustomerOrderDetailView(APIView):
-    """
-    GET /api/orders/<id>/
-    A customer's own view of one parent booking -- same shape as the admin
-    view, scoped to orders the requesting customer actually owns.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request, pk):
-        order = Order.objects.filter(pk=pk, customer=request.user).prefetch_related("items__service_request").first()
-        if not order:
-            return Response({"success": False, "message": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response({"success": True, "data": OrderDetailSerializer(order).data})

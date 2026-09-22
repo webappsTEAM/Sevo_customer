@@ -316,14 +316,6 @@ def update_saved_address(user, address_id, validated_data):
     """Update fields on an existing address. Enforces single-default rule atomically."""
     address = _get_address_or_404(user, address_id)
 
-    # Fields that are safe to update on the SavedAddress model
-    ALLOWED_UPDATE_FIELDS = {
-        "label", "address_line1", "address_line2", "formatted_address",
-        "flat_house_no", "landmark", "locality", "city", "state", "pincode",
-        "phone_number", "receiver_name", "receiver_phone",
-        "latitude", "longitude", "location_source", "geocoding_status",
-    }
-
     is_default = validated_data.pop("is_default", None)
     with transaction.atomic():
         if is_default is True:
@@ -333,8 +325,7 @@ def update_saved_address(user, address_id, validated_data):
             raise ValidationError({"detail": "Cannot remove default status without setting another address as default."})
 
         for field, value in validated_data.items():
-            if field in ALLOWED_UPDATE_FIELDS:
-                setattr(address, field, value)
+            setattr(address, field, value)
 
         address.save()
     return address

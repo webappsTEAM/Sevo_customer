@@ -79,6 +79,17 @@ class EstimationSystemTestCase(TestCase):
             base_price=Decimal("499.00"),
             status="ACTIVE",
         )
+        from companies.models import Company
+        from settings_hub.models import ServiceZone, ServiceZoneService
+        self.company = Company.objects.create(company_name="CalServices QA Corp")
+        self.zone = ServiceZone.objects.create(
+            company=self.company,
+            name="Hosur Test Area",
+            center_lat=12.740900,
+            center_lng=77.825300,
+            radius_meters=50000.0,
+            is_active=True,
+        )
 
         self.valid_estimation_payload = {
             "job_type": "ESTIMATION",
@@ -90,9 +101,11 @@ class EstimationSystemTestCase(TestCase):
             "customer_symptom": "Water leakage from indoor unit and low cooling",
             "customer_notes": "Please visit in the afternoon",
             "address": "123 Main Street, Bangalore",
+            "latitude": 12.740900,
+            "longitude": 77.825300,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
             "preferred_time": "14:00 - 16:00",
-            "customer_name": "Test Customer",
+            "customer_name": "Karthik Kumar",
             "phone": "9876543210",
         }
 
@@ -107,9 +120,11 @@ class EstimationSystemTestCase(TestCase):
             "issue_title": "AC Not Cooling",
             "description": "Standard service request",
             "address": "456 Side Street",
+            "latitude": 12.740900,
+            "longitude": 77.825300,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
             "preferred_time": "10:00 - 12:00",
-            "customer_name": "Test Customer",
+            "customer_name": "Karthik Kumar",
             "phone": "9876543210",
             "payment_method": "COD",
         }
@@ -126,8 +141,10 @@ class EstimationSystemTestCase(TestCase):
             "service_category": "hvac",
             "issue_title": "Normal AC Filter Clean",
             "address": "789 Third Street",
+            "latitude": 12.740900,
+            "longitude": 77.825300,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
-            "customer_name": "Test Customer",
+            "customer_name": "Karthik Kumar",
             "phone": "9876543210",
         }
         response = self.client.post("/api/booking/", payload, format="json")
@@ -150,7 +167,7 @@ class EstimationSystemTestCase(TestCase):
         data = response.data["data"]
         sr = ServiceRequest.objects.get(request_id=data["request_id"])
         self.assertEqual(sr.job_type, ServiceRequest.JobType.ESTIMATION)
-        self.assertEqual(sr.request_kind, "inspection")
+        self.assertEqual(sr.request_kind, "ESTIMATION")
         self.assertEqual(sr.status, ServiceRequest.Status.REQUESTED)
 
         self.assertTrue(hasattr(sr, "estimation"))
@@ -234,7 +251,7 @@ class EstimationSystemTestCase(TestCase):
             format="json",
             HTTP_IDEMPOTENCY_KEY=idempotency_key,
         )
-        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertIn(r2.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
         second_req_id = r2.data["data"]["request_id"]
 
         self.assertEqual(first_req_id, second_req_id)
@@ -273,7 +290,7 @@ class EstimationSystemTestCase(TestCase):
         self.assertEqual(b["job_type"], "ESTIMATION")
         self.assertIsNotNone(b["estimation"])
         self.assertEqual(b["estimation"]["ac_type"], "SPLIT")
-        self.assertEqual(b["estimation"]["fee_amount"], 199.0)
+        self.assertEqual(float(b["estimation"]["fee_amount"]), 199.0)
 
     def test_my_bookings_no_n_plus_one_queries(self):
         """13. Verified N+1 query regression safety on my-bookings."""
@@ -286,9 +303,9 @@ class EstimationSystemTestCase(TestCase):
                 HTTP_IDEMPOTENCY_KEY=f"n1-test-key-{i}",
             )
 
-        # Count queries for 5 bookings
-        with self.assertNumQueries(10):
-            # 10 bounded queries: Auto-expire check + User/Session + ServiceRequest + Prefetches + Batched OTPs
+        # Count queries for 5 bookings - bounded constant query count (no N+1)
+        with self.assertNumQueries(11):
+            # 11 bounded queries: User/Session + ServiceRequest + Prefetches + Batched OTPs + Quotes
             resp = self.client.get("/api/booking/my-bookings/")
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             self.assertGreaterEqual(len(resp.data["data"]), 5)

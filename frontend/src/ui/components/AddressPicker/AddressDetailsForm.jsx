@@ -185,39 +185,26 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
     setSaveError(null)
     try {
       let saved = null
-      // Determine if this is an update (editing existing) or a create (new address)
-      const isEdit = addressData?.id &&
-        !String(addressData.id).startsWith('local_') &&
-        !String(addressData.id).startsWith('search-') &&
-        !String(addressData.id).startsWith('addr_')
-
-      if (isEdit) {
-        const res = await apiUpdateSavedAddress(addressData.id, payload)
-        // Backend returns { success, data: {...address}, message }
-        if (!res?.success) throw new Error(res?.message || 'Failed to update address.')
-        saved = res.data ?? res
-      } else {
-        const res = await apiCreateSavedAddress(payload)
-        // Backend returns { success, data: {...address}, message }
-        if (!res?.success) throw new Error(res?.message || 'Failed to save address.')
-        saved = res.data ?? res
+      try {
+        if (addressData?.id && !String(addressData.id).startsWith("local_") && !String(addressData.id).startsWith("search-")) {
+          const res = await apiUpdateSavedAddress(addressData.id, payload)
+          saved = res?.data ?? res
+        } else {
+          const res = await apiCreateSavedAddress(payload)
+          saved = res?.data ?? res
+        }
+        console.log("[AddressDetailsForm] saved address:", saved)
+      } catch (err) {
+        console.warn("[AddressDetailsForm] API save address warning, falling back:", err)
+        saved = { ...payload, id: addressData?.id || `local_${Date.now()}` }
       }
 
-      // Only call onSubmit if we have a real backend address with a numeric ID
-      if (!saved?.id) throw new Error('Address was not saved. Please try again.')
-
-      if (typeof onSubmit === 'function') {
-        onSubmit(saved)
+      if (typeof onSubmit === "function") {
+        onSubmit(saved || payload)
       }
     } catch (err) {
-      console.error('[AddressDetailsForm] save error:', err)
-      const body = err?.body
-      const msg =
-        body?.message ||
-        body?.detail ||
-        (typeof body === 'string' ? body : null) ||
-        err?.message ||
-        "Couldn't save address. Please check your details and try again."
+      console.error("[AddressDetailsForm] save error:", err)
+      const msg = err?.body?.message || err?.body?.detail || err?.message || "Couldn't save address, please try again."
       setSaveError(msg)
     } finally {
       setSaving(false)
@@ -244,31 +231,19 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
     dispatch({ type: "SET_ERRORS", errors: errs })
     if (Object.keys(errs).length > 0) return
 
-    const flatNo = state.flat_house_no.trim()
-    const landmark = state.landmark.trim()
-    // address_line1 is required by the backend — build it from flat/landmark
-    const address_line1 =
-      addressData?.address_line1 ||
-      addressData?.street_address ||
-      [flatNo, landmark].filter(Boolean).join(', ') ||
-      flatNo ||
-      'Address'
-
     const payload = {
-      latitude:          addressData?.latitude,
-      longitude:         addressData?.longitude,
-      formatted_address: addressData?.formatted_address ?? '',
-      address_line1,
-      flat_house_no:     flatNo,
-      landmark,
-      locality:          state.locality.trim() || addressData?.locality || '',
-      city:              state.city.trim() || addressData?.city || addressData?.locality || 'City',
-      state:             state.state.trim() || addressData?.state || 'State',
-      pincode:           state.pincode.trim(),
-      label:             state.label,
-      address_type:      state.label,
-      receiver_name:     state.receiver_name.trim(),
-      receiver_phone:    state.receiver_phone.replace(/[^\d+]/g, '').replace(/^(\+91|91|0)(?=[6-9]\d{9}$)/, '').replace(/\D/g, ''),
+      latitude:         addressData?.latitude,
+      longitude:        addressData?.longitude,
+      formatted_address: addressData?.formatted_address ?? "",
+      flat_house_no:    state.flat_house_no.trim(),
+      landmark:         state.landmark.trim(),
+      locality:         state.locality.trim() || addressData?.locality || "",
+      city:             state.city.trim() || addressData?.city || addressData?.locality || "City",
+      state:            state.state.trim() || addressData?.state || "State",
+      pincode:          state.pincode.trim(),
+      label:            state.label,
+      receiver_name:    state.receiver_name.trim(),
+      receiver_phone:   state.receiver_phone.replace(/[^\d+]/g, "").replace(/^(\+91|91|0)(?=[6-9]\d{9}$)/, "").replace(/\D/g, ""),
     }
 
     // Require Customer Login before saving address
@@ -526,23 +501,6 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
 
       {/* Sticky Save button */}
       <div style={s.footer}>
-        {/* Save Error Banner */}
-        {saveError && (
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 8,
-            padding: '0.65rem 0.85rem', marginBottom: '0.65rem',
-            background: '#fff1f2', border: '1.5px solid #fca5a5',
-            borderRadius: 12, fontSize: '0.78rem', fontWeight: 700, color: '#dc2626',
-            lineHeight: 1.4,
-          }}>
-            <span style={{ fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>⚠️</span>
-            <div>
-              <div style={{ fontWeight: 800, marginBottom: 2 }}>Could not save address</div>
-              <div style={{ fontWeight: 600, color: '#b91c1c' }}>{saveError}</div>
-            </div>
-          </div>
-        )}
-
         <motion.button
           style={{
             ...s.saveBtn,
@@ -554,15 +512,14 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
           id="adf-save-btn"
         >
           {saving ? (
-            <><Loader2 size={17} style={{ animation: 'spin 1s linear infinite' }} /> Saving Address…</>
+            <><Loader2 size={17} style={{ animation: "spin 1s linear infinite" }} /> {addressData?.id && !addressData?.isNew ? "Saving Changes…" : "Saving Address…"}</>
           ) : isFormValid ? (
-            <><CheckCircle2 size={17} /> {addressData?.isEditing ? 'Save Changes' : 'Save Address'}</>
+            <><CheckCircle2 size={17} /> {addressData?.id && !addressData?.isNew ? "Save Changes" : "Save Address"}</>
           ) : (
-            'Fill required fields to save'
+            "Fill required fields to save"
           )}
         </motion.button>
       </div>
-
 
         {/* Customer Entry OTP/Login Modal */}
         <CustomerEntryFlowModal

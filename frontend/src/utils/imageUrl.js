@@ -17,14 +17,14 @@ export const SUPABASE_STORAGE_BASE = "https://zqghatybqkztzgjmmlpl.supabase.co/s
  * @param {string} [fallback=""] - Default fallback image path.
  * @returns {string} Fully qualified displayable image URL.
  */
-export function resolveImageUrl(path, fallback = null) {
+export function resolveImageUrl(path, fallback = "") {
   if (!path || typeof path !== "string") {
-    return fallback || null
+    return fallback || ""
   }
 
   const trimmed = path.trim()
   if (!trimmed) {
-    return fallback || null
+    return fallback || ""
   }
 
   // 1. Already fully qualified URL or data URI
@@ -168,6 +168,114 @@ export function uploadImageFile(file, options = {}) {
 
     xhr.onerror = () => {
       reject(new Error("Network connection error occurred during image upload."))
+    }
+
+    xhr.send(formData)
+  })
+}
+
+/**
+ * Uploads an image OR short video file to the Home Page CMS's media
+ * pipeline (settings_hub/views_homepage.py: HomePageImageUploadAPIView).
+ *
+ * Added 2026-09-21 per explicit request ("the banners and advertisement
+ * could allow admin to upload video and images... and that should be
+ * reflected in mobile application"). Kept as its own function rather than
+ * extending [uploadImageFile] above: that one is shared by every other
+ * upload surface in this admin (catalog packages/services/addons/etc, via
+ * a DIFFERENT backend endpoint that expects a different form field name
+ * and only ever handles images) — changing its shape risked a regression
+ * everywhere else it's used. This one is scoped to the Home Page CMS's own
+ * upload endpoint, sends the "section" field name that endpoint actually
+ * reads (views_homepage.py's `request.data.get("section", ...)` — the
+ * shared helper above sends "asset_type", which that endpoint has never
+ * read), and accepts a real video size ceiling instead of assuming every
+ * file is a photo.
+ *
+ * @param {File} file
+ * @param {Object} [options]
+ * @param {string} [options.section="general"] - homepage CMS section, e.g. "mobile-banners".
+ * @param {string} [options.oldImagePath=""] - existing storage path to replace/delete.
+ * @param {function} [options.onProgress]
+ * @returns {Promise<Object>} { success, url, path, mediaType: "image"|"video", fileSize, oldDeleted, compressionRatio? }
+ */
+export function uploadHomepageMediaFile(file, options = {}) {
+  const {
+    section = "general",
+    oldImagePath = "",
+    onProgress = null,
+  } = options
+
+  const isVideo = (file?.type || "").toLowerCase().startsWith("video/")
+  const maxBytes = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024
+
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      return reject(new Error("No file provided for upload."))
+    }
+    if (file.size > maxBytes) {
+      const limitMb = Math.round(maxBytes / (1024 * 1024))
+      return reject(new Error(`${isVideo ? "Video" : "Image"} file size exceeds the ${limitMb} MB maximum.`))
+    }
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("section", section)
+    if (oldImagePath) {
+      formData.append("old_image_path", oldImagePath)
+    }
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", "/api/settings/homepage/upload-image/")
+    xhr.withCredentials = true
+
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    }
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100))
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText)
+          if (res.success && (res.url || res.path)) {
+            resolve({
+              success: true,
+              url: res.url || resolveImageUrl(res.path),
+              path: res.path || "",
+              mediaType: res.media_type === "video" ? "video" : "image",
+              fileSize: res.file_size,
+              compressionRatio: res.compression_ratio,
+              oldDeleted: res.old_deleted,
+            })
+          } else {
+            const err = new Error(res.message || res.error || "Upload failed.")
+            if (res.error_code) err.code = res.error_code
+            reject(err)
+          }
+        } catch {
+          reject(new Error("Invalid server response."))
+        }
+      } else {
+        try {
+          const res = JSON.parse(xhr.responseText)
+          reject(new Error(res.message || res.error || `Upload failed with HTTP ${xhr.status}`))
+        } catch {
+          reject(new Error(`Server returned error HTTP ${xhr.status}`))
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error("Network connection error occurred during upload."))
     }
 
     xhr.send(formData)

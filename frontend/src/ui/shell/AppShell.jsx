@@ -27,6 +27,8 @@ import {
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
   Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers,
+  Smartphone, Megaphone, LayoutGrid
 } from "lucide-react"
 
 const SUPER_ADMIN_NAV_ITEMS = [
@@ -116,6 +118,24 @@ const ADMIN_NAV_ITEMS = [
       { label: "Featured Pros", to: `${routes.homepage_customizer}?tab=experts`, icon: <Users size={16} />, color: "#D946EF" },
       { label: "Testimonials", to: `${routes.homepage_customizer}?tab=testimonials`, icon: <Award size={16} />, color: "#F59E0B" },
       { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
+    ]
+  },
+  // Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+  // ... give the access to upload the banners, advertisement, top cards
+  // [Groceries, Services] images"). Deliberately its own top-level nav
+  // group rather than nested under "Home Page Builder" above, since these
+  // three uploads are specifically for the mobile app (mobile-*
+  // sections/storage folders — see settings_hub/views_homepage.py) and
+  // never shown on the website.
+  {
+    label: "Mobile App",
+    to: `${routes.homepage_customizer}?tab=mobileBanners`,
+    icon: <Smartphone size={20} />,
+    color: "#0EA5E9",
+    children: [
+      { label: "App Banners", to: `${routes.homepage_customizer}?tab=mobileBanners`, icon: <Globe size={16} />, color: "#0EA5E9" },
+      { label: "Advertisement", to: `${routes.homepage_customizer}?tab=mobileAds`, icon: <Megaphone size={16} />, color: "#F97316" },
+      { label: "Top Cards (Groceries/Services)", to: `${routes.homepage_customizer}?tab=mobileTopCards`, icon: <LayoutGrid size={16} />, color: "#10B981" },
     ]
   },
   {

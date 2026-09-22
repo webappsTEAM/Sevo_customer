@@ -170,7 +170,7 @@ export default function SavedAddressesPage({ user, onClose, onSelectAddress }) {
       receiver_mobile: addr.receiver_mobile || addr.receiver_phone || addr.contact_phone || user?.phone || '',
       receiver_phone: addr.receiver_phone || addr.receiver_mobile || addr.contact_phone || user?.phone || '',
       address_type: addr.address_type || 'Home',
-      label: (addr.label || addr.address_type || 'home').toLowerCase(),
+      label: (addr.address_type || 'home').toLowerCase(),
       is_default: Boolean(addr.is_default),
       isEditing: true
     }
@@ -234,17 +234,14 @@ export default function SavedAddressesPage({ user, onClose, onSelectAddress }) {
           address_line1: '',
           flat_house_no: '',
           landmark: '',
-          locality: '',
           city: '',
           state: '',
           pincode: '',
           latitude: lat,
           longitude: lng,
           address_type: 'Home',
-          label: 'home',
           location_source: 'gps',
-          geocoding_status: 'pending',
-          isNew: true,
+          geocoding_status: 'verified'
         }
 
         try {
@@ -288,19 +285,11 @@ export default function SavedAddressesPage({ user, onClose, onSelectAddress }) {
   }
 
   // ── Handle Confirmation from Map Picker ───────────────────────────────────
-  const handleMapConfirm = (confirmedData) => {
+  const handleMapConfirm = () => {
     setShowMapPicker(false)
     setEditingAddress(null)
     setActiveLocationForMap(null)
-    // Reload addresses to show the newly saved/updated address
     loadAddresses()
-    // If the confirmed address has an id, mark it as selected
-    if (confirmedData?.id && user?.id) {
-      const addrId = confirmedData.id
-      setSelectedAddressId(addrId)
-      setCustomerSelectedAddress(user.id, confirmedData)
-      setCustomerLocation(user.id, confirmedData.formatted_address || confirmedData.address_line1 || '')
-    }
     window.dispatchEvent(new Event('calservice_address_changed'))
   }
 
@@ -342,7 +331,7 @@ export default function SavedAddressesPage({ user, onClose, onSelectAddress }) {
                 onClick={() => {
                   setSearchQuery('')
                   setSearchResults([])
-                  setActiveLocationForMap({ ...item, isNew: true })
+                  setActiveLocationForMap(item)
                   setShowMapPicker(true)
                 }}
                 className="p-3.5 hover:bg-emerald-50/60 cursor-pointer transition-colors flex items-start gap-3"

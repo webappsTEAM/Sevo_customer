@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Wrench,
@@ -34,6 +35,7 @@ function todayDateString() {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+  return d.toISOString().slice(0, 10);
 }
 
 const TIME_SLOTS = [
@@ -102,6 +104,7 @@ export function ACInspectionBookingPage() {
 
   const [contact, setContact] = useState({
     name: user?.name || user?.username || "",
+    name: user?.name || user?.full_name || "",
     phone: user?.phone || "",
     email: user?.email || "",
   });
@@ -144,6 +147,8 @@ export function ACInspectionBookingPage() {
       }
     } catch (_) {}
   }, [user?.id]);
+  const [selectedDate, setSelectedDate] = useState(todayDateString());
+  const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[0]);
 
   const [showSummary, setShowSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -164,6 +169,10 @@ export function ACInspectionBookingPage() {
     address.trim().length > 4 &&
     isEmailValid &&
     isSlotValid;
+  const canReview =
+    contact.name.trim().length > 1 &&
+    /^\d{10}$/.test(contact.phone.trim()) &&
+    address.trim().length > 4;
 
   function handlePhotoChange(file) {
     setPhotoFile(file);
@@ -188,6 +197,12 @@ export function ACInspectionBookingPage() {
         landmark,
         latitude: coords?.lat != null ? coords.lat : 12.7409,
         longitude: coords?.lng != null ? coords.lng : 77.8253,
+      const result = await estimationRepository.createEstimationBooking({
+        customer_name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        address,
+        landmark,
         preferred_date: selectedDate,
         preferred_time: selectedTime,
         paymentMethod: "COD",
@@ -209,6 +224,10 @@ export function ACInspectionBookingPage() {
       console.error("[ACInspectionBookingPage] createEstimationBooking failed:", err, "Response body:", err?.body);
       const serverMsg = extractApiErrorMessage(err, "Something went wrong while booking your inspection. Please try again.");
       setErrorMsg(serverMsg);
+      console.error("[ACInspectionBookingPage] createEstimationBooking failed:", err);
+      const serverMsg =
+        err?.body?.message || err?.body?.detail || (typeof err?.body === "string" ? err.body : null);
+      setErrorMsg(serverMsg || "Something went wrong while booking your inspection. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -384,12 +403,17 @@ export function ACInspectionBookingPage() {
                 <span className="text-[10px] font-bold text-rose-600">Please enter a valid email or leave blank</span>
               )}
             </div>
+            <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-1.5">
+              <Mail size={11} className="inline -mt-0.5 mr-1" /> Email (Optional)
+            </label>
             <input
               type="email"
               value={contact.email}
               onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
               placeholder="you@example.com (optional)"
               className={`w-full h-11 bg-slate-50 border ${!isEmailValid ? "border-rose-400 focus:border-rose-500" : "border-slate-200/90 focus:border-emerald-500"} rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:bg-white transition-all`}
+              placeholder="you@example.com"
+              className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
             />
           </div>
 
@@ -429,6 +453,7 @@ export function ACInspectionBookingPage() {
                 min={todayDateString()}
                 value={selectedDate}
                 onChange={(e) => handleDateChange(e.target.value)}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full h-11 bg-slate-50 border border-slate-200/90 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
               />
             </div>
@@ -460,6 +485,14 @@ export function ACInspectionBookingPage() {
               All technician visit slots for today have closed. Please select tomorrow or a later date above.
             </p>
           )}
+                {TIME_SLOTS.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {errorMsg && (
@@ -471,6 +504,7 @@ export function ACInspectionBookingPage() {
 
         {/* CTA */}
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+        <div className="mt-6 flex items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-[11px] text-slate-500 font-semibold">
             <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
             <span>Pay only the ₹{ESTIMATION_FEE} inspection fee. No surprise charges.</span>
@@ -496,6 +530,14 @@ export function ACInspectionBookingPage() {
               Review Booking
             </button>
           </div>
+          <button
+            type="button"
+            disabled={!canReview}
+            onClick={() => setShowSummary(true)}
+            className="shrink-0 py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-600/25"
+          >
+            Review Booking
+          </button>
         </div>
       </div>
 
@@ -508,6 +550,9 @@ export function ACInspectionBookingPage() {
         onConfirm={handleConfirmBooking}
         isSubmitting={isSubmitting}
         errorMsg={errorMsg}
+        onClose={() => setShowSummary(false)}
+        onConfirm={handleConfirmBooking}
+        isSubmitting={isSubmitting}
         estimationAcDetails={acDetails}
         estimationSymptom={customerReportedIssue}
         estimationNotes={notes}

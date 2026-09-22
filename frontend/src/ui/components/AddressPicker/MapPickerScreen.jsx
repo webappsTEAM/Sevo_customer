@@ -646,15 +646,11 @@ export function MapPickerScreen({
 
     const streetAddress = targetAddr.address_line1 || targetAddr.street_address || [targetAddr.flat_house_no || initialFlat, targetAddr.landmark || initialLandmark].filter(Boolean).join(", ") || fullDisplay.split(",")[0]
 
-    // ── Case 1: User selected an ALREADY SAVED address (has a real numeric backend ID) ──
-    // These are pre-existing addresses — we can confirm directly without re-saving.
-    const resolvedId = resolvedAddr?.id
-    const isTrulyPersistedAddress = resolvedId && !String(resolvedId).startsWith("addr_") && !String(resolvedId).startsWith("search-") && !String(resolvedId).startsWith("local_")
-
-    if (isTrulyPersistedAddress) {
+    // If user selected an ALREADY SAVED address or explicitly confirms without needing full details form
+    if (resolvedAddr && (resolvedAddr.id || resolvedAddr.isSaved || resolvedAddr.is_saved || initialLocation?.id)) {
       const rawType = resolvedAddr.address_type || resolvedAddr.label || resolvedAddr.tag || initialLocation?.address_type || "Home"
       const confirmedData = {
-        id: resolvedId,
+        id: resolvedAddr.id || resolvedAddr.saved_address_id || initialLocation?.address_id || initialLocation?.saved_address_id || initialLocation?.id || `addr_${Date.now()}`,
         address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
         label: rawType.toLowerCase(),
         flat_house_no: resolvedAddr.flat_house_no || resolvedAddr.house_number || initialLocation?.flat_house_no || initialFlat || "",
@@ -668,7 +664,7 @@ export function MapPickerScreen({
         formatted_address: fullDisplay,
         latitude: Number(currentCenter.lat),
         longitude: Number(currentCenter.lng),
-        location_source: resolvedAddr.location_source || "saved_address",
+        location_source: initialLocation?.location_source || resolvedAddr.location_source || (resolvedAddr.id ? "saved_address" : "map_pin"),
         geocoding_status: "verified",
         serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
         zone_id: zoneStatus.zoneId || resolvedAddr.zone_id || null,
@@ -688,43 +684,69 @@ export function MapPickerScreen({
       return
     }
 
-    // ── Case 2: New address (GPS / search / map pick / add-new) ──
-    // Always route through AddressDetailsForm so the user fills doorstep details
-    // and the address is saved to the backend before confirming.
-    const detailsObj = {
+    const finalObj = {
       ...initialLocation,
-      ...targetAddr,
-      id: initialLocation?.id || null,          // keep the edit ID if editing
-      address_id: initialLocation?.id || null,
-      saved_address_id: initialLocation?.id || null,
-      formatted_address: fullDisplay || "Selected Location",
+      ...resolvedAddr,
+      formatted_address: fullDisplay || "Custom Location",
       address_line1: streetAddress,
       street_address: streetAddress,
-      locality: targetAddr.locality || address?.locality || "",
-      city: targetAddr.city || address?.city || initialLocation?.city || "Hosur",
-      state: targetAddr.state || address?.state || initialLocation?.state || "Tamil Nadu",
-      pincode: targetAddr.pincode || address?.pincode || initialLocation?.pincode || "635109",
+      locality: resolvedAddr?.locality || address?.locality || "",
+      city: resolvedAddr?.city || address?.city || initialLocation?.city || "Hosur",
+      state: resolvedAddr?.state || address?.state || initialLocation?.state || "Tamil Nadu",
+      pincode: resolvedAddr?.pincode || address?.pincode || initialLocation?.pincode || "635109",
       latitude: Number(currentCenter.lat),
       longitude: Number(currentCenter.lng),
-      zone_id: zoneStatus.zoneId || targetAddr.zone_id || null,
-      zone_name: zoneStatus.zoneName || targetAddr.zone_name || "Hosur City",
-      flat_house_no: targetAddr.flat_house_no || targetAddr.house_number || initialLocation?.flat_house_no || initialFlat || "",
-      landmark: targetAddr.landmark || initialLocation?.landmark || initialLandmark || "",
-      location_source: initialLocation?.location_source || targetAddr.location_source || "map_pin",
+      zone_id: zoneStatus.zoneId || resolvedAddr?.zone_id || null,
+      zone_name: zoneStatus.zoneName || resolvedAddr?.zone_name || "Hosur City",
+      flat_house_no: selectedAddressData?.flat_house_no || initialLocation?.flat_house_no || initialFlat || "",
+      landmark: selectedAddressData?.landmark || initialLocation?.landmark || initialLandmark || "",
+      location_source: initialLocation?.location_source || "map_pin",
       geocoding_status: "verified",
-      address_type: targetAddr.address_type || targetAddr.label || initialLocation?.address_type || "Home",
-      label: (targetAddr.label || targetAddr.address_type || initialLocation?.label || "home").toLowerCase(),
-      receiver_name: targetAddr.receiver_name || initialLocation?.receiver_name || "",
-      receiver_phone: targetAddr.receiver_phone || initialLocation?.receiver_phone || "",
-      // Preserve flags so AddressDetailsForm knows whether to call create or update
-      isNew: !initialLocation?.id,
-      isEditing: Boolean(initialLocation?.id),
+      address_type: initialLocation?.address_type || "Home"
     }
 
-    setSelectedAddressData(detailsObj)
-    setStep("details")
-  }
+    // If initialLocation had mode === 'details' or isNew or isEditing
+    if (initialLocation?.isNew || initialLocation?.isEditing || initialLocation?.mode === 'details') {
+      setSelectedAddressData(finalObj)
+      setStep("details")
+      return
+    }
 
+    // Direct confirm without requiring redundant form if address is already rich
+    const rawType = finalObj.address_type || finalObj.label || "Home"
+    const confirmedData = {
+      id: finalObj.id || finalObj.saved_address_id || `addr_${Date.now()}`,
+      address_type: rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase(),
+      label: rawType.toLowerCase(),
+      flat_house_no: finalObj.flat_house_no || "",
+      address_line1: finalObj.address_line1 || finalObj.street_address || "",
+      street_address: finalObj.address_line1 || finalObj.street_address || "",
+      landmark: finalObj.landmark || "",
+      locality: finalObj.locality || "",
+      city: finalObj.city || "Hosur",
+      state: finalObj.state || "Tamil Nadu",
+      pincode: finalObj.pincode || "635109",
+      formatted_address: finalObj.formatted_address,
+      latitude: Number(currentCenter.lat),
+      longitude: Number(currentCenter.lng),
+      location_source: finalObj.location_source || "map_pin",
+      geocoding_status: "verified",
+      serviceable: zoneStatus.inZone !== false && zoneStatus.serviceAllowed !== false,
+      zone_id: zoneStatus.zoneId || null,
+      zone_name: zoneStatus.zoneName || "Hosur City",
+      confirmed_at: new Date().toISOString()
+    }
+
+    if (typeof onConfirm === "function") {
+      onConfirm(confirmedData)
+    }
+    if (typeof onCenterChange === "function") {
+      onCenterChange(confirmedData.latitude, confirmedData.longitude, confirmedData)
+    }
+    if (typeof onClose === "function") {
+      onClose()
+    }
+  }
 
   // ── Open AddressDetailsForm for doorstep edits (Flat/House No, Landmark, Label, Receiver) ──
   const handleOpenDetailsForm = (resolvedAddr) => {

@@ -181,7 +181,6 @@ class CustomerBookingRateCardSnapshotView(APIView):
         return Response({"success": True, "data": snapshot_data}, status=status.HTTP_200_OK)
 
 
-
 class CustomerQuotationDetailView(APIView):
     """
     GET /api/booking/{id}/quotation/

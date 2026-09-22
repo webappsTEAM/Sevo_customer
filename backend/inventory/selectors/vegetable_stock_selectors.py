@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db.models import Sum, Q
 
+from django.core.exceptions import ObjectDoesNotExist
+
 from inventory.models import InventoryItem, StockMovement
 from inventory.utils.unit_conversion import format_grams_for_display, parse_pack_size_grams
 
@@ -23,7 +25,7 @@ def get_stock_status(product) -> Dict[str, Any]:
     """
     try:
         item = getattr(product, "stock_item", None)
-    except Exception:
+    except (ObjectDoesNotExist, AttributeError, Exception):
         item = None
     if not item or item.stock_quantity_grams is None:
         return {"in_stock": True, "max_quantity": None}
@@ -57,7 +59,7 @@ def get_admin_stock_status(product, for_date: Optional[date] = None) -> Dict[str
     """
     try:
         item = getattr(product, "stock_item", None)
-    except Exception:
+    except (ObjectDoesNotExist, AttributeError, Exception):
         item = None
     target_date = for_date or timezone.localdate()
 
@@ -201,10 +203,7 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     - sold_grams: sum of SOLD movement deltas (positive amount sold) that day.
     - closing_grams: balance_after of the latest movement that day (or live stock if date is today and no movements).
     """
-    try:
-        item = getattr(product, "stock_item", None)
-    except Exception:
-        item = None
+    item = getattr(product, "stock_item", None)
     if not item:
         return []
 

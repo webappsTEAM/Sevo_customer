@@ -1773,16 +1773,9 @@ class CustomerAddressListCreateView(APIView):
 
         receiver_phone = str(request.data.get("receiver_phone", "")).strip() or str(request.data.get("phone_number", "")).strip()
         if receiver_phone:
-            clean_phone = re.sub(r"[\s\-\(\)\+]+", "", receiver_phone)
-            # Strip country code prefix ONLY when total digits > 10
-            # (prevents stripping "91" from numbers like 9150632938)
-            if len(clean_phone) == 13 and clean_phone.startswith("91"):
-                clean_phone = clean_phone[2:]   # +91XXXXXXXXXX → XXXXXXXXXX
-            elif len(clean_phone) == 12 and clean_phone.startswith("91"):
-                clean_phone = clean_phone[2:]   # 91XXXXXXXXXX → XXXXXXXXXX
-            elif len(clean_phone) == 11 and clean_phone.startswith("0"):
-                clean_phone = clean_phone[1:]   # 0XXXXXXXXXX → XXXXXXXXXX
-            if not re.match(r"^\d{10}$", clean_phone):
+            clean_phone = re.sub(r"[\s\-\(\)]+", "", receiver_phone)
+            clean_phone = re.sub(r"^(\+91|91|0)", "", clean_phone)
+            if not re.match(r"^[6-9]\d{9}$", clean_phone):
                 return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
             receiver_phone = clean_phone
 
@@ -1837,40 +1830,9 @@ class CustomerAddressDetailView(APIView):
             return _ce("Address not found.", 404)
 
     def patch(self, request, pk):
-        allowed = {
-            "label", "address_line1", "address_line2", "city", "state", "pincode",
-            "phone_number", "latitude", "longitude", "is_default",
-            # Additional fields that AddressDetailsForm sends
-            "flat_house_no", "landmark", "locality", "formatted_address",
-            "receiver_name", "receiver_phone",
-        }
+        allowed = {"label", "address_line1", "address_line2", "city", "state", "pincode",
+                   "phone_number", "latitude", "longitude", "is_default"}
         payload = {k: v for k, v in request.data.items() if k in allowed}
-
-        # Normalize receiver_phone if provided
-        import re
-        if "receiver_phone" in payload and payload["receiver_phone"]:
-            rp = re.sub(r"[\s\-\(\)\+]+", "", str(payload["receiver_phone"]))
-            # Strip country code prefix ONLY when total digits > 10
-            if len(rp) == 13 and rp.startswith("91"):
-                rp = rp[2:]
-            elif len(rp) == 12 and rp.startswith("91"):
-                rp = rp[2:]
-            elif len(rp) == 11 and rp.startswith("0"):
-                rp = rp[1:]
-            if re.match(r"^\d{10}$", rp):
-                payload["receiver_phone"] = rp
-                payload["phone_number"] = rp
-            else:
-                return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
-
-        # Clean coordinates
-        for coord_field in ("latitude", "longitude"):
-            if coord_field in payload:
-                try:
-                    payload[coord_field] = round(float(payload[coord_field]), 6) if payload[coord_field] not in (None, "") else None
-                except (ValueError, TypeError):
-                    payload.pop(coord_field)
-
         try:
             addr = customer_services.update_saved_address(request.user, pk, payload)
             return _cs(_serialize_address(addr), message="Address updated.")

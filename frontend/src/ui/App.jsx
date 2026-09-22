@@ -140,6 +140,9 @@ const ACInspectionStatusPage = lazy(() =>
 const VegetableFullScreenPage = lazy(() =>
   import("./pages/VegetableFullScreenPage.jsx").then(m => ({ default: m.VegetableFullScreenPage || m.default }))
 )
+const MarketplacePage = lazy(() =>
+  import("./pages/MarketplacePage.jsx").then(m => ({ default: m.MarketplacePage || m.default }))
+)
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
 )
@@ -373,6 +376,10 @@ export function App() {
           <Route path="/vegetables" element={<VegetableFullScreenPage />} />
           <Route path="/vegetable" element={<VegetableFullScreenPage />} />
           <Route path="/fresh-vegetables" element={<VegetableFullScreenPage />} />
+          <Route path={routes.marketplace} element={<MarketplacePage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
+          <Route path="/mart" element={<MarketplacePage />} />
+          <Route path="/seller-hub" element={<MarketplacePage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />

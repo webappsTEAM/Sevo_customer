@@ -137,7 +137,8 @@ class EstimationService:
                     preferred_date=booking_data.get("preferred_date"),
                     preferred_time=booking_data.get("preferred_time", ""),
                     job_type=ServiceRequest.JobType.ESTIMATION,
-                    request_kind="inspection",
+                    request_kind=str(booking_data.get("request_kind") or "ESTIMATION"),
+                    catalog_service_id=str(booking_data.get("catalog_service_id") or booking_data.get("serviceId") or "ac-inspection"),
                     status=ServiceRequest.Status.REQUESTED,
                     payment_method=booking_data.get("payment_method", "COD"),
                     payment_status=ServiceRequest.PaymentStatus.PENDING,
@@ -163,6 +164,7 @@ class EstimationService:
                     currency="INR",
                     status=EstimationFee.Status.PENDING,
                 )
+
 
                 # Atomically create CustomerInspection and snapshot all active rate card items
                 from service_requests.services.customer_inspection_service import CustomerInspectionService

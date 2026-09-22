@@ -10,10 +10,8 @@ import { apiRequest, extractApiErrorMessage } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import ImageUploader from "../../components/ImageUploader.jsx"
 import { resolveImageUrl } from "../../../utils/imageUrl.js"
-import { routes } from "../../routes.js"
-import { ACInspectionCustomizerModal } from "../../components/estimation/ACInspectionCustomizerModal.jsx"
-import { fetchACInspectionConfig } from "../../../services/estimation/acInspectionData.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { routes } from "../../routes.js"
 
 // SERVICE_SUBTABS used to live here: a hardcoded slug -> subtabs lookup that
 // made this modal switch to an entirely different, subtab-banner-only field
@@ -97,8 +95,6 @@ export function CatalogServicesPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [toast, showToast] = useToast()
-  const [showAcInspectionCustomizer, setShowAcInspectionCustomizer] = useState(false)
-  const [acInspectionConfig, setAcInspectionConfig] = useState(null)
 
   const loadCategories = async () => {
     try {
@@ -118,10 +114,6 @@ export function CatalogServicesPage() {
       ])
       if (svcRes.success) setServices(svcRes.data)
       if (pkgRes.success) setDbPackages(pkgRes.data)
-
-      fetchACInspectionConfig().then(cfg => {
-        if (cfg) setAcInspectionConfig(cfg)
-      }).catch(e => console.error("Failed to load AC inspection config:", e))
     } catch {
       showToast("Failed to load services", "error")
     }
@@ -492,48 +484,6 @@ export function CatalogServicesPage() {
                 {/* ── Services Expandable Panel ── */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50/40 p-3.5 sm:p-4 space-y-2.5 animate-in fade-in duration-150">
-                    {cat.slug === "ac_appliance" && (
-                      <div className="bg-amber-50/70 rounded-xl border border-amber-200/80 p-3 sm:p-3.5 flex items-center justify-between gap-3 shadow-2xs">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-bold text-xs border border-amber-300/80">
-                            <Wrench className="w-4 h-4 text-amber-700" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-slate-900 text-xs sm:text-sm">
-                                AC Inspection &amp; Diagnostic Visit
-                              </span>
-                              <code className="text-[11px] bg-amber-100/70 text-amber-900 px-1.5 py-0.5 rounded font-mono border border-amber-200/60">
-                                ac-inspection
-                              </code>
-                              <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                ₹{acInspectionConfig?.fee ?? 199} Visit Fee • {acInspectionConfig?.rateCardCategories?.length || 0} Rate Categories
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 font-normal mt-0.5 truncate max-w-xl">
-                              Doorstep diagnosis and {(acInspectionConfig?.rateCardCategories || []).reduce((s, c) => s + (c.items?.length || 0), 0)} spare parts items loaded from database.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setShowAcInspectionCustomizer(true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 text-xs font-bold transition-all cursor-pointer shadow-2xs border border-slate-700"
-                          >
-                            <Wrench className="w-3 h-3 text-amber-400" />
-                            <span>Customise Rates</span>
-                          </button>
-                          <a
-                            href={routes.catalog_ac_inspection_rates}
-                            className="px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-all cursor-pointer border border-amber-300/70"
-                          >
-                            Full Rate Card &rarr;
-                          </a>
-                        </div>
-                      </div>
-                    )}
                     {catServices.length === 0 ? (
                       <div className="text-center py-6 bg-white rounded-xl border border-dashed border-slate-200 p-4">
                         <Box className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
@@ -725,16 +675,12 @@ export function CatalogServicesPage() {
                                         {/* Inclusions checklist */}
                                         {pkg.includes && pkg.includes.length > 0 && (
                                           <ul className="space-y-1 text-xs text-slate-600 font-normal">
-                                            {pkg.includes.map((inc, i) => {
-                                              const text = typeof inc === "object" ? (inc?.text || inc?.name || inc?.title || "") : String(inc || "")
-                                              if (!text) return null
-                                              return (
-                                                <li key={i} className="flex items-center gap-1.5">
-                                                  <Check className="w-3 h-3 text-indigo-600 shrink-0 stroke-[2]" />
-                                                  <span className="truncate">{text}</span>
-                                                </li>
-                                              )
-                                            })}
+                                            {pkg.includes.map((inc, i) => (
+                                              <li key={i} className="flex items-center gap-1.5">
+                                                <Check className="w-3 h-3 text-indigo-600 shrink-0 stroke-[2]" />
+                                                <span className="truncate">{inc}</span>
+                                              </li>
+                                            ))}
                                           </ul>
                                         )}
                                       </div>
@@ -852,18 +798,6 @@ export function CatalogServicesPage() {
           </form>
         </Modal>
       )}
-
-      {showAcInspectionCustomizer && (
-        <ACInspectionCustomizerModal
-          isOpen={showAcInspectionCustomizer}
-          onClose={() => setShowAcInspectionCustomizer(false)}
-          currentConfig={acInspectionConfig}
-          onSaved={(newCfg) => {
-            setAcInspectionConfig(newCfg)
-          }}
-        />
-      )}
     </div>
   )
 }
-

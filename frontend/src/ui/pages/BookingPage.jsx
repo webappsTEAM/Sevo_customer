@@ -35,6 +35,7 @@ import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AC_BRANDS_LIST } from "../components/estimation/ACInspectionFormModal.jsx"
+import { ACInspectionFormModal } from "../components/estimation/ACInspectionFormModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -213,6 +214,57 @@ export const resolveAcServiceImage = (nameOrIdOrSlug) => {
 };
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
+
+export const triggerPdfDownload = async (token, filename = "Quotation.pdf") => {
+  if (!token) {
+    alert("Unable to find quotation reference for download.");
+    return;
+  }
+  const cleanToken = String(token).trim();
+  const pdfPath = `/api/booking/quote/${encodeURIComponent(cleanToken)}/pdf/?download=1`;
+  const cleanFilename = (filename || "Quotation.pdf").endsWith(".pdf") ? filename : `${filename}.pdf`;
+
+  try {
+    // 1. Try standard blob download
+    const res = await fetch(pdfPath, { credentials: "include" });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob && blob.size > 0) {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = cleanFilename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          try {
+            window.URL.revokeObjectURL(downloadUrl);
+            link.remove();
+          } catch (_) {}
+        }, 3000);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("Direct blob download failed, trying direct anchor click fallback:", err);
+  }
+
+  // 2. Fallback: Direct Anchor Trigger with HTML5 download attribute
+  try {
+    const fallbackLink = document.createElement('a');
+    fallbackLink.href = pdfPath;
+    fallbackLink.download = cleanFilename;
+    fallbackLink.target = '_blank';
+    fallbackLink.rel = 'noopener noreferrer';
+    fallbackLink.style.display = 'none';
+    document.body.appendChild(fallbackLink);
+    fallbackLink.click();
+    setTimeout(() => fallbackLink.remove(), 2000);
+  } catch (e2) {
+    window.location.href = pdfPath;
+  }
+};
 
 export function getAuthoritativeItemPrice(item, booking) {
   if (!item) return 0;
@@ -438,7 +490,7 @@ const DAYS_LIST = getNextDays(21)
 // convenience filter, and the two deliberately use the same numbers.
 const BOOKING_TIMEZONE = 'Asia/Kolkata'
 const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
-const SAME_DAY_MIN_LEAD_MINUTES = 30
+const SAME_DAY_MIN_LEAD_MINUTES = 60
 
 function businessNowParts() {
   try {
@@ -509,6 +561,11 @@ function isSlotInPast(dateStr, slotStr) {
   const slotMinutes = hours * 60 + minutes
   const nowMinutes = business.hour * 60 + business.minute
   return slotMinutes < nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
+  // Compare in business-timezone minutes, and keep the same minimum lead time
+  // the server applies, so a slot starting in a few minutes is not offered.
+  const slotMinutes = hours * 60 + minutes
+  const nowMinutes = business.hour * 60 + business.minute
+  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -1392,6 +1449,14 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
                 {pkg.excludes.map((item, idx) => (
                   <div key={idx} className="uc-pkg-item uc-pkg-no">
                     <X size={12} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
+                {pkg.includes.map(item => (
+                  <div key={item} className="uc-pkg-item uc-pkg-yes">
+                    <CheckCircle2 size={13} /> {item}
+                  </div>
+                ))}
+                {pkg.excludes.map(item => (
+                  <div key={item} className="uc-pkg-item uc-pkg-no">
+                    <X size={12} /> {item}
                   </div>
                 ))}
               </div>
@@ -1448,6 +1513,17 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
     const h12 = h % 12 === 0 ? 12 : h % 12
     const minStr = String(m).padStart(2, '0')
     return `${h12}:${minStr} ${ampm}`
+  // Urban time slots: Morning / Afternoon / Evening
+  const UC_TIME_SLOTS = [
+    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
+  ]
+  const formatSlot = t => {
+    const [h] = t.split(':').map(Number)
+    const ampm = h < 12 ? 'AM' : 'PM'
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    return `${h12}:00 ${ampm}`
   }
 
   const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
@@ -2487,6 +2563,29 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const tokenQuery = resolvedToken ? `?token=${encodeURIComponent(resolvedToken)}` : ""
 
   const [liveData, setLiveData] = useState(null)
+  const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
+  const [liveData, setLiveData] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "null")
+        if (cached && (cached.request_id === rid || String(cached.id) === String(rid) || cached.booking_id === rid)) {
+          return cached
+        }
+      } catch (_) { }
+    }
+    return null
+  })
+  const [initialLoading, setInitialLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "null")
+        if (cached && (cached.request_id === rid || String(cached.id) === String(rid) || cached.booking_id === rid)) {
+          return false
+        }
+      } catch (_) { }
+    }
+    return !successData?.status
+  })
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
@@ -2494,6 +2593,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
+  const [changeNotes, setChangeNotes] = useState("")
+  const [declineReasonCode, setDeclineReasonCode] = useState("")
+  const [declineReasonNotes, setDeclineReasonNotes] = useState("")
+  const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
@@ -2502,6 +2606,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     if (isRefreshing || !rid) return
     setIsRefreshing(true)
     try {
+      const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
       const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
       if (res?.data) {
         setLiveData(res.data)
@@ -2523,6 +2628,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
       const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
+      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token || liveData?.quote?.quote_number
       if (!quoteToken) return
 
       const response = await fetch(`/api/booking/quote/${quoteToken}/decide/`, {
@@ -2542,6 +2648,22 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         window.location.reload()
       } else {
         alert("Error saving quote decision: " + (result.message || "Unknown error"))
+          action: decision === "CUSTOMER_ACCEPTED" ? "ACCEPT" : decision === "CHANGE_REQUESTED" ? "REQUEST_CHANGES" : "DECLINE",
+          reason_code: reasonCode,
+          reason_notes: reasonNotes,
+          notes: reasonNotes,
+          reason: reasonCode || reasonNotes,
+          customer_notes: reasonNotes,
+          decline_reason: reasonNotes,
+        })
+      })
+      const result = await response.json().catch(() => ({}))
+      if (response.ok || result.success) {
+        const actionText = decision === "CUSTOMER_ACCEPTED" ? "accepted" : decision === "CHANGE_REQUESTED" ? "re-quotation requested" : "declined"
+        alert(`Quotation ${actionText} successfully!`)
+        window.location.reload()
+      } else {
+        alert("Error saving quote decision: " + (result.message || result.error || "Unknown error"))
       }
     } catch (err) {
       console.error("Quote decision failed:", err)
@@ -2558,6 +2680,69 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     let isFetching = false
     const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
+    // Resolve initial token from props, URL query parameters, or sessionStorage cache
+    let initialToken = successData?.tracking_token || successData?.booking?.tracking_token || liveData?.tracking_token
+    if (!initialToken && typeof window !== "undefined") {
+      try {
+        const urlParams = new URLSearchParams(window.location.search)
+        initialToken = urlParams.get("token")
+      } catch (_) { }
+      if (!initialToken) {
+        try {
+          const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
+          if (cached?.request_id === rid || String(cached?.id) === String(rid)) {
+            initialToken = cached.tracking_token
+          }
+        } catch (_) { }
+      }
+    }
+
+    let activeToken = initialToken
+
+    const startWebSocket = (tokenToUse) => {
+      if (!isMounted) return
+      if (ws) {
+        try { ws.close() } catch (_) { }
+        ws = null
+      }
+      try {
+        ws = createTrackingWebSocket(
+          rid,
+          tokenToUse,
+          (eventType, eventData) => {
+            if (!isMounted || !eventData) return
+            setLiveData(prev => {
+              const merged = {
+                ...(prev || {}),
+                ...(eventData?.booking || eventData || {}),
+              }
+              if (eventData?.status || eventData?.booking?.status) {
+                merged.status = eventData.status || eventData.booking.status
+              }
+              if (eventData?.technician || eventData?.booking?.technician) {
+                merged.technician = {
+                  ...(prev?.technician || {}),
+                  ...(eventData.technician || eventData.booking?.technician || {})
+                }
+              }
+              if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
+                merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
+              }
+              try {
+                sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
+              } catch (_) { }
+              return merged
+            })
+          },
+          (state) => {
+            if (isMounted) setWsState(state)
+          }
+        )
+      } catch (err) {
+        console.warn("[LiveTrackingPage] WS init error:", err)
+      }
+    }
+
     const fetchStatus = async () => {
       if (isFetching) return          // skip cycle if previous request still in-flight
       isFetching = true
@@ -2567,6 +2752,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${currentTokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
+        const tokenQuery = activeToken ? `?token=${encodeURIComponent(activeToken)}` : ""
+        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
+        if (res?.data && isMounted) {
+          setLiveData(res.data)
+          setInitialLoading(false)
+          if (res.data.tracking_token && !activeToken) {
+            activeToken = res.data.tracking_token
+            startWebSocket(activeToken)
+          }
           try {
             sessionStorage.setItem("calservice_last_booking", JSON.stringify(res.data))
           } catch (_) { }
@@ -2577,6 +2771,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         }
       } catch (e) { }
       finally {
+        if (isMounted) setInitialLoading(false)
         isFetching = false
       }
     }
@@ -2623,6 +2818,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       )
     } catch (err) {
       console.warn("[LiveTrackingPage] WS init error:", err)
+    // 3. Connect real-time WebSocket channel (when token is available, else fetchStatus will initiate it)
+    if (activeToken) {
+      startWebSocket(activeToken)
     }
 
     return () => {
@@ -2743,11 +2941,13 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       "proof_submitted",
       "awaiting_verification",
       "verified"
+      "feedback_received"
     ].includes(String(liveData.status).toLowerCase())
   )
 
   const isProofSubmitted = Boolean(
     liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
+    liveData?.status && ["proof_submitted", "awaiting_verification", "cash_pending"].includes(String(liveData.status).toLowerCase())
   )
 
   const empInfo = liveData?.assigned_employee || liveData?.technician || successData?.technician || null
@@ -2847,6 +3047,34 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     const m = Math.floor(sec / 60)
     const s = sec % 60
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  /* ─────────────────── CASE 00: INITIAL LOADING STATE ─────────────────── */
+  if (initialLoading && !liveData) {
+    return (
+      <div style={{ maxWidth: 620, margin: "0 auto", padding: "4rem 1rem", textAlign: "center" }}>
+        <div style={{
+          width: 64,
+          height: 64,
+          borderRadius: "50%",
+          background: "#f5f3ff",
+          border: "1px solid #ddd6fe",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 1.25rem",
+          boxShadow: "0 4px 14px rgba(124, 58, 237, 0.15)",
+        }}>
+          <RefreshCw size={28} className="animate-spin" color="#7C3AED" />
+        </div>
+        <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 0.4rem" }}>
+          Loading Booking Details...
+        </h3>
+        <p style={{ color: "#64748b", fontSize: "0.88rem", margin: 0 }}>
+          Synchronizing live status for #{rid}
+        </p>
+      </div>
+    )
   }
 
   /* ─────────────────── CASE 0A: BOOKING COMPLETED STATE ─────────────────── */
@@ -3425,6 +3653,52 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
       {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
       {isAccepted && (
+      {/* ─────────────────── CASH PAYMENT CONFIRMATION OTP (IF REPORTED/PENDING) ─────────────────── */}
+      {((liveData?.payment_status === 'cash_pending' || currentStatus === 'cash_pending' || isProofSubmitted || (liveData?.payment_confirmation_otp && liveData?.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentStatus) && liveData?.payment_status !== 'paid') && (
+        <div style={{
+          background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+          borderRadius: 14,
+          padding: '12px 16px',
+          border: '1.5px solid #10b981',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1rem',
+          boxShadow: '0 4px 12px rgba(16,185,129,0.12)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+              <KeyRound size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                💰 Cash Payment Confirmation OTP
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#065f46', marginTop: 1 }}>
+                Technician reported cash collection. Share this OTP with your partner to verify &amp; complete.
+              </div>
+            </div>
+          </div>
+          <div style={{
+            fontFamily: 'monospace',
+            fontSize: '1.35rem',
+            fontWeight: 900,
+            color: '#047857',
+            letterSpacing: 3,
+            background: 'white',
+            padding: '6px 14px',
+            borderRadius: 10,
+            border: '1.5px solid #a7f3d0',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            whiteSpace: 'nowrap'
+          }}>
+            {liveData?.payment_confirmation_otp || 'Generating OTP...'}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
+      {isAccepted && !['completed', 'closed', 'proof_submitted'].includes(currentStatus) && (
         <div style={{
           background: '#fff7ed',
           borderRadius: 14,
@@ -3695,6 +3969,464 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 style={{
                   flex: 1,
                   padding: '10px 14px',
+      {liveData?.quote && (liveData.quote.id || liveData.quote.quote_id || liveData.quote.quote_number) && liveData.quote.has_quote !== false && (() => {
+        const q = liveData.quote
+        const qStatus = String(q.status || "").toUpperCase()
+        const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
+        const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
+        const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
+        const isPending = [
+          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
+          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
+          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
+          "DRAFT", "VIEWED", "NEW", "OPEN"
+        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        
+        const totalEst = q.net_payable ?? (q.grand_total ?? (q.total_amount ?? 0))
+        const itemsList = Array.isArray(q.items) ? q.items : []
+        const measurementsList = Array.isArray(q.measurements) ? q.measurements : []
+        const totalArea = q.total_paintable_area || q.total_area || measurementsList.reduce((acc, m) => acc + (Number(m.final_area || m.calculated_area || 0)), 0)
+
+        return (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.4rem',
+              marginBottom: '1rem',
+              boxShadow: '0 8px 30px rgba(79, 70, 229, 0.12)',
+              border: `2px solid ${isPending ? "#4F46E5" : isAccepted ? "#10B981" : isChangesRequested ? "#F59E0B" : "#EF4444"}`,
+            }}
+          >
+            {/* Header: Title, Number, Status Badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Quotation Details
+                  </span>
+                  {q.quote_number && (
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 6, fontFamily: 'monospace' }}>
+                      #{q.raw_quote_number || (typeof q.quote_number === 'string' ? q.quote_number.replace(/-V\d+$/i, '') : q.quote_number)} (v{q.quote_version || q.version || 1})
+                    </span>
+                  )}
+                </div>
+                <h3 style={{ margin: '4px 0 0', fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+                  Total Estimate: ₹{totalEst}
+                </h3>
+              </div>
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '4px 10px',
+                borderRadius: 8,
+                fontWeight: 800,
+                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+              }}>
+                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+              </span>
+            </div>
+
+            {/* Quick Meta Specs (Validity, Area in Sq.Ft, Property Type, Warranty) */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontSize: '0.78rem', color: '#475569' }}>
+              {q.valid_until && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={12} color="#64748b" /> Valid till: <strong>{new Date(q.valid_until).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                </span>
+              )}
+              {totalArea > 0 && (
+                <span style={{ background: '#f0fdf4', color: '#166534', padding: '3px 8px', borderRadius: 6, border: '1px solid #bbf7d0', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  📐 Total Area: <strong>{totalArea} sq.ft</strong>
+                </span>
+              )}
+              {q.property_type && (
+                <span style={{ background: '#f8fafc', padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🏠 <strong>{q.property_type}</strong>
+                </span>
+              )}
+              {q.warranty && (
+                <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: 6, border: '1px solid #a7f3d0', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  🛡️ <strong>{q.warranty}</strong>
+                </span>
+              )}
+            </div>
+
+            {/* Advance & Balance Payment Schedule if applicable */}
+            {(Number(q.advance_amount ?? 0) > 0 || Number(q.balance_amount ?? 0) > 0 || Number(q.advance_percent ?? 0) > 0 || Number(totalEst) > 0) && (
+              <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 12, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                <span>💰 Advance (Booking/Materials): <strong style={{ color: '#0f172a' }}>₹{Number(q.advance_amount !== undefined && q.advance_amount !== null && q.advance_amount !== "" ? q.advance_amount : (q.invoice?.advance_amount ?? (Number(totalEst) * (Number(q.advance_percent || 0) / 100)))) || 0}</strong></span>
+                <span>Balance on Completion: <strong style={{ color: '#0f172a' }}>₹{Number(q.balance_amount !== undefined && q.balance_amount !== null && q.balance_amount !== "" ? q.balance_amount : (q.invoice?.balance_amount ?? (Number(totalEst) - Number(q.advance_amount || 0)))) || Number(totalEst)}</strong></span>
+              </div>
+            )}
+
+            {/* Status-specific alert message (Only shown if NOT pending and has resolved state) */}
+            {(isAccepted || isChangesRequested || isDeclined) && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: 12,
+                marginBottom: 14,
+                textAlign: 'left',
+                background: isAccepted ? "#F0FDF4" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                border: `1px solid ${isAccepted ? "#DCFCE7" : isChangesRequested ? "#FEF3C7" : "#FEE2E2"}`,
+                color: isAccepted ? "#15803D" : isChangesRequested ? "#B45309" : "#C2410C",
+                fontSize: '0.82rem',
+                fontWeight: 700
+              }}>
+                {isAccepted && "✓ You have accepted this quotation. Your service booking is confirmed and scheduled."}
+                {isChangesRequested && `⚠ Re-quotation / Changes requested: "${q.customer_notes || 'Please adjust quotation items & measurements'}"`}
+                {isDeclined && `✗ You declined this quotation: "${q.customer_decline_reason || q.decline_reason || 'Declined by customer'}"`}
+              </div>
+            )}
+
+            {/* ── Measurements Section (Square Feet Room-by-Room Breakdown) ── */}
+            {measurementsList.length > 0 && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#fafafa' }}>
+                <div style={{ padding: '8px 12px', background: '#f1f5f9', fontWeight: 800, fontSize: '0.78rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>📐 Room &amp; Area Measurements</span>
+                  <span style={{ color: '#4F46E5', fontFamily: 'monospace' }}>Total: {totalArea} sq.ft</span>
+                </div>
+                <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {measurementsList.map((m, mIdx) => (
+                    <div key={m.id || mIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', borderBottom: mIdx < measurementsList.length - 1 ? '1px dashed #e2e8f0' : 'none', paddingBottom: 4 }}>
+                      <div>
+                        <strong style={{ color: '#0f172a' }}>{m.area_name || `Area ${mIdx + 1}`}</strong>
+                        {m.length && m.width && (
+                          <span style={{ color: '#64748b', marginLeft: 6 }}>
+                            ({m.length}ft × {m.width}ft{m.height ? ` × ${m.height}ft` : ''})
+                          </span>
+                        )}
+                        {Number(m.deductions || 0) > 0 && (
+                          <span style={{ color: '#dc2626', marginLeft: 6 }}>
+                            (Deductions: -{m.deductions} sq.ft)
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                        {m.final_area || m.calculated_area} sq.ft
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Expandable Line Items Section with Rate, Quantity, Square Feet ── */}
+            <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setQuoteExpanded(!quoteExpanded)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 14px',
+                  background: '#f8fafc',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  color: '#0f172a'
+                }}
+              >
+                <span>{quoteExpanded ? "Hide Line Items" : "View Line Items & Breakdown"} ({itemsList.length} items)</span>
+                <span>{quoteExpanded ? "▲" : "▼"}</span>
+              </button>
+
+              {quoteExpanded && (
+                <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {itemsList.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '8px 0' }}>
+                      Complete package estimation provided.
+                    </div>
+                  ) : (
+                    itemsList.map((item, idx) => {
+                      const itemName = item.name || item.description || item.category || "Quotation Item"
+                      const itemDesc = item.description && item.description !== item.name ? item.description : (item.category || item.classification || "")
+                      const qty = Number(item.quantity) || 1
+                      const unit = item.unit || (item.category?.toLowerCase()?.includes('paint') ? 'sq.ft' : 'Unit')
+                      const rate = item.final_rate ?? item.unit_price ?? item.proposed_rate ?? item.base_rate ?? item.price ?? 0
+                      const itemTotalAmount = item.total_amount ?? item.amount ?? (rate * qty)
+
+                      return (
+                        <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.8rem', paddingBottom: 8, borderBottom: idx < itemsList.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                          <div style={{ flex: 1, paddingRight: 10 }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                              {itemName}
+                            </div>
+                            {itemDesc && (
+                              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+                                {itemDesc}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                              <span style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                                {qty} {unit} × ₹{rate}/{unit}
+                              </span>
+                              {item.classification && (
+                                <span style={{ color: '#059669', fontWeight: 700 }}>
+                                  ({item.classification === 'both' ? 'Material + Labour' : item.classification.toUpperCase()})
+                                </span>
+                              )}
+                              {item.warranty_tier && String(item.warranty_tier).toUpperCase() !== 'NONE' && (
+                                <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                                  🛡️ {item.warranty_tier}
+                                </span>
+                              )}
+                              {Number(item.warranty_months) > 0 && (
+                                <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                                  🛡️ {item.warranty_months} mo warranty
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
+                            ₹{itemTotalAmount}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+
+                  {/* Financial calculation sub-breakdown */}
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: '#64748b' }}>
+                    {Number(q.subtotal || q.subtotal_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Subtotal</span>
+                        <span>₹{q.subtotal || q.subtotal_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.discount || q.discount_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                        <span>Discount</span>
+                        <span>-₹{q.discount || q.discount_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.tax || q.tax_amount || q.gst_amount || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>GST / Taxes</span>
+                        <span>₹{q.tax || q.tax_amount || q.gst_amount}</span>
+                      </div>
+                    )}
+                    {Number(q.inspection_fee_adjusted || 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                        <span>Site Consultation Fee Adjusted</span>
+                        <span>-₹{q.inspection_fee_adjusted}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '0.84rem', color: '#0f172a', borderTop: '1px solid #f1f5f9', paddingTop: 4 }}>
+                      <span>Net Total</span>
+                      <span>₹{totalEst}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PDF Download link */}
+            <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const pdfToken = q.decision_token || q.raw_quote_number || q.quote_number || q.quote_id;
+                  triggerPdfDownload(pdfToken, `Quotation_${q.raw_quote_number || q.quote_number || 'Quotation'}.pdf`);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+              >
+                📄 Download PDF Quotation
+              </button>
+            </div>
+
+            {/* Quote Version History */}
+            {(() => {
+              const prevList = (Array.isArray(q.history) && q.history.length > 0)
+                ? q.history
+                : (Array.isArray(liveData?.quotation_history)
+                    ? liveData.quotation_history.filter(h => String(h.quote_id || h.id) !== String(q.quote_id || q.id) && (Number(h.quote_version || h.version || 1) !== Number(q.quote_version || q.version || 1)))
+                    : []);
+              if (prevList.length === 0) return null;
+              return (
+                <div style={{ marginTop: 14, borderTop: '1px dashed #e2e8f0', paddingTop: 12, marginBottom: 14 }}>
+                  <h4 style={{ fontSize: '0.75rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>
+                    Previous Revisions ({prevList.length})
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {prevList.map((prevQuote, pIdx) => {
+                      const pId = prevQuote.quote_id || prevQuote.id || pIdx;
+                      const isExpanded = expandedPrevQuotes[pId];
+                      return (
+                        <div key={pId} style={{ background: '#f8fafc', borderRadius: 10, padding: 10, border: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
+                                #{prevQuote.raw_quote_number || (typeof prevQuote.quote_number === 'string' ? prevQuote.quote_number.replace(/-V\d+$/i, '') : prevQuote.quote_number)} (v{prevQuote.quote_version || prevQuote.version || 1})
+                              </span>
+                              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
+                                {String(prevQuote.status || "").replace(/_/g, " ")}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [pId]: !prev[pId] }))}
+                              style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                            >
+                              {isExpanded ? "Hide" : "View"}
+                            </button>
+                          </div>
+                          {isExpanded && (
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                              <p style={{ margin: '0 0 6px 0', color: '#475569' }}>
+                                <strong>Total Estimate:</strong> ₹{Number(prevQuote.total_amount || prevQuote.grand_total || 0).toLocaleString('en-IN')}
+                              </p>
+                              {prevQuote.customer_notes && (
+                                <p style={{ margin: '0 0 6px 0', color: '#b45309' }}>
+                                  <strong>Revision Note:</strong> &quot;{prevQuote.customer_notes}&quot;
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Action Buttons: Accept Quote / Request Changes / Decline ── */}
+            {isPending && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                  style={{
+                    flex: '1.2 1 140px',
+                    padding: '11px 14px',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Check size={16} /> Accept Quote
+                </button>
+                <button
+                  onClick={() => setShowRequestChangesModal(true)}
+                  style={{
+                    flex: '1 1 120px',
+                    padding: '11px 14px',
+                    background: '#fffbeb',
+                    color: '#92400e',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fde68a',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <MessageSquare size={15} /> Request Changes
+                </button>
+                <button
+                  onClick={() => setShowDeclineReasonModal(true)}
+                  style={{
+                    flex: '0.9 1 100px',
+                    padding: '11px 14px',
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    fontWeight: 800,
+                    fontSize: '0.84rem',
+                    border: '1px solid #fecaca',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Ban size={15} /> Decline
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )
+      })()}
+
+      {/* ── Request Changes / Re-Quote Modal Overlay ── */}
+      {showRequestChangesModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.75rem',
+              maxWidth: 440,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+              Request Changes / Re-Quotation
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#64748b' }}>
+              Tell our service professional what you would like modified (e.g. adjust square feet, change paint brand, remove an area, update pricing):
+            </p>
+
+            <textarea
+              placeholder="e.g., Please change the paint brand to Royal Luxury Emulsion, adjust square footage for living room to 350 sq.ft, and exclude balcony..."
+              value={changeNotes}
+              onChange={(e) => setChangeNotes(e.target.value)}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                height: 100,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1.5px solid #cbd5e1',
+                fontSize: '0.85rem',
+                fontFamily: 'inherit',
+                marginBottom: 16,
+                resize: 'none',
+                outline: 'none'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowRequestChangesModal(false)
+                  setChangeNotes("")
+                }}
+                style={{
+                  padding: '9px 16px',
                   background: '#f1f5f9',
                   color: '#0f172a',
                   fontWeight: 800,
@@ -3713,6 +4445,21 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   padding: '10px 14px',
                   background: '#fef2f2',
                   color: '#dc2626',
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!changeNotes.trim()) {
+                    alert("Please enter what changes you would like to request.")
+                    return
+                  }
+                  handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
+                  setShowRequestChangesModal(false)
+                }}
+                style={{
+                  padding: '9px 18px',
+                  background: '#f59e0b',
+                  color: 'white',
                   fontWeight: 800,
                   fontSize: '0.82rem',
                   border: 'none',
@@ -3725,6 +4472,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
           )}
         </motion.div>
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+                }}
+              >
+                Send Request
+              </button>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       {/* Decline Reason Modal Overlay */}
@@ -4317,6 +5073,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             requestId={rid || liveData?.request_id || successData?.request_id || sessionSaved?.request_id}
             trackingToken={liveData?.tracking_token || successData?.tracking_token || resolvedToken}
             phone={liveData?.phone || successData?.phone || sessionSaved?.phone || formData?.phone}
+            bookingId={liveData?.booking_id || liveData?.id || successData?.id}
+            requestId={rid || liveData?.request_id || successData?.request_id}
+            trackingToken={liveData?.tracking_token || successData?.tracking_token}
+            phone={liveData?.phone || successData?.phone || formData?.phone}
             isAccepted={isAccepted}
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
@@ -4384,6 +5144,7 @@ function StepBar({ step, total }) {
 
 /* ── Cart Drawer Modal Component ── */
 export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout, onAddAnotherService, bagItemCount = 0 }) {
+export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout }) {
   if (!isOpen) return null;
 
   const itemTotal = (cart || []).reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
@@ -5853,6 +6614,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           if (group.every(t => cancelledLikeStatuses.includes(t.status))) return { label: 'Cancelled', color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' }
           return { label: 'In Progress', color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' }
         }
+      case "My Bookings":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
@@ -5912,6 +6674,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         </span>
                       </div>
                     )}
+                return (
+                  <React.Fragment key={b.id}>
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
@@ -5973,6 +6737,63 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                         {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
                         {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
+                      {/* Quotation Ready Action Banner */}
+                      {(() => {
+                        const activeQuote = b.quote || b.estimation?.current_quotation;
+                        const isQuotePendingDecision = activeQuote && ["SENT_TO_CUSTOMER", "SENT", "QUOTATION_SENT"].includes(String(activeQuote.status || activeQuote.quotation_status).toUpperCase());
+                        if (!isQuotePendingDecision) return null;
+                        const decisionToken = activeQuote?.decision_token;
+                        const targetToken = decisionToken || activeQuote?.quote_number || b.request_id || b.id;
+                        return (
+                          <div style={{ marginTop: 12, padding: '12px 16px', background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)', border: '1.5px solid #3b82f6', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 34, height: 34, borderRadius: 8, background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <FileText size={18} />
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.9rem' }}>
+                                  Quotation {activeQuote.quote_number ? `#${activeQuote.quote_number}` : ''} Ready for Review
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                                  Total Estimate: <strong style={{ color: '#0f172a' }}>₹{Number(activeQuote.total_amount || activeQuote.net_payable || 0).toLocaleString('en-IN')}</strong>
+                                  {activeQuote.valid_until && <span> • Valid till {new Date(activeQuote.valid_until).toLocaleDateString('en-IN')}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              disabled={!targetToken}
+                              onClick={() => {
+                                if (targetToken) {
+                                  window.location.href = `/customer/quote/${targetToken}`
+                                }
+                              }}
+                              style={{
+                                padding: '8px 18px',
+                                background: targetToken ? '#2563eb' : '#94a3b8',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 8,
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                cursor: targetToken ? 'pointer' : 'not-allowed',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                boxShadow: targetToken ? '0 2px 6px rgba(37,99,235,0.25)' : 'none',
+                                transition: 'background 0.15s',
+                                opacity: targetToken ? 1 : 0.7
+                              }}
+                              onMouseOver={e => { if (targetToken) e.currentTarget.style.background = '#1d4ed8' }}
+                              onMouseOut={e => { if (targetToken) e.currentTarget.style.background = '#2563eb' }}
+                            >
+                              <CheckCircle2 size={14} /> Review & Decide Quote
+                            </button>
+                          </div>
+                        );
+                      })()}
+
+                      {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
+                      {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
                           <div style={{ marginTop: 8 }}>
                             <button
                               onClick={() => toggleStopsEditor(b)}
@@ -6064,6 +6885,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                         {/* Cash Collection Confirmation OTP Box */}
                         {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
+                        {((b.payment_status === 'cash_pending' || (b.payment_confirmation_otp && b.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) && b.payment_status !== 'paid') && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
                             border: '1.5px solid #10b981',
@@ -6257,6 +7079,242 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             </div>
                           )}
 
+                          {/* ── Quotation Details & Version History ── */}
+                          {(((b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false)) || (b.quotation_history && b.quotation_history.length > 0)) && (() => {
+                            const activeQ = (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ? b.quote : (b.quotation_history && b.quotation_history[b.quotation_history.length - 1])
+                            if (!activeQ || (!activeQ.id && !activeQ.quote_id && !activeQ.quote_number) || activeQ.has_quote === false) return null
+                            const qStatus = String(activeQ?.status || "").toUpperCase()
+                            const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
+                            const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
+                            const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
+                            const isPending = [
+                              "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
+                              "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
+                              "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
+                              "DRAFT", "VIEWED", "NEW", "OPEN"
+                            ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+                            const historyList = Array.isArray(b.quotation_history) ? b.quotation_history : [activeQ].filter(Boolean)
+
+                            return (
+                              <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                  <div style={{ fontSize: '0.74rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    📄 Service Quotation &amp; Revision History
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.7rem',
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    fontWeight: 800,
+                                    background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                                    color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+                                  }}>
+                                    {isPending ? "Pending Customer Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+                                  </span>
+                                </div>
+
+                                {/* Active Quotation Summary Card */}
+                                <div style={{ background: 'white', border: '1.5px solid #e0e7ff', borderRadius: 14, padding: '16px', marginBottom: 12, boxShadow: '0 2px 10px rgba(79, 70, 229, 0.07)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>
+                                          {activeQ.title || `Quotation #${activeQ.quote_number}`}
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 800, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 6, border: '1px solid #e0e7ff' }}>
+                                          #{activeQ.raw_quote_number || (typeof activeQ.quote_number === 'string' ? activeQ.quote_number.replace(/-V\d+$/i, '') : activeQ.quote_number)} (v{activeQ.quote_version || activeQ.version || 1})
+                                        </span>
+                                      </div>
+                                      {activeQ.service_name && (
+                                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 3 }}>{activeQ.service_name}</div>
+                                      )}
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
+                                        ₹{Number(activeQ.net_payable ?? (activeQ.total_amount || activeQ.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Includes GST &amp; Materials</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Line Items Breakdown */}
+                                  {activeQ.items && activeQ.items.length > 0 && (
+                                    <div style={{ marginTop: 12, background: '#f8fafc', borderRadius: 10, padding: '10px 14px', border: '1px solid #f1f5f9' }}>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                                        Quotation Line Items ({activeQ.items.length})
+                                      </div>
+                                      {activeQ.items.map((it, itIdx) => (
+                                        <div key={it.id || itIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', padding: '5px 0', borderBottom: itIdx < activeQ.items.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                                          <span style={{ color: '#334155', fontWeight: 600 }}>
+                                            {it.name || it.description || 'Quotation Item'} ({it.quantity} {it.unit || 'sqft'} × ₹{it.unit_price || it.rate})
+                                          </span>
+                                          <span style={{ color: '#0f172a', fontWeight: 800 }}>
+                                            ₹{Number(it.total_amount || (it.quantity * it.unit_price)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Measurements Breakdown */}
+                                  {activeQ.measurements && activeQ.measurements.length > 0 && (
+                                    <div style={{ marginTop: 10, background: '#f8fafc', borderRadius: 10, padding: '10px 14px', border: '1px solid #f1f5f9' }}>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
+                                        📐 Measurements Breakdown ({activeQ.total_area || activeQ.total_paintable_area} sq.ft total)
+                                      </div>
+                                      {activeQ.measurements.map((m, mIdx) => (
+                                        <div key={m.id || mIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', padding: '4px 0' }}>
+                                          <span style={{ color: '#334155' }}>
+                                            {m.name || m.area_name || `Area ${mIdx + 1}`} ({m.length}ft × {m.width}ft{m.height ? ` × ${m.height}ft` : ''})
+                                          </span>
+                                          <span style={{ color: '#4f46e5', fontWeight: 700, fontFamily: 'monospace' }}>
+                                            {m.calculated_area || m.final_area || m.area} sq.ft
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Financial Summary Breakdown */}
+                                  <div style={{ marginTop: 10, background: '#fcfaff', borderRadius: 10, padding: '10px 14px', border: '1px solid #ede9fe', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#475569' }}>
+                                      <span>Service Subtotal:</span>
+                                      <span style={{ fontWeight: 600 }}>₹{Number(activeQ.subtotal || activeQ.subtotal_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {(activeQ.discount_amount > 0) && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#15803d' }}>
+                                        <span>Discount Applied:</span>
+                                        <span style={{ fontWeight: 600 }}>- ₹{Number(activeQ.discount_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#475569' }}>
+                                      <span>GST / Taxes (18%):</span>
+                                      <span style={{ fontWeight: 600 }}>₹{Number(activeQ.tax_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {(Number(activeQ.inspection_fee_adjusted || 0) > 0) && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#15803d' }}>
+                                        <span>Site Consultation Fee Adjusted:</span>
+                                        <span style={{ fontWeight: 600 }}>- ₹{Number(activeQ.inspection_fee_adjusted).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', borderTop: '1px solid #e0e7ff', paddingTop: 4, marginTop: 2 }}>
+                                      <span>Total Net Payable:</span>
+                                      <span style={{ color: '#4338ca' }}>₹{Number(activeQ.net_payable ?? (activeQ.total_amount || activeQ.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#6366f1', marginTop: 2 }}>
+                                      <span>
+                                        Payment Terms: {Number(activeQ.advance_percent || activeQ.advance_amount || 0) > 0 
+                                          ? `${Number(activeQ.advance_percent || 50)}% Advance (₹${Number(activeQ.advance_amount || ((activeQ.net_payable || activeQ.total_amount || 0) * 0.5)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) + Balance upon completion` 
+                                          : `100% Balance on Completion (₹${Number(activeQ.net_payable ?? (activeQ.total_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Notes & Actions */}
+                                  {activeQ.customer_notes && (
+                                    <div style={{ marginTop: 10, padding: '8px 12px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fef3c7', fontSize: '0.76rem', color: '#92400e' }}>
+                                      <strong>Customer Revision Note:</strong> {activeQ.customer_notes}
+                                    </div>
+                                  )}
+
+                                  {/* Download Official Quotation PDF Button */}
+                                  <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const pdfToken = activeQ.decision_token || activeQ.raw_quote_number || activeQ.quote_number || activeQ.quote_id || b.request_id || b.id;
+                                        triggerPdfDownload(pdfToken, `Quotation_${activeQ.raw_quote_number || activeQ.quote_number || b.request_id}.pdf`);
+                                      }}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                                        color: 'white',
+                                        padding: '7px 14px',
+                                        borderRadius: 8,
+                                        fontSize: '0.78rem',
+                                        fontWeight: 700,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
+                                        transition: 'all 0.15s ease',
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 10px rgba(79, 70, 229, 0.35)'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(79, 70, 229, 0.25)'; }}
+                                    >
+                                      <span>📥</span>
+                                      <span>Download Quotation (PDF)</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Quotation Version History Timeline */}
+                                {historyList.length > 1 && (
+                                  <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '10px 14px', marginTop: 8 }}>
+                                    <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                      📜 Revision Timeline ({historyList.length} Versions)
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                      {historyList.map((h, hIdx) => {
+                                        const hSt = String(h.status || "").toUpperCase()
+                                        return (
+                                          <div key={h.quote_id || hIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '8px 12px', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: '0.76rem' }}>
+                                            <div>
+                                              <strong style={{ color: '#0f172a' }}>v{h.version || h.quote_version || (hIdx + 1)} (#{h.raw_quote_number || (typeof h.quote_number === 'string' ? h.quote_number.replace(/-V\d+$/i, '') : h.quote_number)})</strong>
+                                              <span style={{ color: '#64748b', marginLeft: 8 }}>
+                                                ₹{Number(h.net_payable ?? (h.total_amount || h.grand_total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                              </span>
+                                              {h.customer_notes && (
+                                                <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: 2 }}>
+                                                  Note: &quot;{h.customer_notes}&quot;
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                              <span style={{
+                                                fontSize: '0.68rem',
+                                                padding: '2px 6px',
+                                                borderRadius: 6,
+                                                fontWeight: 800,
+                                                background: hSt === "SENT_TO_CUSTOMER" ? "#eff6ff" : hSt === "CUSTOMER_ACCEPTED" ? "#ecfdf5" : hSt === "SUPERSEDED" ? "#f1f5f9" : "#fffbeb",
+                                                color: hSt === "SENT_TO_CUSTOMER" ? "#1d4ed8" : hSt === "CUSTOMER_ACCEPTED" ? "#065f46" : hSt === "SUPERSEDED" ? "#64748b" : "#92400e"
+                                              }}>
+                                                {hSt === "SENT_TO_CUSTOMER" ? "Active / Sent" : hSt === "CUSTOMER_ACCEPTED" ? "Accepted" : hSt === "SUPERSEDED" ? "Superseded" : hSt.replace(/_/g, " ")}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const pdfToken = h.decision_token || h.raw_quote_number || h.quote_number || h.quote_id;
+                                                  if (pdfToken) {
+                                                    triggerPdfDownload(pdfToken, `Quotation_v${h.quote_version || h.version || 1}_${h.raw_quote_number || h.quote_number}.pdf`);
+                                                  }
+                                                }}
+                                                style={{
+                                                  background: 'none',
+                                                  border: '1px solid #cbd5e1',
+                                                  borderRadius: 6,
+                                                  padding: '2px 8px',
+                                                  fontSize: '0.68rem',
+                                                  fontWeight: 700,
+                                                  color: '#475569',
+                                                  cursor: 'pointer'
+                                                }}
+                                                title="Download PDF for this revision"
+                                              >
+                                                📄 PDF
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+
                           {(() => {
                             let parsedCart = [];
                             if (typeof b.cart_data === 'string') {
@@ -6295,6 +7353,24 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
                                 <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8 }}>
                                   📦 Booked Service Modules ({parsedCart.length})
+                            const finalTot = rawStored > 0 ? rawStored : computedGrand;
+                            const isEstimationOrConsultation = Boolean(
+                              b.job_type === 'ESTIMATION' ||
+                              b.request_kind === 'ESTIMATION' ||
+                              isOnlyConsultation ||
+                              parsedCart.some(c => (c.name || '').includes('Consultation') || (c.title || '').includes('Consultation'))
+                            );
+                            const hasQuotationAbove = Boolean(
+                              (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ||
+                              (b.quotation_history && b.quotation_history.length > 0)
+                            );
+
+                            return (
+                              <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                                <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.04em' }}>
+                                  {isEstimationOrConsultation
+                                    ? (hasQuotationAbove ? `📋 Initial Site Consultation Request (${parsedCart.length})` : `📋 Booked Site Consultation & Inspection (${parsedCart.length})`)
+                                    : `📦 Booked Service Modules (${parsedCart.length})`}
                                 </div>
                                 <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -6329,6 +7405,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
                                       <span>Item Total:</span>
                                       <span style={{ fontWeight: 700, color: '#334155' }}>₹{itemTotal.toLocaleString('en-IN')}</span>
+                                      <span>{isEstimationOrConsultation ? 'Consultation Fee:' : 'Item Total:'}</span>
+                                      <span style={{ fontWeight: 700, color: '#334155' }}>
+                                        {isEstimationOrConsultation && itemTotal === 0 ? 'Free (₹0)' : `₹${itemTotal.toLocaleString('en-IN')}`}
+                                      </span>
                                     </div>
                                     {totalGst > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
@@ -6358,6 +7438,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                       <span style={{ color: '#0f172a' }}>Total Amount:</span>
                                       <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
                                     </div>
+                                      <span style={{ color: '#0f172a' }}>{isEstimationOrConsultation ? 'Consultation Booking Total:' : 'Total Amount:'}</span>
+                                      <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
+                                    </div>
+                                    {hasQuotationAbove && isEstimationOrConsultation && (
+                                      <div style={{ marginTop: 4, padding: '6px 10px', background: '#eef2ff', borderRadius: 6, fontSize: '0.73rem', color: '#4338ca', fontWeight: 600 }}>
+                                        💡 Official service quotation, scope of work, measurements, and pricing are detailed in the Quotation section above.
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -9560,6 +10648,11 @@ function StepWorkflowCheckout({
 
   const timeSlots = timeSlotGroups.flatMap(g => g.slots)
 
+  const timeSlots = [
+    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
+  ]
+
   const items = cart && cart.length > 0 ? cart : [{
     id: "def-1",
     name: (category?.id === "painting" || category?.id === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
@@ -9821,6 +10914,20 @@ function StepWorkflowCheckout({
       if (first.includes("mason") || first.includes("tile") || first.includes("brick")) return "Masonry Services";
     }
     if (category?.name && category.name !== "General Service") return category.name;
+    if (category?.name && category.name !== "General Service") return category.name;
+    if (cart && cart.length > 0) {
+      if (cart[0].categoryName) return cart[0].categoryName;
+      const first = (cart[0].id + " " + cart[0].name + " " + (cart[0].category || "")).toLowerCase();
+      if (first.includes("waterproof") || first.includes("tar sheet") || first.includes("terrace") || first.includes("seepage")) return "Waterproofing Services";
+      if (first.includes("paint") || first.includes("whitewash")) return "Painting & Wall Care";
+      if (first.includes("mason") || first.includes("tile") || first.includes("brick") || first.includes("plaster")) return "Masonry Services";
+      if (first.includes("carp") || first.includes("lock") || first.includes("handle") || first.includes("door") || first.includes("furniture") || first.includes("hinge")) return "Carpentry Services";
+      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wiring")) return "Electrical Services";
+      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("mixer") || first.includes("flush")) return "Plumbing Services";
+      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("geyser") || first.includes("purifier") || first.includes("ro ") || first.includes("appliance")) return "Appliance Service & Repair";
+      if (/\b(ac|hvac|air conditioner|air conditioning)\b/i.test(first) || first.includes("foam jet") || first.includes("jet pump") || first.includes("heating")) return "AC & Heating";
+      if (first.includes("clean") || first.includes("sofa") || first.includes("carpet") || first.includes("pest")) return "Home Cleaning & Pest Control";
+    }
     return "Services Added";
   }, [category, cart]);
 
@@ -10271,6 +11378,7 @@ function StepWorkflowCheckout({
                       <div>
                         <span className="text-xs font-black text-indigo-950 block">
                           {availableDates.find(d => d.dateStr === selectedDate)?.label || selectedDate}
+                          {selectedDate}
                         </span>
                         <span className="text-xs font-bold text-indigo-700">
                           {selectedTime}
@@ -10388,6 +11496,36 @@ function StepWorkflowCheckout({
                             </div>
                           </div>
                         ))}
+                      {/* Time Slot Grid */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Time Slot
+                        </label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {timeSlots.map(t => {
+                            const isSel = selectedTime === t
+                            const isPast = isSlotInPast(selectedDate, t)
+                            return (
+                              <button
+                                key={t}
+                                disabled={isPast}
+                                onClick={() => {
+                                  if (isPast) return
+                                  onTimeChange(t)
+                                  if (selectedDate) setShowSlotPicker(false)
+                                }}
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  : isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
+                                  }`}
+                              >
+                                {t}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
 
                       {isSlotSelected && (
@@ -10548,6 +11686,62 @@ function StepWorkflowCheckout({
                     </div>
                   );
                 })
+                items.map(item => (
+                  <div key={item.id} className="flex flex-col gap-1 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-slate-800 flex-1">{item.name}</span>
+
+                      {/* Quantity controls */}
+                      <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
+                        <button type="button" onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">-</button>
+                        <span className="text-slate-800 font-black">{item.quantity}</span>
+                        <button type="button" onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">+</button>
+                      </div>
+
+                      {/* Price */}
+                      <div className="text-right">
+                        <span className="font-black text-slate-900 block">
+                          ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                        </span>
+                        {origTotal > itemTotal && (
+                          <span className="text-[10px] text-slate-400 line-through block">
+                            ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {item.description && (
+                      <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, paddingLeft: '2px', marginTop: '2px', textAlign: 'left' }}>
+                        {item.description}
+                      </div>
+                    )}
+                    {item.ac_notes && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', paddingLeft: '2px', marginTop: '1px', textAlign: 'left' }}>
+                        Note: {item.ac_notes}
+                      </div>
+                    )}
+                    {item.ac_images && item.ac_images.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingLeft: '2px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Photos:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {item.ac_images.map((img, imgIdx) => (
+                            <img
+                              key={imgIdx}
+                              src={img}
+                              alt={`AC Photo ${imgIdx + 1}`}
+                              style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                        Areas: {item.selectedSubOptions.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
 
@@ -11254,6 +12448,7 @@ export function BookingPage() {
         const storedToken = storedBookingData?.tracking_token || sessionStorage.getItem("active_tracking_token") || sessionStorage.getItem("caltrack_tracking_token") || "";
         const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : "";
         apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/${tokenQuery}`)
+        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
           .then(res => {
             if (res?.data) {
               setSuccessData(res.data);
@@ -11621,6 +12816,7 @@ export function BookingPage() {
       (cart && cart.some(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection"))))
     );
     if (!isEst && !checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
+    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
       setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
       return
     }
@@ -11786,6 +12982,34 @@ export function BookingPage() {
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const effectiveCart = (cart && cart.length > 0) ? cart : [{
+      id: "def-1",
+      name: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
+      price: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? 0 : 1198,
+      quantity: 1,
+      gst_rate: (category?.id === "painting" || category?.id === "mason") ? 0 : 18,
+      platform_fee: (category?.id === "painting" || category?.id === "mason") ? 0 : 29,
+      is_consultation: Boolean(category?.is_consultation || category?.id === "painting" || category?.id === "mason")
+    }];
+
+    const customerName = (formData.customer_name || user?.name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : '') || user?.username || "Customer").trim();
+    const customerPhone = (formData.phone || user?.phone || user?.mobile_number || "").trim();
+    const customerEmail = (formData.email || user?.email || "").trim();
+
+    let savedAddr = null;
+    try { savedAddr = getCustomerSelectedAddress(user?.id); } catch (_) {}
+    const finalAddress = (formData.address || savedAddr?.formatted_address || savedAddr?.address || "Hosur, Tamil Nadu").trim();
+    const finalLat = formData.latitude || (savedAddr?.latitude ? String(savedAddr.latitude) : "12.740916");
+    const finalLng = formData.longitude || (savedAddr?.longitude ? String(savedAddr.longitude) : "77.825292");
+
+    const data = new FormData()
+    data.append("customer_name", customerName)
+    data.append("phone", customerPhone)
+    data.append("email", customerEmail)
+    data.append("service_category", category?.id || "general")
+
+    const firstName = (effectiveCart[0]?.name) || (category?.name || "Service Booking");
+    const extraCount = effectiveCart.length > 1 ? effectiveCart.length - 1 : 0;
     const defaultTitle = extraCount > 0
       ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
       : firstName;
@@ -11808,6 +13032,18 @@ export function BookingPage() {
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
     const nonConsultCart = cart.filter(i => !isConsultationItem(i, category));
     const totalGst = isPaintingOrMason ? 0 : cart.reduce((s, i) => {
+    const itemTotal = effectiveCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const catSlug = (category?.slug || category?.id || "").toLowerCase();
+    const isPaintingOrMason = Boolean(
+      category?.is_consultation ||
+      catSlug === "painting" ||
+      catSlug === "mason" ||
+      catSlug === "masonry" ||
+      effectiveCart.some(c => isConsultationItem(c, category))
+    );
+    const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
+    const nonConsultCart = effectiveCart.filter(i => !isConsultationItem(i, category));
+    const totalGst = isPaintingOrMason ? 0 : effectiveCart.reduce((s, i) => {
       if (isConsultationItem(i, category)) return s;
       return s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100));
     }, 0);
@@ -11839,6 +13075,12 @@ export function BookingPage() {
     console.log("service_category:", category?.id || "general");
     console.log("issue_title:", finalIssueTitle);
     console.log("cart_data item count:", cart?.length || 0);
+    console.log("customer_name:", customerName);
+    console.log("phone:", customerPhone);
+    console.log("email:", customerEmail);
+    console.log("service_category:", category?.id || "general");
+    console.log("issue_title:", finalIssueTitle);
+    console.log("cart_data item count:", effectiveCart.length);
     console.log("item_total:", itemTotal);
     console.log("gst_amount:", totalGst);
     console.log("platform_fee:", platformFee);
@@ -11855,6 +13097,7 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    data.append("address", formData.landmark ? finalAddress + " | " + formData.landmark : finalAddress)
     if (formData.flat_house_no) {
       data.append("flat_house_no", formData.flat_house_no)
     }
@@ -11887,6 +13130,10 @@ export function BookingPage() {
     const parsedLon = parseFloat(lonVal);
     data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.7409");
     data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.8253");
+    const parsedLat = parseFloat(finalLat);
+    data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.740916");
+    const parsedLon = parseFloat(finalLng);
+    data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.825292");
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", calculatedGrandTotal)
@@ -11898,6 +13145,7 @@ export function BookingPage() {
 
     // Serialize cart_data with gst_rate and platform_fee as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => {
+    data.append("cart_data", JSON.stringify(effectiveCart.map(c => {
       const isConsult = isPaintingOrMason || isConsultationItem(c, category);
       return {
         id: c.id,
@@ -12027,6 +13275,7 @@ export function BookingPage() {
         }
       } catch (err) {
         setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
+        setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
       } finally {
         setLoading(false)
       }
@@ -12087,6 +13336,8 @@ export function BookingPage() {
         const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
         setError(msgs || err.body.message)
       } else setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
+        setError(msgs || err.body.message || err.body.error)
+      } else setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
     } finally { setLoading(false) }
   }
 
@@ -12234,6 +13485,26 @@ export function BookingPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Phase 3: ask before silently checking out only one cart when the other also has items. */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
 
       {/* Cart Summary Drawer Modal */}
       <AnimatePresence>
@@ -12905,6 +14176,10 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
                 <li key={i} className="flex items-start gap-1.5">
                   <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
                   <span>{typeof inc === 'object' ? (inc?.text || inc?.name || '') : String(inc || '')}</span>
+              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
+                <li key={inc} className="flex items-start gap-1.5">
+                  <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
+                  <span>{inc}</span>
                 </li>
               ))}
             </ul>
@@ -17346,6 +18621,27 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Phase 3 (DAILY_ESSENTIALS_FRONTEND_IMPLEMENTATION_PLAN.md): ask before
+          silently checking out only one cart when the other also has items. */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
     </div>
   );
 }
@@ -21337,6 +22633,8 @@ export function CustomCleaningPackageModal({
                       price: selectedPackageDetail.price || 199
                     });
                     setSelectedPackageDetail(null);
+                    setActiveAcInspectionItem(selectedPackageDetail);
+                    setShowAcInspectionModal(true);
                     return;
                   }
 
@@ -21361,6 +22659,20 @@ export function CustomCleaningPackageModal({
         </div>,
         document.body
       )}
+
+      {/* AC Inspection Form Modal */}
+      <ACInspectionFormModal
+        isOpen={showAcInspectionModal}
+        onClose={() => setShowAcInspectionModal(false)}
+        onSubmit={handleAcInspectionSubmit}
+        initialData={{
+          brand: formData?.ac_brand || "Daikin",
+          type: formData?.ac_type || "Split AC",
+          quantity: formData?.ac_quantity || 1,
+          notes: formData?.ac_notes || ""
+        }}
+        basePrice={activeAcInspectionItem?.price || 199}
+      />
     </div>
   );
 }

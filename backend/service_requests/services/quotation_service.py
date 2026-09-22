@@ -17,7 +17,6 @@ from service_requests.models import (
     EstimationQuotation,
     EstimationQuotationItem,
     Service,
-    ACInspectionRateItem,
 )
 from service_requests.services.estimation_service import EstimationStateConflictError
 from service_requests.services.outbox_service import OutboxService
@@ -163,50 +162,16 @@ class QuotationService:
                     elif str(service_id).isdigit():
                         service_instance = Service.objects.filter(pk=int(service_id)).first()
 
-                # Snapshot AC Inspection Rate Item if provided
-                rate_item_id = item.get("rate_item_id") or item.get("rate_item")
-                rate_item_instance = None
-                item_name_snapshot = str(item.get("item_name_snapshot") or "")
-                category_name_snapshot = str(item.get("category_name_snapshot") or "")
-                unit_price_snapshot = None
-
-                if rate_item_id:
-                    if isinstance(rate_item_id, ACInspectionRateItem):
-                        rate_item_instance = rate_item_id
-                    elif str(rate_item_id).isdigit():
-                        rate_item_instance = ACInspectionRateItem.objects.select_related("category").filter(pk=int(rate_item_id)).first()
-
-                if rate_item_instance:
-                    if not item_name_snapshot:
-                        item_name_snapshot = rate_item_instance.name
-                    if not category_name_snapshot and rate_item_instance.category:
-                        category_name_snapshot = rate_item_instance.category.name
-                    unit_price_snapshot = rate_item_instance.price
-                    if price <= 0:
-                        price = rate_item_instance.price
-                        line_total = cls._round_currency((price * qty) + tax_amount - discount_amount)
-                elif price > 0:
-                    unit_price_snapshot = cls._round_currency(price)
-
-                service_name = (
-                    item_name_snapshot
-                    or str(item.get("service_name") or item.get("name") or "AC Repair / Service")
-                )
 
                 items_to_create.append(
                     EstimationQuotationItem(
                         quotation=quotation,
                         service=service_instance,
-                        rate_item=rate_item_instance,
                         catalog_service_id=str(service_id or ""),
-                        service_name=service_name,
-                        item_name_snapshot=item_name_snapshot or service_name,
-                        category_name_snapshot=category_name_snapshot,
-                        unit_price_snapshot=unit_price_snapshot or cls._round_currency(price),
-                        selected_at=timezone.now(),
+                        service_name=str(item.get("service_name") or item.get("name") or "AC Repair / Service"),
                         description=str(item.get("description") or ""),
                         quantity=qty,
-                        unit=str(item.get("unit") or (rate_item_instance.unit if rate_item_instance else "job")),
+                        unit=str(item.get("unit") or "job"),
                         unit_price=cls._round_currency(price),
                         tax_rate=cls._round_currency(tax_rate),
                         tax_amount=cls._round_currency(tax_amount),

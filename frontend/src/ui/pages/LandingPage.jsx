@@ -4080,12 +4080,12 @@ export function LandingPage() {
 
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
-              {/* Location Selector Pill */}
+              {/* Location Selector Pill with Auto-detected Badge */}
               <div className="flex items-center gap-1.5 min-w-0">
                 <button
                   type="button"
                   onClick={() => setShowLocationPickerModal(true)}
-                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-[#0B8F7A] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs min-w-0 max-w-[120px] min-[360px]:max-w-[150px] min-[400px]:max-w-[180px] sm:max-w-[240px] truncate"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-[#0B8F7A] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs min-w-0 max-w-[120px] min-[360px]:max-w-[150px] min-[400px]:max-w-[180px] sm:max-w-[220px] truncate"
                   title="Change Location"
                 >
                   <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0B8F7A]" />
@@ -4104,6 +4104,9 @@ export function LandingPage() {
                   </span>
                   <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
                 </button>
+                <span className="hidden md:inline-flex items-center bg-emerald-50 dark:bg-emerald-950/40 text-[#0B8F7A] dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800 shrink-0">
+                  Auto-detected
+                </span>
               </div>
             </div>
 

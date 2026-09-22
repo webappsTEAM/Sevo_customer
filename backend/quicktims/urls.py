@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/orders/", include("orders.urls")),
     path("api/customer-care/", include("customer_care.urls")),
     path("api/workforce-integration/", include("workforce_integration.urls")),
+    path("api/marketplace/", include("workforce_integration.marketplace_urls")),
     path("api/customers/", include("customer_analytics.urls")),
     path("api/platform/", include("platform_control.urls")),
     path("api/", include("service_requests.urls")),

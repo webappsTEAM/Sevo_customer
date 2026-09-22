@@ -44,6 +44,7 @@ export const routes = {
   packers_movers_booking_hosur: "/packers-and-movers/hosur",
   packers_movers_booking: "/packers-and-movers",
   vegetables: "/vegetables",
+  marketplace: "/marketplace",
   catalog_dashboard: "/catalog",
   catalog_categories: "/catalog/categories",
   catalog_services: "/catalog/services",

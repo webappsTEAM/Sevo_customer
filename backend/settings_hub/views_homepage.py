@@ -17,11 +17,37 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SECTIONS = {
     "hero", "categories", "offers", "why-choose-us",
-    "how-it-works", "featured-pros", "testimonials", "general"
+    "how-it-works", "featured-pros", "testimonials", "general",
+    # Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+    # ... give the access to upload the banners, advertisement, top cards
+    # [Groceries, Services] images"): these three back the new "Mobile App"
+    # admin nav section (HomePageCustomizerPage.jsx tabs mobileBanners /
+    # mobileAds / mobileTopCards) so mobile-only image uploads get their own
+    # Supabase Storage folder (homepage/mobile-*) instead of being mixed
+    # into the web's "offers"/"categories" folders.
+    "mobile-banners", "mobile-ads", "mobile-top-cards",
 }
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# Added 2026-09-21 per explicit request ("the banners and advertisement
+# could allow admin to upload video and images... and that should be
+# reflected in mobile application"): banners/ads previously only ever
+# accepted a still image (this view ran every upload through
+# ImageOptimizer, which opens the file with PIL — a video file would
+# simply fail there). Video files skip optimization entirely (there's no
+# safe way to "compress a video with PIL") and upload as-is, capped well
+# below the image limit's assumption of "a photo" since a banner is meant
+# to be a short, small looping clip, not a full video, and every extra MB
+# here is a customer on mobile data waiting for the Home screen to load.
+ALLOWED_VIDEO_MIME_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
+VIDEO_EXTENSION_BY_MIME = {
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+}
+MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 
 def _extract_image_paths(config_data):
@@ -215,6 +241,43 @@ class HomePageConfigAPIView(APIView):
                         "phone": "+91 98765 43210",
                         "email": "support@calservices.com",
                         "workingHours": "Mon – Sun (8 AM – 8 PM)"
+                    },
+                    # Added 2026-09-17: mobile-app-only assets, edited from the
+                    # admin's new "Mobile App" nav section. Kept separate from
+                    # "hero"/"offers"/"categories" (the web homepage's own
+                    # banners/categories) so an admin can upload different
+                    # creative for the app without touching the website, and
+                    # so the app never accidentally shows a web-only asset (or
+                    # vice versa). Consumed by the customer app's
+                    # homepage_repository.dart / home_screen.dart.
+                    "mobile": {
+                        # Home-screen banner carousel — same shape as
+                        # "offers.items" (single admin-uploaded image + an
+                        # optional click-through link, no code-drawn text).
+                        "banners": [],
+                        # In-app advertisement slot(s) — same shape as banners;
+                        # rendered as an extra promo card on the Home screen
+                        # when at least one enabled item has an image.
+                        "ads": [],
+                        # The quick-access card row at the top of the Home
+                        # screen. Fixed 2026-09-18 per explicit request
+                        # ("Top cards 'Groceries' and 'Services' could be
+                        # editable like add new, delete and make text also
+                        # editable from admin panel"): this used to be a
+                        # fixed {groceries, services} object with only an
+                        # image+link each (no editable label) — now a plain
+                        # list so the admin can add, delete and relabel any
+                        # number of cards. The mobile app falls back to the
+                        # matching catalog Category's own image whenever a
+                        # card's "image" is empty. The customer app's
+                        # homepage_repository.dart still accepts the older
+                        # object shape too, for any config saved before this
+                        # change, and upgrades it to this list shape the
+                        # next time the admin publishes.
+                        "topCards": [
+                            {"id": "groceries", "label": "Groceries", "image": "", "link": "", "enabled": True},
+                            {"id": "services", "label": "Services", "image": "", "link": "", "enabled": True}
+                        ]
                     }
                 }
                 return Response({
@@ -313,6 +376,13 @@ class HomePageImageUploadAPIView(APIView):
     """
     permission_classes = [IsAdminRole, RequireModuleAccess("cms", "edit_sections")]
 
+    # Added 2026-09-21 alongside the video-upload feature: video is only
+    # accepted for the two sections that actually render admin media as a
+    # single full-bleed asset (the banner carousel and the advertisement
+    # card) — never hero/categories/etc, which compose an uploaded image
+    # into a larger designed layout no video player belongs in.
+    VIDEO_ALLOWED_SECTIONS = {"mobile-banners", "mobile-ads"}
+
     def post(self, request):
         user = request.user if request.user and request.user.is_authenticated else None
 
@@ -324,6 +394,12 @@ class HomePageImageUploadAPIView(APIView):
 
         if section not in ALLOWED_SECTIONS:
             return Response({"error": f"Invalid section '{section}'. Allowed: {list(ALLOWED_SECTIONS)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = (getattr(file_obj, "content_type", "") or "").lower()
+        is_video = content_type in ALLOWED_VIDEO_MIME_TYPES
+
+        if is_video:
+            return self._upload_video(request, file_obj, section, content_type, user)
 
         # 1. Optimize and WebP compress <= 500KB with under-100KB preservation
         try:
@@ -389,6 +465,7 @@ class HomePageImageUploadAPIView(APIView):
                 "media_id": str(media.id),
                 "image_path": storage_path,
                 "image_url": public_url,
+                "media_type": "image",
                 "original_name": file_obj.name,
                 "dimensions": optimized["dimensions"],
                 "original_dimensions": optimized.get("original_dimensions"),
@@ -406,6 +483,91 @@ class HomePageImageUploadAPIView(APIView):
             SupabaseStorageService.delete_file(storage_path)
             return Response({"success": False, "error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _upload_video(self, request, file_obj, section, content_type, user):
+        """
+        Added 2026-09-21 per explicit request ("the banners and
+        advertisement could allow admin to upload video and images").
+        Mirrors the image path above (validate -> upload to Supabase ->
+        HomePageMedia record -> old-file cleanup -> JSON response) but
+        uploads the raw video bytes as-is — there's no equivalent to
+        ImageOptimizer's WebP re-encode for video here, so this is the one
+        step video skips relative to the image flow, not a shortcut taken
+        on the validation/cleanup/response contract.
+        """
+        if section not in self.VIDEO_ALLOWED_SECTIONS:
+            return Response({
+                "success": False,
+                "error": f"Video uploads are only supported for: {sorted(self.VIDEO_ALLOWED_SECTIONS)}.",
+                "message": f"Video uploads are only supported for: {sorted(self.VIDEO_ALLOWED_SECTIONS)}.",
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if file_obj.size > MAX_VIDEO_FILE_SIZE:
+            size_mb = file_obj.size / (1024 * 1024)
+            limit_mb = MAX_VIDEO_FILE_SIZE // (1024 * 1024)
+            msg = f"Video is too large ({size_mb:.1f} MB). Maximum is {limit_mb} MB — keep banner/ad clips short."
+            return Response({"success": False, "error": msg, "message": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        extension = VIDEO_EXTENSION_BY_MIME.get(content_type, "mp4")
+
+        try:
+            file_bytes = file_obj.read()
+        except Exception as e:
+            logger.error(f"Failed to read uploaded video file: {e}")
+            return Response({"success": False, "error": "Could not read uploaded video file", "message": "Could not read uploaded video file"}, status=status.HTTP_400_BAD_REQUEST)
+
+        storage_path = SupabaseStorageService.generate_storage_path(
+            folder=f"homepage/{section}",
+            extension=extension,
+        )
+
+        upload_success, public_url, error_msg = SupabaseStorageService.upload_file(
+            file_bytes=file_bytes,
+            path=storage_path,
+            content_type=content_type,
+        )
+        if not upload_success:
+            return Response({"success": False, "error": error_msg or "Failed to upload video to Supabase Storage", "message": error_msg or "Failed to upload video to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        old_image_path = (request.data.get("old_image_path") or request.data.get("old_path") or "").strip()
+        old_deleted = False
+        if old_image_path:
+            try:
+                old_deleted = SupabaseStorageService.delete_file(old_image_path)
+            except Exception as del_err:
+                logger.warning(f"Failed to delete old homepage media '{old_image_path}': {del_err}")
+
+        try:
+            with transaction.atomic():
+                media = HomePageMedia.objects.create(
+                    section=section,
+                    original_name=file_obj.name,
+                    image_path=storage_path,
+                    mime_type=content_type,
+                    file_size=file_obj.size,
+                    dimensions="",
+                    uploaded_by=user,
+                    is_active=False,
+                    cleanup_status="UNREFERENCED",
+                )
+
+            return Response({
+                "success": True,
+                "url": public_url,
+                "path": storage_path,
+                "media_id": str(media.id),
+                "image_path": storage_path,
+                "image_url": public_url,
+                "media_type": "video",
+                "original_name": file_obj.name,
+                "file_size": file_obj.size,
+                "original_size": file_obj.size,
+                "old_deleted": old_deleted,
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as db_err:
+            logger.error(f"Database creation failed after video Storage upload: {db_err}. Cleaning up Storage file.")
+            SupabaseStorageService.delete_file(storage_path)
+            return Response({"success": False, "error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class HomePageImageDeleteAPIView(APIView):
@@ -442,153 +604,3 @@ class HomePageImageDeleteAPIView(APIView):
             "message": "Media deleted successfully",
             "storage_deleted": storage_deleted
         })
-
-
-# Note: AC inspection rate-card categories and items are strictly loaded from PostgreSQL
-# (ACInspectionConfiguration, ACInspectionRateCategory, ACInspectionRateItem)
-
-
-
-class ACInspectionConfigAPIView(APIView):
-    """
-    GET: Serves AC inspection configuration with categories and items loaded from PostgreSQL relational tables.
-    PUT: Allows Super Admin / Catalog Admin to update AC inspection settings and sync rate card items to database.
-    """
-    def get_permissions(self):
-        if self.request.method == "PUT":
-            return [permissions.IsAuthenticated()]
-        return [permissions.AllowAny()]
-
-    def get(self, request):
-        try:
-            from service_requests.models import (
-                ACInspectionRateCategory,
-                ACInspectionRateItem,
-                ACInspectionConfiguration,
-            )
-
-            config = ACInspectionConfiguration.get_solo()
-            categories = ACInspectionRateCategory.objects.filter(is_active=True).prefetch_related("items").order_by("display_order", "id")
-
-            if not categories.exists():
-                try:
-                    from seed_ac_inspection_db import seed_ac_inspection_database
-                    seed_ac_inspection_database(force_reset=True)
-                    categories = ACInspectionRateCategory.objects.filter(is_active=True).prefetch_related("items").order_by("display_order", "id")
-                except Exception as ex:
-                    logger.warning(f"Could not auto-seed AC inspection models: {ex}")
-
-            category_list = []
-            for cat in categories:
-                items_list = []
-                for it in cat.items.filter(is_active=True).order_by("display_order", "id"):
-                    price_str = f"₹{int(it.price):,}" if it.price == int(it.price) else f"₹{it.price:,.2f}"
-                    if it.price == 0:
-                        price_str = "Free"
-                    items_list.append({
-                        "id": it.id,
-                        "name": it.name,
-                        "price": price_str,
-                        "numeric_price": float(it.price),
-                        "unit": it.unit,
-                        "note": it.description,
-                        "service_type": it.service_type,
-                    })
-                category_list.append({
-                    "id": cat.slug,
-                    "db_id": cat.id,
-                    "name": cat.name,
-                    "slug": cat.slug,
-                    "description": cat.description,
-                    "items": items_list,
-                })
-
-            data = {
-                "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
-                "currency": config.currency,
-                "title": "AC Inspection & Diagnostic Visit",
-                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
-                "badges": [
-                    f"₹{int(config.diagnostic_fee)} Diagnostic Fee",
-                    "Adjustable Against Repair",
-                    "Pay at Doorstep",
-                ],
-                "includes": [
-                    "Comprehensive 21-point system & safety diagnostics",
-                    "Cooling delta temp scan & gas pressure test",
-                    "Compressor load & capacitor electrical scan",
-                    "Itemized quotation before any repair work",
-                ],
-                "rateCardCategories": category_list,
-            }
-            return Response({"success": True, "data": data})
-        except Exception as e:
-            logger.exception("Failed to fetch AC inspection config from database")
-            return Response({"success": False, "error": "Unable to load current rate card."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def put(self, request):
-        try:
-            from service_requests.models import (
-                ACInspectionRateCategory,
-                ACInspectionRateItem,
-                ACInspectionConfiguration,
-            )
-            from decimal import Decimal
-            import re
-
-            config_data = request.data
-            if not isinstance(config_data, dict):
-                return Response({"success": False, "error": "Invalid payload, must be a JSON object"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Update configuration
-            if "fee" in config_data:
-                config = ACInspectionConfiguration.get_solo()
-                config.diagnostic_fee = Decimal(str(config_data["fee"]))
-                config.save(update_fields=["diagnostic_fee", "updated_at"])
-
-            # Sync categories & items if provided
-            categories = config_data.get("rateCardCategories")
-            if isinstance(categories, list):
-                for c_idx, cat in enumerate(categories):
-                    cat_name = cat.get("name") or "Category"
-                    cat_slug = cat.get("slug") or cat.get("id") or re.sub(r"[^a-z0-9]+", "-", cat_name.lower()).strip("-")
-                    cat_obj, _ = ACInspectionRateCategory.objects.update_or_create(
-                        slug=cat_slug,
-                        defaults={
-                            "name": cat_name,
-                            "description": cat.get("description", ""),
-                            "display_order": (c_idx + 1) * 10,
-                            "is_active": True,
-                        }
-                    )
-                    for i_idx, item in enumerate(cat.get("items", [])):
-                        raw_price = str(item.get("price", "0")).replace(",", "")
-                        match = re.search(r"(\d+(?:\.\d+)?)", raw_price)
-                        item_price = Decimal(match.group(1)) if match else Decimal("0.00")
-                        item_id = item.get("id")
-                        if isinstance(item_id, int):
-                            ACInspectionRateItem.objects.filter(id=item_id).update(
-                                name=item.get("name", "").strip(),
-                                price=item_price,
-                                description=item.get("note", item.get("description", "")),
-                                display_order=(i_idx + 1) * 10,
-                            )
-                        elif item.get("name"):
-                            ACInspectionRateItem.objects.update_or_create(
-                                category=cat_obj,
-                                name=item.get("name", "").strip(),
-                                defaults={
-                                    "price": item_price,
-                                    "description": item.get("note", item.get("description", "")),
-                                    "unit": item.get("unit", "per piece"),
-                                    "display_order": (i_idx + 1) * 10,
-                                    "is_active": True,
-                                }
-                            )
-
-            return Response({"success": True, "message": "AC Inspection & Rate Card stored in PostgreSQL database successfully."})
-        except Exception as e:
-            logger.exception("Failed to save AC inspection config to database")
-            return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-

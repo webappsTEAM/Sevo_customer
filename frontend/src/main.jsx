@@ -6,7 +6,6 @@ import { Provider as ReduxProvider } from "react-redux"
 import { store } from "./store/store.js"
 import { AuthProvider } from "./state/auth/AuthProvider.jsx"
 import { EditModeProvider } from "./state/editMode/EditModeProvider.jsx"
-import { MultiServiceCartProvider } from "./state/multiServiceCart/MultiServiceCartProvider.jsx"
 import { App } from "./ui/App.jsx"
 import { initTheme } from "./ui/theme.js"
 import "./ui/styles.css"
@@ -40,12 +39,10 @@ console.log("DEBUG: Root element found:", rootEl);
 createRoot(rootEl).render(
   <StrictMode>
     <ReduxProvider store={store}>
-      <BrowserRouter basename={import.meta.env.DEV ? "/" : "/Caltrack"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter basename="/" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <EditModeProvider>
-            <MultiServiceCartProvider>
-              <App />
-            </MultiServiceCartProvider>
+            <App />
           </EditModeProvider>
         </AuthProvider>
       </BrowserRouter>

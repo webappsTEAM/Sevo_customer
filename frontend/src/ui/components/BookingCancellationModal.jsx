@@ -55,9 +55,10 @@ export function BookingCancellationModal({
   }
 
   const isGraceExpired = isAccepted && remainingSecs <= 0
-  const isOther = selectedReason === "Other reason (please specify)"
-  const hasValidReason = isOther ? Boolean(customReason.trim()) : Boolean(selectedReason)
-  const canSubmit = hasValidReason && !isGraceExpired && !isSubmitting
+  const isCustom = selectedReason === "Other reason (please specify)"
+  const canSubmit = !isSubmitting && !isGraceExpired && Boolean(
+    selectedReason && (!isCustom || customReason.trim().length > 0)
+  )
 
   const handleConfirmCancel = async () => {
     const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason
@@ -74,31 +75,7 @@ export function BookingCancellationModal({
     setIsSubmitting(true)
     setErrorMsg("")
 
-    let savedObj = {}
-    try { savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}") } catch (_) { }
-    const urlParams = new URLSearchParams(window.location.search)
-
-    const rawLookup = (requestId && String(requestId) !== "undefined" && String(requestId) !== "null")
-      ? requestId
-      : (bookingId && String(bookingId) !== "undefined" && String(bookingId) !== "null")
-        ? bookingId
-        : urlParams.get("track") ||
-          urlParams.get("booking_id") ||
-          urlParams.get("request_id") ||
-          urlParams.get("id") ||
-          savedObj?.request_id ||
-          savedObj?.id ||
-          savedObj?.booking_id ||
-          sessionStorage.getItem("calservice_active_tracking_id")
-
-    const lookup = rawLookup ? String(rawLookup).trim() : ""
-
-    if (!lookup || lookup === "undefined" || lookup === "null") {
-      setErrorMsg("Unable to identify the booking to cancel. Please refresh the page.")
-      setIsSubmitting(false)
-      return
-    }
-
+    const lookup = requestId || bookingId
     const isEstimation = Boolean(
       (lookup && String(lookup).includes("LOCAL-EST")) ||
       estimationRepository.hasActiveEstimationSync()
@@ -129,6 +106,9 @@ export function BookingCancellationModal({
     }
 
     try {
+      let savedObj = {}
+      try { savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}") } catch (_) { }
+      const urlParams = new URLSearchParams(window.location.search)
       const resolvedToken = trackingToken ||
         savedObj?.tracking_token ||
         urlParams.get("token") ||
@@ -151,11 +131,7 @@ export function BookingCancellationModal({
         payload.phone = resolvedPhone
       }
 
-      const queryParams = new URLSearchParams()
-      if (resolvedToken) queryParams.set("token", resolvedToken)
-      if (resolvedPhone) queryParams.set("phone", resolvedPhone)
-      const tokenQuery = queryParams.toString() ? `?${queryParams.toString()}` : ""
-
+      const tokenQuery = resolvedToken ? `?token=${encodeURIComponent(resolvedToken)}` : ""
       const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel/${tokenQuery}`, {
         method: "POST",
         body: JSON.stringify(payload),

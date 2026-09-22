@@ -11,5 +11,6 @@ export const CATEGORIES = [
   { id: "painting", name: "Painting", image: "/assets/Painting/Interior.webp", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
   { id: "mason", name: "Mason", image: "/mockups/brick_wall_construction_red.jpg", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
   { id: "appliance_repair", name: "Appliances", image: "/mockups/hero_pro_appliance_rect.jpg", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
- 
+  { id: "security", name: "Security Systems", image: "/mockups/service_inspection.png", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
+  { id: "general", name: "General Repair", image: "/mockups/service_maintenance.png", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
 ];

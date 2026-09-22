@@ -69,6 +69,12 @@ export function ACInspectionStatusPage() {
       } else if (bookingResp?.data?.customer_inspection) {
         setRateCardSnapshot(bookingResp.data.customer_inspection);
       }
+      const [bookingResp, estimationResp] = await Promise.all([
+        apiRequest(`/booking/${encodeURIComponent(id)}/`),
+        apiRequest(`/booking/${encodeURIComponent(id)}/estimation/`).catch(() => null),
+      ]);
+      if (bookingResp?.success) setBooking(bookingResp.data);
+      if (estimationResp?.success) setEstimation(estimationResp.data);
       if (!bookingResp?.success) {
         setError(bookingResp?.message || "Could not load this booking.");
       }

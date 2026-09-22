@@ -15,7 +15,7 @@ Asia/Kolkata) via django.utils.timezone, never a naive datetime.now().
 Both values are settings-driven so they can be tuned per environment without a
 code change:
     BOOKING_SAME_DAY_CUTOFF_HOUR  (default 18, i.e. 6 PM local)
-    BOOKING_MIN_LEAD_MINUTES      (default 30)
+    BOOKING_MIN_LEAD_MINUTES      (default 60)
 """
 import datetime
 import logging
@@ -26,7 +26,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 DEFAULT_CUTOFF_HOUR = 18
-DEFAULT_MIN_LEAD_MINUTES = 30
+DEFAULT_MIN_LEAD_MINUTES = 60
 
 # Accepted spellings for a slot, in the order they are tried. The frontend
 # sends 24-hour "HH:MM"; the 12-hour forms are accepted because several of the

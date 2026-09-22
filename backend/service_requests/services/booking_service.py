@@ -227,8 +227,25 @@ class BookingService:
                     final_amount=final_tot
                 )
 
-        # 5. Dispatch booking notification to workforce management system
-        WorkforceIntegrationService.dispatch_job(sr.id)
+        # 5. Dispatch booking notification to workforce management system asynchronously after commit
+        def _trigger_dispatch():
+            try:
+                from service_requests.tasks import async_dispatch_service_request
+                async_dispatch_service_request.delay(sr.id)
+            except Exception as task_err:
+                import logging
+                logging.getLogger("service_requests.dispatch").warning(
+                    f"Celery task delay failed ({task_err}), falling back to direct async_dispatch_service_request call."
+                )
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request(sr.id)
+                except Exception as direct_err:
+                    logging.getLogger("service_requests.dispatch").error(
+                        f"Direct dispatch execution failed for booking {sr.id}: {direct_err}"
+                    )
+
+        transaction.on_commit(_trigger_dispatch)
 
         return sr
 

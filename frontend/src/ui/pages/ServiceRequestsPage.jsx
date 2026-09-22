@@ -205,13 +205,6 @@ export function ServiceRequestsPage() {
   const [categoriesMap, setCategoriesMap] = useState({})
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
-  // Multi-service booking (Sept 2026): when the selected booking is one task
-  // of a multi-service parent Order (detail.order_id + sibling_task_count > 1,
-  // both already returned by the existing admin list/detail serializer --
-  // see service_requests/serializers.py), fetch the full per-task breakdown
-  // once so the detail pane can show every sibling task's own status and
-  // technician instead of just this one.
-  const [orderTasks, setOrderTasks] = useState(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -370,24 +363,12 @@ export function ServiceRequestsPage() {
     setDetailLoading(true)
     setActionSuccess(null)
     setShowAssign(false)
-    setOrderTasks(null)
     apiRequest(`/admin/service-requests/${selectedId}/`)
       .then(res => { if (active && res?.success) setDetail(res.data) })
       .catch(err => console.error(err))
       .finally(() => { if (active) setDetailLoading(false) })
     return () => { active = false }
   }, [selectedId])
-
-  /* Multi-service booking: load sibling tasks once we know this booking
-     belongs to a multi-task Order. */
-  useEffect(() => {
-    if (!detail?.order_id || (detail?.sibling_task_count || 1) <= 1) { setOrderTasks(null); return }
-    let active = true
-    apiRequest(`/orders/admin/${detail.order_id}/`)
-      .then(res => { if (active && res?.success) setOrderTasks(res.data) })
-      .catch(err => console.error(err))
-    return () => { active = false }
-  }, [detail?.order_id, detail?.sibling_task_count])
 
   const refreshAll = async () => {
     const [detRes, listRes] = await Promise.all([
@@ -971,16 +952,6 @@ export function ServiceRequestsPage() {
 
                   <div className="sr-item-bottom">
                     <StatusBadge status={r.status} />
-                    {(r.sibling_task_count || 1) > 1 && (
-                      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#6366f1", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 99, padding: "2px 7px" }}>
-                        +{r.sibling_task_count - 1} more service{r.sibling_task_count - 1 > 1 ? "s" : ""}
-                      </span>
-                    )}
-                    {r.is_delayed && (
-                      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 99, padding: "2px 7px" }}>
-                        ⚠ Delayed
-                      </span>
-                    )}
                     {(r.technician_name || r.assigned_employee) && (
                       <div className="sr-item-tech">
                         <TechAvatar name={r.technician_name || r.assigned_employee?.full_name} size={18} />
@@ -1137,54 +1108,6 @@ export function ServiceRequestsPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Multi-service booking (Sept 2026): this booking is one
-                    task of a parent Order with 2+ services (e.g. AC Service
-                    + TV Repair) -- show every sibling task's own status and
-                    technician here, alongside the single-task card above,
-                    instead of the admin having to open each task separately. */}
-                {(detail.sibling_task_count || 1) > 1 && (
-                  <div className="sr-info-card">
-                    <div className="sr-info-card-title"><ClipboardCheck size={13} /> Multi-Service Tasks ({detail.sibling_task_count})</div>
-                    {!orderTasks ? (
-                      <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Loading tasks…</div>
-                    ) : (
-                      <>
-                        <div style={{ marginBottom: 10 }}>
-                          <StatusBadge status={orderTasks.overall_status} />
-                          <span style={{ marginLeft: 8, fontSize: "0.75rem", color: "#64748b" }}>Overall booking status</span>
-                        </div>
-                        {orderTasks.tasks.map((t) => (
-                          <div
-                            key={t.order_item_id}
-                            style={{
-                              display: "flex", justifyContent: "space-between", alignItems: "center",
-                              padding: "8px 0", borderBottom: "1px solid #f1f5f9",
-                              fontWeight: t.service_request_id === detail.id ? 700 : 400,
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontSize: "0.85rem", color: "#334155" }}>
-                                {t.service_category}{t.service_request_id === detail.id ? " (this task)" : ""}
-                              </div>
-                              {t.technician_name && (
-                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{t.technician_name}</div>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              {t.is_delayed && (
-                                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "2px 6px" }}>
-                                  ⚠ Delayed
-                                </span>
-                              )}
-                              <StatusBadge status={t.status} />
-                            </div>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Booking Details */}

@@ -236,7 +236,7 @@ export function QuotationDecisionPage() {
                       <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
                     )}
                     <p className="text-xs text-slate-500 mt-1">
-                      {item.quantity} {item.unit} &times; {money(item.unit_price)}
+                      {item.quantity} {item.unit} × {money(item.unit_price)}
                     </p>
                     {WARRANTY_LABELS[item.warranty_tier] && (
                       <span className="inline-flex items-center gap-1 mt-2 text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">

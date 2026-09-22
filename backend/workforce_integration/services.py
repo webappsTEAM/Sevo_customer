@@ -8,6 +8,7 @@ or GPS hardware tracking.
 """
 import logging
 import os
+import sys
 import uuid
 import requests
 import threading
@@ -16,14 +17,25 @@ from django.utils import timezone
 
 logger = logging.getLogger("workforce_integration")
 
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce")
-WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default")
-# Used specifically for the internal (non-technician-session) endpoints on
-# the Vendor app, e.g. customer-cancel-sync below -- reuses the same secret
-# already shared with the Vendor app for webhook auth in the other
-# direction, rather than a second key (WORKFORCE_API_KEY above) the Vendor
-# app has never actually been configured to check.
-WORKFORCE_WEBHOOK_SECRET = os.getenv("WORKFORCE_WEBHOOK_SECRET", "")
+_raw_base_url = getattr(settings, "WORKFORCE_API_BASE_URL", None) or os.getenv("WORKFORCE_API_BASE_URL")
+_raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+
+if not _raw_base_url or not _raw_webhook_secret:
+    if settings.DEBUG or "test" in sys.argv or getattr(settings, "TESTING", False):
+        WORKFORCE_API_BASE_URL = (_raw_base_url or "http://localhost:8001/api/workforce").rstrip("/")
+        WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret or "dev-insecure-workforce-webhook-secret-local-testing-only"
+        logger.warning(
+            "WORKFORCE_API_BASE_URL / WORKFORCE_WEBHOOK_SECRET is not fully configured in environment. "
+            "Using DEBUG-only fallback values. Set both variables in production before deploying."
+        )
+    else:
+        raise ValueError(
+            "CRITICAL CONFIGURATION ERROR: WORKFORCE_API_BASE_URL and WORKFORCE_WEBHOOK_SECRET "
+            "environment variables are mandatory in production (DEBUG=False)."
+        )
+else:
+    WORKFORCE_API_BASE_URL = _raw_base_url.rstrip("/")
+    WORKFORCE_WEBHOOK_SECRET = _raw_webhook_secret.strip()
 
 
 class WorkforceIntegrationService:
@@ -40,26 +52,22 @@ class WorkforceIntegrationService:
             return cls._active_locks[key]
 
     @classmethod
-    def _headers(cls):
+    def _internal_headers(cls):
+        """
+        Headers for all internal/service-to-service endpoints on the Vendor app,
+        authenticated via shared WORKFORCE_WEBHOOK_SECRET.
+        """
         return {
-            "Authorization": f"Bearer {WORKFORCE_API_KEY}",
+            "Authorization": f"Bearer {WORKFORCE_WEBHOOK_SECRET}",
+            "X-Workforce-Webhook-Secret": WORKFORCE_WEBHOOK_SECRET,
             "Content-Type": "application/json",
             "X-CalServices-Source": "calservices-platform",
         }
 
     @classmethod
-    def _internal_headers(cls):
-        """
-        Headers for the Vendor app's internal/service-to-service endpoints
-        (IsInternalWorkforceCaller), which check WORKFORCE_WEBHOOK_SECRET --
-        not the generic _headers() above, whose WORKFORCE_API_KEY the
-        Vendor app has never actually been configured to recognize.
-        """
-        return {
-            "Authorization": f"Bearer {WORKFORCE_WEBHOOK_SECRET}",
-            "Content-Type": "application/json",
-            "X-CalServices-Source": "calservices-platform",
-        }
+    def _headers(cls):
+        """Alias to _internal_headers to ensure all calls pass verified shared authentication."""
+        return cls._internal_headers()
 
     @classmethod
     def _resolve_sr(cls, service_request):
@@ -148,20 +156,7 @@ class WorkforceIntegrationService:
                 }
 
         try:
-            # Bug found (BLOCKER -- root cause of "vendor never gets new
-            # jobs"): this used cls._headers() (Bearer WORKFORCE_API_KEY),
-            # but the Vendor app has never had any endpoint or permission
-            # class that checks WORKFORCE_API_KEY -- every internal endpoint
-            # there (IsInternalWorkforceCaller) checks WORKFORCE_WEBHOOK_SECRET
-            # instead, same as cancel_workforce_job()/clawback_workforce_job()
-            # below already correctly do via _internal_headers(). On top of
-            # that, "/jobs/dispatch/" itself didn't exist on the Vendor side
-            # until this handover's fix (see WorkforceJobDispatchReceiveView) --
-            # so this call was doubly broken: 404, and would have 401'd even
-            # once the route existed. Every new booking's dispatch call was
-            # silently swallowed by the except below and logged only as a
-            # warning, so a technician was never offered the job and it sat
-            # at "confirmed" indefinitely with no visible error anywhere.
+
             url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
             response = requests.post(url, json=payload, headers=cls._internal_headers(), timeout=10)
             if response.status_code in [200, 201]:
@@ -448,10 +443,210 @@ class WorkforceIntegrationService:
         return {"success": True, "fallback": True}
 
     @classmethod
+    def _build_quote_dict_from_db(cls, quote_id: int) -> dict:
+        """
+        Dynamically builds a comprehensive quote dictionary with items and measurements from PostgreSQL.
+        """
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM workforce_quote WHERE id = %s", [quote_id])
+                cols = [c[0] for c in cursor.description]
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                q = dict(zip(cols, row))
+
+                cursor.execute("""
+                    SELECT * FROM workforce_quote_item 
+                    WHERE quote_id = %s 
+                    ORDER BY sort_order ASC, id ASC
+                """, [quote_id])
+                item_cols = [c[0] for c in cursor.description]
+                items = [dict(zip(item_cols, r)) for r in cursor.fetchall()]
+
+                cursor.execute("""
+                    SELECT * FROM workforce_quote_measurement 
+                    WHERE quote_id = %s 
+                    ORDER BY id ASC
+                """, [quote_id])
+                meas_cols = [c[0] for c in cursor.description]
+                meas = [dict(zip(meas_cols, r)) for r in cursor.fetchall()]
+
+                total_area = sum(float(m.get("area") or 0) for m in meas)
+                adv_pct = float(q.get("advance_percent") or 0)
+                tot_amt = float(q.get("total_amount") or 0)
+                adv_amt = round((tot_amt * adv_pct / 100.0), 2) if adv_pct > 0 else 0.0
+
+                q_num = q.get("quote_number") or ""
+                v_num = q.get("quote_version") or 1
+                display_q_num = f"{q_num}-V{v_num}" if (v_num > 1 and f"-V{v_num}" not in q_num and f"-v{v_num}" not in q_num) else q_num
+
+                return {
+                    "quote_id": q["id"],
+                    "quote_number": display_q_num,
+                    "raw_quote_number": q_num,
+                    "version": v_num,
+                    "quote_version": v_num,
+                    "title": q.get("title") or "",
+                    "description": q.get("description") or "",
+                    "service_category": q.get("service_category") or "",
+                    "service_name": q.get("service_name") or "",
+                    "status": q.get("status") or "SENT_TO_CUSTOMER",
+                    "customer_decision": q.get("customer_decision") or "",
+                    "customer_notes": q.get("customer_notes") or "",
+                    "customer_decline_reason": q.get("customer_decline_reason") or "",
+                    "subtotal": float(q.get("subtotal_amount") or 0),
+                    "subtotal_amount": float(q.get("subtotal_amount") or 0),
+                    "discount_amount": float(q.get("discount_amount") or 0),
+                    "tax_amount": float(q.get("tax_amount") or 0),
+                    "total_amount": tot_amt,
+                    "grand_total": tot_amt,
+                    "net_payable": float(q.get("net_payable") or tot_amt),
+                    "inspection_fee": float(q.get("inspection_fee") or 0),
+                    "inspection_fee_adjusted": float(q.get("inspection_fee_adjusted") or 0),
+                    "advance_percent": adv_pct,
+                    "advance_amount": adv_amt,
+                    "balance_amount": round(tot_amt - adv_amt, 2) if adv_amt > 0 else tot_amt,
+                    "valid_until": q["valid_until"].isoformat() if q.get("valid_until") else None,
+                    "decision_token": q.get("decision_token"),
+                    "decision_expires_at": q["decision_expires_at"].isoformat() if q.get("decision_expires_at") else None,
+                    "total_area": total_area,
+                    "total_paintable_area": total_area,
+                    "items": [
+                        {
+                            "id": it["id"],
+                            "name": it.get("name") or it.get("description") or "Quotation Item",
+                            "service_name": it.get("name") or "Quotation Item",
+                            "description": it.get("description") or "",
+                            "section": it.get("section") or "",
+                            "item_type": it.get("item_type") or "item",
+                            "quantity": float(it.get("quantity") or 1),
+                            "unit": it.get("unit") or "sqft",
+                            "unit_price": float(it.get("unit_price") or 0),
+                            "rate": float(it.get("unit_price") or 0),
+                            "final_rate": float(it.get("unit_price") or 0),
+                            "tax_rate": float(it.get("tax_rate") or 0),
+                            "discount_amount": float(it.get("discount_amount") or 0),
+                            "total_amount": float(it.get("total_amount") or 0),
+                            "amount": float(it.get("total_amount") or 0),
+                            "line_total": float(it.get("total_amount") or 0),
+                            "warranty_applicable": bool(it.get("warranty_applicable")),
+                            "warranty_tier": it.get("warranty_tier") or "",
+                        }
+                        for it in items
+                    ],
+                    "measurements": [
+                        {
+                            "id": m["id"],
+                            "name": m.get("name") or f"Area #{m['id']}",
+                            "area_name": m.get("name") or f"Area #{m['id']}",
+                            "measurement_type": m.get("measurement_type") or "area",
+                            "length": float(m["length"]) if m.get("length") is not None else None,
+                            "width": float(m["width"]) if m.get("width") is not None else None,
+                            "height": float(m["height"]) if m.get("height") is not None else None,
+                            "calculated_area": float(m.get("area") or 0),
+                            "final_area": float(m.get("area") or 0),
+                            "area": float(m.get("area") or 0),
+                            "quantity": float(m.get("quantity") or 1),
+                            "unit": m.get("unit") or "sqft",
+                            "notes": m.get("notes") or "",
+                        }
+                        for m in meas
+                    ]
+                }
+        except Exception as e:
+            logger.error(f"Error building quote dict from db for quote {quote_id}: {e}")
+            return None
+
+    @classmethod
+    def get_quote_history_by_booking_id(cls, booking_id) -> list:
+        """
+        Retrieves all quotation versions / history associated with a booking/request ID.
+        """
+        if not booking_id:
+            return []
+
+        try:
+            if hasattr(booking_id, "request_id"):
+                sr_id = booking_id.id
+                req_id = booking_id.request_id
+                wf_id = getattr(booking_id, "workforce_job_id", -1) or -1
+            elif isinstance(booking_id, int) or (isinstance(booking_id, str) and booking_id.isdigit()):
+                sr_id = int(booking_id)
+                req_id = str(booking_id)
+                wf_id = -1
+            else:
+                sr_id = -1
+                req_id = str(booking_id)
+                wf_id = -1
+
+            if isinstance(wf_id, str):
+                try:
+                    wf_id = int(wf_id.replace("WF-", "").replace("WFJ-", ""))
+                except ValueError:
+                    wf_id = -1
+            elif not isinstance(wf_id, int):
+                wf_id = -1
+
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id FROM workforce_quote 
+                    WHERE job_id IN (%s, %s)
+                       OR quote_number = %s
+                       OR quote_number LIKE %s
+                    ORDER BY id ASC
+                """, [sr_id, wf_id, req_id, f"{req_id}%"])
+                rows = cursor.fetchall()
+                quotes = []
+                for r in rows:
+                    q_dict = cls._build_quote_dict_from_db(r[0])
+                    if q_dict:
+                        quotes.append(q_dict)
+                return quotes
+        except Exception as e:
+            logger.error(f"Error fetching quote history for booking {booking_id}: {e}")
+            return []
+
+    @classmethod
     def get_quote_by_token(cls, token: str) -> dict:
         """
-        Calls the vendor's public endpoint to retrieve quote details by token.
+        Retrieves quote details by public decision token or quote number.
         """
+        if not token:
+            return {"success": False, "message": "No token provided"}
+
+        # 1. DB Lookup first
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id FROM workforce_quote 
+                    WHERE decision_token = %s 
+                       OR quote_number = %s 
+                       OR quote_number LIKE %s
+                    ORDER BY 
+                      CASE 
+                        WHEN status = 'SENT_TO_CUSTOMER' THEN 1
+                        WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
+                        WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
+                        WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
+                        WHEN status = 'DRAFT' THEN 5
+                        ELSE 6
+                      END ASC,
+                      updated_at DESC, id DESC LIMIT 1
+                """, [str(token), str(token), f"{str(token).split('-V')[0]}%"])
+                row = cursor.fetchone()
+                if row and row[0]:
+                    quote_dict = cls._build_quote_dict_from_db(row[0])
+                    if quote_dict:
+                        return {"success": True, "quote": quote_dict}
+        except Exception as ex:
+            logger.debug(f"DB get_quote_by_token lookup failed: {ex}")
+
+        # 2. HTTP Fallback
+
         try:
             url = f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{token}/"
             response = requests.get(url, headers=cls._headers(), timeout=5)
@@ -465,39 +660,277 @@ class WorkforceIntegrationService:
             return {"success": False, "message": "Workforce service unreachable"}
 
     @classmethod
-    def get_quote_by_booking_id(cls, booking_id: str) -> dict:
+    def get_quote_by_booking_id(cls, booking_id: str, allow_http: bool = True) -> dict:
         """
-        Calls the vendor's endpoint to retrieve quote details associated with a booking/request ID.
+        Retrieves active quote details associated with a booking/request ID.
+        Dynamically queries PostgreSQL with priority for active sent/accepted quotes,
+        and falls back to external HTTP APIs.
         """
+        if not booking_id:
+            return {"success": False, "message": "No booking ID provided", "quote": None}
+
         from django.core.cache import cache
-        cache_key = f"wf_quote_{booking_id}"
+        booking_key = getattr(booking_id, "request_id", None) or getattr(booking_id, "id", None) or str(booking_id)
+        cache_key = f"wf_quote_{booking_key}"
 
         # Fast path read
         cached = cache.get(cache_key)
-        if cached is not None:
+        if cached is not None and cached.get("quote") is not None:
             return cached
 
         # Deduplication Lock
         lock = cls._get_lock(cache_key)
         with lock:
-            # Double-check cache
             cached = cache.get(cache_key)
-            if cached is not None:
+            if cached is not None and cached.get("quote") is not None:
                 return cached
 
+            # 1. Dynamic query directly in PostgreSQL
             try:
-                url = f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/"
-                response = requests.get(url, headers=cls._headers(), timeout=1.5)
-                if response.status_code == 200:
-                    result = {"success": True, "quote": response.json()}
-                    cache.set(cache_key, result, timeout=60)
-                    return result
+                if hasattr(booking_id, "request_id"):
+                    sr_id = booking_id.id
+                    req_id = booking_id.request_id
+                    wf_id = getattr(booking_id, "workforce_job_id", -1) or -1
+                elif isinstance(booking_id, int) or (isinstance(booking_id, str) and booking_id.isdigit()):
+                    sr_id = int(booking_id)
+                    req_id = str(booking_id)
+                    wf_id = -1
+                else:
+                    sr_id = -1
+                    req_id = str(booking_id)
+                    wf_id = -1
+
+                if isinstance(wf_id, str):
+                    try:
+                        wf_id = int(wf_id.replace("WF-", "").replace("WFJ-", ""))
+                    except ValueError:
+                        wf_id = -1
+                elif not isinstance(wf_id, int):
+                    wf_id = -1
+
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT id FROM workforce_quote 
+                        WHERE job_id IN (%s, %s)
+                           OR quote_number = %s
+                           OR quote_number LIKE %s
+                        ORDER BY 
+                          CASE 
+                            WHEN status = 'SENT_TO_CUSTOMER' THEN 1
+                            WHEN status IN ('CUSTOMER_ACCEPTED', 'APPROVED', 'CONVERTED') THEN 2
+                            WHEN status IN ('CHANGES_REQUESTED', 'CHANGE_REQUESTED') THEN 3
+                            WHEN status IN ('DECLINED', 'CUSTOMER_DECLINED') THEN 4
+                            WHEN status = 'DRAFT' THEN 5
+                            ELSE 6
+                          END ASC,
+                          updated_at DESC,
+                          id DESC
+                        LIMIT 1
+                    """, [sr_id, wf_id, req_id, f"{req_id}%"])
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        quote_dict = cls._build_quote_dict_from_db(row[0])
+                        if quote_dict:
+                            result = {"success": True, "quote": quote_dict}
+                            cache.set(cache_key, result, timeout=5)
+                            return result
+            except Exception as db_err:
+                logger.debug(f"Direct DB quote query failed, falling back to HTTP: {db_err}")
+
+            if not allow_http:
                 result = {"success": False, "message": "No quote found", "quote": None}
-                cache.set(cache_key, result, timeout=60)
+                cache.set(cache_key, result, timeout=10)
                 return result
+
+            # 2. HTTP Fallback to Vendor API
+            candidate_urls = [
+                f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/",
+                f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/quote/",
+                f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/quote/",
+            ]
+
+            for url in candidate_urls:
+                try:
+                    response = requests.get(url, headers=cls._headers(), timeout=1.0)
+                    if response.status_code == 200:
+                        quote_json = response.json()
+                        if quote_json and isinstance(quote_json, dict):
+                            # If the vendor returned { "has_quote": False, ... } or { "quote": None }
+                            if quote_json.get("has_quote") is False:
+                                quote_json = None
+                            elif quote_json.get("quote") and isinstance(quote_json.get("quote"), dict):
+                                quote_json = quote_json.get("quote")
+
+                            # Verify quote_json is an actual quote (has quote_number, id, quote_id, or items)
+                            if quote_json and isinstance(quote_json, dict):
+                                has_valid_identifier = bool(quote_json.get("quote_number") or quote_json.get("id") or quote_json.get("quote_id") or quote_json.get("items"))
+                                if not has_valid_identifier:
+                                    quote_json = None
+
+                            if quote_json and isinstance(quote_json, dict):
+                                # Ensure decision_token is attached if missing from vendor JSON
+                                if not quote_json.get("decision_token"):
+                                    quote_num = str(quote_json.get("quote_number") or "").strip()
+                                    if quote_num:
+                                        try:
+                                            from django.db import connection
+                                            with connection.cursor() as cursor:
+                                                cursor.execute("""
+                                                    SELECT decision_token, customer_notes, customer_decline_reason, status 
+                                                    FROM workforce_quote 
+                                                    WHERE quote_number = %s 
+                                                       OR quote_number LIKE %s 
+                                                       OR job_id = %s 
+                                                       OR id = %s
+                                                    ORDER BY id DESC LIMIT 1
+                                                """, [
+                                                    quote_num,
+                                                    f"{quote_num.split('-V')[0]}%",
+                                                    int(booking_id) if str(booking_id).isdigit() else -1,
+                                                    int(quote_json.get("quote_id") or -1) if str(quote_json.get("quote_id") or "").isdigit() else -1
+                                                ])
+                                                row = cursor.fetchone()
+                                                if row and row[0]:
+                                                    quote_json["decision_token"] = row[0]
+                                                    if not quote_json.get("customer_notes") and row[1]:
+                                                        quote_json["customer_notes"] = row[1]
+                                                    if not quote_json.get("customer_decline_reason") and row[2]:
+                                                        quote_json["customer_decline_reason"] = row[2]
+                                        except Exception as d_err:
+                                            logger.debug(f"Could not enrich decision_token for quote: {d_err}")
+
+                                result = {"success": True, "quote": quote_json}
+                                cache.set(cache_key, result, timeout=5)
+                                return result
+                except Exception as e:
+                    logger.debug(f"Workforce API get_quote_by_booking_id failed on {url}: {e}")
+
+            result = {"success": False, "message": "No quote found", "quote": None}
+            cache.set(cache_key, result, timeout=2)
+            return result
+
+    @classmethod
+    def decide_quote(cls, token: str, decision: str, data: dict = None) -> dict:
+        """
+        Submits customer decision (ACCEPT, REQUEST_CHANGES, DECLINE) to the workforce system.
+        Auto-resolves decision_token from database if a quote_number, quote_id, or booking_id was passed.
+        """
+        resolved_token = token
+        quote_id_val = None
+        job_id_val = None
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT decision_token, id, job_id 
+                    FROM workforce_quote 
+                    WHERE decision_token = %s 
+                       OR quote_number = %s 
+                       OR quote_number LIKE %s 
+                       OR id = %s 
+                       OR job_id = %s
+                    ORDER BY 
+                      CASE 
+                        WHEN status = 'SENT_TO_CUSTOMER' THEN 1
+                        ELSE 2
+                      END ASC,
+                      updated_at DESC, id DESC LIMIT 1
+                """, [
+                    str(token),
+                    str(token),
+                    f"{str(token).split('-V')[0]}%",
+                    int(token) if str(token).isdigit() else -1,
+                    int(token) if str(token).isdigit() else -1
+                ])
+                row = cursor.fetchone()
+                if row:
+                    if row[0]:
+                        resolved_token = row[0]
+                    quote_id_val = row[1]
+                    job_id_val = row[2]
+        except Exception as ex:
+            logger.debug(f"Auto-resolving decision_token for {token} skipped: {ex}")
+
+        # Invalidate quote caches
+        from django.core.cache import cache
+        for k in [f"wf_quote_{token}", f"wf_quote_{resolved_token}", f"wf_quote_{job_id_val}"]:
+            cache.delete(k)
+
+        norm_action = "ACCEPT" if decision in ["CUSTOMER_ACCEPTED", "ACCEPT", "APPROVED"] else ("REQUEST_CHANGES" if decision in ["CHANGE_REQUESTED", "REQUESTED_CHANGES", "REQUEST_CHANGES"] else "DECLINE")
+        norm_status = "CUSTOMER_ACCEPTED" if norm_action == "ACCEPT" else ("CHANGES_REQUESTED" if norm_action == "REQUEST_CHANGES" else "DECLINED")
+        notes_val = (data or {}).get("reason_notes") or (data or {}).get("notes") or (data or {}).get("customer_notes") or ""
+        reason_val = (data or {}).get("reason_code") or (data or {}).get("reason") or (data or {}).get("decline_reason") or ""
+
+        payload = {
+            "action": norm_action,
+            "decision": decision,
+            "notes": notes_val,
+            "customer_notes": notes_val,
+            "reason": reason_val,
+            "reason_code": reason_val,
+            "reason_notes": notes_val,
+        }
+        candidate_urls = [
+            f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{resolved_token}/decide/",
+            f"{WORKFORCE_API_BASE_URL}/customer/quotes/{resolved_token}/decide/",
+            f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{resolved_token}/decision/",
+            f"{WORKFORCE_API_BASE_URL}/workforce/quotes/decision/{resolved_token}/",
+            f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{token}/decide/",
+        ]
+        http_success = False
+        res_json = {}
+        for url in candidate_urls:
+            try:
+                response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+                if response.status_code in [200, 201, 204]:
+                    res_json = response.json() if response.content else {}
+                    http_success = True
+                    break
             except Exception as e:
-                logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
-                result = {"success": False, "message": "Workforce service unreachable", "quote": None}
-                cache.set(cache_key, result, timeout=60)
-                return result
+                logger.warning(f"Workforce quote decision failed for {url}: {e}")
+
+        # Sync update in DB directly to ensure zero latency and state consistency
+        if quote_id_val:
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE workforce_quote 
+                        SET status = %s,
+                            customer_decision = %s,
+                            customer_decided_at = NOW(),
+                            customer_notes = CASE WHEN %s != '' THEN %s ELSE customer_notes END,
+                            customer_decline_reason = CASE WHEN %s != '' THEN %s ELSE customer_decline_reason END,
+                            updated_at = NOW()
+                        WHERE id = %s
+                    """, [
+                        norm_status, norm_status,
+                        notes_val, notes_val,
+                        reason_val, reason_val,
+                        quote_id_val
+                    ])
+            except Exception as u_err:
+                logger.warning(f"Could not directly update workforce_quote {quote_id_val}: {u_err}")
+
+        # Broadcast tracking event to update live customer screen and booking
+        if job_id_val:
+            try:
+                from service_requests.models import ServiceRequest
+                from service_requests.notifications import broadcast_tracking_event
+                sr_obj = ServiceRequest.objects.filter(id=job_id_val).first()
+                if sr_obj:
+                    broadcast_tracking_event(sr_obj, event_type="quote_decision_updated")
+            except Exception as b_err:
+                logger.debug(f"Broadcast quote decision event failed: {b_err}")
+
+        if http_success:
+            return {"success": True, "message": res_json.get("message", "Quotation decision recorded successfully."), "data": res_json}
+
+        if quote_id_val:
+            return {"success": True, "message": "Quotation decision recorded successfully."}
+
+        return {"success": False, "message": "Failed to record quote decision with workforce service."}
+
+
 

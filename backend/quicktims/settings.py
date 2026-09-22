@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-load_dotenv(BASE_DIR / ".env", override=True)
+_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
+load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -30,8 +31,10 @@ DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 _allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+    if "testserver" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append("testserver")
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1", "testserver"]
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
@@ -95,10 +98,21 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
+_argv_str = " ".join(sys.argv).lower()
+IS_TESTING = (
+    "test" in sys.argv
+    or "pytest" in sys.modules
+    or "pytest" in _argv_str
+    or "unittest" in _argv_str
+    or os.getenv("DJANGO_TEST_SQLITE") == "1"
+    or os.getenv("SEVO_TESTING") == "1"
+)
 
 if IS_TESTING:
     TESTING = True
+    PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -151,6 +165,19 @@ else:
         }
     }
 
+_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
+if _e2e_sqlite_path:
+    if DEBUG or IS_TESTING:
+        DATABASES["default"] = {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": Path(_e2e_sqlite_path),
+        }
+    else:
+        import logging
+        logging.getLogger(__name__).warning(
+            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
+        )
+
 
 
 ROOT_URLCONF = "quicktims.urls"
@@ -191,7 +218,7 @@ USE_TZ = True
 # service_requests/booking_window.py, which the booking serializer calls -- the
 # frontend filter is a convenience, not the control. Tunable per environment.
 BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
-BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "30"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
 
 STATIC_URL = "static/"
 
@@ -443,7 +470,7 @@ PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in
 
 # ── Workforce Integration ────────────────────────────────────────────────────
 WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
-WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default").strip()
+WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",
     "dev-insecure-workforce-webhook-secret-local-testing-only" if DEBUG else ""
@@ -520,10 +547,23 @@ LOGGING = {
     },
 }
 
-if "test" in sys.argv:
+if "test" in sys.argv or IS_TESTING:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
+
+
+# ── Test Database Safety Guard ───────────────────────────────────────────────
+# Aborts execution if testing mode is active but the final resolved database
+# engine is anything other than SQLite.
+if IS_TESTING:
+    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    if "sqlite3" not in _final_engine:
+        raise RuntimeError(
+            f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "
+            f"but final DATABASES['default']['ENGINE'] is '{_final_engine}'. "
+            "Tests must run on SQLite only to protect shared/production databases."
+        )
 
 
 
