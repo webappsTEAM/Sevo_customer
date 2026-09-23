@@ -569,7 +569,7 @@ if "test" in sys.argv or IS_TESTING:
 
 # ── Test Database Safety Guard ───────────────────────────────────────────────
 if IS_TESTING:
-    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    _final_engine = str(DATABASES.get("default", {}).get("ENGINE", "") or "")
     if "sqlite3" not in _final_engine:
         raise RuntimeError(
             f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "

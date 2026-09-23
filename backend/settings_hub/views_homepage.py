@@ -538,7 +538,7 @@ class HomePageImageUploadAPIView(APIView):
                 logger.warning(f"Failed to delete old homepage media '{old_image_path}': {del_err}")
 
         try:
-            with transaction.atomic():
+            with cast(Any, transaction.atomic()):
                 media = HomePageMedia.objects.create(
                     section=section,
                     original_name=file_obj.name,

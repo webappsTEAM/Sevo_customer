@@ -4729,12 +4729,12 @@ class CustomerQuotePDFView(APIView):
             from django.http import HttpResponse
             return HttpResponse("Quotation identifier required.", status=400)
 
+        from workforce_integration.services import WorkforceIntegrationService
         quote_data = None
         customer_info = {}
 
         # 1. Try to fetch from workforce_quote / WorkforceIntegrationService
         try:
-            from workforce_integration.services import WorkforceIntegrationService
             from django.db import connection
 
             base_qnum = lookup_key.split('-V')[0].split('-v')[0]
@@ -4944,7 +4944,7 @@ class CustomerQuotePDFView(APIView):
         y = y - 110
 
         # ── Scope of Work / Line Items Table ──
-        items = quote_data.get("items") or []
+        items: list = list(quote_data.get("items") or [])
         p.setFillColor(colors.HexColor("#4338CA"))
         p.setFont("Helvetica-Bold", 10)
         p.drawString(45, y, "SCOPE OF WORK & LINE ITEMS")
@@ -4985,7 +4985,7 @@ class CustomerQuotePDFView(APIView):
                 y = height - 50
 
         # ── Measurements Breakdown Table ──
-        measurements = quote_data.get("measurements") or []
+        measurements: list = list(quote_data.get("measurements") or [])
         if measurements:
             y -= 12
             p.setFillColor(colors.HexColor("#4338CA"))

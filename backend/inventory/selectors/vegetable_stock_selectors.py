@@ -13,10 +13,10 @@ from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import format_grams_for_display, parse_pack_size_grams
 
 
-def _safe_get_stock_item(product) -> Optional[InventoryItem]:
+def _safe_get_stock_item(product) -> Optional[Any]:
     """
     Safely retrieves product.stock_item.
-    Handles ObjectDoesNotExist / InventoryItem.DoesNotExist which getattr does not catch.
+    Handles ObjectDoesNotExist which getattr does not catch.
     """
     try:
         return getattr(product, "stock_item", None)
