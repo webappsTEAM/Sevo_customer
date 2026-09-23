@@ -9,20 +9,12 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import ValidationError
 
-from inventory.models import InventoryItem, StockMovement
+from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import to_grams
 
 logger = logging.getLogger(__name__)
-
-
-def get_linked_stock_item(product):
-    try:
-        return getattr(product, "stock_item", None)
-    except (ObjectDoesNotExist, AttributeError, Exception):
-        return None
 
 
 class InsufficientStockError(Exception):
@@ -37,34 +29,32 @@ class InsufficientStockError(Exception):
 
 
 @transaction.atomic
-def add_stock(product, quantity, unit, company, entered_by_user=None) -> InventoryItem:
+def add_stock(product, quantity, unit, company, entered_by_user=None) -> Vegetable:
     """
     ADDITIVE RESTOCK.
     Adds converted grams to the live stock_quantity_grams.
-    Creates and links the InventoryItem if one does not exist yet.
-    Logs StockMovement (RESTOCK).
+    Creates and links the Vegetable if one does not exist yet.
+    Logs VegetableStockMovement (RESTOCK).
     """
     grams_to_add = to_grams(quantity, unit)
     
-    # Resolve linked InventoryItem or create one
-    item = get_linked_stock_item(product)
+    # Resolve linked Vegetable or create one
+    item = product.stock_item
     if not item:
-        item = InventoryItem.objects.create(
+        item = Vegetable.objects.create(
             org=company,
+            package=product,
             name=f"{product.name} (Produce)",
-            category=InventoryItem.Category.CONSUMABLE,
             sku=f"VEG-{product.slug.upper()[:20]}",
             unit=unit or "g",
             stock_quantity_grams=0,
             default_daily_quantity_grams=None,
-            total_quantity=0,
-            available_quantity=0,
         )
         product.stock_item = item
         product.save(update_fields=["stock_item"])
     else:
         # Lock item row for update
-        item = InventoryItem.objects.select_for_update().get(id=item.id)
+        item = Vegetable.objects.select_for_update().get(id=item.id)
 
     current_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
     new_stock = current_stock + grams_to_add
@@ -73,10 +63,10 @@ def add_stock(product, quantity, unit, company, entered_by_user=None) -> Invento
         item.unit = unit
     item.save(update_fields=["stock_quantity_grams", "unit"])
 
-    StockMovement.objects.create(
+    VegetableStockMovement.objects.create(
         org=company,
-        item=item,
-        movement_type=StockMovement.MovementType.RESTOCK,
+        vegetable=item,
+        movement_type=VegetableStockMovement.MovementType.RESTOCK,
         delta_grams=grams_to_add,
         balance_after_grams=new_stock,
         reason=f"Restocked {quantity} {unit}",
@@ -87,34 +77,32 @@ def add_stock(product, quantity, unit, company, entered_by_user=None) -> Invento
 
 
 @transaction.atomic
-def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=None) -> InventoryItem:
+def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=None) -> Vegetable:
     """
     ABSOLUTE SET (Manual Correction).
     Sets stock_quantity_grams to the exact converted value. Reason is required.
-    Logs StockMovement (ADJUSTMENT) with computed delta and reason.
+    Logs VegetableStockMovement (ADJUSTMENT) with computed delta and reason.
     """
     if not reason or not str(reason).strip():
         raise ValueError("Reason is required for manual stock adjustment.")
 
     target_grams = to_grams(quantity, unit, allow_zero=True)
-    item = get_linked_stock_item(product)
+    item = product.stock_item
     if not item:
-        item = InventoryItem.objects.create(
+        item = Vegetable.objects.create(
             org=company,
+            package=product,
             name=f"{product.name} (Produce)",
-            category=InventoryItem.Category.CONSUMABLE,
             sku=f"VEG-{product.slug.upper()[:20]}",
             unit=unit or "g",
             stock_quantity_grams=target_grams,
             default_daily_quantity_grams=None,
-            total_quantity=0,
-            available_quantity=0,
         )
         product.stock_item = item
         product.save(update_fields=["stock_item"])
         delta = target_grams
     else:
-        item = InventoryItem.objects.select_for_update().get(id=item.id)
+        item = Vegetable.objects.select_for_update().get(id=item.id)
         current_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
         delta = target_grams - current_stock
         item.stock_quantity_grams = target_grams
@@ -122,10 +110,10 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
             item.unit = unit
         item.save(update_fields=["stock_quantity_grams", "unit"])
 
-    StockMovement.objects.create(
+    VegetableStockMovement.objects.create(
         org=company,
-        item=item,
-        movement_type=StockMovement.MovementType.ADJUSTMENT,
+        vegetable=item,
+        movement_type=VegetableStockMovement.MovementType.ADJUSTMENT,
         delta_grams=delta,
         balance_after_grams=target_grams,
         reason=str(reason).strip(),
@@ -136,104 +124,38 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
 
 
 @transaction.atomic
-def set_default_daily_quantity(product, quantity, unit, company, entered_by_user=None, apply_now: bool = False) -> InventoryItem:
+def set_default_daily_quantity(product, quantity, unit, company, entered_by_user=None, apply_now: bool = False) -> Vegetable:
     """
-    Sets default_daily_quantity_grams.
-    If apply_now is True, immediately applies daily reset for today.
+    Sets default_daily_quantity_grams as a baseline restock capacity / reference level.
+    Stock remains strictly persistent and only changes via explicit Restock, Adjustment, Sale, or Cancellation.
     """
     if quantity is None or quantity == "":
         default_grams = None
     else:
         default_grams = to_grams(quantity, unit, allow_zero=True)
 
-    item = get_linked_stock_item(product)
+    item = product.stock_item
     if not item:
-        item = InventoryItem.objects.create(
+        item = Vegetable.objects.create(
             org=company,
+            package=product,
             name=f"{product.name} (Produce)",
-            category=InventoryItem.Category.CONSUMABLE,
             sku=f"VEG-{product.slug.upper()[:20]}",
             unit=unit or "g",
-            stock_quantity_grams=default_grams if apply_now else None,
+            stock_quantity_grams=None,
             default_daily_quantity_grams=default_grams,
-            last_reset_date=timezone.localdate() if (apply_now and default_grams is not None) else None,
-            total_quantity=0,
-            available_quantity=0,
         )
         product.stock_item = item
         product.save(update_fields=["stock_item"])
-        if apply_now and default_grams is not None:
-            StockMovement.objects.create(
-                org=company,
-                item=item,
-                movement_type=StockMovement.MovementType.DAILY_RESET,
-                delta_grams=default_grams,
-                balance_after_grams=default_grams,
-                reason="Immediate daily reset upon setting default stock",
-                entered_by=entered_by_user,
-            )
         return item
 
-    item = InventoryItem.objects.select_for_update().get(id=item.id)
+    item = Vegetable.objects.select_for_update().get(id=item.id)
     item.default_daily_quantity_grams = default_grams
     if unit:
         item.unit = unit
     item.save(update_fields=["default_daily_quantity_grams", "unit"])
 
-    if apply_now and default_grams is not None:
-        apply_daily_reset(item, company, entered_by=entered_by_user, force=True)
-        item.refresh_from_db()
-
     return item
-
-
-@transaction.atomic
-def apply_daily_reset(item: InventoryItem, company, entered_by=None, force: bool = False) -> bool:
-    """
-    Applies the daily reset for an item to its default_daily_quantity_grams.
-    IDEMPOTENT per business date: if last_reset_date == today, skips unless force=True.
-    Skips if default_daily_quantity_grams is None.
-    Logs StockMovement (DAILY_RESET).
-    """
-    if item.default_daily_quantity_grams is None:
-        return False
-
-    today = timezone.localdate()
-    if not force and item.last_reset_date == today:
-        return False
-
-    # Lock row
-    item = InventoryItem.objects.select_for_update().get(id=item.id)
-    current_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
-    new_stock = item.default_daily_quantity_grams
-    delta = new_stock - current_stock
-
-    item.stock_quantity_grams = new_stock
-    item.last_reset_date = today
-    item.save(update_fields=["stock_quantity_grams", "last_reset_date"])
-
-    StockMovement.objects.create(
-        org=company,
-        item=item,
-        movement_type=StockMovement.MovementType.DAILY_RESET,
-        delta_grams=delta,
-        balance_after_grams=new_stock,
-        reason=f"Daily reset to default capacity ({new_stock}g)",
-        entered_by=entered_by,
-    )
-    return True
-
-
-def ensure_daily_reset_applied(item: InventoryItem, company) -> None:
-    """
-    Lightweight self-healing check:
-    If default_daily_quantity_grams is set AND last_reset_date < today (or None),
-    applies the daily reset before proceeding.
-    """
-    if item and item.default_daily_quantity_grams is not None:
-        today = timezone.localdate()
-        if item.last_reset_date is None or item.last_reset_date < today:
-            apply_daily_reset(item, company)
 
 
 @transaction.atomic
@@ -242,11 +164,10 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
     items: list of dicts: {"product": Package, "quantity": numeric/str, "unit": 'kg'|'g'}
     Atomic, deadlock-free reservation:
     1. Collects tracked stock_item ids, sorts them ascending.
-    2. Runs ensure_daily_reset_applied() on all tracked items.
-    3. Locks all tracked items via select_for_update().filter(id__in=sorted_ids).order_by('id').
-    4. Validates that every tracked item has stock_quantity_grams >= requested_grams.
+    2. Locks all tracked items via select_for_update().filter(id__in=sorted_ids).order_by('id').
+    3. Validates that every tracked item has stock_quantity_grams >= requested_grams.
        If ANY fails, raises InsufficientStockError (rolling back transaction).
-    5. Deducts stock_quantity_grams and logs one StockMovement (SOLD) per tracked item with real booking_ref.
+    4. Deducts stock_quantity_grams and logs one VegetableStockMovement (SOLD) per tracked item with real booking_ref.
     """
     if not items or not booking_ref:
         return
@@ -259,7 +180,7 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
         prod = entry.get("product")
         if not prod:
             continue
-        stock_item = get_linked_stock_item(prod)
+        stock_item = getattr(prod, "stock_item", None)
         if stock_item is None:
             continue
         qty = entry.get("quantity")
@@ -286,16 +207,10 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
     sorted_ids = sorted(list(item_ids_to_lock))
     locked_items = {
         item.id: item
-        for item in InventoryItem.objects.select_for_update().filter(id__in=sorted_ids).order_by("id")
+        for item in Vegetable.objects.select_for_update().filter(id__in=sorted_ids).order_by("id")
     }
 
-    # First pass: ensure daily reset is applied for each locked item
-    for item in locked_items.values():
-        ensure_daily_reset_applied(item, company)
-        # Reload locked item in case daily reset updated stock_quantity_grams
-        item.refresh_from_db()
-
-    # Aggregate requested grams per inventory item in case multi-line entries reference same product
+    # Aggregate requested grams per vegetable item in case multi-line entries reference same product
     aggregated_requested = {}
     for req in parsed_requests:
         sid = req["stock_item_id"]
@@ -322,10 +237,10 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
         item.stock_quantity_grams = new_balance
         item.save(update_fields=["stock_quantity_grams"])
 
-        StockMovement.objects.create(
+        VegetableStockMovement.objects.create(
             org=company,
-            item=item,
-            movement_type=StockMovement.MovementType.SOLD,
+            vegetable=item,
+            movement_type=VegetableStockMovement.MovementType.SOLD,
             delta_grams=-grams_sold,
             balance_after_grams=new_balance,
             reason=f"Sold {grams_sold}g in booking {booking_ref}",
@@ -347,42 +262,42 @@ def release_stock_for_booking(service_request) -> None:
     company = service_request.company
 
     # Check for already restored
-    already_restored = StockMovement.objects.filter(
+    already_restored = VegetableStockMovement.objects.filter(
         booking_ref=booking_ref,
-        movement_type=StockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
+        movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
     ).exists()
 
     if already_restored:
         return
 
     # Find all SOLD movements for this booking_ref
-    sold_movements = list(StockMovement.objects.filter(
+    sold_movements = list(VegetableStockMovement.objects.filter(
         booking_ref=booking_ref,
-        movement_type=StockMovement.MovementType.SOLD,
-    ).select_related("item"))
+        movement_type=VegetableStockMovement.MovementType.SOLD,
+    ).select_related("vegetable"))
 
     if not sold_movements:
         return
 
     # Lock affected items in ascending order
-    item_ids = sorted(list({sm.item_id for sm in sold_movements}))
+    veg_ids = sorted(list({sm.vegetable_id for sm in sold_movements}))
     locked_items = {
         item.id: item
-        for item in InventoryItem.objects.select_for_update().filter(id__in=item_ids).order_by("id")
+        for item in Vegetable.objects.select_for_update().filter(id__in=veg_ids).order_by("id")
     }
 
     for sm in sold_movements:
-        item = locked_items[sm.item_id]
+        item = locked_items[sm.vegetable_id]
         restored_grams = abs(sm.delta_grams)
         current_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
         new_stock = current_stock + restored_grams
         item.stock_quantity_grams = new_stock
         item.save(update_fields=["stock_quantity_grams"])
 
-        StockMovement.objects.create(
+        VegetableStockMovement.objects.create(
             org=company,
-            item=item,
-            movement_type=StockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
+            vegetable=item,
+            movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
             delta_grams=restored_grams,
             balance_after_grams=new_stock,
             reason=f"Restored {restored_grams}g upon cancellation of booking {booking_ref}",

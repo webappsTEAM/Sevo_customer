@@ -872,8 +872,8 @@ const MAIN_CATEGORIES = [
   {
     id: "food_health",
     label: "Food and Health",
-    subtitle: "Daily groceries, farm-fresh vegetables & wellness essentials",
-    badge: "Groceries & Vegetables",
+    subtitle: "Farm-fresh vegetables & wellness essentials",
+    badge: "Vegetables",
     badgeColor: "bg-amber-100 text-amber-900",
     graphic: FoodHealthGraphic,
     bgGradient: "from-amber-50/80 to-orange-50/40",

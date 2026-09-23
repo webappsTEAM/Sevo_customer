@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Smartphone, Phone, Mail, Clock } from "lucide-react";
 import { CalTrackLogo } from "./CalTrackLogo.jsx";
-import { BkStyles } from "../pages/BookingPage.jsx";
 
 function FacebookMark(props) {
   return (
@@ -37,9 +36,7 @@ function TwitterMark(props) {
 
 export function AppBannerAndFooter() {
   return (
-    <>
-      <BkStyles />
-      <div className="w-full mt-16 transition-colors duration-200">
+    <div className="w-full mt-16 transition-colors duration-200">
         {/* App Banner */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
           <div className="bg-[#F2F8F4] dark:bg-[#0B1E43] border border-[#D5EADB] dark:border-[var(--sevo-border)] rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[var(--sevo-shadow-sm)] relative overflow-hidden">
@@ -149,6 +146,5 @@ export function AppBannerAndFooter() {
           </div>
         </footer>
       </div>
-    </>
   );
 }

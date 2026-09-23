@@ -14,7 +14,7 @@ from rest_framework.exceptions import ValidationError
 from companies.models import Company
 from service_requests.models import CatalogCategory, Service, Package
 from inventory.services import vegetable_stock_service
-from inventory.models import StockMovement
+from inventory.models import VegetableStockMovement
 from orders.models import GroceryOrder, GroceryOrderItem
 
 User = get_user_model()
@@ -114,9 +114,9 @@ class GroceryStateMachineTests(TestCase):
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 1000)
         self.assertEqual(
-            StockMovement.objects.filter(
+            VegetableStockMovement.objects.filter(
                 booking_ref=order.order_number,
-                movement_type=StockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
+                movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_CANCELLATION,
             ).count(),
             1,
         )

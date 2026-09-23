@@ -137,13 +137,20 @@ const ADMIN_NAV_ITEMS = [
     ]
   },
   {
-    label: "Warehouse Inventory",
-    to: routes.inventory,
-    icon: <Package size={20} />,
-    color: "#8B5CF6",
+    label: "Vegetable Inventory",
+    to: routes.inventory_vegetables,
+    icon: <Sprout size={20} />,
+    color: "#10B981",
     children: [
-      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
-      { label: "Vegetables", to: routes.inventory_vegetables, icon: <Sprout size={16} />, color: "#10B981" },
+      { label: "Home", to: routes.vegetable_admin_home, icon: <Home size={16} />, color: "#10B981" },
+      { label: "Orders", to: routes.vegetable_admin_orders, icon: <Package size={16} />, color: "#3B82F6" },
+      { label: "Returns", to: routes.vegetable_admin_returns, icon: <Repeat2 size={16} />, color: "#F59E0B" },
+      { label: "Claims", to: routes.vegetable_admin_claims, icon: <ShieldAlert size={16} />, color: "#EF4444" },
+      { label: "Inventory", to: routes.inventory_vegetables, icon: <Layers size={16} />, color: "#10B981" },
+      { label: "Catalog Uploads", to: routes.vegetable_admin_catalog_uploads, icon: <FolderOpen size={16} />, color: "#8B5CF6" },
+      { label: "Categories Approval", to: routes.vegetable_admin_categories_approval, icon: <ShieldCheck size={16} />, color: "#F59E0B" },
+      { label: "Categories", to: routes.vegetable_admin_categories, icon: <FolderOpen size={16} />, color: "#06B6D4" },
+      { label: "Coupons", to: routes.marketing_coupons, icon: <Ticket size={16} />, color: "#EC4899" },
     ]
   },
   { label: "Reports & Analytics", to: routes.reports, icon: <BarChart3 size={20} />, color: "#10B981" },
@@ -154,6 +161,7 @@ const ADMIN_NAV_ITEMS = [
     icon: <Settings size={20} />,
     color: "#64748B",
     children: [
+      { label: "Stock Catalog", to: routes.inventory, icon: <Package size={16} />, color: "#8B5CF6" },
       { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
       { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
       { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
@@ -233,6 +241,49 @@ function playStatusBeep(isOnline) {
   } catch (e) {
     console.warn("Status beep failed", e)
   }
+}
+
+function matchesRoute(currentPathname, routeTo) {
+  if (!routeTo || !currentPathname) return false
+  const basePath = routeTo.split("?")[0].split("#")[0]
+  if (basePath === "/") {
+    return currentPathname === "/"
+  }
+  return currentPathname === basePath || currentPathname.startsWith(basePath + "/")
+}
+
+function isItemActive(item, currentPathname) {
+  if (!item) return false
+  if (item.to === "/customers/dashboard" && (currentPathname === "/customers" || currentPathname.startsWith("/customers/"))) {
+    return true
+  }
+  if (matchesRoute(currentPathname, item.to)) return true
+  if (item.children && Array.isArray(item.children)) {
+    return item.children.some(child => matchesRoute(currentPathname, child.to))
+  }
+  return false
+}
+
+function isChildActive(child, location, siblingRoutes = []) {
+  const currentFullUrl = location.pathname + location.search
+  if (child.to.includes("?")) {
+    return currentFullUrl === child.to || currentFullUrl.startsWith(child.to + "&")
+  }
+  
+  if (location.pathname === child.to) return true
+
+  const isSiblingMoreSpecific = siblingRoutes.some(sib => {
+    if (sib === child.to) return false
+    const sibBase = sib.split("?")[0].split("#")[0]
+    const childBase = child.to.split("?")[0].split("#")[0]
+    return matchesRoute(location.pathname, sibBase) &&
+      sibBase.startsWith(childBase) &&
+      sibBase.length > childBase.length
+  })
+
+  if (isSiblingMoreSpecific) return false
+
+  return matchesRoute(location.pathname, child.to)
 }
 
 function SidebarTooltip({ tooltip }) {
@@ -367,22 +418,20 @@ export function AppShell() {
   }, [user, dispatch])
 
   useEffect(() => {
+    if (drillDownParent && isItemActive(drillDownParent, location.pathname)) {
+      return
+    }
+
     const parent = items.find(item => {
       if (!item.children) return false
-      if (item.to === "/") {
-        return location.pathname === "/"
-      }
-      if (item.to === "/customers/dashboard") {
-        return location.pathname.startsWith("/customers")
-      }
-      return location.pathname.startsWith(item.to)
+      return isItemActive(item, location.pathname)
     })
     if (parent) {
       setDrillDownParent(parent)
     } else {
       setDrillDownParent(null)
     }
-  }, [location.pathname, items])
+  }, [location.pathname, items, drillDownParent])
 
   const showTooltip = (label, e) => {
     if (!sidebarCollapsed) return
@@ -655,7 +704,7 @@ export function AppShell() {
         >
           <nav className="flex-1 overflow-y-auto py-6 flex flex-col items-center gap-4 scrollbar-hide">
             {items.map((item) => {
-              const active = (item.to === "/" && location.pathname === "/") || (item.to !== "/" && location.pathname.startsWith(item.to));
+              const active = isItemActive(item, location.pathname) || drillDownParent?.label === item.label;
               const color = item.color || "#0B8F7A";
               const hasChildren = !!item.children;
 
@@ -720,11 +769,7 @@ export function AppShell() {
                     .filter(child => (!child.adminOnly || isAdmin) && hasModuleAccess(user, child))
                     .map((child) => {
                       const childSiblings = drillDownParent.children.map(c => c.to)
-                      const isSiblingMoreSpecific = childSiblings.some(
-                        sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
-                      )
-                      const active = location.pathname === child.to ||
-                        (!isSiblingMoreSpecific && child.to !== '/settings' && location.pathname.startsWith(child.to));
+                      const active = isChildActive(child, location, childSiblings)
                       const color = child.color || drillDownParent.color || "#0B8F7A";
                       return (
                         <NavLink
