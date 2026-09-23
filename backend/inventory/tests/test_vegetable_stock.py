@@ -624,3 +624,79 @@ class VegetableStockWriteLockdownTestSuite(TestCase):
 
         items_list_res = self.client.get("/api/inventory/items/")
         self.assertEqual(items_list_res.status_code, 200)
+
+    def test_never_restocked_vegetable_shows_out_of_stock_in_customer_and_admin(self):
+        # Create a package enrolled in inventory (has linked Vegetable row), but stock_quantity_grams is None (never restocked)
+        pkg_unstocked = Package.objects.create(
+            service=self.veg_service,
+            name="Never Restocked Capsicum",
+            slug="never-restocked-capsicum",
+            base_price=Decimal("60.00"),
+            duration="500g",
+            status="ACTIVE",
+        )
+        veg_item = Vegetable.objects.create(
+            org=self.company,
+            package=pkg_unstocked,
+            name="Never Restocked Capsicum",
+            sku="VEG-CAP-01",
+            stock_quantity_grams=None,
+            default_daily_quantity_grams=10000,
+        )
+        pkg_unstocked.stock_item = veg_item
+        pkg_unstocked.save(update_fields=["stock_item"])
+
+        # Customer stock status must be OUT OF STOCK with max_quantity=0 (not unlimited)
+        customer_status = vegetable_stock_selectors.get_stock_status(pkg_unstocked)
+        self.assertFalse(customer_status["in_stock"])
+        self.assertEqual(customer_status["max_quantity"], 0)
+
+        # Admin status must be out_of_stock (not not_tracked) with 0g available
+        admin_status = vegetable_stock_selectors.get_admin_stock_status(pkg_unstocked)
+        self.assertEqual(admin_status["state"], "out_of_stock")
+        self.assertEqual(admin_status["today_available_grams"], 0)
+        self.assertEqual(admin_status["today_available_display"], "0 g")
+
+        # Booking reservation must fail due to zero stock
+        from inventory.services.vegetable_stock_service import InsufficientStockError
+        with self.assertRaises(InsufficientStockError):
+            vegetable_stock_service.reserve_stock_for_booking_items(
+                [{"product": pkg_unstocked, "quantity": 500, "unit": "g"}],
+                self.company,
+                booking_ref="SR-TEST-UNSTOCKED",
+            )
+
+        # Restocking makes it immediately available with correct cap
+        vegetable_stock_service.add_stock(pkg_unstocked, 5, "kg", self.company)
+        pkg_unstocked.refresh_from_db()
+        pkg_unstocked.stock_item.refresh_from_db()
+
+        customer_status_after = vegetable_stock_selectors.get_stock_status(pkg_unstocked)
+        self.assertTrue(customer_status_after["in_stock"])
+        self.assertEqual(customer_status_after["max_quantity"], 10)  # 5000g / 500g = 10
+
+        admin_status_after = vegetable_stock_selectors.get_admin_stock_status(pkg_unstocked)
+        self.assertEqual(admin_status_after["state"], "in_stock")
+        self.assertEqual(admin_status_after["today_available_grams"], 5000)
+        self.assertEqual(admin_status_after["today_available_display"], "5 kg")
+
+    def test_untracked_product_without_vegetable_row_remains_unlimited(self):
+        pkg_untracked = Package.objects.create(
+            service=self.veg_service,
+            name="General Service Package",
+            slug="general-service-package",
+            base_price=Decimal("100.00"),
+            status="ACTIVE",
+        )
+        self.assertIsNone(getattr(pkg_untracked, "stock_item", None))
+
+        # Customer stock status must be in_stock: True, max_quantity: None (unlimited)
+        customer_status = vegetable_stock_selectors.get_stock_status(pkg_untracked)
+        self.assertTrue(customer_status["in_stock"])
+        self.assertIsNone(customer_status["max_quantity"])
+
+        # Admin status must be not_tracked
+        admin_status = vegetable_stock_selectors.get_admin_stock_status(pkg_untracked)
+        self.assertEqual(admin_status["state"], "not_tracked")
+        self.assertIsNone(admin_status["today_available_grams"])
+        self.assertEqual(admin_status["today_available_display"], "Not Tracked")

@@ -4,6 +4,7 @@ backend/vegetable_orders/views.py
 API Views for Vegetable Orders Administration, State Transitions, and Home Dashboard KPIs.
 """
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -423,13 +424,13 @@ class AdminVegetableReturnDetailView(APIView):
 class AdminVegetableReturnActionView(APIView):
     """
     POST /api/vegetable-orders/admin/returns/<pk>/action/
-    Admin actions: approve, reject, or resolve return with resolution action, refund amount, admin notes.
+    Admin actions: approve, reject, or resolve return with resolution action, refund amount, restock choice, admin notes.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
         ret = get_object_or_404(
-            VegetableReturn.objects.select_related("order", "item__package", "customer"),
+            VegetableReturn.objects.select_related("order", "item__package", "customer", "stock_movement"),
             pk=pk,
         )
 
@@ -443,6 +444,7 @@ class AdminVegetableReturnActionView(APIView):
         target_status = serializer.validated_data["status"]
         resolution_action = serializer.validated_data.get("resolution_action", VegetableReturn.ResolutionAction.NONE)
         refund_amount = serializer.validated_data.get("refund_amount", Decimal("0.00"))
+        restock_item = serializer.validated_data.get("restock_item", False)
         admin_notes = serializer.validated_data.get("admin_notes", "")
 
         ret.status = target_status
@@ -455,7 +457,35 @@ class AdminVegetableReturnActionView(APIView):
         if target_status in [VegetableReturn.Status.RESOLVED, VegetableReturn.Status.REJECTED]:
             ret.resolved_at = timezone.now()
 
-        ret.save()
+        # If resolving return, process inventory stock adjustments atomically
+        if target_status == VegetableReturn.Status.RESOLVED:
+            from inventory.services.vegetable_stock_service import process_return_stock_resolution
+            try:
+                with transaction.atomic():
+                    ret.save()
+                    process_return_stock_resolution(
+                        vegetable_return=ret,
+                        restock_item=restock_item,
+                        entered_by=request.user,
+                    )
+            except ValidationError as e:
+                msg = e.detail if hasattr(e, "detail") else str(e)
+                if isinstance(msg, list):
+                    msg = msg[0]
+                return Response(
+                    {"success": False, "message": str(msg)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except Exception as e:
+                return Response(
+                    {"success": False, "message": f"Error updating inventory: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            ret.save()
+
+        # Refresh from db to ensure linked stock movement is populated
+        ret.refresh_from_db()
 
         return Response({
             "success": True,

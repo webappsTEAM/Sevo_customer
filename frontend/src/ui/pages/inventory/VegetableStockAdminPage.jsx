@@ -1235,12 +1235,16 @@ export function VegetableStockAdminPage() {
                             <tr key={m.id} className="hover:bg-slate-50/70">
                               <td className="py-2 px-3 text-slate-500 font-medium whitespace-nowrap">{m.time}</td>
                               <td className="py-2 px-3 font-bold">
-                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${m.type === 'RESTOCK' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                    m.type === 'DAILY_RESET' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                                      m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                        'bg-blue-50 text-blue-700 border border-blue-200'
-                                  }`}>
-                                  {m.type_display}
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  m.type === 'RESTOCK' || m.type === 'RESTOCKED_ON_RETURN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                  m.type === 'RESTOCKED_ON_CANCELLATION' ? 'bg-cyan-50 text-cyan-700 border border-cyan-200' :
+                                  m.type === 'SOLD' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                  m.type === 'RETURN_REPLACEMENT' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                  m.type === 'CLAIM_WRITEOFF' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                  m.type === 'RETURN_WRITEOFF' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                  'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  {m.type_display || m.type}
                                 </span>
                               </td>
                               <td className={`py-2 px-3 font-bold ${m.delta_grams >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>

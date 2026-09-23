@@ -338,6 +338,9 @@ class VegetableStockMovement(models.Model):
         SOLD = "SOLD", "Sold"
         RESTOCKED_ON_CANCELLATION = "RESTOCKED_ON_CANCELLATION", "Restocked on Cancellation"
         CLAIM_WRITEOFF = "CLAIM_WRITEOFF", "Claim Write-off"
+        RESTOCKED_ON_RETURN = "RESTOCKED_ON_RETURN", "Restocked on Return"
+        RETURN_REPLACEMENT = "RETURN_REPLACEMENT", "Return Replacement"
+        RETURN_WRITEOFF = "RETURN_WRITEOFF", "Return Write-off"
 
     objects = CompanyScopedManager(company_field="org")
 

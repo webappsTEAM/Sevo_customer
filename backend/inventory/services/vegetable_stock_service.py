@@ -303,3 +303,121 @@ def release_stock_for_booking(service_request) -> None:
             reason=f"Restored {restored_grams}g upon cancellation of booking {booking_ref}",
             booking_ref=booking_ref,
         )
+
+
+@transaction.atomic
+def process_return_stock_resolution(vegetable_return, restock_item: bool = False, entered_by=None) -> VegetableStockMovement | None:
+    """
+    Processes stock consequences for resolved VegetableReturn.
+    - Idempotent: If return is already linked to a stock_movement, returns it.
+    - If resolution_action == REPLACEMENT:
+        Validates that available stock_quantity_grams >= quantity_grams.
+        Raises ValidationError if insufficient stock to fulfill replacement.
+        Deducts quantity_grams and creates VegetableStockMovement (RETURN_REPLACEMENT).
+    - If resolution_action == REFUND:
+        - If restock_item is True: adds quantity_grams back to stock and creates VegetableStockMovement (RESTOCKED_ON_RETURN).
+        - If restock_item is False: leaves live stock unchanged and logs write-off loss as VegetableStockMovement (RETURN_WRITEOFF).
+    Links created stock movement to vegetable_return.stock_movement.
+    """
+    if not vegetable_return:
+        return None
+
+    if vegetable_return.stock_movement:
+        return vegetable_return.stock_movement
+
+    action = vegetable_return.resolution_action
+    if action not in ["REPLACEMENT", "REFUND"]:
+        return None
+
+    # Resolve package and quantity
+    package = None
+    quantity_grams = 0
+    if vegetable_return.item:
+        package = vegetable_return.item.package
+        quantity_grams = vegetable_return.item.quantity_grams
+    elif vegetable_return.order:
+        first_item = vegetable_return.order.items.select_related("package").first()
+        if first_item:
+            package = first_item.package
+            quantity_grams = sum(it.quantity_grams for it in vegetable_return.order.items.all())
+
+    if not package or quantity_grams <= 0:
+        return None
+
+    # Resolve linked Vegetable
+    veg = getattr(package, "stock_item", None)
+    if not veg:
+        veg = Vegetable.objects.filter(package=package).first()
+    if not veg:
+        veg = Vegetable.objects.filter(name=package.name).first()
+
+    if not veg:
+        return None
+
+    # Lock vegetable row
+    veg = Vegetable.objects.select_for_update().get(id=veg.id)
+    current_stock = veg.stock_quantity_grams if veg.stock_quantity_grams is not None else 0
+    company = veg.org
+    order_number = vegetable_return.order.order_number if vegetable_return.order else ""
+    ret_number = vegetable_return.return_number
+
+    if action == "REPLACEMENT":
+        if current_stock < quantity_grams:
+            raise ValidationError(
+                f"Insufficient stock to fulfill replacement for '{veg.name}': "
+                f"required {quantity_grams}g, but only {current_stock}g available in live inventory."
+            )
+
+        new_stock = current_stock - quantity_grams
+        veg.stock_quantity_grams = new_stock
+        veg.save(update_fields=["stock_quantity_grams"])
+
+        movement = VegetableStockMovement.objects.create(
+            org=company,
+            vegetable=veg,
+            movement_type=VegetableStockMovement.MovementType.RETURN_REPLACEMENT,
+            delta_grams=-quantity_grams,
+            balance_after_grams=new_stock,
+            reason=f"Replacement dispatched for return {ret_number} (Order {order_number})",
+            booking_ref=order_number,
+            entered_by=entered_by,
+        )
+        vegetable_return.stock_movement = movement
+        vegetable_return.save(update_fields=["stock_movement"])
+        return movement
+
+    elif action == "REFUND":
+        if restock_item:
+            new_stock = current_stock + quantity_grams
+            veg.stock_quantity_grams = new_stock
+            veg.save(update_fields=["stock_quantity_grams"])
+
+            movement = VegetableStockMovement.objects.create(
+                org=company,
+                vegetable=veg,
+                movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_RETURN,
+                delta_grams=quantity_grams,
+                balance_after_grams=new_stock,
+                reason=f"Restocked {quantity_grams}g on return {ret_number} (Order {order_number})",
+                booking_ref=order_number,
+                entered_by=entered_by,
+            )
+            vegetable_return.stock_movement = movement
+            vegetable_return.save(update_fields=["stock_movement"])
+            return movement
+        else:
+            movement = VegetableStockMovement.objects.create(
+                org=company,
+                vegetable=veg,
+                movement_type=VegetableStockMovement.MovementType.RETURN_WRITEOFF,
+                delta_grams=0,
+                balance_after_grams=current_stock,
+                reason=f"Return {ret_number} write-off ({quantity_grams}g spoiled/damaged): {vegetable_return.get_reason_display()}",
+                booking_ref=order_number,
+                entered_by=entered_by,
+            )
+            vegetable_return.stock_movement = movement
+            vegetable_return.save(update_fields=["stock_movement"])
+            return movement
+
+    return None

@@ -66,7 +66,7 @@ class VegetableReturnListSerializer(serializers.ModelSerializer):
             "id", "return_number", "order", "order_number", "item", "item_name",
             "customer", "customer_name", "customer_phone", "reason", "reason_label",
             "status", "status_label", "resolution_action", "resolution_action_label",
-            "refund_amount", "created_at", "resolved_at",
+            "refund_amount", "stock_movement", "created_at", "resolved_at",
         ]
 
     def get_customer_name(self, obj):
@@ -96,6 +96,7 @@ class VegetableReturnDetailSerializer(serializers.ModelSerializer):
     resolution_action_label = serializers.CharField(source="get_resolution_action_display", read_only=True)
     handled_by_name = serializers.SerializerMethodField()
     order_items = serializers.SerializerMethodField()
+    stock_movement_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = VegetableReturn
@@ -105,7 +106,8 @@ class VegetableReturnDetailSerializer(serializers.ModelSerializer):
             "customer", "customer_name", "customer_phone", "customer_email",
             "reason", "reason_label", "customer_notes", "status", "status_label",
             "resolution_action", "resolution_action_label", "refund_amount", "admin_notes",
-            "handled_by", "handled_by_name", "created_at", "resolved_at", "order_items",
+            "handled_by", "handled_by_name", "stock_movement", "stock_movement_detail",
+            "created_at", "resolved_at", "order_items",
         ]
 
     def get_customer_name(self, obj):
@@ -136,6 +138,21 @@ class VegetableReturnDetailSerializer(serializers.ModelSerializer):
             for it in obj.order.items.all()
         ]
 
+    def get_stock_movement_detail(self, obj):
+        sm = obj.stock_movement
+        if not sm:
+            return None
+        return {
+            "id": sm.id,
+            "type": sm.movement_type,
+            "type_display": sm.get_movement_type_display(),
+            "delta_grams": sm.delta_grams,
+            "balance_after_grams": sm.balance_after_grams,
+            "reason": sm.reason,
+            "booking_ref": sm.booking_ref,
+            "created_at": sm.created_at,
+        }
+
 
 class CustomerVegetableReturnCreateSerializer(serializers.Serializer):
     order_id = serializers.IntegerField(required=True)
@@ -148,5 +165,6 @@ class AdminVegetableReturnActionSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=VegetableReturn.Status.choices)
     resolution_action = serializers.ChoiceField(choices=VegetableReturn.ResolutionAction.choices, required=False, default=VegetableReturn.ResolutionAction.NONE)
     refund_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+    restock_item = serializers.BooleanField(required=False, default=False)
     admin_notes = serializers.CharField(required=False, allow_blank=True, default="")
 

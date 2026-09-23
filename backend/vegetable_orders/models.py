@@ -178,6 +178,13 @@ class VegetableReturn(models.Model):
         blank=True,
         related_name="handled_vegetable_returns",
     )
+    stock_movement = models.OneToOneField(
+        "inventory.VegetableStockMovement",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="linked_return",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
 

@@ -16,16 +16,16 @@ def get_stock_status(product) -> Dict[str, Any]:
     """
     Customer-facing stock status: in_stock boolean and max_quantity unit cap.
     Never exposes exact gram/kg numbers.
-    - If stock_item is None -> not tracked -> in_stock: True, max_quantity: None
-    - If stock_item.stock_quantity_grams is None -> not tracked -> in_stock: True, max_quantity: None
-    - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
-    - If stock_item.stock_quantity_grams <= 0 -> in_stock: False, max_quantity: 0
+    - If stock_item is None -> genuinely not inventory-managed -> in_stock: True, max_quantity: None (unlimited)
+    - If stock_item is not None (enrolled in inventory):
+        - If stock_item.stock_quantity_grams is None or <= 0 -> in_stock: False, max_quantity: 0 (out of stock)
+        - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
     """
     item = getattr(product, "stock_item", None)
-    if not item or item.stock_quantity_grams is None:
+    if not item:
         return {"in_stock": True, "max_quantity": None}
 
-    live_grams = item.stock_quantity_grams
+    live_grams = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
     if live_grams <= 0:
         return {"in_stock": False, "max_quantity": 0}
 
@@ -146,31 +146,31 @@ def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None)
         reorder_threshold_grams = getattr(item, 'reorder_threshold', 0) if item else 0
         restock_level_grams = item.default_daily_quantity_grams if item and item.default_daily_quantity_grams else 0
 
-        if not item or item.stock_quantity_grams is None:
+        if not item:
             result[prod.id] = {
                 "state": "not_tracked",
                 "today_available_grams": None,
-                "default_daily_grams": item.default_daily_quantity_grams if item else None,
+                "default_daily_grams": None,
                 "today_available_display": "Not Tracked",
-                "default_daily_display": format_grams_for_display(item.default_daily_quantity_grams) if item and item.default_daily_quantity_grams else "None",
-                "opening_stock_grams": opening_grams,
-                "opening_stock_display": format_grams_for_display(opening_grams) if opening_grams is not None else "—",
-                "consumed_stock_grams": consumed_grams,
-                "consumed_stock_display": format_grams_for_display(consumed_grams),
+                "default_daily_display": "None",
+                "opening_stock_grams": None,
+                "opening_stock_display": "—",
+                "consumed_stock_grams": 0,
+                "consumed_stock_display": format_grams_for_display(0),
                 "consumed_date": target_date.strftime("%Y-%m-%d"),
-                "restock_level_grams": restock_level_grams,
-                "restock_level_display": format_grams_for_display(restock_level_grams) if restock_level_grams else "—",
-                "reorder_level_grams": reorder_threshold_grams,
-                "reorder_level_display": format_grams_for_display(reorder_threshold_grams) if reorder_threshold_grams else "—",
+                "restock_level_grams": 0,
+                "restock_level_display": "—",
+                "reorder_level_grams": 0,
+                "reorder_level_display": "—",
                 "price": selling_price,
                 "mrp": mrp_price,
                 "offer_price": mrp_price if mrp_price != selling_price else None,
                 "offer_percentage": offer_pct,
                 "vegetable_gram": veg_gram,
-                "unit": item.unit if item else "g",
+                "unit": "g",
             }
         else:
-            live_grams = item.stock_quantity_grams
+            live_grams = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
             state = "in_stock" if live_grams > 0 else "out_of_stock"
 
             result[prod.id] = {
