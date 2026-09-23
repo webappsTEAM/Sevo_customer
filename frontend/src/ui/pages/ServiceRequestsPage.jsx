@@ -589,9 +589,8 @@ export function ServiceRequestsPage() {
                       <td className="px-6 py-4 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">₹{totAmt.toLocaleString("en-IN")}</td>
                       <td className="px-6 py-4 text-xs font-bold">{r.payment_method || "COD"}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                          isPaid ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${isPaid ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                          }`}>
                           {isPaid ? "PAID" : "PENDING"}
                         </span>
                       </td>
@@ -617,7 +616,7 @@ export function ServiceRequestsPage() {
     return (
       <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
         <SrStyles />
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -729,7 +728,7 @@ export function ServiceRequestsPage() {
             {filteredList.map((r) => {
               const catInfo = getCategoryInfo(r.service_category)
               const isPaid = r.payment_status === "paid" || r.payment_status === "collected"
-              
+
               return (
                 <div key={r.id} className="p-5 bg-white dark:bg-slate-900/60 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4">
                   <div className="space-y-3">
@@ -741,9 +740,8 @@ export function ServiceRequestsPage() {
                         <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/30">
                           {r.request_id}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                          isPaid ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isPaid ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                          }`}>
                           {isPaid ? "PAID" : "PENDING"}
                         </span>
                       </div>
@@ -811,7 +809,7 @@ export function ServiceRequestsPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-black text-slate-900 dark:text-white">Invoice #{previewInvoice.request_id}</h2>
-                  <p className="text-xs text-slate-500 font-semibold">CalTrack Customer Billing Document</p>
+                  <p className="text-xs text-slate-500 font-semibold">sevo Customer Billing Document</p>
                 </div>
               </div>
 
@@ -834,9 +832,8 @@ export function ServiceRequestsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-bold">Payment Status:</span>
-                  <span className={`font-black uppercase ${
-                    previewInvoice.payment_status === "paid" || previewInvoice.payment_status === "collected" ? "text-emerald-600" : "text-amber-600"
-                  }`}>
+                  <span className={`font-black uppercase ${previewInvoice.payment_status === "paid" || previewInvoice.payment_status === "collected" ? "text-emerald-600" : "text-amber-600"
+                    }`}>
                     {previewInvoice.payment_status || "PENDING"}
                   </span>
                 </div>
@@ -874,534 +871,534 @@ export function ServiceRequestsPage() {
         <button onClick={() => setAdminTab('refunds')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'refunds' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Refund Requests</button>
         <button onClick={() => setAdminTab('complaints')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'complaints' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Complaints</button>
       </div>
-      
+
       <div className="flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-950">
         <SrStyles />
         {adminTab === 'bookings' && (
           <div className="sr-root" style={{ height: '100%' }}>
 
-      {/* ── Left Pane ── */}
-      <div className="sr-left">
-        {/* Header */}
-        <div className="sr-left-header">
-          <div className="sr-left-title">
-            <Wrench size={15} style={{ color: "#7C3AED" }} />
-            Service Requests
-          </div>
-          <button className="sr-icon-btn" onClick={loadRequests} title="Refresh">
-            <RefreshCw size={14} className={loading ? "sr-spin" : ""} />
-          </button>
-        </div>
+            {/* ── Left Pane ── */}
+            <div className="sr-left">
+              {/* Header */}
+              <div className="sr-left-header">
+                <div className="sr-left-title">
+                  <Wrench size={15} style={{ color: "#7C3AED" }} />
+                  Service Requests
+                </div>
+                <button className="sr-icon-btn" onClick={loadRequests} title="Refresh">
+                  <RefreshCw size={14} className={loading ? "sr-spin" : ""} />
+                </button>
+              </div>
 
-        {/* Pipeline Lanes */}
-        <PipelineLanes requests={allRequests} activeStatus={statusFilter} onFilter={setStatusFilter} />
+              {/* Pipeline Lanes */}
+              <PipelineLanes requests={allRequests} activeStatus={statusFilter} onFilter={setStatusFilter} />
 
-        {/* Search + Filters */}
-        <div className="sr-filters">
-          <div className="sr-search-wrap">
-            <Search size={14} className="sr-search-icon" />
-            <input
-              className="sr-search"
-              placeholder="Search ID (AC0826, CUS0025), customer, phone..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            {search && <button className="sr-search-clear" onClick={() => setSearch("")}><X size={12} /></button>}
-          </div>
-          <select className="sr-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
-            <option value="">All Priorities</option>
-            {Object.entries(PRIORITY_META).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
-            ))}
-          </select>
-        </div>
+              {/* Search + Filters */}
+              <div className="sr-filters">
+                <div className="sr-search-wrap">
+                  <Search size={14} className="sr-search-icon" />
+                  <input
+                    className="sr-search"
+                    placeholder="Search ID (AC0826, CUS0025), customer, phone..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                  {search && <button className="sr-search-clear" onClick={() => setSearch("")}><X size={12} /></button>}
+                </div>
+                <select className="sr-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+                  <option value="">All Priorities</option>
+                  {Object.entries(PRIORITY_META).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+              </div>
 
-        {/* List */}
-        <div className="sr-list">
-          {loading && filtered.length === 0 ? (
-            <div className="sr-center-msg">
-              <RefreshCw size={20} className="sr-spin" style={{ color: "#7C3AED" }} />
-              <span>Loading...</span>
+              {/* List */}
+              <div className="sr-list">
+                {loading && filtered.length === 0 ? (
+                  <div className="sr-center-msg">
+                    <RefreshCw size={20} className="sr-spin" style={{ color: "#7C3AED" }} />
+                    <span>Loading...</span>
+                  </div>
+                ) : error ? (
+                  <div className="sr-center-msg">
+                    <AlertCircle size={20} style={{ color: "#EF4444" }} />
+                    <span style={{ color: "#EF4444", fontSize: "0.78rem" }}>{error}</span>
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="sr-center-msg">
+                    <HelpCircle size={20} style={{ color: "#94a3b8" }} />
+                    <span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>No requests found</span>
+                  </div>
+                ) : (
+                  filtered.map(r => {
+                    const isSelected = r.id === selectedId
+                    const sm = STATUS_META[r.status] || STATUS_META.closed
+                    const pm = PRIORITY_META[r.priority] || PRIORITY_META.normal
+                    return (
+                      <button
+                        key={r.id}
+                        className={`sr-list-item ${isSelected ? "sr-list-item--active" : ""} ${r.priority === "urgent" ? "sr-list-item--urgent" : ""}`}
+                        onClick={() => setSelectedId(r.id)}
+                        style={isSelected ? { "--lc": sm.color } : {}}
+                      >
+                        <div className="sr-item-top">
+                          <div className="sr-item-meta">
+                            <span className="sr-item-id">{r.request_id}</span>
+                            <span className="sr-item-emoji">{getCategoryInfo(r.service_category).emoji}</span>
+                            <PriorityBadge priority={r.priority} />
+                          </div>
+                          <span className="sr-item-date">{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                        </div>
+
+                        <div className="sr-item-title">{r.issue_title}</div>
+                        <div className="sr-item-customer">
+                          <User size={11} /> {r.customer_name} {r.customer_id ? `(${r.customer_id})` : ""} · {r.phone}
+                        </div>
+
+                        <div className="sr-item-bottom">
+                          <StatusBadge status={r.status} />
+                          {(r.technician_name || r.assigned_employee) && (
+                            <div className="sr-item-tech">
+                              <TechAvatar name={r.technician_name || r.assigned_employee?.full_name} size={18} />
+                              <span>{(r.technician_name || r.assigned_employee?.full_name)?.split(" ")[0]}</span>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
             </div>
-          ) : error ? (
-            <div className="sr-center-msg">
-              <AlertCircle size={20} style={{ color: "#EF4444" }} />
-              <span style={{ color: "#EF4444", fontSize: "0.78rem" }}>{error}</span>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="sr-center-msg">
-              <HelpCircle size={20} style={{ color: "#94a3b8" }} />
-              <span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>No requests found</span>
-            </div>
-          ) : (
-            filtered.map(r => {
-              const isSelected = r.id === selectedId
-              const sm = STATUS_META[r.status] || STATUS_META.closed
-              const pm = PRIORITY_META[r.priority] || PRIORITY_META.normal
-              return (
-                <button
-                  key={r.id}
-                  className={`sr-list-item ${isSelected ? "sr-list-item--active" : ""} ${r.priority === "urgent" ? "sr-list-item--urgent" : ""}`}
-                  onClick={() => setSelectedId(r.id)}
-                  style={isSelected ? { "--lc": sm.color } : {}}
-                >
-                  <div className="sr-item-top">
-                    <div className="sr-item-meta">
-                      <span className="sr-item-id">{r.request_id}</span>
-                      <span className="sr-item-emoji">{getCategoryInfo(r.service_category).emoji}</span>
-                      <PriorityBadge priority={r.priority} />
+
+            {/* ── Right Pane ── */}
+            <div className="sr-right">
+              <AnimatePresence mode="wait">
+                {detailLoading ? (
+                  <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="sr-center-full">
+                    <RefreshCw size={28} className="sr-spin" style={{ color: "#7C3AED" }} />
+                    <span className="sr-loading-text">Loading details...</span>
+                  </motion.div>
+                ) : !detail ? (
+                  <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="sr-center-full">
+                    <div className="sr-empty-icon"><Wrench size={32} /></div>
+                    <h3 className="sr-empty-title">Select a Request</h3>
+                    <p className="sr-empty-desc">Choose a service request from the list to view details and take action.</p>
+                  </motion.div>
+                ) : (
+                  <motion.div key={`detail-${detail.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="sr-detail">
+
+                    {/* Detail Header */}
+                    <div className="sr-detail-header">
+                      <div className="sr-detail-header-left">
+                        <div className="sr-detail-id-row">
+                          <span className="sr-detail-id">{detail.request_id}</span>
+                          <span className="sr-detail-cat">
+                            {getCategoryInfo(detail.service_category).emoji} {getCategoryInfo(detail.service_category).name}
+                          </span>
+                          <StatusBadge status={detail.status} size="md" />
+                        </div>
+                        <h2 className="sr-detail-title">{detail.issue_title}</h2>
+                        <div className="sr-detail-sub">
+                          <Calendar size={12} /> {detail.preferred_date} &nbsp;·&nbsp;
+                          <Clock size={12} /> Created {new Date(detail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </div>
+                      </div>
+
+                      <div className="sr-detail-header-right">
+                        <div className="sr-priority-control">
+                          <span className="sr-priority-label">Priority</span>
+                          <select
+                            className="sr-priority-select"
+                            value={detail.priority}
+                            onChange={e => handlePriorityChange(e.target.value)}
+                            disabled={actionLoading}
+                            style={{ color: PRIORITY_META[detail.priority]?.color }}
+                          >
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <span className="sr-item-date">{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-                  </div>
 
-                  <div className="sr-item-title">{r.issue_title}</div>
-                  <div className="sr-item-customer">
-                    <User size={11} /> {r.customer_name} {r.customer_id ? `(${r.customer_id})` : ""} · {r.phone}
-                  </div>
-
-                  <div className="sr-item-bottom">
-                    <StatusBadge status={r.status} />
-                    {(r.technician_name || r.assigned_employee) && (
-                      <div className="sr-item-tech">
-                        <TechAvatar name={r.technician_name || r.assigned_employee?.full_name} size={18} />
-                        <span>{(r.technician_name || r.assigned_employee?.full_name)?.split(" ")[0]}</span>
+                    {/* Success Banner */}
+                    {actionSuccess && (
+                      <div className="sr-success-banner">
+                        <CheckCircle2 size={15} /> {actionSuccess}
                       </div>
                     )}
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
-      </div>
 
-      {/* ── Right Pane ── */}
-      <div className="sr-right">
-        <AnimatePresence mode="wait">
-          {detailLoading ? (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="sr-center-full">
-              <RefreshCw size={28} className="sr-spin" style={{ color: "#7C3AED" }} />
-              <span className="sr-loading-text">Loading details...</span>
-            </motion.div>
-          ) : !detail ? (
-            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="sr-center-full">
-              <div className="sr-empty-icon"><Wrench size={32} /></div>
-              <h3 className="sr-empty-title">Select a Request</h3>
-              <p className="sr-empty-desc">Choose a service request from the list to view details and take action.</p>
-            </motion.div>
-          ) : (
-            <motion.div key={`detail-${detail.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="sr-detail">
-
-              {/* Detail Header */}
-              <div className="sr-detail-header">
-                <div className="sr-detail-header-left">
-                  <div className="sr-detail-id-row">
-                    <span className="sr-detail-id">{detail.request_id}</span>
-                    <span className="sr-detail-cat">
-                      {getCategoryInfo(detail.service_category).emoji} {getCategoryInfo(detail.service_category).name}
-                    </span>
-                    <StatusBadge status={detail.status} size="md" />
-                  </div>
-                  <h2 className="sr-detail-title">{detail.issue_title}</h2>
-                  <div className="sr-detail-sub">
-                    <Calendar size={12} /> {detail.preferred_date} &nbsp;·&nbsp;
-                    <Clock size={12} /> Created {new Date(detail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                  </div>
-                </div>
-
-                <div className="sr-detail-header-right">
-                  <div className="sr-priority-control">
-                    <span className="sr-priority-label">Priority</span>
-                    <select
-                      className="sr-priority-select"
-                      value={detail.priority}
-                      onChange={e => handlePriorityChange(e.target.value)}
-                      disabled={actionLoading}
-                      style={{ color: PRIORITY_META[detail.priority]?.color }}
-                    >
-                      <option value="low">Low</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Success Banner */}
-              {actionSuccess && (
-                <div className="sr-success-banner">
-                  <CheckCircle2 size={15} /> {actionSuccess}
-                </div>
-              )}
-
-              {/* Pipeline Progress */}
-              <div className="sr-pipeline-progress">
-                {PIPELINE_ORDER.slice(0, 7).map((s, i) => {
-                  const idx = PIPELINE_ORDER.indexOf(detail.status)
-                  const done = PIPELINE_ORDER.indexOf(s) < idx
-                  const active = s === detail.status
-                  const m = STATUS_META[s]
-                  return (
-                    <React.Fragment key={s}>
-                      <div className={`sr-pp-step ${done ? "sr-pp-step--done" : active ? "sr-pp-step--active" : ""}`}
-                        style={active ? { "--ppc": m.color } : {}}>
-                        <div className="sr-pp-dot" style={active ? { background: m.color } : done ? { background: "#10B981" } : {}}>
-                          {done && <CheckCheck size={8} />}
-                        </div>
-                        <span className="sr-pp-label">{m.label}</span>
-                      </div>
-                      {i < 6 && <div className={`sr-pp-line ${done ? "sr-pp-line--done" : ""}`} />}
-                    </React.Fragment>
-                  )
-                })}
-              </div>
-
-              {/* Two-column info grid */}
-              <div className="sr-info-grid">
-                {/* Customer */}
-                <div className="sr-info-card">
-                  <div className="sr-info-card-title"><User size={13} /> Customer</div>
-                  {detail.customer_id && (
-                    <div className="sr-info-row">
-                      <span className="sr-info-key">Customer ID</span>
-                      <span className="sr-info-val font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900">{detail.customer_id}</span>
+                    {/* Pipeline Progress */}
+                    <div className="sr-pipeline-progress">
+                      {PIPELINE_ORDER.slice(0, 7).map((s, i) => {
+                        const idx = PIPELINE_ORDER.indexOf(detail.status)
+                        const done = PIPELINE_ORDER.indexOf(s) < idx
+                        const active = s === detail.status
+                        const m = STATUS_META[s]
+                        return (
+                          <React.Fragment key={s}>
+                            <div className={`sr-pp-step ${done ? "sr-pp-step--done" : active ? "sr-pp-step--active" : ""}`}
+                              style={active ? { "--ppc": m.color } : {}}>
+                              <div className="sr-pp-dot" style={active ? { background: m.color } : done ? { background: "#10B981" } : {}}>
+                                {done && <CheckCheck size={8} />}
+                              </div>
+                              <span className="sr-pp-label">{m.label}</span>
+                            </div>
+                            {i < 6 && <div className={`sr-pp-line ${done ? "sr-pp-line--done" : ""}`} />}
+                          </React.Fragment>
+                        )
+                      })}
                     </div>
-                  )}
-                  <div className="sr-info-row"><span className="sr-info-key">Name</span><span className="sr-info-val">{detail.customer_name}</span></div>
-                  <div className="sr-info-row">
-                    <span className="sr-info-key">Phone</span>
-                    <a href={`tel:${detail.phone}`} className="sr-info-link">{detail.phone}</a>
-                  </div>
-                  {detail.email && (
-                    <div className="sr-info-row">
-                      <span className="sr-info-key">Email</span>
-                      <a href={`mailto:${detail.email}`} className="sr-info-link">{detail.email}</a>
-                    </div>
-                  )}
-                  <div className="sr-info-row sr-info-row--col">
-                    <span className="sr-info-key"><MapPin size={11} /> Address</span>
-                    <span className="sr-info-val sr-info-val--sm">{detail.address}</span>
-                  </div>
-                </div>
 
-                {/* Technician Snapshot (External Workforce) */}
-                <div className="sr-info-card">
-                  <div className="sr-info-card-title"><Users size={13} /> Field Technician</div>
-                  {(detail.technician_name || detail.assigned_employee) ? (
-                    <div className="sr-tech-assigned">
-                      <TechAvatar name={detail.technician_name || detail.assigned_employee?.full_name} size={40} />
-                      <div>
-                        <div className="sr-tech-name">{detail.technician_name || detail.assigned_employee?.full_name}</div>
-                        <div className="sr-tech-role">{detail.technician_phone || "External Workforce"}</div>
-                        {detail.technician_rating && (
-                          <div className="sr-tech-id" style={{ color: "#d97706", fontWeight: 600 }}>⭐ {detail.technician_rating} Rating</div>
+                    {/* Two-column info grid */}
+                    <div className="sr-info-grid">
+                      {/* Customer */}
+                      <div className="sr-info-card">
+                        <div className="sr-info-card-title"><User size={13} /> Customer</div>
+                        {detail.customer_id && (
+                          <div className="sr-info-row">
+                            <span className="sr-info-key">Customer ID</span>
+                            <span className="sr-info-val font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900">{detail.customer_id}</span>
+                          </div>
                         )}
-                        {detail.workforce_job_id && (
-                          <div className="sr-tech-id" style={{ color: "#6366f1" }}>Job: {detail.workforce_job_id}</div>
+                        <div className="sr-info-row"><span className="sr-info-key">Name</span><span className="sr-info-val">{detail.customer_name}</span></div>
+                        <div className="sr-info-row">
+                          <span className="sr-info-key">Phone</span>
+                          <a href={`tel:${detail.phone}`} className="sr-info-link">{detail.phone}</a>
+                        </div>
+                        {detail.email && (
+                          <div className="sr-info-row">
+                            <span className="sr-info-key">Email</span>
+                            <a href={`mailto:${detail.email}`} className="sr-info-link">{detail.email}</a>
+                          </div>
+                        )}
+                        <div className="sr-info-row sr-info-row--col">
+                          <span className="sr-info-key"><MapPin size={11} /> Address</span>
+                          <span className="sr-info-val sr-info-val--sm">{detail.address}</span>
+                        </div>
+                      </div>
+
+                      {/* Technician Snapshot (External Workforce) */}
+                      <div className="sr-info-card">
+                        <div className="sr-info-card-title"><Users size={13} /> Field Technician</div>
+                        {(detail.technician_name || detail.assigned_employee) ? (
+                          <div className="sr-tech-assigned">
+                            <TechAvatar name={detail.technician_name || detail.assigned_employee?.full_name} size={40} />
+                            <div>
+                              <div className="sr-tech-name">{detail.technician_name || detail.assigned_employee?.full_name}</div>
+                              <div className="sr-tech-role">{detail.technician_phone || "External Workforce"}</div>
+                              {detail.technician_rating && (
+                                <div className="sr-tech-id" style={{ color: "#d97706", fontWeight: 600 }}>⭐ {detail.technician_rating} Rating</div>
+                              )}
+                              {detail.workforce_job_id && (
+                                <div className="sr-tech-id" style={{ color: "#6366f1" }}>Job: {detail.workforce_job_id}</div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="sr-tech-unassigned">
+                            <HelpCircle size={20} style={{ color: "#94a3b8" }} />
+                            <span>{detail.status === "confirmed" ? "Ready for Workforce Dispatch" : "No technician assigned yet"}</span>
+                            {detail.status === "confirmed" && (
+                              <button
+                                className="sr-btn-sm"
+                                onClick={() => setShowAssign(v => !v)}
+                              >
+                                <Send size={11} /> Dispatch Now
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
-                  ) : (
-                    <div className="sr-tech-unassigned">
-                      <HelpCircle size={20} style={{ color: "#94a3b8" }} />
-                      <span>{detail.status === "confirmed" ? "Ready for Workforce Dispatch" : "No technician assigned yet"}</span>
-                      {detail.status === "confirmed" && (
-                        <button
-                          className="sr-btn-sm"
-                          onClick={() => setShowAssign(v => !v)}
-                        >
-                          <Send size={11} /> Dispatch Now
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Booking Details */}
-              {(detail.cart_data || detail.total_amount > 0 || detail.preferred_time) && (
-                (() => {
-                  let parsedCart = [];
-                  if (typeof detail.cart_data === "string") {
-                    try { parsedCart = JSON.parse(detail.cart_data); } catch (e) { }
-                  } else if (Array.isArray(detail.cart_data)) {
-                    parsedCart = detail.cart_data;
-                  }
+                    {/* Booking Details */}
+                    {(detail.cart_data || detail.total_amount > 0 || detail.preferred_time) && (
+                      (() => {
+                        let parsedCart = [];
+                        if (typeof detail.cart_data === "string") {
+                          try { parsedCart = JSON.parse(detail.cart_data); } catch (e) { }
+                        } else if (Array.isArray(detail.cart_data)) {
+                          parsedCart = detail.cart_data;
+                        }
 
-                  if (parsedCart.length === 0 && !detail.total_amount && !detail.preferred_time) return null;
+                        if (parsedCart.length === 0 && !detail.total_amount && !detail.preferred_time) return null;
 
-                  return (
-                    <div className="sr-desc-card" style={{ marginBottom: 15 }}>
-                      <div className="sr-info-card-title"><ClipboardCheck size={13} /> Booking Details</div>
+                        return (
+                          <div className="sr-desc-card" style={{ marginBottom: 15 }}>
+                            <div className="sr-info-card-title"><ClipboardCheck size={13} /> Booking Details</div>
 
-                      {(detail.preferred_date || detail.preferred_time) && (
-                        <div className="sr-info-row" style={{ marginBottom: 15 }}>
-                          <span className="sr-info-key"><Clock size={11} /> Preferred Schedule</span>
-                          <span className="sr-info-val sr-info-val--sm">
-                            {detail.preferred_date ? new Date(detail.preferred_date).toLocaleDateString("en-IN", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ""} 
-                            {detail.preferred_date && detail.preferred_time ? " at " : ""}
-                            {detail.preferred_time}
-                          </span>
-                        </div>
-                      )}
+                            {(detail.preferred_date || detail.preferred_time) && (
+                              <div className="sr-info-row" style={{ marginBottom: 15 }}>
+                                <span className="sr-info-key"><Clock size={11} /> Preferred Schedule</span>
+                                <span className="sr-info-val sr-info-val--sm">
+                                  {detail.preferred_date ? new Date(detail.preferred_date).toLocaleDateString("en-IN", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ""}
+                                  {detail.preferred_date && detail.preferred_time ? " at " : ""}
+                                  {detail.preferred_time}
+                                </span>
+                              </div>
+                            )}
 
-                      {parsedCart.length > 0 && (
-                        <div className="sr-cart-items" style={{ marginBottom: 15 }}>
-                          <table style={{ width: "100%", fontSize: "0.85rem", borderCollapse: "collapse" }}>
-                            <thead>
-                              <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748B", textAlign: "left" }}>
-                                <th style={{ padding: "8px 0", fontWeight: 600 }}>Service</th>
-                                <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "center" }}>Qty</th>
-                                <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "right" }}>Price</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {parsedCart.map((item, idx) => (
-                                <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                  <td style={{ padding: "10px 0", color: "#334155" }}>
-                                    <div style={{ fontWeight: 500 }}>{item.name}</div>
-                                    {item.categoryName && <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{item.categoryName}</div>}
-                                  </td>
-                                  <td style={{ padding: "10px 0", textAlign: "center", color: "#475569" }}>{item.quantity}</td>
-                                  <td style={{ padding: "10px 0", textAlign: "right", color: "#475569" }}>₹{item.price}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                            {parsedCart.length > 0 && (
+                              <div className="sr-cart-items" style={{ marginBottom: 15 }}>
+                                <table style={{ width: "100%", fontSize: "0.85rem", borderCollapse: "collapse" }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748B", textAlign: "left" }}>
+                                      <th style={{ padding: "8px 0", fontWeight: 600 }}>Service</th>
+                                      <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "center" }}>Qty</th>
+                                      <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "right" }}>Price</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {parsedCart.map((item, idx) => (
+                                      <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                        <td style={{ padding: "10px 0", color: "#334155" }}>
+                                          <div style={{ fontWeight: 500 }}>{item.name}</div>
+                                          {item.categoryName && <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{item.categoryName}</div>}
+                                        </td>
+                                        <td style={{ padding: "10px 0", textAlign: "center", color: "#475569" }}>{item.quantity}</td>
+                                        <td style={{ padding: "10px 0", textAlign: "right", color: "#475569" }}>₹{item.price}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
 
-                      {(detail.total_amount > 0 || parsedCart.length > 0) && (
-                        <div className="sr-info-row" style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12, justifyContent: "space-between", alignItems: "flex-end" }}>
-                          <div>
-                            <div className="sr-info-key" style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem" }}>Total Amount</div>
-                            {detail.payment_method && (
-                              <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
-                                <span style={{ textTransform: "uppercase", fontWeight: 700, color: "#475569" }}>{detail.payment_method}</span>
-                                {detail.payment_status && (
-                                  <span style={{ 
-                                    padding: "2px 6px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase",
-                                    background: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#dcfce7" : "#fef9c3",
-                                    color: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#166534" : "#854d0e",
-                                    border: `1px solid ${detail.payment_status === "completed" || detail.payment_status === "processing" ? "#bbf7d0" : "#fef08a"}`
-                                  }}>
-                                    {detail.payment_status === "processing" ? "Paid" : detail.payment_status}
-                                  </span>
-                                )}
+                            {(detail.total_amount > 0 || parsedCart.length > 0) && (
+                              <div className="sr-info-row" style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12, justifyContent: "space-between", alignItems: "flex-end" }}>
+                                <div>
+                                  <div className="sr-info-key" style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem" }}>Total Amount</div>
+                                  {detail.payment_method && (
+                                    <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
+                                      <span style={{ textTransform: "uppercase", fontWeight: 700, color: "#475569" }}>{detail.payment_method}</span>
+                                      {detail.payment_status && (
+                                        <span style={{
+                                          padding: "2px 6px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase",
+                                          background: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#dcfce7" : "#fef9c3",
+                                          color: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#166534" : "#854d0e",
+                                          border: `1px solid ${detail.payment_status === "completed" || detail.payment_status === "processing" ? "#bbf7d0" : "#fef08a"}`
+                                        }}>
+                                          {detail.payment_status === "processing" ? "Paid" : detail.payment_status}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="sr-info-val" style={{ fontWeight: 800, color: "#7C3AED", fontSize: "1.15rem" }}>₹{Number(detail.total_amount || 0).toLocaleString('en-IN')}</span>
                               </div>
                             )}
                           </div>
-                          <span className="sr-info-val" style={{ fontWeight: 800, color: "#7C3AED", fontSize: "1.15rem" }}>₹{Number(detail.total_amount || 0).toLocaleString('en-IN')}</span>
+                        );
+                      })()
+                    )}
+
+                    {/* Description + Photo */}
+                    <div className="sr-desc-card">
+                      <div className="sr-info-card-title"><FileText size={13} /> Issue Description</div>
+                      <p className="sr-desc-text">{detail.description || <em style={{ color: "#94a3b8" }}>No description provided.</em>}</p>
+                      {detail.photo && (
+                        <div className="sr-photo-wrap">
+                          <a href={detail.photo} target="_blank" rel="noreferrer" className="sr-photo-link">
+                            <img src={detail.photo} alt="Customer photo" className="sr-photo" />
+                            <div className="sr-photo-hover"><Eye size={18} /></div>
+                          </a>
+                          <span className="sr-photo-label">Customer Attached Photo</span>
                         </div>
                       )}
                     </div>
-                  );
-                })()
-              )}
 
-              {/* Description + Photo */}
-              <div className="sr-desc-card">
-                <div className="sr-info-card-title"><FileText size={13} /> Issue Description</div>
-                <p className="sr-desc-text">{detail.description || <em style={{ color: "#94a3b8" }}>No description provided.</em>}</p>
-                {detail.photo && (
-                  <div className="sr-photo-wrap">
-                    <a href={detail.photo} target="_blank" rel="noreferrer" className="sr-photo-link">
-                      <img src={detail.photo} alt="Customer photo" className="sr-photo" />
-                      <div className="sr-photo-hover"><Eye size={18} /></div>
-                    </a>
-                    <span className="sr-photo-label">Customer Attached Photo</span>
-                  </div>
-                )}
-              </div>
+                    {/* Dispatch Panel (expandable) */}
+                    {showAssign && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                        <DispatchWorkforcePanel onDispatch={handleDispatch} loading={actionLoading} />
+                      </motion.div>
+                    )}
 
-              {/* Dispatch Panel (expandable) */}
-              {showAssign && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                  <DispatchWorkforcePanel onDispatch={handleDispatch} loading={actionLoading} />
-                </motion.div>
-              )}
-
-              {/* Completion Proofs */}
-              {((detail.completion_proofs || detail.proofs || detail.employee_job?.proofs)?.length > 0) && (
-                <div className="sr-proofs-card">
-                  <div className="sr-info-card-title"><Eye size={13} /> Completion Proofs</div>
-                  {(detail.completion_notes || detail.employee_job?.notes) && (
-                    <div className="sr-proof-note">&ldquo;{detail.completion_notes || detail.employee_job?.notes}&rdquo;</div>
-                  )}
-                  <div className="sr-proof-grid">
-                    {(detail.completion_proofs || detail.proofs || detail.employee_job?.proofs || []).map((proof, idx) => (
-                      <div key={proof.id || idx} className="sr-proof-item">
-                        {proof.photo ? (
-                          <a href={proof.photo} target="_blank" rel="noreferrer" className="sr-proof-photo-link">
-                            <img src={proof.photo} alt="Proof" className="sr-proof-photo" />
-                            <div className="sr-proof-hover"><Eye size={14} /></div>
-                          </a>
-                        ) : (
-                          <a href={proof.document || proof.file} target="_blank" rel="noreferrer" className="sr-proof-doc">
-                            <FileText size={20} style={{ color: "#7C3AED" }} />
-                            <span>Document</span>
-                          </a>
+                    {/* Completion Proofs */}
+                    {((detail.completion_proofs || detail.proofs || detail.employee_job?.proofs)?.length > 0) && (
+                      <div className="sr-proofs-card">
+                        <div className="sr-info-card-title"><Eye size={13} /> Completion Proofs</div>
+                        {(detail.completion_notes || detail.employee_job?.notes) && (
+                          <div className="sr-proof-note">&ldquo;{detail.completion_notes || detail.employee_job?.notes}&rdquo;</div>
                         )}
-                        {proof.note && <div className="sr-proof-caption">{proof.note}</div>}
+                        <div className="sr-proof-grid">
+                          {(detail.completion_proofs || detail.proofs || detail.employee_job?.proofs || []).map((proof, idx) => (
+                            <div key={proof.id || idx} className="sr-proof-item">
+                              {proof.photo ? (
+                                <a href={proof.photo} target="_blank" rel="noreferrer" className="sr-proof-photo-link">
+                                  <img src={proof.photo} alt="Proof" className="sr-proof-photo" />
+                                  <div className="sr-proof-hover"><Eye size={14} /></div>
+                                </a>
+                              ) : (
+                                <a href={proof.document || proof.file} target="_blank" rel="noreferrer" className="sr-proof-doc">
+                                  <FileText size={20} style={{ color: "#7C3AED" }} />
+                                  <span>Document</span>
+                                </a>
+                              )}
+                              {proof.note && <div className="sr-proof-caption">{proof.note}</div>}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    )}
 
-              {/* Feedback */}
-              {detail.feedback?.is_submitted && (
-                <div className="sr-feedback-card">
-                  <div className="sr-info-card-title"><Star size={13} /> Customer Feedback</div>
-                  <div className="sr-fb-row">
-                    <div className="sr-fb-rating">
-                      <Star size={20} style={{ fill: "#F59E0B", color: "#F59E0B" }} />
-                      <span className="sr-fb-score">{detail.feedback.rating}</span>
-                      <span className="sr-fb-of">/5</span>
-                    </div>
-                    <div className="sr-fb-meta">
-                      <div className="sr-fb-meta-row">
-                        <span className="sr-fb-key">Behaviour</span>
-                        <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.employee_behaviour}</span>
+                    {/* Feedback */}
+                    {detail.feedback?.is_submitted && (
+                      <div className="sr-feedback-card">
+                        <div className="sr-info-card-title"><Star size={13} /> Customer Feedback</div>
+                        <div className="sr-fb-row">
+                          <div className="sr-fb-rating">
+                            <Star size={20} style={{ fill: "#F59E0B", color: "#F59E0B" }} />
+                            <span className="sr-fb-score">{detail.feedback.rating}</span>
+                            <span className="sr-fb-of">/5</span>
+                          </div>
+                          <div className="sr-fb-meta">
+                            <div className="sr-fb-meta-row">
+                              <span className="sr-fb-key">Behaviour</span>
+                              <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.employee_behaviour}</span>
+                            </div>
+                            <div className="sr-fb-meta-row">
+                              <span className="sr-fb-key">Work Quality</span>
+                              <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.work_quality}</span>
+                            </div>
+                            <div className="sr-fb-meta-row">
+                              <span className="sr-fb-key">Resolved</span>
+                              <span className="sr-fb-val">{detail.feedback.issue_resolved ? "✅ Yes" : "❌ No"}</span>
+                            </div>
+                          </div>
+                        </div>
+                        {detail.feedback.comment && (
+                          <div className="sr-fb-comment">&ldquo;{detail.feedback.comment}&rdquo;</div>
+                        )}
                       </div>
-                      <div className="sr-fb-meta-row">
-                        <span className="sr-fb-key">Work Quality</span>
-                        <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.work_quality}</span>
+                    )}
+
+                    {/* Feedback Token URL */}
+                    {detail.feedback && !["closed", "rejected"].includes(detail.status) && (
+                      <div className="sr-token-card">
+                        <div className="sr-token-label">Feedback Link</div>
+                        <div className="sr-token-url-row">
+                          <span className="sr-token-url">{`${window.location.origin}/feedback/${detail.feedback.feedback_token}`}</span>
+                          <button
+                            className="sr-token-copy"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/feedback/${detail.feedback.feedback_token}`)
+                              showToast("Copied!", "success")
+                            }}
+                          >
+                            <Copy size={12} /> Copy
+                          </button>
+                        </div>
                       </div>
-                      <div className="sr-fb-meta-row">
-                        <span className="sr-fb-key">Resolved</span>
-                        <span className="sr-fb-val">{detail.feedback.issue_resolved ? "✅ Yes" : "❌ No"}</span>
+                    )}
+
+                    {/* ── Action Buttons ── */}
+                    <div className="sr-actions">
+                      <div className="sr-actions-title">Workflow Actions</div>
+                      <div className="sr-actions-row">
+
+                        {/* NEW_REQUEST / CONFIRMED */}
+                        {["new_request", "confirmed"].includes(detail.status) && (
+                          <>
+                            <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("review/")}>
+                              <ClipboardCheck size={14} /> Mark Reviewed
+                            </button>
+                            <button
+                              className="sr-btn-action sr-btn-action--primary"
+                              onClick={() => setShowAssign(v => !v)}
+                            >
+                              <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
+                            </button>
+                            <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
+                              <Ban size={14} /> Reject
+                            </button>
+                          </>
+                        )}
+
+                        {/* REVIEWED */}
+                        {detail.status === "reviewed" && (
+                          <>
+                            <button
+                              className="sr-btn-action sr-btn-action--primary"
+                              onClick={() => setShowAssign(v => !v)}
+                            >
+                              <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
+                            </button>
+                            <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
+                              <Ban size={14} /> Reject
+                            </button>
+                          </>
+                        )}
+
+                        {/* AWAITING_VERIFICATION */}
+                        {detail.status === "awaiting_verification" && (
+                          <>
+                            <button className="sr-btn-action sr-btn-action--success" disabled={actionLoading} onClick={() => handleAction("verify/")}>
+                              <CheckCheck size={14} /> Verify & Send Feedback
+                            </button>
+                            <button className="sr-btn-action sr-btn-action--warning" disabled={actionLoading} onClick={() => handleAction("request-rework/")}>
+                              <Repeat2 size={14} /> Request Rework
+                            </button>
+                          </>
+                        )}
+
+                        {/* FEEDBACK_RECEIVED */}
+                        {detail.status === "feedback_received" && (
+                          <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("close/")}>
+                            <CheckCircle2 size={14} /> Close Request
+                          </button>
+                        )}
+
+                        {/* SEND/RESEND FEEDBACK EMAIL */}
+                        {!["closed", "rejected"].includes(detail.status) && (
+                          <button
+                            className="sr-btn-action sr-btn-action--ghost"
+                            disabled={actionLoading}
+                            onClick={() => handleAction("resend-feedback/", "POST")}
+                          >
+                            <Send size={14} /> {detail.feedback ? "Resend Feedback Email" : "Send Feedback Email"}
+                          </button>
+                        )}
+
+                        {/* CLOSED */}
+                        {detail.status === "closed" && (
+                          <div className="sr-status-msg sr-status-msg--closed">
+                            <CheckCircle2 size={14} /> This request is fully closed.
+                          </div>
+                        )}
+
+                        {/* REJECTED */}
+                        {detail.status === "rejected" && (
+                          <div className="sr-status-msg sr-status-msg--rejected">
+                            <Ban size={14} /> This request has been rejected.
+                          </div>
+                        )}
+
+                        {/* LOADING */}
+                        {actionLoading && (
+                          <div className="sr-status-msg">
+                            <RefreshCw size={13} className="sr-spin" /> Processing...
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                  {detail.feedback.comment && (
-                    <div className="sr-fb-comment">&ldquo;{detail.feedback.comment}&rdquo;</div>
-                  )}
-                </div>
-              )}
 
-              {/* Feedback Token URL */}
-              {detail.feedback && !["closed", "rejected"].includes(detail.status) && (
-                <div className="sr-token-card">
-                  <div className="sr-token-label">Feedback Link</div>
-                  <div className="sr-token-url-row">
-                    <span className="sr-token-url">{`${window.location.origin}/feedback/${detail.feedback.feedback_token}`}</span>
-                    <button
-                      className="sr-token-copy"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/feedback/${detail.feedback.feedback_token}`)
-                        showToast("Copied!", "success")
-                      }}
-                    >
-                      <Copy size={12} /> Copy
-                    </button>
-                  </div>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
-              {/* ── Action Buttons ── */}
-              <div className="sr-actions">
-                <div className="sr-actions-title">Workflow Actions</div>
-                <div className="sr-actions-row">
-
-                  {/* NEW_REQUEST / CONFIRMED */}
-                  {["new_request", "confirmed"].includes(detail.status) && (
-                    <>
-                      <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("review/")}>
-                        <ClipboardCheck size={14} /> Mark Reviewed
-                      </button>
-                      <button
-                        className="sr-btn-action sr-btn-action--primary"
-                        onClick={() => setShowAssign(v => !v)}
-                      >
-                        <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
-                      </button>
-                      <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
-                        <Ban size={14} /> Reject
-                      </button>
-                    </>
-                  )}
-
-                  {/* REVIEWED */}
-                  {detail.status === "reviewed" && (
-                    <>
-                      <button
-                        className="sr-btn-action sr-btn-action--primary"
-                        onClick={() => setShowAssign(v => !v)}
-                      >
-                        <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
-                      </button>
-                      <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
-                        <Ban size={14} /> Reject
-                      </button>
-                    </>
-                  )}
-
-                  {/* AWAITING_VERIFICATION */}
-                  {detail.status === "awaiting_verification" && (
-                    <>
-                      <button className="sr-btn-action sr-btn-action--success" disabled={actionLoading} onClick={() => handleAction("verify/")}>
-                        <CheckCheck size={14} /> Verify & Send Feedback
-                      </button>
-                      <button className="sr-btn-action sr-btn-action--warning" disabled={actionLoading} onClick={() => handleAction("request-rework/")}>
-                        <Repeat2 size={14} /> Request Rework
-                      </button>
-                    </>
-                  )}
-
-                  {/* FEEDBACK_RECEIVED */}
-                  {detail.status === "feedback_received" && (
-                    <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("close/")}>
-                      <CheckCircle2 size={14} /> Close Request
-                    </button>
-                  )}
-
-                  {/* SEND/RESEND FEEDBACK EMAIL */}
-                  {!["closed", "rejected"].includes(detail.status) && (
-                    <button
-                      className="sr-btn-action sr-btn-action--ghost"
-                      disabled={actionLoading}
-                      onClick={() => handleAction("resend-feedback/", "POST")}
-                    >
-                      <Send size={14} /> {detail.feedback ? "Resend Feedback Email" : "Send Feedback Email"}
-                    </button>
-                  )}
-
-                  {/* CLOSED */}
-                  {detail.status === "closed" && (
-                    <div className="sr-status-msg sr-status-msg--closed">
-                      <CheckCircle2 size={14} /> This request is fully closed.
-                    </div>
-                  )}
-
-                  {/* REJECTED */}
-                  {detail.status === "rejected" && (
-                    <div className="sr-status-msg sr-status-msg--rejected">
-                      <Ban size={14} /> This request has been rejected.
-                    </div>
-                  )}
-
-                  {/* LOADING */}
-                  {actionLoading && (
-                    <div className="sr-status-msg">
-                      <RefreshCw size={13} className="sr-spin" /> Processing...
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Toast */}
-      {toast && createPortal(
-        <Toast key={toast.id} message={toast.msg} type={toast.type} onDismiss={() => setToast(null)} />,
-        document.body
-      )}
-    </div>
+            {/* Toast */}
+            {toast && createPortal(
+              <Toast key={toast.id} message={toast.msg} type={toast.type} onDismiss={() => setToast(null)} />,
+              document.body
+            )}
+          </div>
         )}
 
         {adminTab === 'reschedules' && <AdminReschedulesPanel showToast={showToast} />}

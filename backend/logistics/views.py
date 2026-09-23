@@ -22,8 +22,13 @@ from rest_framework.views import APIView
 
 from utils.responses import success_response
 
-from .models import Lane, ServiceArea, ServiceTier
-from .serializers import LaneSerializer, ServiceAreaSerializer, ServiceTierSerializer
+from .models import GTFaq, Lane, ServiceArea, ServiceTier
+from .serializers import (
+    GTFaqSerializer,
+    LaneSerializer,
+    ServiceAreaSerializer,
+    ServiceTierSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +142,7 @@ class LogisticsQuoteView(APIView):
     real billed Google Distance Matrix call.
 
     Packers & Movers is deliberately NOT quotable here: its pricing is
-    survey/volume/crew-driven (CALTRACK_PHASE_14 H.2), so a distance
+    survey/volume/crew-driven (sevo_PHASE_14 H.2), so a distance
     quote would be actively wrong rather than merely approximate. That
     flow keeps its existing tier price.
     """
@@ -281,7 +286,7 @@ class LogisticsQuoteView(APIView):
             is_fit, fit_reason = evaluate_vehicle_fitment(tier, cargo_summary)
             if not is_fit:
                 recommendations = recommend_vehicles_for_cargo(cargo_summary, city=tier.city or "Hosur")
-                err_code = "CARGO_INCOMPATIBLE" if "incompatible" in str(fit_reason).lower() else "VEHICLE_CAPACITY_EXCEEDED"
+                err_code = "CARGO_INCOMPATIBLE" if "incompatible" in fit_reason.lower() else "VEHICLE_CAPACITY_EXCEEDED"
                 return Response(
                     {
                         "success": False,
@@ -657,11 +662,13 @@ class PackersMoversInventoryView(APIView):
                 "slug": cat.slug,
                 "icon": cat.icon,
                 "description": cat.description,
+                "info_banner": cat.info_banner or f"What we pack in {cat.name}",
                 "items": [
                     {
                         "id": it.id,
                         "name": it.name,
                         "slug": it.slug,
+                        "subcategory": it.subcategory or "",
                         "cft": float(it.default_cft) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
                         "weight_kg": float(it.default_weight_kg) if (it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0) else None,
                         "configured": bool(it.default_cft is not None and it.default_cft > 0 and it.default_weight_kg is not None and it.default_weight_kg > 0),
@@ -709,34 +716,103 @@ class LogisticsSlotAvailabilityView(APIView):
         else:
             target_date = now.date()
 
-        SLOT_DEFS = [
-            ("Morning", ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"]),
-            ("Afternoon", ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"]),
-            ("Evening", ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]),
-        ]
+        city = (request.query_params.get("city") or "").strip().lower()
+
+        from logistics.models import LogisticsSlot
+        from service_requests.models import ServiceRequest
+
+        db_slots = list(
+            LogisticsSlot.objects.filter(is_active=True)
+            .filter(Q(category="") | Q(category__iexact=category) | Q(category__iexact=category.replace("goods_transport_", "")))
+            .filter(Q(city="") | Q(city__iexact=city))
+            .order_by("order", "start_time")
+        )
+
+        groups_map = {}
+        if db_slots:
+            for s in db_slots:
+                groups_map.setdefault(s.group, []).append({
+                    "id": s.id,
+                    "slot": s.slot_label,
+                    "label": s.slot_label,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "capacity": s.capacity,
+                })
+        else:
+            is_pm = ("packer" in category.lower() or "mover" in category.lower())
+            if is_pm:
+                fallback_defs = [
+                    ("Morning", ["07:00 AM - 08:00 AM", "08:00 AM - 09:00 AM", "09:00 AM - 10:00 AM", "10:00 AM - 11:00 AM", "11:00 AM - 12:00 PM"]),
+                    ("Afternoon", ["12:00 PM - 01:00 PM", "01:00 PM - 02:00 PM", "02:00 PM - 03:00 PM", "03:00 PM - 04:00 PM"]),
+                    ("Evening", ["04:00 PM - 05:00 PM", "05:00 PM - 06:00 PM", "06:00 PM - 07:00 PM"]),
+                ]
+            else:
+                fallback_defs = [
+                    ("Morning", ["06:00 AM - 07:00 AM", "07:00 AM - 08:00 AM", "08:00 AM - 09:00 AM", "09:00 AM - 10:00 AM", "10:00 AM - 11:00 AM", "11:00 AM - 12:00 PM"]),
+                    ("Afternoon", ["12:00 PM - 01:00 PM", "01:00 PM - 02:00 PM", "02:00 PM - 03:00 PM", "03:00 PM - 04:00 PM", "04:00 PM - 05:00 PM"]),
+                    ("Evening", ["05:00 PM - 06:00 PM", "06:00 PM - 07:00 PM", "07:00 PM - 08:00 PM", "08:00 PM - 09:00 PM", "09:00 PM - 10:00 PM"]),
+                ]
+            for g_name, s_labels in fallback_defs:
+                groups_map[g_name] = [
+                    {"id": None, "slot": lbl, "label": lbl, "start_time": None, "end_time": None, "capacity": 10}
+                    for lbl in s_labels
+                ]
 
         same_day_closed = (target_date == now.date()) and is_same_day_closed(now, category)
 
         groups = []
-        for group_name, slots in SLOT_DEFS:
+        for group_name, slots in groups_map.items():
             group_slots = []
-            for slot_label in slots:
+            for item in slots:
+                slot_label = item["slot"]
                 err = validate_booking_slot(
                     preferred_date=target_date,
                     preferred_time=slot_label,
                     now=now,
                     service_category=category,
                 )
+                
+                # Check concurrent capacity
+                cap = item.get("capacity") or 10
+                if not err and cap > 0:
+                    booked_count = ServiceRequest.objects.filter(
+                        preferred_date=target_date,
+                        preferred_time=slot_label,
+                        status__in=["new_request", "assigned", "accepted", "in_progress", "scheduled"]
+                    ).count()
+                    if booked_count >= cap:
+                        err = f"Slot is fully booked ({booked_count}/{cap} bookings filled)."
+
                 is_avail = (err is None)
                 group_slots.append({
+                    "id": item.get("id"),
                     "slot": slot_label,
                     "label": slot_label,
+                    "start_time": item.get("start_time"),
+                    "end_time": item.get("end_time"),
+                    "capacity": cap,
                     "is_available": is_avail,
                     "reason": err if not is_avail else None,
                 })
             groups.append({
                 "group": group_name,
+                "category": group_name,
                 "slots": group_slots,
+            })
+
+        # Compute server-authoritative upcoming 7 bookable dates
+        start_date = next_bookable_date(now, category)
+        upcoming_dates = []
+        for i in range(7):
+            d = start_date + datetime.timedelta(days=i)
+            day_name = "Today" if d == now.date() else ("Tomorrow" if d == now.date() + datetime.timedelta(days=1) else d.strftime("%a"))
+            upcoming_dates.append({
+                "id": f"date_{d.isoformat()}",
+                "date": d.isoformat(),
+                "label": day_name,
+                "value": d.strftime("%d %b"),
+                "is_today": (d == now.date()),
             })
 
         return Response({
@@ -748,7 +824,31 @@ class LogisticsSlotAvailabilityView(APIView):
             "cutoff_label": cutoff_label(category),
             "min_lead_minutes": get_min_lead_minutes(),
             "next_bookable_date": next_bookable_date(now, category).isoformat(),
+            "upcoming_dates": upcoming_dates,
             "groups": groups,
         })
+
+
+class GTFaqListView(APIView):
+    """
+    GET /api/logistics/faqs/?category=truck&city=hosur
+    Returns active FAQs matching category (or blank/platform-wide) and city (or blank/all).
+    Public catalog endpoint with AllowAny.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        category = (request.query_params.get("category") or "").strip().lower()
+        city = (request.query_params.get("city") or "").strip().lower()
+
+        qs = GTFaq.objects.filter(is_active=True)
+        if category:
+            qs = qs.filter(Q(category__iexact=category) | Q(category=""))
+        if city:
+            qs = qs.filter(Q(city__iexact=city) | Q(city=""))
+
+        serializer = GTFaqSerializer(qs, many=True)
+        return success_response(data=serializer.data, message="FAQs fetched successfully")
+
 
 

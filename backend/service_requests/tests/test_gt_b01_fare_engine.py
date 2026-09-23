@@ -1,7 +1,7 @@
 """
 service_requests/tests/test_gt_b01_fare_engine.py
 
-GT-B-01: real distance-based fare engine, per CALTRACK_PHASE_14 PART H.1
+GT-B-01: real distance-based fare engine, per sevo_PHASE_14 PART H.1
   fare = base_fare + chargeable_km x per_km_rate
        + loading_unloading + additional_stop_charge x (stops - 2)
        (x surge), floored at minimum_fare

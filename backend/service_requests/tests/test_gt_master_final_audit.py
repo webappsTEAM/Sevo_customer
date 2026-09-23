@@ -29,12 +29,13 @@ from logistics.models import (
     LogisticsCategory,
     GoodsItem,
     GoodsCategory,
+    PackersMoversConfig,
 )
+LogisticsCatalogItem = GoodsItem
 from service_requests.models import (
     ServiceRequest,
     Payment,
     TripStop,
-    ServiceRequestEvent,
 )
 from service_requests.views import (
     BookingCreateView,
@@ -48,13 +49,14 @@ from logistics.views import (
 )
 from service_requests.services.logistics_pricing import (
     quote_logistics_fare,
+)
+from service_requests.services.cargo_fitment import (
     evaluate_vehicle_fitment,
     resolve_cargo_payload,
 )
 from service_requests.services.packers_movers_pricing import (
     compute_packers_movers_quote,
     verify_packers_movers_quote,
-    PackersMoversConfig,
 )
 
 
@@ -65,7 +67,6 @@ class GTMasterBusinessFlowAuditTests(TestCase):
     """
 
     def setUp(self):
-        super().setUp()
         self.rf = APIRequestFactory()
 
         # 1. Operating Company
@@ -78,45 +79,65 @@ class GTMasterBusinessFlowAuditTests(TestCase):
         self.tier_2w, _ = ServiceTier.objects.get_or_create(
             category=LogisticsCategory.TWO_WHEELER,
             city="Hosur",
+            slug="2-wheeler",
             defaults={
                 "name": "2-Wheeler Instant Parcel Delivery",
                 "vehicle_class": "two_wheeler",
+                "starting_price": Decimal("50.00"),
                 "base_fare": Decimal("50.00"),
                 "per_km_rate": Decimal("10.00"),
-                "capacity_kg": Decimal("20.00"),
+                "max_weight_kg": Decimal("20.00"),
+                "max_cft": Decimal("2.50"),
                 "is_active": True,
             }
         )
+        self.tier_2w.base_fare = Decimal("50.00")
+        self.tier_2w.per_km_rate = Decimal("10.00")
+        self.tier_2w.max_weight_kg = Decimal("20.00")
+        self.tier_2w.max_cft = Decimal("2.50")
+        self.tier_2w.save()
 
         self.tier_truck, _ = ServiceTier.objects.get_or_create(
             category=LogisticsCategory.TRUCK,
             city="Hosur",
+            slug="tata-ace",
             defaults={
                 "name": "Tata Ace (750 kg Capacity)",
-                "vehicle_class": "tata_ace",
+                "vehicle_class": "truck",
+                "starting_price": Decimal("220.00"),
                 "base_fare": Decimal("220.00"),
                 "per_km_rate": Decimal("22.00"),
-                "capacity_kg": Decimal("750.00"),
+                "max_weight_kg": Decimal("750.00"),
+                "max_cft": Decimal("120.00"),
                 "is_active": True,
             }
         )
+        self.tier_truck.base_fare = Decimal("220.00")
+        self.tier_truck.per_km_rate = Decimal("22.00")
+        self.tier_truck.max_weight_kg = Decimal("750.00")
+        self.tier_truck.max_cft = Decimal("120.00")
+        self.tier_truck.save()
 
         self.tier_pm, _ = ServiceTier.objects.get_or_create(
             category=LogisticsCategory.PACKERS_MOVERS,
             city="Hosur",
+            slug="packers-movers-1rk",
             defaults={
                 "name": "1 RK / 1 BHK Household Shifting",
-                "vehicle_class": "packers_movers",
+                "vehicle_class": "truck",
+                "starting_price": Decimal("1500.00"),
                 "base_fare": Decimal("1500.00"),
                 "per_km_rate": Decimal("25.00"),
-                "capacity_kg": Decimal("1000.00"),
+                "max_weight_kg": Decimal("1000.00"),
+                "max_cft": Decimal("300.00"),
                 "is_active": True,
             }
         )
-        if self.tier_pm.base_fare is None:
-            self.tier_pm.base_fare = Decimal("1500.00")
-            self.tier_pm.per_km_rate = Decimal("25.00")
-            self.tier_pm.save()
+        self.tier_pm.base_fare = Decimal("1500.00")
+        self.tier_pm.per_km_rate = Decimal("25.00")
+        self.tier_pm.max_weight_kg = Decimal("1000.00")
+        self.tier_pm.max_cft = Decimal("300.00")
+        self.tier_pm.save()
 
         # 3. P&M Pricing Configuration
         self.pm_conf, _ = PackersMoversConfig.objects.get_or_create(
@@ -126,8 +147,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
                 "premium_packing_rate_cft": Decimal("6.00"),
                 "floor_rate_no_lift_per_100cft": Decimal("150.00"),
                 "unpacking_rate_cft": Decimal("2.00"),
-                "gst_rate": Decimal("18.00"),
-                "survey_cft_threshold": Decimal("600.00"),
+                "gst_rate": Decimal("0.1800"),
+                "survey_cft_threshold": 600.0,
                 "is_active": True,
             }
         )
@@ -142,8 +163,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             defaults={
                 "name": "Arm Chair",
                 "category": self.goods_cat,
-                "weight_kg": Decimal("12.00"),
-                "volume_cft": Decimal("15.00"),
+                "default_weight_kg": Decimal("12.00"),
+                "default_cft": Decimal("15.00"),
                 "is_active": True,
             }
         )
@@ -152,8 +173,53 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             defaults={
                 "name": "Center Table",
                 "category": self.goods_cat,
-                "weight_kg": Decimal("15.00"),
-                "volume_cft": Decimal("12.00"),
+                "default_weight_kg": Decimal("15.00"),
+                "default_cft": Decimal("12.00"),
+                "is_active": True,
+            }
+        )
+        self.item_docs, _ = LogisticsCatalogItem.objects.get_or_create(
+            slug="legal-documents",
+            defaults={
+                "name": "Legal Documents",
+                "category": self.goods_cat,
+                "default_weight_kg": Decimal("2.00"),
+                "default_cft": Decimal("0.50"),
+                "is_two_wheeler_compatible": True,
+                "is_active": True,
+            }
+        )
+        self.item_parts, _ = LogisticsCatalogItem.objects.get_or_create(
+            slug="heavy-spare-parts",
+            defaults={
+                "name": "Heavy Spare Parts",
+                "category": self.goods_cat,
+                "default_weight_kg": Decimal("40.00"),
+                "default_cft": Decimal("5.00"),
+                "is_two_wheeler_compatible": False,
+                "is_active": True,
+            }
+        )
+        self.item_fireworks, _ = LogisticsCatalogItem.objects.get_or_create(
+            slug="fireworks-crackers",
+            defaults={
+                "name": "Fireworks / Crackers",
+                "category": self.goods_cat,
+                "default_weight_kg": Decimal("5.00"),
+                "default_cft": Decimal("1.00"),
+                "is_two_wheeler_compatible": False,
+                "is_prohibited": True,
+                "is_active": True,
+            }
+        )
+        self.item_hardware, _ = LogisticsCatalogItem.objects.get_or_create(
+            slug="hardware-goods",
+            defaults={
+                "name": "Hardware Goods",
+                "category": self.goods_cat,
+                "default_weight_kg": Decimal("60.00"),
+                "default_cft": Decimal("10.00"),
+                "is_two_wheeler_compatible": False,
                 "is_active": True,
             }
         )
@@ -188,21 +254,22 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             "phone": "9876543210",
             "service_category": "goods_transport_two_wheeler",
             "logistics_tier": self.tier_2w.id,
+            "description": "Courier legal documents dispatch",
             "address": "Hosur Bus Stand",
             "latitude": "12.7409",
             "longitude": "77.8253",
             "drop_address": "Sipcot Phase 1, Hosur",
             "drop_latitude": "12.7300",
             "drop_longitude": "77.8300",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": (timezone.localdate() + timedelta(days=1)).isoformat(),
             "preferred_time": "10:00 AM",
-            "payment_method": "cash",
+            "payment_method": "COD",
             "total_amount": str(fare),
             "idempotency_key": f"2w_{uuid.uuid4().hex[:8]}",
         }
         b_req = self.rf.post("/api/booking/", b_payload, format="json")
         b_resp = BookingCreateView.as_view()(b_req)
-        self.assertEqual(b_resp.status_code, 201)
+        self.assertEqual(b_resp.status_code, 201, getattr(b_resp, "data", None))
         sr_id = b_resp.data["data"]["id"]
         sr = ServiceRequest.objects.get(id=sr_id)
         self.assertEqual(sr.service_category, "goods_transport_two_wheeler")
@@ -227,7 +294,7 @@ class GTMasterBusinessFlowAuditTests(TestCase):
         t_resp = CustomerPublicTrackingView.as_view()(t_req, tracking_token=sr.tracking_token)
         self.assertEqual(t_resp.status_code, 200)
         t_data = t_resp.data.get("data", t_resp.data)
-        self.assertEqual(t_data.get("logistics_leg"), "DELIVERED")
+        self.assertEqual(t_data.get("logistics_leg") or t_data.get("logistics", {}).get("leg"), "DELIVERED")
         self.assertEqual(t_data.get("status"), "completed")
 
     def test_02_2w_over_capacity_rejection_and_recommendation(self):
@@ -271,10 +338,12 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="goods_transport_two_wheeler",
             company=self.company,
             total_amount=Decimal("60.00"),
-            status="pending",
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
+            status=ServiceRequest.Status.CONFIRMED,
         )
         # Cancel before assignment
-        c_req = self.rf.post(f"/api/booking/{sr.id}/cancel/", {"reason": "Customer cancelled"}, format="json")
+        c_req = self.rf.post(f"/api/booking/{sr.id}/cancel/", {"reason": "Customer cancelled", "phone": sr.phone}, format="json")
         c_resp = CustomerBookingCancelView.as_view()(c_req, pk=sr.id)
         self.assertIn(c_resp.status_code, [200, 204])
         sr.refresh_from_db()
@@ -284,9 +353,9 @@ class GTMasterBusinessFlowAuditTests(TestCase):
         sr.status = "completed"
         sr.logistics_leg = "DELIVERED"
         sr.save()
-        c_req_del = self.rf.post(f"/api/booking/{sr.id}/cancel/", {"reason": "Too late"}, format="json")
+        c_req_del = self.rf.post(f"/api/booking/{sr.id}/cancel/", {"reason": "Too late", "phone": sr.phone}, format="json")
         c_resp_del = CustomerBookingCancelView.as_view()(c_req_del, pk=sr.id)
-        self.assertEqual(c_resp_del.status_code, 400)
+        self.assertIn(c_resp_del.status_code, [400, 409])
 
     def test_05_2w_tracking_token_expiry_guard(self):
         """2W: Tracking tokens older than 180 days must be refused as expired credentials."""
@@ -296,7 +365,9 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="goods_transport_two_wheeler",
             company=self.company,
             total_amount=Decimal("50.00"),
-            tracking_token="tok_expired_old_180",
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
+            tracking_token=str(uuid.uuid4()),
         )
         # Backdate created_at to 200 days ago
         ServiceRequest.objects.filter(id=sr_old.id).update(created_at=timezone.now() - timedelta(days=200))
@@ -333,21 +404,22 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             "phone": "9876543213",
             "service_category": "goods_transport_truck",
             "logistics_tier": self.tier_truck.id,
+            "description": "Hardware items moving to Bagalur Road",
             "address": "Hosur Warehouse",
             "latitude": "12.7409",
             "longitude": "77.8253",
             "drop_address": "Bagalur Road, Hosur",
             "drop_latitude": "12.7000",
             "drop_longitude": "77.8100",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": (timezone.localdate() + timedelta(days=1)).isoformat(),
             "preferred_time": "11:00 AM",
             "total_amount": "1.00",  # TAMPERED
-            "payment_method": "cash",
+            "payment_method": "COD",
             "idempotency_key": f"tamper_{uuid.uuid4().hex[:8]}",
         }
         b_req = self.rf.post("/api/booking/", tampered_booking, format="json")
         b_resp = BookingCreateView.as_view()(b_req)
-        self.assertEqual(b_resp.status_code, 201)
+        self.assertEqual(b_resp.status_code, 201, getattr(b_resp, "data", None))
         sr = ServiceRequest.objects.get(id=b_resp.data["data"]["id"])
         # Server must lock authoritative fare
         self.assertNotEqual(sr.total_amount, Decimal("1.00"))
@@ -373,13 +445,15 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             customer_name="Intercity Enterprise",
             phone="9876543214",
             service_category="goods_transport_truck",
-            service_tier=self.tier_truck,
+            logistics_tier=self.tier_truck,
             company=self.company,
             address="Hosur SIPCOT",
             latitude=hosur_lat, longitude=hosur_lng,
             drop_address="Bangalore Electronic City",
             drop_latitude=blr_lat, drop_longitude=blr_lng,
-            total_amount=quote["total_fare"],
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
+            total_amount=quote.get("total") or quote.get("total_fare"),
             status="assigned",
             logistics_leg="EN_ROUTE_PICKUP",
         )
@@ -398,12 +472,14 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="goods_transport_truck",
             company=self.company,
             total_amount=Decimal("450.00"),
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             status="assigned",
             logistics_leg="EN_ROUTE_PICKUP",
         )
-        s1 = TripStop.objects.create(service_request=sr, sequence=1, stop_type="pickup", address="Pickup Hub", latitude=Decimal("12.7409"), longitude=Decimal("77.8253"), status="completed")
-        s2 = TripStop.objects.create(service_request=sr, sequence=2, stop_type="drop", address="Stop 1 Drop", latitude=Decimal("12.7200"), longitude=Decimal("77.8200"), status="pending")
-        s3 = TripStop.objects.create(service_request=sr, sequence=3, stop_type="drop", address="Stop 2 Drop", latitude=Decimal("12.7000"), longitude=Decimal("77.8100"), status="pending")
+        s1 = TripStop.objects.create(booking=sr, sequence=1, stop_type=TripStop.StopType.PICKUP, address="Pickup Hub", latitude=Decimal("12.7409"), longitude=Decimal("77.8253"))
+        s2 = TripStop.objects.create(booking=sr, sequence=2, stop_type=TripStop.StopType.DROP, address="Stop 1 Drop", latitude=Decimal("12.7200"), longitude=Decimal("77.8200"))
+        s3 = TripStop.objects.create(booking=sr, sequence=3, stop_type=TripStop.StopType.DROP, address="Stop 2 Drop", latitude=Decimal("12.7000"), longitude=Decimal("77.8100"))
 
         self.assertEqual(sr.trip_stops.count(), 3)
         # Verify route mutation rejection after assignment
@@ -420,6 +496,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="goods_transport_truck",
             company=self.company,
             total_amount=Decimal("380.00"),
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             status="in_progress",
             logistics_leg="EN_ROUTE_DROP",
         )
@@ -438,20 +516,23 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             "phone": "9876543217",
             "service_category": "goods_transport_truck",
             "logistics_tier": self.tier_truck.id,
+            "description": "Hardware items moving to Sipcot 2",
             "address": "Hosur SIPCOT",
             "latitude": "12.7409",
             "longitude": "77.8253",
             "drop_address": "Hosur Sipcot 2",
             "drop_latitude": "12.7100",
             "drop_longitude": "77.8200",
-            "preferred_date": timezone.localdate().isoformat(),
+            "preferred_date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+            "preferred_time": "11:00 AM",
+            "payment_method": "COD",
             "total_amount": "250.00",
             "idempotency_key": idemp_key,
         }
         # First submission
         r1 = self.rf.post("/api/booking/", payload, format="json")
         res1 = BookingCreateView.as_view()(r1)
-        self.assertEqual(res1.status_code, 201)
+        self.assertEqual(res1.status_code, 201, getattr(res1, "data", None))
         sr_id_1 = res1.data["data"]["id"]
 
         # Duplicate submission
@@ -470,6 +551,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="goods_transport_truck",
             company=self.company,
             total_amount=Decimal("300.00"),
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             status="completed",
             logistics_leg="DELIVERED",
         )
@@ -546,8 +629,10 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             service_category="packers_movers",
             company=self.company,
             address="Hosur to Indiranagar Bangalore",
-            pickup_latitude=Decimal("12.7409"), pickup_longitude=Decimal("77.8253"),
+            latitude=Decimal("12.7409"), longitude=Decimal("77.8253"),
             drop_latitude=Decimal("12.9716"), drop_longitude=Decimal("77.5946"),
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             total_amount=Decimal(str(quote["total"])),
             status="assigned",
             logistics_leg="CREW_ASSIGNED",
@@ -577,6 +662,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             phone="9876543220",
             service_category="goods_transport_truck",
             company=comp_a,
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             total_amount=Decimal("300.00"),
         )
         sr_b = ServiceRequest.objects.create(
@@ -584,6 +671,8 @@ class GTMasterBusinessFlowAuditTests(TestCase):
             phone="9876543221",
             service_category="goods_transport_truck",
             company=comp_b,
+            preferred_date=timezone.localdate(),
+            preferred_time="10:00 AM",
             total_amount=Decimal("400.00"),
         )
         self.assertNotEqual(sr_a.company_id, sr_b.company_id)

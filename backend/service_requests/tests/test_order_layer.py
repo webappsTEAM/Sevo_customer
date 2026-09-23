@@ -39,8 +39,8 @@ class BookingCreateOrderLayerTests(APITestCase):
 
     def setUp(self):
         self.company = Company.objects.create(
-            company_name="CalTrack Logistics",
-            slug="caltrack",
+            company_name="sevo Logistics",
+            slug="sevo",
         )
         self.customer = User.objects.create_user(
             username="order_layer_customer",
@@ -163,8 +163,8 @@ class QuoteAcceptanceOrderLayerTests(APITestCase):
 
     def setUp(self):
         self.company = Company.objects.create(
-            company_name="CalTrack Logistics",
-            slug="caltrack",
+            company_name="sevo Logistics",
+            slug="sevo",
         )
         self.customer = User.objects.create_user(
             username="order_layer_quote_customer",

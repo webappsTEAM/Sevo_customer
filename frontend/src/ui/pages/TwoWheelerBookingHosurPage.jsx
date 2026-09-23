@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import {
-  MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
+  MapPin, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
@@ -19,6 +19,7 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
 import { getAddress } from "../../api/geocoding.js"
 import {
   filterLocationSuggestions,
@@ -28,7 +29,21 @@ import {
   resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
-const LOGISTICS_CITY = "hosur"
+function GenericTwoWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
+  return (
+    <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="260" height="130" rx="12" fill="#F8FAFC" />
+      <circle cx="75" cy="85" r="22" stroke="#059669" strokeWidth="4" fill="#F1F5F9" />
+      <circle cx="75" cy="85" r="8" fill="#334155" />
+      <circle cx="185" cy="85" r="22" stroke="#059669" strokeWidth="4" fill="#F1F5F9" />
+      <circle cx="185" cy="85" r="8" fill="#334155" />
+      <path d="M75 85L110 85L135 60L165 60L185 85" stroke="#047857" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M110 85L130 50L145 50" stroke="#047857" strokeWidth="4" strokeLinecap="round" />
+      <rect x="85" y="45" width="28" height="22" rx="3" fill="#0F172A" />
+      <path d="M165 60L155 35L170 35" stroke="#334155" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 /* ── 2 Wheeler Dimension Diagram matching user screenshot (40cm x 40cm box on bike) ── */
 function TwoWheelerDimensionDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
@@ -205,54 +220,14 @@ function TierImageFallback({ src, alt, fallback }) {
   )
 }
 
-/* ── Slots & Dates Helper ── */
-const DELIVERY_SLOTS = {
-  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
-  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
-  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
-}
-
-const isSlotPassed = (slot, dateObj) => {
-  const today = new Date()
-  if (dateObj.toDateString() !== today.toDateString()) return false
-
-  const parts = slot.split("-")
-  if (parts.length < 2) return false
-  const endTimeStr = parts[1].trim()
-  
-  const match = endTimeStr.match(/^(\d+)(AM|PM)$/i)
-  if (!match) return false
-  let hour = parseInt(match[1], 10)
-  const ampm = match[2].toUpperCase()
-  if (ampm === "PM" && hour < 12) hour += 12
-  if (ampm === "AM" && hour === 12) hour = 0
-
-  const currentHour = today.getHours()
-  const currentMinute = today.getMinutes()
-
-  if (currentHour > hour) return true
-  if (currentHour === hour && currentMinute > 0) return true
-
-  return false
-}
-
+/* ── Dynamic Upcoming Dates Helper ── */
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
-  
-  const hasRemainingSlots = (dateObj) => {
-    for (const slots of Object.values(DELIVERY_SLOTS)) {
-      for (const slot of slots) {
-        if (!isSlotPassed(slot, dateObj)) return true
-      }
-    }
-    return false
-  }
 
-  let startOffset = 0
-  if (!hasRemainingSlots(today)) {
-    startOffset = 1
-  }
+  // Start today (or tomorrow if past operating cutoff at 21:00)
+  const isLateNight = today.getHours() >= 21
+  const startOffset = isLateNight ? 1 : 0
 
   for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
@@ -276,28 +251,59 @@ const generateUpcomingDates = () => {
   return dates
 }
 
-const getFirstAvailableSlotAndCategory = (dateObj) => {
-  for (const [category, slots] of Object.entries(DELIVERY_SLOTS)) {
-    for (const slot of slots) {
-      if (!isSlotPassed(slot, dateObj)) {
-        return { category, slot }
-      }
-    }
-  }
-  return { category: "Morning", slot: "" }
-}
-
 const DELIVERY_DATES = generateUpcomingDates()
 
 /* ── Two-Wheeler Booking in Hosur Page ── */
-export function TwoWheelerBookingHosurPage() {
+export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameProp }) {
   const navigate = useNavigate()
+  const { city: routeCityParam } = useParams()
+  const [availableCities, setAvailableCities] = useState([])
+  const [mapPickerTarget, setMapPickerTarget] = useState(null)
+  const currentCitySlug = (cityProp || routeCityParam || "hosur").toLowerCase()
+  const defaultCityName = currentCitySlug.charAt(0).toUpperCase() + currentCitySlug.slice(1)
+  const [currentCityName, setCurrentCityName] = useState(cityNameProp || defaultCityName)
+
+  useEffect(() => {
+    let isMounted = true
+    fetchLogisticsCities()
+      .then(res => {
+        if (!isMounted) return
+        const cities = Array.isArray(res) ? res : (res?.results || res?.data || [])
+        setAvailableCities(cities)
+        const matched = cities.find(c => c.slug === currentCitySlug || c.name?.toLowerCase() === currentCitySlug)
+        if (matched?.name) {
+          setCurrentCityName(matched.name)
+        }
+      })
+      .catch(() => { })
+    return () => { isMounted = false }
+  }, [currentCitySlug])
+
+  // Persistent form state for browser Reload / Refresh recovery
+  const getSavedForm = () => {
+    try {
+      const raw = sessionStorage.getItem("sevo_gt_form_two_wheeler")
+      return raw ? JSON.parse(raw) : {}
+    } catch (_) { return {} }
+  }
+  const savedForm = getSavedForm()
 
   // Form State
-  const [pickup, setPickup] = useState("")
-  const [drop, setDrop] = useState("")
-  const [pickupCoords, setPickupCoords] = useState(null)
-  const [dropCoords, setDropCoords] = useState(null)
+  const [pickup, setPickup] = useState(() => savedForm.pickup || "")
+  const [drop, setDrop] = useState(() => savedForm.drop || "")
+  const [pickupCoords, setPickupCoords] = useState(() => savedForm.pickupCoords || null)
+  const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("sevo_gt_form_two_wheeler", JSON.stringify({
+        pickup,
+        drop,
+        pickupCoords,
+        dropCoords
+      }))
+    } catch (_) { }
+  }, [pickup, drop, pickupCoords, dropCoords])
   const [serverQuote, setServerQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState("")
@@ -319,14 +325,6 @@ export function TwoWheelerBookingHosurPage() {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
-
-  useEffect(() => {
-    if (bookingMode === "SCHEDULED" && selectedDate?.fullDate) {
-      const { category, slot } = getFirstAvailableSlotAndCategory(selectedDate.fullDate)
-      setSelectedSlot(slot)
-      setExpandedSlotCategory(category)
-    }
-  }, [selectedDate, bookingMode])
 
   useEffect(() => {
     bookingAttemptKeyRef.current = null
@@ -373,7 +371,7 @@ export function TwoWheelerBookingHosurPage() {
           startTimestamp = Number(parsed.timestamp)
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const updateCountdown = () => {
       const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
@@ -391,7 +389,7 @@ export function TwoWheelerBookingHosurPage() {
             if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
           }
           sessionStorage.removeItem("calservice_active_partner_search")
-        } catch (_) {}
+        } catch (_) { }
         if (activeBId) {
           cancelBooking(
             activeBId,
@@ -436,7 +434,7 @@ export function TwoWheelerBookingHosurPage() {
   // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+    try { savedPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
     if (user || savedPhone) {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
@@ -468,6 +466,7 @@ export function TwoWheelerBookingHosurPage() {
 
   // Lock body scroll when any modal or drawer is open to freeze background
   const isAnyModalOpen = Boolean(
+    mapPickerTarget ||
     activeVehicleDetails ||
     vehicleSelectorOpen ||
     goodsTypeModalOpen ||
@@ -490,8 +489,22 @@ export function TwoWheelerBookingHosurPage() {
     return () => { document.body.style.overflow = "" }
   }, [isAnyModalOpen])
 
-  // FAQ state
+  // FAQ state & dynamic server FAQs
   const [openFaq, setOpenFaq] = useState(null)
+  const [serverFaqs, setServerFaqs] = useState([])
+  const [faqsLoading, setFaqsLoading] = useState(true)
+
+  useEffect(() => {
+    setFaqsLoading(true)
+    fetchGTFaqs({ category: "two_wheeler", city: currentCityName || currentCitySlug })
+      .then(res => {
+        if (Array.isArray(res)) {
+          setServerFaqs(res.map(f => ({ q: f.question, a: f.answer })))
+        }
+      })
+      .catch(() => { })
+      .finally(() => setFaqsLoading(false))
+  }, [currentCityName, currentCitySlug])
 
   // Catalog data — fetched from /api/logistics/ (backend/logistics app),
   // replacing what used to be hardcoded TWO_WHEELER_VEHICLES/POPULAR_ROUTES/
@@ -504,24 +517,66 @@ export function TwoWheelerBookingHosurPage() {
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
+  const [serverSlotGroups, setServerSlotGroups] = useState(null)
+  const [serverDates, setServerDates] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
 
   useEffect(() => {
-    if (!selectedDate?.fullDate) return
-    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
-    fetchLogisticsSlots({ date: dStr, category: "goods_transport_two_wheeler" })
+    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
+    setSlotsLoading(true)
+    fetchLogisticsSlots({ date: dStr, category: "goods_transport_two_wheeler", city: currentCitySlug })
       .then(res => {
-        if (res && res.success && res.groups) {
-          const map = {}
-          res.groups.forEach(g => {
-            (g.slots || []).forEach(s => {
-              map[s.slot] = s.is_available
+        if (res && res.success) {
+          if (Array.isArray(res.upcoming_dates) && res.upcoming_dates.length > 0) {
+            const mappedDates = res.upcoming_dates.map(d => ({
+              id: d.id,
+              date: d.date,
+              label: d.label,
+              value: d.value,
+              fullDate: new Date(`${d.date}T00:00:00`),
+              is_today: d.is_today,
+            }))
+            setServerDates(mappedDates)
+            if (!selectedDate) {
+              setSelectedDate(mappedDates[0])
+            }
+          }
+
+          if (res.groups) {
+            setServerSlotGroups(res.groups)
+            const map = {}
+            let firstAvailSlot = null
+            let firstAvailGroup = null
+
+            res.groups.forEach(g => {
+              (g.slots || []).forEach(s => {
+                const sLabel = s.slot || s.label
+                map[sLabel] = s.is_available
+                if (s.is_available && !firstAvailSlot) {
+                  firstAvailSlot = sLabel
+                  firstAvailGroup = g.group
+                }
+              })
             })
-          })
-          setServerSlotsAvailability(map)
+            setServerSlotsAvailability(map)
+
+            // Dynamically auto-select the first valid server slot if current selection is null or invalid
+            setSelectedSlot(prev => {
+              if (prev && map[prev] === true) return prev
+              return firstAvailSlot
+            })
+            setExpandedSlotCategory(prev => {
+              if (prev && res.groups.some(g => g.group === prev && g.slots.some(s => s.is_available))) {
+                return prev
+              }
+              return firstAvailGroup || res.groups[0]?.group || "Morning"
+            })
+          }
         }
       })
-      .catch(() => {})
-  }, [selectedDate])
+      .catch(() => { })
+      .finally(() => setSlotsLoading(false))
+  }, [selectedDate, currentCitySlug])
 
   // Recover active in-flight partner search if customer refreshes the page
   useEffect(() => {
@@ -539,7 +594,7 @@ export function TwoWheelerBookingHosurPage() {
           sessionStorage.removeItem("calservice_active_partner_search")
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }, [])
 
   useEffect(() => {
@@ -564,7 +619,7 @@ export function TwoWheelerBookingHosurPage() {
             setLookingForPartnerOpen(false)
             try {
               sessionStorage.removeItem("calservice_active_partner_search")
-            } catch (e) {}
+            } catch (e) { }
             const bookingPayload = {
               id: lastBookingId,
               request_id: lastBookingId,
@@ -574,7 +629,7 @@ export function TwoWheelerBookingHosurPage() {
             try {
               sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
               sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-            } catch (e) {}
+            } catch (e) { }
             navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
               state: {
                 isTracking: true,
@@ -585,7 +640,7 @@ export function TwoWheelerBookingHosurPage() {
             setLookingForPartnerOpen(false)
             try {
               sessionStorage.removeItem("calservice_active_partner_search")
-            } catch (_) {}
+            } catch (_) { }
             setBookingError("We could not find an available delivery partner for your booking. Please try again or schedule for later.")
           }
         }
@@ -605,21 +660,146 @@ export function TwoWheelerBookingHosurPage() {
     }
   }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken, navigate])
 
+  // ── Comprehensive Browser Navigation (Back / Forward / PopState) ──
+  const anyModalOpen = Boolean(
+    showExitConfirm ||
+    showCustomerEntryModal ||
+    mapPickerTarget ||
+    cargoSelectorOpen ||
+    slotStepperOpen ||
+    vehicleSelectorOpen ||
+    activeVehicleDetails ||
+    goodsTypeModalOpen ||
+    supportModalOpen ||
+    showAccountPortal
+  )
+
+  // Push state when any modal opens to allow Browser Back button to dismiss it
   useEffect(() => {
-    if (!lookingForPartnerOpen) return
+    if (anyModalOpen || lookingForPartnerOpen) {
+      window.history.pushState({ modalOpen: true }, "")
+    }
+  }, [anyModalOpen, lookingForPartnerOpen])
 
-    window.history.pushState(null, null, window.location.pathname)
-
-    const handlePopState = () => {
-      window.history.pushState(null, null, window.location.pathname)
+  const handleBackNavigation = () => {
+    if (showExitConfirm) {
+      setShowExitConfirm(false)
+      return
+    }
+    if (lookingForPartnerOpen) {
       setShowExitConfirm(true)
+      return
+    }
+    if (showCustomerEntryModal) {
+      setShowCustomerEntryModal(false)
+      return
+    }
+    if (mapPickerTarget) {
+      setMapPickerTarget(null)
+      return
+    }
+    if (cargoSelectorOpen) {
+      setCargoSelectorOpen(false)
+      return
+    }
+    if (slotStepperOpen) {
+      if (stepperStep > 1) {
+        setStepperStep(prev => prev - 1)
+      } else {
+        setSlotStepperOpen(false)
+      }
+      return
+    }
+    if (vehicleSelectorOpen) {
+      setVehicleSelectorOpen(false)
+      return
+    }
+    if (activeVehicleDetails) {
+      setActiveVehicleDetails(null)
+      return
+    }
+    if (goodsTypeModalOpen) {
+      setGoodsTypeModalOpen(false)
+      return
+    }
+    if (supportModalOpen) {
+      setSupportModalOpen(false)
+      return
+    }
+    if (showAccountPortal) {
+      setShowAccountPortal(false)
+      return
+    }
+    // If no modal is open, navigate to home / previous page
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate(routes.landing)
+    }
+  }
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (showExitConfirm) {
+        setShowExitConfirm(false)
+        return
+      }
+      if (lookingForPartnerOpen) {
+        setShowExitConfirm(true)
+        return
+      }
+      if (showCustomerEntryModal) {
+        setShowCustomerEntryModal(false)
+        return
+      }
+      if (mapPickerTarget) {
+        setMapPickerTarget(null)
+        return
+      }
+      if (cargoSelectorOpen) {
+        setCargoSelectorOpen(false)
+        return
+      }
+      if (slotStepperOpen) {
+        if (stepperStep > 1) {
+          setStepperStep(prev => prev - 1)
+        } else {
+          setSlotStepperOpen(false)
+        }
+        return
+      }
+      if (vehicleSelectorOpen) {
+        setVehicleSelectorOpen(false)
+        return
+      }
+      if (activeVehicleDetails) {
+        setActiveVehicleDetails(null)
+        return
+      }
+      if (goodsTypeModalOpen) {
+        setGoodsTypeModalOpen(false)
+        return
+      }
+      if (supportModalOpen) {
+        setSupportModalOpen(false)
+        return
+      }
+      if (showAccountPortal) {
+        setShowAccountPortal(false)
+        return
+      }
     }
 
     window.addEventListener("popstate", handlePopState)
     return () => {
       window.removeEventListener("popstate", handlePopState)
     }
-  }, [lookingForPartnerOpen])
+  }, [
+    showExitConfirm, lookingForPartnerOpen, showCustomerEntryModal,
+    mapPickerTarget, cargoSelectorOpen, slotStepperOpen, stepperStep,
+    vehicleSelectorOpen, activeVehicleDetails, goodsTypeModalOpen,
+    supportModalOpen, showAccountPortal
+  ])
 
 
   useEffect(() => {
@@ -629,9 +809,9 @@ export function TwoWheelerBookingHosurPage() {
       setCatalogError("")
       try {
         const [tiers, lanes, areas, categories] = await Promise.all([
-          fetchServiceTiers("two_wheeler", LOGISTICS_CITY),
-          fetchLanes("two_wheeler", LOGISTICS_CITY),
-          fetchServiceAreas(LOGISTICS_CITY),
+          fetchServiceTiers("two_wheeler", currentCitySlug),
+          fetchLanes("two_wheeler", currentCitySlug),
+          fetchServiceAreas(currentCitySlug),
           fetchGoodsCategories(),
         ])
         if (cancelled) return
@@ -658,7 +838,7 @@ export function TwoWheelerBookingHosurPage() {
     }
     loadCatalog()
     return () => { cancelled = true }
-  }, [])
+  }, [currentCitySlug])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -766,31 +946,6 @@ export function TwoWheelerBookingHosurPage() {
     }
   }
 
-  const VEHICLE_SUITABILITY_MAP = {
-    "2-wheeler": {
-      suitableFor: [
-        "Small parcels & packages",
-        "Documents & files",
-        "Clothing & accessories",
-        "Medicines & essentials",
-        "Food & grocery orders",
-        "Small electronic items"
-      ],
-      bestFor: "Small, lightweight local deliveries."
-    },
-    "2-wheeler-electric-express": {
-      suitableFor: [
-        "Small parcels & packages",
-        "Clothing & accessories",
-        "Food & grocery orders",
-        "Medicines & essentials",
-        "Small electronic items",
-        "Urgent deliveries"
-      ],
-      bestFor: "Fast and lightweight local deliveries."
-    }
-  }
-
   function isBadgeActive(durationStr, updatedAtStr) {
     if (!durationStr || !updatedAtStr) return true
     const norm = durationStr.toLowerCase().trim()
@@ -816,8 +971,8 @@ export function TwoWheelerBookingHosurPage() {
   function tierToVehicle(tier) {
     const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
       ? tier.includes
-      : (VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [])
-    const bestForText = tier.description || VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || ""
+      : []
+    const bestForText = tier.description || ""
     const isBadgeValid = isBadgeActive(tier.duration, tier.updated_at)
     const badgeText = isBadgeValid ? (tier.icon || "") : ""
 
@@ -831,8 +986,8 @@ export function TwoWheelerBookingHosurPage() {
       bestFor: bestForText,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       diagram: tier.image
-        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />} />
-        : (TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />),
+        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <GenericTwoWheelerDiagram />} />
+        : (TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <GenericTwoWheelerDiagram />),
       details: {
         name: tier.name,
         capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
@@ -977,8 +1132,8 @@ export function TwoWheelerBookingHosurPage() {
   const isSelectedVehicleOverCapacity = serverQuote?.breakdown?.is_cargo_fit != null
     ? serverQuote.breakdown.is_cargo_fit === false
     : Boolean(
-        (maxAllowed2WWeight > 0 && totalCargoWeightKg > maxAllowed2WWeight) || hasIncompatible2WItems
-      )
+      (maxAllowed2WWeight > 0 && totalCargoWeightKg > maxAllowed2WWeight) || hasIncompatible2WItems
+    )
 
   const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
@@ -990,25 +1145,6 @@ export function TwoWheelerBookingHosurPage() {
     _laneId: lane.id,
   }))
 
-  // FAQs tailored for 2 Wheeler
-  const FAQS = [
-    {
-      q: "What is the maximum weight and parcel size for 2 Wheeler delivery?",
-      a: "Our two-wheelers can comfortably carry packages weighing up to 20 kg with dimensions up to 40 cm x 40 cm x 40 cm in safe, weatherproof cargo boxes."
-    },
-    {
-      q: "How fast will a rider arrive at my pickup address in Hosur?",
-      a: "With our dense rider network across Hosur and SIPCOT, a verified delivery partner is assigned immediately and arrives at your pickup location within 10–15 minutes."
-    },
-    {
-      q: "Can I send important documents, keys, or medicines securely?",
-      a: "Yes! Two-wheeler delivery is ideal for time-sensitive parcels, corporate contracts, legal paperwork, keys, gifts, and pharmacy items with real-time live GPS tracking and secure OTP delivery."
-    },
-    {
-      q: "What are the payment options available for 2 Wheeler bookings?",
-      a: "You can pay securely via UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards, Net Banking, or Cash on Pickup/Delivery to the rider partner."
-    }
-  ]
 
   const isRouteServed = (pickupVal, dropVal) => {
     return isHosurRouteServed(pickupVal, dropVal)
@@ -1036,7 +1172,7 @@ export function TwoWheelerBookingHosurPage() {
   }
 
   // Persists the booking to the backend (POST /api/booking/ — see service_requests.BookingCreateView).
-  const submitBooking = async (goodsTypeOverride = null) => {
+  const submitBooking = async (goodsTypeOverride = null, nameOverride = null, phoneOverride = null) => {
     if (bookingSubmitting) return
     setBookingError("")
     setBookingSubmitting(true)
@@ -1055,8 +1191,9 @@ export function TwoWheelerBookingHosurPage() {
       if (serverQuote?.total == null) {
         setBookingError(
           quoteError ||
-            "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
+          "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
         )
+        setBookingSubmitting(false)
         return
       }
       if (serverQuote?.breakdown?.is_cargo_fit === false) {
@@ -1080,7 +1217,7 @@ export function TwoWheelerBookingHosurPage() {
         return
       }
 
-      
+
       let dateString = todayDateString()
       let timeString = "Immediate / Next Available"
       let slotValue = null
@@ -1097,22 +1234,12 @@ export function TwoWheelerBookingHosurPage() {
         slotValue = selectedSlot
       }
 
-      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
+      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("sevo_customer_email") : "") || ""
 
+      const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
+      const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
 
-      // pickupAddressValue / dropAddressValue / pickupPoint / dropPoint are
-      // computed once in the component body above and shared with the
-      // quote effect, so the fare shown and the booking submitted are
-      // derived from exactly the same inputs.
-
-      // No hardcoded fallback coordinate any more. If we could not resolve
-      // coordinates from the user's geocoded selection (e.g. they typed an
-      // address freeform without picking a suggestion), fail fast with a
-      // human explanation. Submitting a fake coordinate creates a booking
-      // that is physically wrong in the database, cannot be dispatched
-      // accurately, and computes an ETA against a place the customer never
-      // mentioned.
-      if (!pickupPoint || !dropPoint) {
+      if (!activePickupPoint || !activeDropPoint) {
         setBookingSubmitting(false)
         setBookingError("Please pick both the pickup and drop locations from the suggestions so we can map the route.")
         return
@@ -1125,20 +1252,33 @@ export function TwoWheelerBookingHosurPage() {
         return
       }
 
+      let resolvedName = (nameOverride || name || user?.full_name || user?.fullName || user?.first_name || user?.username || "").trim()
+      if (!resolvedName && typeof window !== "undefined") {
+        try { resolvedName = (localStorage.getItem("sevo_customer_name") || "").trim() } catch (_) { }
+      }
 
-      if (!name || !name.trim()) {
+      let rawPhone = phoneOverride || phone || user?.phone || user?.mobile || user?.mobile_number || ""
+      if (!rawPhone && typeof window !== "undefined") {
+        try { rawPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
+      }
+      const cleanPhone = String(rawPhone || "").replace(/\D/g, "").slice(0, 10)
+
+      if (resolvedName && !name) setName(resolvedName)
+      if (cleanPhone && !phone) setPhone(cleanPhone)
+
+      if (!resolvedName) {
         setBookingSubmitting(false)
         setBookingError("Please enter your name to complete the booking.")
         return
       }
-      const cleanPhone = (phone || "").replace(/\D/g, "")
+
       if (!cleanPhone || cleanPhone.length !== 10) {
         setBookingSubmitting(false)
         setBookingError("Please enter a valid 10-digit mobile number.")
         return
       }
 
-      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "")
+      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "").slice(0, 10)
       if (receiverPhone && cleanReceiverPhone.length !== 10) {
         setBookingSubmitting(false)
         setReceiverPhoneError("Please enter a valid 10-digit receiver phone number.")
@@ -1163,10 +1303,11 @@ export function TwoWheelerBookingHosurPage() {
         : ""
 
       const payload = {
-        customer_name: name.trim(),
+        customer_name: resolvedName,
         phone: cleanPhone,
         email: customerEmail,
-        drop_contact_name: (receiverName || name).trim(),
+        city: currentCitySlug,
+        drop_contact_name: (receiverName || resolvedName).trim(),
         drop_contact_phone: cleanReceiverPhone || cleanPhone,
         service_category: "goods_transport_two_wheeler",
         issue_title: `Two-wheeler delivery — ${vehicle.name} (${currentGoodsType})`,
@@ -1174,8 +1315,8 @@ export function TwoWheelerBookingHosurPage() {
         description: `Goods Type: ${currentGoodsType}${cargoDesc} | Type: ${userType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
-        latitude: Number(Number(pickupPoint.lat).toFixed(6)),
-        longitude: Number(Number(pickupPoint.lng).toFixed(6)),
+        latitude: Number(Number(activePickupPoint.lat).toFixed(6)),
+        longitude: Number(Number(activePickupPoint.lng).toFixed(6)),
 
         preferred_date: dateString,
         preferred_time: timeString,
@@ -1204,9 +1345,9 @@ export function TwoWheelerBookingHosurPage() {
       if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
       // Backend accepts these as optional; only send a real resolved point.
-      if (dropPoint?.lat != null && dropPoint?.lng != null) {
-        payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
-        payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
+      if (activeDropPoint?.lat != null && activeDropPoint?.lng != null) {
+        payload.drop_latitude = Number(Number(activeDropPoint.lat).toFixed(6))
+        payload.drop_longitude = Number(Number(activeDropPoint.lng).toFixed(6))
       }
 
       if (!bookingAttemptKeyRef.current) {
@@ -1225,8 +1366,8 @@ export function TwoWheelerBookingHosurPage() {
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
-      const authoritativeAmount = res?.data?.total_amount != null 
-        ? Number(res.data.total_amount) 
+      const authoritativeAmount = res?.data?.total_amount != null
+        ? Number(res.data.total_amount)
         : (res?.total_amount != null ? Number(res.total_amount) : null)
       setLastBookingId(bookingId)
       setLastTrackingToken(token)
@@ -1246,7 +1387,7 @@ export function TwoWheelerBookingHosurPage() {
             serviceCategory: "goods_transport_two_wheeler",
             timestamp: Date.now()
           }))
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (err) {
       // A booking exists only if the backend created the ServiceRequest.
@@ -1266,7 +1407,7 @@ export function TwoWheelerBookingHosurPage() {
       }
       setBookingError(
         detail ||
-          "We couldn't confirm your booking just now. Nothing has been charged — please try again."
+        "We couldn't confirm your booking just now. Nothing has been charged — please try again."
       )
       setLookingForPartnerOpen(false)
     } finally {
@@ -1294,7 +1435,7 @@ export function TwoWheelerBookingHosurPage() {
       setLookingForPartnerOpen(false)
       try {
         sessionStorage.removeItem("calservice_active_partner_search")
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -1373,13 +1514,7 @@ export function TwoWheelerBookingHosurPage() {
       setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
     }
     setBookingMode("SCHEDULED")
-    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
-    const defaultD = selectedDate?.fullDate || DELIVERY_DATES[0]?.fullDate || new Date()
-    const { category, slot } = getFirstAvailableSlotAndCategory(defaultD)
-    if (!selectedSlot) {
-      setSelectedSlot(slot)
-      setExpandedSlotCategory(category)
-    }
+    if (!selectedDate) setSelectedDate((serverDates && serverDates.length > 0) ? serverDates[0] : DELIVERY_DATES[0])
     setVehicleSelectorOpen(false)
     setStepperStep(3)
     setSlotStepperOpen(true)
@@ -1467,7 +1602,7 @@ export function TwoWheelerBookingHosurPage() {
                   setLookingForPartnerOpen(false)
                   try {
                     sessionStorage.removeItem("calservice_active_partner_search")
-                  } catch (e) {}
+                  } catch (e) { }
                   const bookingPayload = {
                     id: lastBookingId,
                     request_id: lastBookingId,
@@ -1476,7 +1611,7 @@ export function TwoWheelerBookingHosurPage() {
                   try {
                     sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
                     sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-                  } catch (e) {}
+                  } catch (e) { }
                   navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
                     state: {
                       isTracking: true,
@@ -1502,30 +1637,41 @@ export function TwoWheelerBookingHosurPage() {
 
       <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
-            <img
-              src="/assets/sevo_emblem_transparent.png"
-              alt="SEVO Emblem"
-              className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-              style={{ height: '36px', width: 'auto' }}
-            />
-            <div className="flex flex-col">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackNavigation}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center text-slate-700 transition-all cursor-pointer shrink-0"
+              title="Go back"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
               <img
-                src="/assets/sevo_text_logo.png"
-                alt="SEVO"
-                className="shrink-0 object-contain"
-                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+                src="/assets/sevo_emblem_transparent.png"
+                alt="SEVO Emblem"
+                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                style={{ height: '36px', width: 'auto' }}
               />
-              <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
-                Two-Wheeler Delivery
-              </span>
+              <div className="flex flex-col">
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain"
+                  style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+                />
+                <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
+                  Two-Wheeler Delivery
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Location Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/20 text-xs font-bold text-[var(--sevo-primary)]">
             <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
-            <span>Hosur</span>
+            <span>{currentCityName}</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[var(--sevo-text-secondary)]">
@@ -1559,7 +1705,7 @@ export function TwoWheelerBookingHosurPage() {
       </header>
 
       {/* ── Hero Section (Uniform Image 2 Style) ────────────────────── */}
-      <section 
+      <section
         className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 border-b border-slate-100/60 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('/hero_twowheeler_bg.png')` }}
       >
@@ -1567,15 +1713,15 @@ export function TwoWheelerBookingHosurPage() {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-4 shadow-sm border border-white/25 backdrop-blur-sm">
             <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-            Hosur Two-Wheeler Service
+            {currentCityName} Two-Wheeler Service
           </div>
 
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight max-w-3xl mx-auto drop-shadow-lg">
-            Affordable and Trusted Two-Wheeler Delivery in Hosur
+            Affordable and Trusted Two-Wheeler Delivery in {currentCityName}
           </h1>
 
           <p className="mt-4 text-sm sm:text-base text-slate-200 max-w-2xl mx-auto leading-relaxed drop-shadow">
-            Whether you're sending documents, daily essentials, or parcel deliveries across the city, our two-wheeler courier service in Hosur offers fast, safe, and cost-effective delivery
+            Whether you're sending documents, daily essentials, or parcel deliveries across the city, our two-wheeler courier service in {currentCityName} offers fast, safe, and cost-effective delivery
           </p>
 
           <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-300">
@@ -1633,7 +1779,7 @@ export function TwoWheelerBookingHosurPage() {
               <div className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Enter pickup location in Hosur"
+                  placeholder={`Enter pickup location in ${currentCityName}`}
                   value={pickup}
                   onFocus={() => {
                     setShowPickupSuggestions(true)
@@ -1645,32 +1791,43 @@ export function TwoWheelerBookingHosurPage() {
                   }}
                   onChange={(e) => {
                     setPickup(e.target.value)
+                    setPickupCoords(null)
                     setShowPickupSuggestions(true)
                   }}
-                  className="w-full pl-3 pr-8 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                  className="w-full pl-3 pr-16 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
                   required
                   autoComplete="off"
                 />
-                <button
-                  type="button"
-                  onClick={handleFetchLiveLocation}
-                  disabled={isDetectingLocation}
-                  title="Fetch live GPS location"
-                  className="absolute right-2 text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
-                >
-                  {isDetectingLocation ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                  ) : (
-                    <LocateFixed className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
-                  )}
-                </button>
+                <div className="absolute right-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setMapPickerTarget("pickup")}
+                    title="Pick on interactive map"
+                    className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600 hover:scale-110 transition-transform" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFetchLiveLocation}
+                    disabled={isDetectingLocation}
+                    title="Fetch live GPS location"
+                    className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                  >
+                    {isDetectingLocation ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                    ) : (
+                      <LocateFixed className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Pickup Suggestions Dropdown */}
               {showPickupSuggestions && (
                 <div className="absolute top-full left-0 mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    <span>{pickup ? `Suggestions for "${pickup}"` : "Suggested Hosur Locations"}</span>
+                    <span>{pickup ? `Suggestions for "${pickup}"` : `Suggested ${currentCityName} Locations`}</span>
                     <span className="text-[9px] text-emerald-700 font-semibold">{pickupSuggestions.length} found</span>
                   </div>
                   <div className="p-1 space-y-0.5">
@@ -1738,32 +1895,42 @@ export function TwoWheelerBookingHosurPage() {
                   <span className="text-rose-500">●</span> Delivery Destination *
                 </label>
               </div>
-              <input
-                id="drop-input"
-                type="text"
-                placeholder="Enter delivery destination"
-                value={drop}
-                onFocus={() => {
-                  setShowDropSuggestions(true)
-                  setShowPickupSuggestions(false)
-                }}
-                onClick={() => {
-                  setShowDropSuggestions(true)
-                  setShowPickupSuggestions(false)
-                }}
-                onChange={(e) => {
-                  setDrop(e.target.value)
-                  if (e.target.value.trim()) setDestinationError("")
-                  setShowDropSuggestions(true)
-                }}
-                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
-                  destinationError
-                    ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
-                    : "border-slate-200 focus:border-emerald-500"
-                }`}
-                required
-                autoComplete="off"
-              />
+              <div className="relative flex items-center">
+                <input
+                  id="drop-input"
+                  type="text"
+                  placeholder="Enter delivery destination"
+                  value={drop}
+                  onFocus={() => {
+                    setShowDropSuggestions(true)
+                    setShowPickupSuggestions(false)
+                  }}
+                  onClick={() => {
+                    setShowDropSuggestions(true)
+                    setShowPickupSuggestions(false)
+                  }}
+                  onChange={(e) => {
+                    setDrop(e.target.value)
+                    setDropCoords(null)
+                    if (e.target.value.trim()) setDestinationError("")
+                    setShowDropSuggestions(true)
+                  }}
+                  className={`w-full pl-3 pr-9 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${destinationError
+                      ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
+                      : "border-slate-200 focus:border-emerald-500"
+                    }`}
+                  required
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMapPickerTarget("drop")}
+                  title="Pick on interactive map"
+                  className="absolute right-2 text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 hover:scale-110 transition-transform" />
+                </button>
+              </div>
               {destinationError && (
                 <p className="absolute -bottom-5 left-0 text-[10px] font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap z-20 animate-in fade-in">
                   <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
@@ -1938,9 +2105,8 @@ export function TwoWheelerBookingHosurPage() {
                   }
                 }}
                 onFocus={() => setPhoneError("")}
-                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
-                  phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
-                }`}
+                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
+                  }`}
                 required
               />
               {phoneError && (
@@ -2099,19 +2265,18 @@ export function TwoWheelerBookingHosurPage() {
                 {/* Highlight Badge if configured */}
                 {vehicle.badge && (
                   <span
-                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
-                      vehicle.badge.toLowerCase().includes("coming")
+                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${vehicle.badge.toLowerCase().includes("coming")
                         ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider px-3"
                         : vehicle.badge.toLowerCase().includes("popular")
-                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                        : vehicle.badge.toLowerCase().includes("rare")
-                        ? "bg-slate-100 text-slate-700 border-slate-200"
-                        : vehicle.badge.toLowerCase().includes("best")
-                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                        : vehicle.badge.toLowerCase().includes("trend")
-                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                        : "bg-blue-50 text-blue-700 border-blue-200"
-                    }`}
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : vehicle.badge.toLowerCase().includes("rare")
+                            ? "bg-slate-100 text-slate-700 border-slate-200"
+                            : vehicle.badge.toLowerCase().includes("best")
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              : vehicle.badge.toLowerCase().includes("trend")
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                      }`}
                   >
                     {vehicle.badge.toLowerCase().includes("coming") ? "" : "★ "}
                     {vehicle.badge}
@@ -2373,26 +2538,37 @@ export function TwoWheelerBookingHosurPage() {
             Frequently Asked Questions
           </h2>
           <div className="space-y-4">
-            {FAQS.map((faq, idx) => (
-              <div
-                key={faq.q}
-                className="border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full p-4 sm:p-5 text-left font-bold text-sm text-slate-800 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
-                >
-                  <span>{faq.q}</span>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openFaq === idx ? "rotate-180" : ""}`} />
-                </button>
-                {openFaq === idx && (
-                  <div className="px-4 sm:px-5 pb-5 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
-                    {faq.a}
-                  </div>
-                )}
+            {faqsLoading ? (
+              <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
+                <span>Loading FAQs...</span>
               </div>
-            ))}
+            ) : serverFaqs.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-2xl border border-slate-100">
+                No FAQs currently published for this category.
+              </div>
+            ) : (
+              serverFaqs.map((faq, idx) => (
+                <div
+                  key={faq.q}
+                  className="border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                    className="w-full p-4 sm:p-5 text-left font-bold text-sm text-slate-800 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
+                  >
+                    <span>{faq.q}</span>
+                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openFaq === idx ? "rotate-180" : ""}`} />
+                  </button>
+                  {openFaq === idx && (
+                    <div className="px-4 sm:px-5 pb-5 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -2460,7 +2636,7 @@ export function TwoWheelerBookingHosurPage() {
             <div className="sm:w-[48%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between overflow-y-auto">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 mb-4">Address Details</h3>
-                
+
                 {/* Pickup */}
                 <div className="flex items-start gap-3 mb-3">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
@@ -2478,7 +2654,7 @@ export function TwoWheelerBookingHosurPage() {
                     className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
                   >Edit</button>
                 </div>
-                
+
                 {/* Dashed line */}
                 <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
 
@@ -2497,7 +2673,7 @@ export function TwoWheelerBookingHosurPage() {
                     <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
                   </React.Fragment>
                 ))}
-                
+
                 {/* Drop */}
                 <div className="flex items-start gap-3 mb-2">
                   <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
@@ -2718,14 +2894,13 @@ export function TwoWheelerBookingHosurPage() {
                     isSelectedVehicleOverCapacity
                       ? "Cargo exceeds Two-Wheeler limits. Please book a Mini Truck."
                       : serverQuote?.total == null && !quoteLoading
-                      ? "A fare is needed before booking"
-                      : undefined
+                        ? "A fare is needed before booking"
+                        : undefined
                   }
-                  className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    isSelectedVehicleOverCapacity
+                  className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${isSelectedVehicleOverCapacity
                       ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
                       : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white shadow-emerald-600/30"
-                  }`}
+                    }`}
                 >
                   {bookingSubmitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
@@ -2807,11 +2982,10 @@ export function TwoWheelerBookingHosurPage() {
                         key={v.id}
                         type="button"
                         onClick={() => setSelectedVehicle(v)}
-                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
-                          isSelected
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${isSelected
                             ? "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
                             : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
-                        }`}
+                          }`}
                       >
                         <div className="w-20 shrink-0 flex items-center justify-center">
                           {React.cloneElement(v.diagram, { className: "w-full h-14" })}
@@ -2931,11 +3105,10 @@ export function TwoWheelerBookingHosurPage() {
                         setSelectedGoodsType(type)
                         setGoodsTypeModalOpen(false)
                       }}
-                      className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${
-                        isSelected
+                      className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${isSelected
                           ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
                           : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       <span>{type}</span>
                       {isSelected && (
@@ -2982,7 +3155,7 @@ export function TwoWheelerBookingHosurPage() {
                   quantity: i.quantity,
                 })),
                 goods_category_id: cat?.id,
-                city: LOGISTICS_CITY,
+                city: currentCitySlug,
               })
               if (res?.cargo_summary?.is_two_wheeler_compatible === false || res?.recommended_tier?.category === "truck") {
                 setBookingError(
@@ -3076,8 +3249,8 @@ export function TwoWheelerBookingHosurPage() {
                           {lastBookingAmount != null
                             ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
                             : (serverQuote?.total != null
-                                ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                                : "Amount unavailable")}
+                              ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                              : "Amount unavailable")}
                         </span>
                       </div>
                     </div>
@@ -3244,7 +3417,7 @@ export function TwoWheelerBookingHosurPage() {
               <div className="flex-1 flex justify-center max-w-[600px] mx-auto w-full relative">
                 {/* Progress Line */}
                 <div className="absolute top-[35%] left-[12%] right-[12%] h-[1px] bg-white/30 -z-0"></div>
-                
+
                 {[
                   { step: 1, label: "Location" },
                   { step: 2, label: "Add Items" },
@@ -3252,11 +3425,10 @@ export function TwoWheelerBookingHosurPage() {
                   { step: 4, label: "Summary" }
                 ].map((s) => (
                   <div key={s.step} className="flex-1 flex flex-col items-center justify-center text-center z-10">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${
-                      stepperStep > s.step ? "bg-white text-[#0B8860]" :
-                      stepperStep === s.step ? "bg-[#33a886] text-white" :
-                      "bg-[#0B8860] text-white border border-white/40"
-                    }`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${stepperStep > s.step ? "bg-white text-[#0B8860]" :
+                        stepperStep === s.step ? "bg-[#33a886] text-white" :
+                          "bg-[#0B8860] text-white border border-white/40"
+                      }`}>
                       {stepperStep > s.step ? <Check className="w-4 h-4" /> : s.step}
                     </div>
                     <span className={`text-[11px] font-medium tracking-wide ${stepperStep === s.step ? "text-white font-bold" : "text-white/70"}`}>
@@ -3301,15 +3473,14 @@ export function TwoWheelerBookingHosurPage() {
                       {/* Date Selector */}
                       <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Date</p>
                       <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-2 mb-6">
-                        {DELIVERY_DATES.map((dateObj) => (
-                          <div 
+                        {((serverDates && serverDates.length > 0) ? serverDates : DELIVERY_DATES).map((dateObj) => (
+                          <div
                             key={dateObj.id}
                             onClick={() => setSelectedDate(dateObj)}
-                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
-                              selectedDate?.id === dateObj.id 
-                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
+                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${selectedDate?.id === dateObj.id
+                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm"
                                 : "border-slate-200 bg-white hover:border-slate-300"
-                            }`}
+                              }`}
                           >
                             <span className={`text-[11px] font-bold ${selectedDate?.id === dateObj.id ? "text-[#0B8860]" : "text-slate-500"}`}>{dateObj.label}</span>
                             <span className="text-[13px] font-black text-slate-800 mt-0.5">{dateObj.value}</span>
@@ -3325,52 +3496,70 @@ export function TwoWheelerBookingHosurPage() {
 
                       {/* Slot Selector */}
                       <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
-                      <div className="space-y-4">
-                        {Object.entries(DELIVERY_SLOTS).map(([timeOfDay, slots]) => {
-                          const isExpanded = expandedSlotCategory === timeOfDay
-                          return (
-                            <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
-                              <div 
-                                className="flex items-center justify-between cursor-pointer mb-2 group"
-                                onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
-                                  {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
-                                  {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
-                                  <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
+                      {slotsLoading ? (
+                        <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
+                          <span>Loading available pickup slots...</span>
+                        </div>
+                      ) : (!serverSlotGroups || serverSlotGroups.length === 0) ? (
+                        <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                          No operating slots available for this date.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {serverSlotGroups.map((groupObj) => {
+                            const timeOfDay = groupObj.group || groupObj.category
+                            const slots = groupObj.slots || []
+                            const isExpanded = expandedSlotCategory === timeOfDay
+                            return (
+                              <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                                <div
+                                  className="flex items-center justify-between cursor-pointer mb-2 group"
+                                  onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
+                                    {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
+                                    {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
+                                    <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
+                                  </div>
+                                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                                 </div>
-                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+
+                                {isExpanded && (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                    {slots.map((item) => {
+                                      const slotLabel = typeof item === "string" ? item : (item.slot || item.label)
+                                      const isAvail = typeof item === "object" && "is_available" in item
+                                        ? item.is_available
+                                        : (serverSlotsAvailability ? (serverSlotsAvailability[slotLabel] === true) : false)
+                                      const passed = !isAvail
+                                      const reason = (typeof item === "object" && item.reason) || (passed ? "Slot not available" : "")
+                                      return (
+                                        <button
+                                          key={slotLabel}
+                                          type="button"
+                                          disabled={passed}
+                                          title={reason || undefined}
+                                          onClick={() => setSelectedSlot(slotLabel)}
+                                          className={`py-2 px-1 rounded-xl border text-center transition-all ${selectedSlot === slotLabel
+                                              ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
+                                              : passed
+                                                ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                                : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                            }`}
+                                        >
+                                          <span className="text-[12px]">{slotLabel}</span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
                               </div>
-                              
-                              {isExpanded && (
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                  {slots.map(slot => {
-                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
-                                    return (
-                                      <button
-                                        key={slot}
-                                        type="button"
-                                        disabled={passed}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
-                                          selectedSlot === slot
-                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
-                                            : passed
-                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
-                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
-                                        }`}
-                                      >
-                                        <span className="text-[12px]">{slot}</span>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Step 3 Footer */}
@@ -3378,7 +3567,7 @@ export function TwoWheelerBookingHosurPage() {
                       <button
                         type="button"
                         onClick={() => setStepperStep(4)}
-                        disabled={!selectedDate || !selectedSlot}
+                        disabled={!selectedDate || !selectedSlot || (serverSlotsAvailability ? serverSlotsAvailability[selectedSlot] === false : false)}
                         className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
                       >
                         Confirm
@@ -3424,7 +3613,7 @@ export function TwoWheelerBookingHosurPage() {
                         </div>
                         <div className="space-y-4 relative ml-1">
                           <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
-                          
+
                           <div className="flex items-start gap-4 relative bg-white">
                             <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                               <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
@@ -3442,7 +3631,7 @@ export function TwoWheelerBookingHosurPage() {
                             </div>
                           </div>
                         </div>
-                        
+
                         {bookingMode === "IMMEDIATE" ? (
                           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -3462,11 +3651,7 @@ export function TwoWheelerBookingHosurPage() {
                               type="button"
                               onClick={() => {
                                 setBookingMode("SCHEDULED")
-                                if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
-                                const defaultD = DELIVERY_DATES[0]?.fullDate || new Date()
-                                const { category, slot } = getFirstAvailableSlotAndCategory(defaultD)
-                                setSelectedSlot(slot)
-                                setExpandedSlotCategory(category)
+                                if (!selectedDate) setSelectedDate((serverDates && serverDates.length > 0) ? serverDates[0] : DELIVERY_DATES[0])
                                 setStepperStep(3)
                               }}
                               className="text-[12px] font-bold text-[#0B8860] border border-[#0B8860]/30 px-3.5 py-1.5 rounded-full hover:bg-[#0B8860]/5 transition-colors cursor-pointer"
@@ -3535,6 +3720,120 @@ export function TwoWheelerBookingHosurPage() {
                           Change
                         </button>
                       </div>
+
+                      {/* Contact & Receiver Details Card */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-slate-800 text-base">Contact Details</h3>
+                          <span className="text-[11px] font-medium text-slate-400">Driver coordination</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="flex flex-col text-left">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                              Your Name *
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Full Name"
+                              value={name}
+                              onChange={(e) => {
+                                setName(e.target.value)
+                                if (bookingError) setBookingError("")
+                              }}
+                              className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                              required
+                            />
+                          </div>
+
+                          <div className="flex flex-col text-left">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                Mobile Number *
+                              </label>
+                              <span className={`text-[10px] font-semibold tabular-nums ${phone.length === 10 ? "text-emerald-600" : phone.length > 0 ? "text-amber-500" : "text-slate-400"}`}>
+                                {phone.length}/10
+                              </span>
+                            </div>
+                            <input
+                              type="tel"
+                              inputMode="numeric"
+                              maxLength={10}
+                              placeholder="10-digit mobile number"
+                              value={phone}
+                              onChange={(e) => {
+                                const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
+                                setPhone(digits)
+                                if (bookingError) setBookingError("")
+                              }}
+                              className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        {/* Optional Receiver Details Toggle */}
+                        <div className="pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">Receiver at Drop Location</p>
+                              <p className="text-[11px] text-slate-400">Driver calls receiver on delivery</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                              className="text-xs font-bold text-[#0B8860] hover:underline cursor-pointer"
+                            >
+                              {showReceiverDetails ? "Remove" : "+ Add Receiver"}
+                            </button>
+                          </div>
+
+                          {showReceiverDetails && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                              <div className="flex flex-col text-left">
+                                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                  Receiver Name
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="Receiver Name"
+                                  value={receiverName}
+                                  onChange={(e) => setReceiverName(e.target.value)}
+                                  className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                                />
+                              </div>
+                              <div className="flex flex-col text-left">
+                                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                  Receiver Mobile
+                                </label>
+                                <input
+                                  type="tel"
+                                  inputMode="numeric"
+                                  maxLength={10}
+                                  placeholder="10-digit mobile number"
+                                  value={receiverPhone}
+                                  onChange={(e) => {
+                                    setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                                    if (receiverPhoneError) setReceiverPhoneError("")
+                                  }}
+                                  className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                                />
+                                {receiverPhoneError && (
+                                  <p className="text-[10px] text-red-500 font-semibold mt-1">⚠ {receiverPhoneError}</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Booking Error Banner */}
+                      {bookingError && (
+                        <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-800 text-xs font-semibold">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <span className="flex-1 leading-relaxed">{bookingError}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
@@ -3553,16 +3852,24 @@ export function TwoWheelerBookingHosurPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (!isSignedIn) {
+                          const cleanP = phone.replace(/\D/g, "").slice(0, 10)
+                          if (!isSignedIn && (!name.trim() || cleanP.length !== 10)) {
                             setShowCustomerEntryModal(true)
                           } else {
                             submitBooking()
                           }
                         }}
                         disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
-                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 flex items-center gap-2"
                       >
-                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
+                        {bookingSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Confirming...</span>
+                          </>
+                        ) : (
+                          "Confirm Booking"
+                        )}
                       </button>
                     </div>
                   </>
@@ -3587,10 +3894,10 @@ export function TwoWheelerBookingHosurPage() {
                       Edit
                     </button>
                   </div>
-                  
+
                   <div className="space-y-6 relative ml-1">
                     <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
-                    
+
                     <div className="flex items-start gap-4 relative bg-white">
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                         <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
@@ -3663,8 +3970,8 @@ export function TwoWheelerBookingHosurPage() {
                   {lastBookingAmount != null
                     ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
                     : (serverQuote?.total != null
-                        ? `₹${Number(serverQuote.total).toLocaleString("en-IN")}`
-                        : "Amount unavailable")}
+                      ? `₹${Number(serverQuote.total).toLocaleString("en-IN")}`
+                      : "Amount unavailable")}
                 </span>
               </div>
             </div>
@@ -3715,9 +4022,43 @@ export function TwoWheelerBookingHosurPage() {
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onComplete={() => {
+          onComplete={(userData) => {
             setShowCustomerEntryModal(false)
-            submitBooking()
+            setLocalIsSignedIn(true)
+            const resolvedName = (userData?.name || name || "").trim()
+            const resolvedPhone = (userData?.phone || phone || "").replace(/\D/g, "").slice(0, 10)
+            if (resolvedName) setName(resolvedName)
+            if (resolvedPhone) setPhone(resolvedPhone)
+            submitBooking(null, resolvedName, resolvedPhone)
+          }}
+        />
+      )}
+
+      {mapPickerTarget && (
+        <MapPickerScreen
+          initialCoords={
+            mapPickerTarget === "pickup"
+              ? (pickupCoords?.lat ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
+              : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
+          }
+          serviceSlug="two-wheelers"
+          onClose={() => setMapPickerTarget(null)}
+          onConfirm={(resolvedAddr) => {
+            const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"
+            const lat = Number(resolvedAddr?.latitude ?? resolvedAddr?.lat)
+            const lng = Number(resolvedAddr?.longitude ?? resolvedAddr?.lng)
+            if (mapPickerTarget === "pickup") {
+              setPickup(fullAddr)
+              if (!isNaN(lat) && !isNaN(lng)) {
+                setPickupCoords({ lat, lng, forAddress: fullAddr })
+              }
+            } else {
+              setDrop(fullAddr)
+              if (!isNaN(lat) && !isNaN(lng)) {
+                setDropCoords({ lat, lng, forAddress: fullAddr })
+              }
+            }
+            setMapPickerTarget(null)
           }}
         />
       )}

@@ -1,8 +1,8 @@
-# CalTrack / QuickTIMS — Multi-Tenancy & Database Architecture
+# sevo / QuickTIMS — Multi-Tenancy & Database Architecture
 
 ## 1. Multi-Tenant Data Isolation Strategy
 
-CalTrack enforces multi-tenancy using **tenant-scoped row-level data isolation** within PostgreSQL. Every tenant organization is represented as a `Company` record, and all domain tables reference this parent company.
+sevo enforces multi-tenancy using **tenant-scoped row-level data isolation** within PostgreSQL. Every tenant organization is represented as a `Company` record, and all domain tables reference this parent company.
 
 ```text
                                +-----------------------------+

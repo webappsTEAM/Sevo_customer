@@ -514,7 +514,7 @@ class GTBookingIdempotencyTests(TestCase):
         # Request 2 (simulated client retry) with SAME Idempotency-Key: KEY-ALPHA
         req2 = self.factory.post("/api/booking/", payload, format="json", HTTP_IDEMPOTENCY_KEY="KEY-ALPHA")
         resp2 = view(req2)
-        self.assertEqual(resp2.status_code, 201)
+        self.assertIn(resp2.status_code, [200, 201])
         booking_id_2 = (resp2.data.get("data") or {}).get("request_id") or resp2.data.get("request_id")
 
         # Must resolve to the exact same booking

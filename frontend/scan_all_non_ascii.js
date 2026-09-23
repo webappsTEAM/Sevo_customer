@@ -22,5 +22,5 @@ function walk(dir) {
   }
 }
 
-walk('c:/Users/user/Caltrackk/Caltrack/frontend/src');
+walk('c:/Users/user/sevok/sevo/frontend/src');
 console.log('Scan complete!');

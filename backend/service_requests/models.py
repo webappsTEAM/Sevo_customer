@@ -316,7 +316,7 @@ class ServiceRequest(models.Model):
     # estimate -- see services/logistics_pricing.quote_logistics_fare).
     #
     # Stored rather than recomputed because it is the *quote the customer
-    # was given*, locked at booking per CALTRACK_PHASE_14 H.1. Rates can
+    # was given*, locked at booking per sevo_PHASE_14 H.1. Rates can
     # change afterwards, so recomputing later would silently produce a
     # different number and there would be no record of what was actually
     # agreed. This is also the "estimated" half that final-fare
@@ -417,38 +417,80 @@ class ServiceRequest(models.Model):
             raise ValueError(
                 f"{leg!r} is not a valid logistics leg. Expected one of: {sorted(valid)}"
             )
-        if self.logistics_leg == leg:
-            return False
-        if self.logistics_leg:
-            cat = (self.service_category or "").strip().lower()
-            if cat == "packers_movers" or self.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
-                seq = self.PM_LEG_SEQUENCE
-            else:
-                seq = self.LEG_SEQUENCE
-            try:
-                if seq.index(leg) < seq.index(self.logistics_leg):
-                    return False
-            except ValueError:
-                # A leg outside the ordered sequence: fall through and apply
-                # it rather than silently dropping a legitimate value.
-                pass
+        if save and self.pk:
+            with transaction.atomic():  # type: ignore[attr-defined]
+                locked = ServiceRequest.objects.select_for_update().filter(pk=self.pk).first()
+                target = locked if locked is not None else self
 
-        now = timezone.now()
-        history = list(self.logistics_leg_history or [])
-        history.append({
-            "leg": leg,
-            "at": now.isoformat(),
-            "by": getattr(actor, "id", None),
-        })
-        self.logistics_leg = leg
-        self.logistics_leg_updated_at = now
-        self.logistics_leg_history = history
-        if save:
-            self.save(update_fields=[
-                "logistics_leg", "logistics_leg_updated_at",
-                "logistics_leg_history", "updated_at",
-            ])
-        return True
+                if target.logistics_leg == leg:
+                    self.logistics_leg = target.logistics_leg
+                    self.logistics_leg_updated_at = target.logistics_leg_updated_at
+                    self.logistics_leg_history = target.logistics_leg_history
+                    return False
+
+                if target.logistics_leg:
+                    cat = (target.service_category or "").strip().lower()
+                    if cat == "packers_movers" or target.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
+                        seq = self.PM_LEG_SEQUENCE
+                    else:
+                        seq = self.LEG_SEQUENCE
+                    try:
+                        if seq.index(leg) < seq.index(target.logistics_leg):
+                            return False
+                    except ValueError:
+                        pass
+
+                now = timezone.now()
+                history = list(target.logistics_leg_history or [])
+                if not any(h.get("leg") == leg for h in history):
+                    history.append({
+                        "leg": leg,
+                        "at": now.isoformat(),
+                        "by": getattr(actor, "id", None),
+                    })
+                target.logistics_leg = leg
+                target.logistics_leg_updated_at = now
+                target.logistics_leg_history = history
+                target.save(update_fields=[
+                    "logistics_leg", "logistics_leg_updated_at",
+                    "logistics_leg_history", "updated_at",
+                ])
+                self.logistics_leg = target.logistics_leg
+                self.logistics_leg_updated_at = target.logistics_leg_updated_at
+                self.logistics_leg_history = target.logistics_leg_history
+                return True
+        else:
+            if self.logistics_leg == leg:
+                return False
+            if self.logistics_leg:
+                cat = (self.service_category or "").strip().lower()
+                if cat == "packers_movers" or self.logistics_leg in self.PM_SPECIFIC_LEGS or leg in self.PM_SPECIFIC_LEGS:
+                    seq = self.PM_LEG_SEQUENCE
+                else:
+                    seq = self.LEG_SEQUENCE
+                try:
+                    if seq.index(leg) < seq.index(self.logistics_leg):
+                        return False
+                except ValueError:
+                    pass
+
+            now = timezone.now()
+            history = list(self.logistics_leg_history or [])
+            if not any(h.get("leg") == leg for h in history):
+                history.append({
+                    "leg": leg,
+                    "at": now.isoformat(),
+                    "by": getattr(actor, "id", None),
+                })
+            self.logistics_leg = leg
+            self.logistics_leg_updated_at = now
+            self.logistics_leg_history = history
+            if save:
+                self.save(update_fields=[
+                    "logistics_leg", "logistics_leg_updated_at",
+                    "logistics_leg_history", "updated_at",
+                ])
+            return True
 
     logistics_tier   = models.ForeignKey(
         "logistics.ServiceTier",
@@ -634,7 +676,7 @@ class ServiceRequest(models.Model):
         _max_attempts = 5
         for _attempt in range(1, _max_attempts + 1):
             try:
-                with transaction.atomic():
+                with transaction.atomic():  # type: ignore[attr-defined]
                     super().save(*args, **kwargs)
                 break
             except IntegrityError:

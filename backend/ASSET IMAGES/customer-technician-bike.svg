@@ -21,7 +21,7 @@
       <stop offset="100%" stop-color="#334155"/>
     </linearGradient>
 
-    <!-- CalTrack Orange accent -->
+    <!-- sevo Orange accent -->
     <linearGradient id="orangeAccent" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#f97316"/>
       <stop offset="100%" stop-color="#ea580c"/>
@@ -74,7 +74,7 @@
     
     <!-- Rider Helmet with Visor -->
     <ellipse cx="32" cy="27" rx="5.5" ry="6" fill="#0f172a"/>
-    <!-- Helmet Shell Accent (CalTrack Cyan/Blue) -->
+    <!-- Helmet Shell Accent (sevo Cyan/Blue) -->
     <path d="M28 25 Q32 22 36 25 Q36 28 32 29 Q28 28 28 25 Z" fill="#0284c7"/>
     <!-- Visor facing UP -->
     <path d="M28.5 24 Q32 22 35.5 24" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
@@ -82,11 +82,11 @@
     <!-- Rider Seat & Rear Frame -->
     <path d="M27 33 L37 33 L36 43 L28 43 Z" fill="#0f172a"/>
 
-    <!-- CalTrack Technician Tool / Delivery Box on Rear -->
+    <!-- sevo Technician Tool / Delivery Box on Rear -->
     <rect x="23" y="41" width="18" height="13" rx="2.5" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
     <!-- Box Lid / Handle -->
     <rect x="25" y="42" width="14" height="2" rx="0.5" fill="#2563eb"/>
-    <!-- CalTrack Brand Badge on Box -->
+    <!-- sevo Brand Badge on Box -->
     <rect x="27" y="46" width="10" height="5" rx="1" fill="#2563eb"/>
     <circle cx="32" cy="48.5" r="1.5" fill="#f97316"/>
 

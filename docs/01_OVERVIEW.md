@@ -1,7 +1,7 @@
-# QuickTIMS / CalTrack — Comprehensive System Overview
+# QuickTIMS / sevo — Comprehensive System Overview
 
 ## 1. Project Introduction
-**QuickTIMS / CalTrack** is an enterprise-grade, multi-tenant SaaS platform built for **field workforce management, service requests & dispatching, geofenced real-time GPS tracking, logistics & fleet transport, inventory, customer care, and automated payroll/invoicing**.
+**QuickTIMS / sevo** is an enterprise-grade, multi-tenant SaaS platform built for **field workforce management, service requests & dispatching, geofenced real-time GPS tracking, logistics & fleet transport, inventory, customer care, and automated payroll/invoicing**.
 
 The platform caters to multi-role workflows including **Super Admins**, **Company Admins/Managers**, **Technicians/Field Workers**, and **End Customers**.
 

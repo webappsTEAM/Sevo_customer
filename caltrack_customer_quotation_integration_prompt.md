@@ -1,8 +1,8 @@
-# CALTRACK CUSTOMER — QUOTATION INTEGRATION IMPLEMENTATION PROMPT
+# sevo CUSTOMER — QUOTATION INTEGRATION IMPLEMENTATION PROMPT
 
 ## GOAL
 
-Implement the Customer-side integration for the existing CalTrack Workforce Estimation + Quotation system.
+Implement the Customer-side integration for the existing sevo Workforce Estimation + Quotation system.
 
 The Workforce side already supports:
 

@@ -19,6 +19,7 @@ These tests verify:
    pricing to the linked ServiceTier.
 """
 from decimal import Decimal
+from typing import Any, cast
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -518,7 +519,7 @@ class PackageGtPricingRbacTests(APITestCase):
     def test_malformed_rate_value_is_rejected(self):
         admin = _user("admin", 106)
         with self.assertRaises(Exception):
-            with transaction.atomic():
+            with cast(Any, transaction.atomic()):
                 update_package(
                     package=self.package,
                     data={"gt_per_km_rate": "not-a-number"},

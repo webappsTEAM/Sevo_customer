@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 REVERSE_GEOCODE_CACHE_TTL = 3600
 FORWARD_GEOCODE_CACHE_TTL = 86400
 _COORD_PRECISION = 4
-USER_AGENT = "CalTrack-Services/2.0 (support@caldimproducts.com)"
+USER_AGENT = "sevo-Services/2.0 (support@caldimproducts.com)"
 
 # India Geographic Bounding Box
 INDIA_LAT_MIN = 6.0

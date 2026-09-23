@@ -38,7 +38,7 @@ import { ACInspectionFormModal } from "../components/estimation/ACInspectionForm
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
@@ -3276,7 +3276,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             onClick={() => {
               const url = window.location.href
               if (navigator.share) {
-                navigator.share({ title: "SEVO Live Tracking", url }).catch(() => {})
+                navigator.share({ title: "SEVO Live Tracking", url }).catch(() => { })
               } else {
                 navigator.clipboard?.writeText(url)
                 setCopiedTrackingUrl(true)
@@ -3812,8 +3812,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             marginBottom: '1rem',
             boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
             border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
+              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
               }`,
           }}
         >
@@ -3863,7 +3863,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
                   liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
               border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
                 }`,
               color:
                 liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
@@ -3908,7 +3908,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                         {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
+                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "sevo Supplied"}
                       </div>
                     </div>
                     <div style={{ fontWeight: 900, color: '#0f172a' }}>
@@ -4920,8 +4920,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     } finally {
       // Clear all customer tokens & storage
       try {
-        localStorage.removeItem("caltrack_customer_phone")
-        localStorage.removeItem("caltrack_user")
+        localStorage.removeItem("sevo_customer_phone")
+        localStorage.removeItem("sevo_user")
         localStorage.removeItem("calservice_customer_token")
         sessionStorage.removeItem("calservice_customer_token")
         sessionStorage.removeItem("calservice_last_booking")
@@ -6462,65 +6462,65 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                          </button>
-                        </div>
-
-                        {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
-                        {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
-                          <div style={{ marginTop: 8 }}>
-                            <button
-                              onClick={() => toggleStopsEditor(b)}
-                              style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                            >
-                              <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
                             </button>
-                            {stopsEditorBookingId === b.id && (
-                              <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                {stopsError && (
-                                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
-                                )}
-                                {stopsSavedMsg && (
-                                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
-                                )}
-                                {stopsLoading ? (
-                                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
-                                ) : (
-                                  <>
-                                    {stopsDraft.length === 0 && (
-                                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
-                                    )}
-                                    {stopsDraft.map((s, idx) => (
-                                      <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                                        <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
-                                          <option value="PICKUP">Pickup</option>
-                                          <option value="WAYPOINT">Stop</option>
-                                          <option value="DROP">Drop</option>
-                                        </select>
-                                        <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
-                                        <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
-                                          <X size={12} />
+                          </div>
+
+                          {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
+                          {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
+                            <div style={{ marginTop: 8 }}>
+                              <button
+                                onClick={() => toggleStopsEditor(b)}
+                                style={{ padding: '6px 14px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                              >
+                                <MapPin size={13} /> {stopsEditorBookingId === b.id ? 'Hide Stops' : 'Manage Stops'}
+                              </button>
+                              {stopsEditorBookingId === b.id && (
+                                <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                  {stopsError && (
+                                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsError}</div>
+                                  )}
+                                  {stopsSavedMsg && (
+                                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: '0.75rem', fontWeight: 600 }}>{stopsSavedMsg}</div>
+                                  )}
+                                  {stopsLoading ? (
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Loading stops...</div>
+                                  ) : (
+                                    <>
+                                      {stopsDraft.length === 0 && (
+                                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 8 }}>No extra stops yet -- just the default pickup/drop.</div>
+                                      )}
+                                      {stopsDraft.map((s, idx) => (
+                                        <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                                          <select value={s.stop_type} onChange={e => updateStopRow(idx, 'stop_type', e.target.value)} style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                                            <option value="PICKUP">Pickup</option>
+                                            <option value="WAYPOINT">Stop</option>
+                                            <option value="DROP">Drop</option>
+                                          </select>
+                                          <input value={s.address} onChange={e => updateStopRow(idx, 'address', e.target.value)} placeholder="Address" style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                          <input value={s.contact_phone} onChange={e => updateStopRow(idx, 'contact_phone', e.target.value)} placeholder="Contact phone" style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                                          <button onClick={() => removeStopRow(idx)} style={{ padding: '6px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', cursor: 'pointer' }}>
+                                            <X size={12} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                        <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                                          + Add Stop
+                                        </button>
+                                        <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
+                                          {stopsSaving ? 'Saving...' : 'Save Stops'}
                                         </button>
                                       </div>
-                                    ))}
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                      <button onClick={addStopRow} style={{ padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
-                                        + Add Stop
-                                      </button>
-                                      <button onClick={() => saveStops(b.id)} disabled={stopsSaving} style={{ padding: '6px 12px', background: '#5d5fef', border: 'none', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, color: 'white', cursor: stopsSaving ? 'not-allowed' : 'pointer', opacity: stopsSaving ? 0.6 : 1 }}>
-                                        {stopsSaving ? 'Saving...' : 'Save Stops'}
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {b.child_requests && b.child_requests.length > 0 && (
+                      {b.child_requests && b.child_requests.length > 0 && (
                         <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -8596,7 +8596,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   {/* 6. Reschedule Policy Checklist */}
                   <div style={{ background: '#f8fafc', borderRadius: 14, padding: '1rem 1.25rem', border: '1px solid #e2e8f0' }}>
                     <div style={{ fontWeight: 800, fontSize: '0.8rem', color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
-                      ⚡ CalTrack Reschedule Policy
+                      ⚡ sevo Reschedule Policy
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.8rem', color: '#64748b' }}>
                       <div>✓ Free reschedule when requested at least 12 hours prior to start time</div>
@@ -9262,9 +9262,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       >
         {/* Sidebar: Full width on mobile when mobileView === 'menu', fixed width on desktop */}
         <div
-          className={`${
-            mobileView === 'menu' ? 'flex' : 'hidden md:flex'
-          } w-full md:w-[280px] shrink-0 bg-[var(--sevo-surface-raised,#f8fafc)] border-r border-[var(--sevo-border,#e2e8f0)] py-5 md:py-8 flex-col overflow-y-auto`}
+          className={`${mobileView === 'menu' ? 'flex' : 'hidden md:flex'
+            } w-full md:w-[280px] shrink-0 bg-[var(--sevo-surface-raised,#f8fafc)] border-r border-[var(--sevo-border,#e2e8f0)] py-5 md:py-8 flex-col overflow-y-auto`}
         >
           {/* Mobile Top Bar for Menu */}
           <div className="flex md:hidden items-center justify-between px-5 pb-3 border-b border-slate-200/80 mb-3">
@@ -9356,9 +9355,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
         {/* Content Area: Full width on mobile when mobileView === 'content', flex-1 on desktop */}
         <div
-          className={`${
-            mobileView === 'content' ? 'flex' : 'hidden md:flex'
-          } flex-1 flex-col overflow-y-auto p-4 sm:p-8 lg:p-10 bg-[var(--sevo-surface,white)] text-[var(--sevo-text-primary,#0B172A)]`}
+          className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'
+            } flex-1 flex-col overflow-y-auto p-4 sm:p-8 lg:p-10 bg-[var(--sevo-surface,white)] text-[var(--sevo-text-primary,#0B172A)]`}
         >
           {/* Top Mobile Bar with "< All Options" button, active title, and close button */}
           <div className="flex md:hidden items-center justify-between pb-3 mb-4 border-b border-slate-200 shrink-0">
@@ -9415,41 +9413,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 export function PeopleAlsoTake({ category, cart, setCart }) {
   const sliderRef = useRef(null);
 
-  const peopleAlsoTakeCatalog = useMemo(() => ({
-    ac: [
-      { id: "pat-ac-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-ac-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-ac-5", name: "AC Condenser Coil Jet Wash", price: 299, rating: "4.8", reviews: "15K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-ac-6", name: "AC Outdoor Unit Bracket Setup", price: 349, rating: "4.7", reviews: "11K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" }
-    ],
-    cleaning: [
-      { id: "pat-cl-1", name: "Sofa deep cleaning", price: 499, rating: "4.85", reviews: "210K", optionsText: "2 options", image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "pat-cl-2", name: "Kitchen deep cleaning", price: 999, rating: "4.81", reviews: "140K", optionsText: "3 options", image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "pat-cl-3", name: "Bathroom deep cleaning", price: 399, rating: "4.88", reviews: "310K", optionsText: null, image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "pat-cl-4", name: "Balcony & window cleaning", price: 299, rating: "4.75", reviews: "65K", optionsText: null, image: "/mockups/category_home_repair_3d.jpg" }
-    ],
-    painting: [
-      { id: "pat-pt-1", name: "Wall crack & dampness repair", price: 499, rating: "4.80", reviews: "55K", optionsText: "2 options", image: "/assets/Painting/Interior.webp" },
-      { id: "pat-pt-2", name: "Wood polishing & lacquer", price: 799, rating: "4.77", reviews: "40K", optionsText: "3 options", image: "/assets/Painting/Interior.webp" },
-      { id: "pat-pt-3", name: "Metal grill anti-rust painting", price: 399, rating: "4.74", reviews: "30K", optionsText: null, image: "/assets/Painting/Interior.webp" },
-      { id: "pat-pt-4", name: "Texture wall design", price: 1299, rating: "4.89", reviews: "75K", optionsText: "4 options", image: "/assets/Painting/Interior.webp" }
-    ],
-    plumbing: [
-      { id: "pat-pl-1", name: "Water heater geyser repair", price: 599, rating: "4.76", reviews: "100K", optionsText: "3 options", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "pat-pl-2", name: "Tap & mixer replacement", price: 199, rating: "4.82", reviews: "110K", optionsText: null, image: "/assets/hero_pro_electrical.jpg" },
-      { id: "pat-pl-3", name: "Drain block removal", price: 299, rating: "4.79", reviews: "150K", optionsText: "2 options", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "pat-pl-4", name: "Water tank cleaning", price: 899, rating: "4.84", reviews: "90K", optionsText: null, image: "/assets/hero_pro_electrical.jpg" }
-    ],
-    general: [
-      { id: "pat-gn-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-gn-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-gn-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "pat-gn-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "/assets/hvac/ac_inspection_banner_collage.png" }
-    ]
-  }), []);
-
   const catKey = useMemo(() => {
     const cartName = (cart && cart[0]?.name) || "";
     const raw = `${category?.name || ""} ${category?.id || ""} ${category?.slug || ""} ${cartName}`.toLowerCase();
@@ -9466,45 +9429,47 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
     let isMounted = true;
     async function loadServices() {
       try {
-        const res = await apiRequest("/catalog/services/");
+        const res = await apiRequest("/catalog/services/?status=ACTIVE");
         if (res && isMounted) {
-          const list = Array.isArray(res) ? res : (res.results || []);
+          const list = Array.isArray(res) ? res : (res.data || res.results || []);
           if (list.length > 0) {
             const filtered = list.filter(s => {
               const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
               const sName = (s.name || "").toLowerCase();
-              if (catKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac") || sName.includes("foam");
-              if (catKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
+              if (catKey === "ac") return sCat.includes("ac") || sCat.includes("appliance") || sCat.includes("hvac") || sName.includes("ac") || sName.includes("foam");
+              if (catKey === "cleaning") return sCat.includes("clean") || sCat.includes("pest") || sName.includes("clean");
               if (catKey === "painting") return sCat.includes("paint") || sName.includes("paint");
-              if (catKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
-              return true;
+              if (catKey === "plumbing") return sCat.includes("plumb") || sCat.includes("pipe") || sName.includes("tap") || sName.includes("leak");
+              return s.popular === true;
             });
 
             if (filtered.length > 0) {
-              const mapped = filtered.map((s, idx) => ({
+              const mapped = filtered.slice(0, 8).map((s, idx) => ({
                 id: s.id ? s.id.toString() : `pat-dyn-${idx}`,
                 name: s.name,
-                price: parseFloat(s.price) || 299,
-                rating: s.rating ? s.rating.toString() : "4.8",
-                reviews: s.reviews ? s.reviews.toString() : "10K",
-                optionsText: "2 options",
-                image: s.image || "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop"
+                price: Math.round(Number(s.price || s.base_price) || 299),
+                rating: s.rating ? parseFloat(s.rating).toFixed(1) : null,
+                reviews: s.reviews_count ? `${s.reviews_count} reviews` : null,
+                optionsText: s.optionsText || null,
+                image: resolveImageUrl(s.image || s.service_image, "/assets/hero_illustration.jpg")
               }));
               setDynamicBackendServices(mapped);
             }
           }
         }
       } catch (e) {
-        console.log("Using static curated category services", e);
+        console.warn("Dynamic catalog services in PeopleAlsoTake unavailable:", e);
       }
     }
     loadServices();
     return () => { isMounted = false; };
   }, [catKey, category, cart]);
 
-  const itemsList = dynamicBackendServices.length > 0
-    ? dynamicBackendServices
-    : (peopleAlsoTakeCatalog[catKey] || peopleAlsoTakeCatalog.general);
+  const itemsList = dynamicBackendServices;
+
+  if (!itemsList || itemsList.length === 0) {
+    return null;
+  }
 
   const scrollLeft = () => {
     if (sliderRef.current) {
@@ -9589,11 +9554,13 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
                 <h4 className="font-extrabold text-sm text-slate-900 leading-snug line-clamp-1">
                   {item.name}
                 </h4>
-                <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
-                  <Star size={13} className="fill-slate-900 text-slate-900" />
-                  <span className="font-bold text-slate-900">{item.rating}</span>
-                  <span className="text-slate-500 font-medium">({item.reviews})</span>
-                </div>
+                {item.rating && (
+                  <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
+                    <Star size={13} className="fill-slate-900 text-slate-900" />
+                    <span className="font-bold text-slate-900">{item.rating}</span>
+                    {item.reviews && <span className="text-slate-500 font-medium">({item.reviews})</span>}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between mt-4">
@@ -9681,7 +9648,7 @@ function QuickCommerceCartCheckout({
     try {
       initialSelected = getCustomerSelectedAddress(user?.id)
       coords = getCustomerCoordinates(user?.id)
-    } catch (_) {}
+    } catch (_) { }
 
     const defaultList = []
 
@@ -9752,7 +9719,7 @@ function QuickCommerceCartCheckout({
       })
       try {
         localStorage.setItem("calservice_veg_food_cart", JSON.stringify(nextFoodCart))
-      } catch {}
+      } catch { }
 
       if (nextCart.length === 0) {
         setTimeout(() => {
@@ -9778,7 +9745,7 @@ function QuickCommerceCartCheckout({
         fallbackLat = Number(storedCoords.lat)
         fallbackLng = Number(storedCoords.lng)
       }
-    } catch (_) {}
+    } catch (_) { }
     const newObj = {
       id: newId,
       type: newAddressType,
@@ -10309,7 +10276,7 @@ function QuickCommerceCartCheckout({
                 if (user?.id) {
                   setCustomerSelectedAddress(user.id, locObj)
                 }
-              } catch (e) {}
+              } catch (e) { }
               window.dispatchEvent(new Event("calservice_address_changed"))
             }
           }}
@@ -10529,95 +10496,6 @@ function StepWorkflowCheckout({
   const tipAmount = tip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, tip || 0)
   const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
-  const relatedServicesCatalog = {
-    ac: [
-      { id: "rel-ac-1", name: "Anti-Rust Protective Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "12K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "rel-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "24K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "rel-ac-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "18K", image: "/assets/hvac/ac_inspection_banner_collage.png" },
-      { id: "rel-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "9K", image: "/assets/hvac/ac_inspection_banner_collage.png" }
-    ],
-    cleaning: [
-      { id: "rel-cl-1", name: "Kitchen Sink Drain Degrease", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "15K", image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "rel-cl-2", name: "Balcony Pressure Wash Polish", price: 299, origPrice: 499, duration: "25 mins", rating: "4.7", reviews: "21K", image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "rel-cl-3", name: "Chimney Filter Oil Degreasing", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", reviews: "32K", image: "/mockups/category_home_repair_3d.jpg" },
-      { id: "rel-cl-4", name: "Ceiling Fan & Light Wipe", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "10K", image: "/mockups/category_home_repair_3d.jpg" }
-    ],
-    painting: [
-      { id: "rel-pt-1", name: "Anti-Dampness Primer Shield", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", reviews: "14K", image: "/assets/Painting/Interior.webp" },
-      { id: "rel-pt-2", name: "Furniture Masking Protection", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", reviews: "8K", image: "/assets/Painting/Interior.webp" },
-      { id: "rel-pt-3", name: "Wall Crack Filler (2 Walls)", price: 299, origPrice: 499, duration: "25 mins", rating: "4.9", reviews: "27K", image: "/assets/Painting/Interior.webp" },
-      { id: "rel-pt-4", name: "Post-Paint Floor Scrub Cleanup", price: 499, origPrice: 699, duration: "40 mins", rating: "4.8", reviews: "19K", image: "/assets/Painting/Interior.webp" }
-    ],
-    plumbing: [
-      { id: "rel-pl-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "16K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-pl-2", name: "Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", reviews: "22K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-pl-3", name: "High Pressure Pipe Seal Tape", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", reviews: "11K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-pl-4", name: "Tank Float Valve Safety Check", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "13K", image: "/assets/hero_pro_electrical.jpg" }
-    ],
-    electrical: [
-      { id: "rel-el-1", name: "MCB Trip Switch Safety Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "17K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-el-2", name: "Socket Voltage & Earthing Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "14K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-el-3", name: "Appliance Cable Concealing", price: 299, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "20K", image: "/assets/hero_pro_electrical.jpg" },
-      { id: "rel-el-4", name: "Fan Speed Regulator Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", reviews: "25K", image: "/assets/hero_pro_electrical.jpg" }
-    ],
-    masonry: [
-      { id: "rel-ms-1", name: "Tile Joint Waterproof Grout", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "30K", image: "/mockups/brick_wall_construction_red.jpg" },
-      { id: "rel-ms-2", name: "Debris Bagging & Transport Prep", price: 349, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "15K", image: "/mockups/brick_wall_construction_red.jpg" },
-      { id: "rel-ms-3", name: "Wall Plastering Touch-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.7", reviews: "18K", image: "/mockups/brick_wall_construction_red.jpg" },
-      { id: "rel-ms-4", name: "Laser Level Surface Scan Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "12K", image: "/mockups/brick_wall_construction_red.jpg" }
-    ],
-    general: [
-      { id: "rel-gn-1", name: "Post-Service Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "28K", image: "/assets/hero_illustration.jpg" },
-      { id: "rel-gn-2", name: "Express Priority Slot Assurance", price: 149, origPrice: 249, duration: "Instant", rating: "4.9", reviews: "50K", image: "/assets/hero_illustration.jpg" },
-      { id: "rel-gn-3", name: "Pre-Service Safety Inspection", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", reviews: "22K", image: "/assets/hero_illustration.jpg" },
-      { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "/assets/hero_illustration.jpg" }
-    ]
-  };
-
-  const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadBackendRelated() {
-      try {
-        const res = await apiRequest("/catalog/services/");
-        if (res && isMounted) {
-          const list = Array.isArray(res) ? res : (res?.data || res?.results || []);
-          if (list.length > 0) {
-            const filtered = list.filter(s => {
-              const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
-              const sName = (s.name || "").toLowerCase();
-              if (categoryKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac");
-              if (categoryKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
-              if (categoryKey === "painting") return sCat.includes("paint") || sName.includes("paint");
-              if (categoryKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
-              if (categoryKey === "electrical") return sCat.includes("electr") || sName.includes("electr");
-              if (categoryKey === "masonry") return sCat.includes("mason") || sName.includes("mason");
-              return true;
-            });
-
-            if (filtered.length > 0) {
-              const mapped = filtered.slice(0, 4).map((s, idx) => ({
-                id: s.id ? s.id.toString() : `backend-rel-${idx}`,
-                name: s.name,
-                price: parseFloat(s.price) || 249,
-                origPrice: Math.round((parseFloat(s.price) || 249) * 1.35),
-                duration: s.duration || "20 mins",
-                icon: s.image ? null : (categoryKey === "ac" ? "❄️" : categoryKey === "cleaning" ? "🧼" : categoryKey === "painting" ? "🎨" : "✨"),
-                image: s.image || "/assets/hero_illustration.jpg"
-              }));
-              setDynamicRelatedServices(mapped);
-            }
-          }
-        }
-      } catch (e) {
-        console.log("Using static category related services", e);
-      }
-    }
-    loadBackendRelated();
-    return () => { isMounted = false; };
-  }, [categoryKey, category]);
-
   const displayCategoryTitle = useMemo(() => {
     if (cart && cart.length > 0) {
       if (cart[0].categoryName) return cart[0].categoryName;
@@ -10655,33 +10533,6 @@ function StepWorkflowCheckout({
     });
   };
 
-  const relatedExtraServices = dynamicRelatedServices.length > 0
-    ? dynamicRelatedServices
-    : (relatedServicesCatalog[categoryKey] || relatedServicesCatalog.general);
-
-  const addExtraRelatedService = (extraItem) => {
-    setCart(prev => {
-      const currentCart = prev && prev.length > 0 ? prev : [];
-      const existing = currentCart.find(i => i.id === extraItem.id);
-      if (existing) {
-        return currentCart.map(i => i.id === extraItem.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...currentCart, { id: extraItem.id, name: extraItem.name, price: extraItem.price, origPrice: extraItem.origPrice, quantity: 1, duration: extraItem.duration, gst_rate: extraItem.gst_rate || 18, platform_fee: extraItem.platform_fee || 29 }];
-    });
-  };
-
-  const removeExtraRelatedService = (extraItemId) => {
-    setCart(prev => {
-      if (!prev) return [];
-      const existing = prev.find(i => i.id === extraItemId);
-      if (!existing) return prev;
-      if (existing.quantity <= 1) {
-        return prev.filter(i => i.id !== extraItemId);
-      }
-      return prev.map(i => i.id === extraItemId ? { ...i, quantity: i.quantity - 1 } : i);
-    });
-  };
-
   if (!cart || cart.length === 0) {
     return (
       <div className="w-full max-w-md mx-auto px-4 py-16 text-center font-sans text-slate-800">
@@ -10701,7 +10552,7 @@ function StepWorkflowCheckout({
               if (category?.isQuickCommerce || routerLocation.state?.isQuickCommerce) {
                 try {
                   localStorage.setItem("calservice_veg_food_cart", "{}")
-                } catch {}
+                } catch { }
                 navigate(routes.landing || "/home", {
                   replace: true,
                   state: {
@@ -10785,15 +10636,14 @@ function StepWorkflowCheckout({
 
                 return (
                   <>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${
-                      !hasAddress
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 font-bold ${!hasAddress
                         ? "bg-slate-100 text-slate-500"
                         : isHome
-                        ? "bg-amber-100 text-amber-700 border border-amber-200"
-                        : isWork
-                        ? "bg-blue-100 text-blue-700 border border-blue-200"
-                        : "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                    }`}>
+                          ? "bg-amber-100 text-amber-700 border border-amber-200"
+                          : isWork
+                            ? "bg-blue-100 text-blue-700 border border-blue-200"
+                            : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                      }`}>
                       {isHome ? <Home size={18} /> : isWork ? <Briefcase size={18} /> : <MapPin size={18} />}
                     </div>
 
@@ -10979,8 +10829,8 @@ function StepWorkflowCheckout({
                                 className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
                                   ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
                                   : isSel
-                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
-                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
                                   }`}
                               >
                                 {t}
@@ -12062,7 +11912,7 @@ export function BookingPage() {
   // Auto-sync customer name, phone, email, and address from authenticated user session
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) { }
+    try { savedPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
     if (user || savedPhone) {
       setFormData(prev => ({
         ...prev,
@@ -12466,7 +12316,7 @@ export function BookingPage() {
 
         if (groceryOutcome?.success) {
           resetDailyEssentialsCartCache()
-          try { localStorage.setItem("calservice_veg_food_cart", "{}") } catch {}
+          try { localStorage.setItem("calservice_veg_food_cart", "{}") } catch { }
         }
 
         if (serviceOutcome?.success) {
@@ -12580,7 +12430,7 @@ export function BookingPage() {
     if (isQuickCommerce && cart.length === 0) {
       try {
         localStorage.setItem("calservice_veg_food_cart", "{}")
-      } catch {}
+      } catch { }
       navigate(routes.landing || "/home", {
         replace: true,
         state: {
@@ -12614,7 +12464,7 @@ export function BookingPage() {
             }
             try {
               localStorage.setItem("calservice_veg_food_cart", JSON.stringify(restoredFoodCart))
-            } catch {}
+            } catch { }
             navigate(routes.landing || "/home", {
               replace: true,
               state: {
@@ -14569,7 +14419,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {/* Col 1 */}
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
-                    <CalTrackLogo size={24} />
+                    <SevoLogo size={24} />
                     <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
@@ -15317,7 +15167,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </ul>
                         </div>
 
-                        {/* HOW CALTRACK WORKS */}
+                        {/* HOW sevo WORKS */}
                         <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                           <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             How {String(activeDetailService.name || "").toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
@@ -17332,7 +17182,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                 {/* Col 1 */}
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
-                    <CalTrackLogo size={24} />
+                    <SevoLogo size={24} />
                     <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
@@ -20057,26 +19907,6 @@ export function CustomCleaningPackageModal({
 
   const rightColumnClass = "w-full lg:w-[380px] bg-[#FEFCF8] border border-[#E8E3DB] rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
-  if (activeSubTab === "Kitchen Cleaning") {
-    return <KitchenCleaningModal category={{ id: "kitchen_cleaning", name: "Kitchen Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Sofa Cleaning") {
-    return <SofaCleaningModal category={{ id: "sofa_cleaning", name: "Sofa Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Bathroom Cleaning") {
-    return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (!cleaningHasRealCatalogData && (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning")) {
-    const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
-    return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Cockroach & Termite Control") {
-    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-  if (activeSubTab === "Ants & Bed Bugs Control") {
-    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
-  }
-
   const contentMarkup = (
     <motion.div
       className={containerClass}
@@ -20163,17 +19993,15 @@ export function CustomCleaningPackageModal({
                       params.set("subTab", "AC Inspection");
                       navigate(`?${params.toString()}`, { replace: true });
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left ${
-                      isInspectionSelected
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left ${isInspectionSelected
                         ? "bg-emerald-50 border border-emerald-200"
                         : "bg-transparent border border-transparent hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
-                    <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg transition-all duration-200 ${
-                      isInspectionSelected
+                    <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg transition-all duration-200 ${isInspectionSelected
                         ? "bg-emerald-100 border-2 border-emerald-600"
                         : "bg-emerald-50 border border-emerald-100"
-                    }`}>
+                      }`}>
                       <Wrench className="w-5 h-5 text-emerald-700" strokeWidth={1.5} />
                     </div>
                     <span className="flex-1 min-w-0">
@@ -20189,11 +20017,10 @@ export function CustomCleaningPackageModal({
                           acInspectionTile.badge
                         )}
                       </span>
-                      <span className={`block text-xs leading-tight transition-colors ${
-                        isInspectionSelected
+                      <span className={`block text-xs leading-tight transition-colors ${isInspectionSelected
                           ? "text-emerald-700 font-extrabold"
                           : "text-emerald-700 font-bold"
-                      }`}>
+                        }`}>
                         {serviceEditMode ? (
                           <EditableText
                             active={true}
@@ -20229,11 +20056,10 @@ export function CustomCleaningPackageModal({
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left group ${
-                  isSelected
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left group ${isSelected
                     ? "bg-emerald-50 border border-emerald-200"
                     : "bg-transparent border border-transparent hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-white border border-slate-100 overflow-hidden">
                   <img
@@ -20272,11 +20098,10 @@ export function CustomCleaningPackageModal({
               <button
                 type="button"
                 onClick={() => setActiveSubServiceId("")}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                  activeSubServiceId === ""
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${activeSubServiceId === ""
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                     : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
-                }`}
+                  }`}
               >
                 All {activeSubTab}
               </button>
@@ -20285,11 +20110,10 @@ export function CustomCleaningPackageModal({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubServiceId(t.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                    activeSubServiceId === t.id
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${activeSubServiceId === t.id
                       ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                       : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700"
-                  }`}
+                    }`}
                 >
                   {t.label}
                 </button>
@@ -20739,11 +20563,10 @@ export function CustomCleaningPackageModal({
                                 alt={p.name}
                                 assetType="services"
                                 className="w-full h-full"
-                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
-                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                imgClassName={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
                                     ? "object-contain p-1"
                                     : "object-cover"
-                                }`}
+                                  }`}
                                 onSave={(v) => handleSaveServiceField(p, "image", v)}
                               />
                             ) : (
@@ -20754,11 +20577,10 @@ export function CustomCleaningPackageModal({
                                   e.target.onerror = null;
                                   e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                                 }}
-                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${
-                                  normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
+                                className={`w-full h-full object-center rounded-xl transition-transform duration-300 hover:scale-105 ${normalizedKey === "tv_display" || (typeof p.image === "string" && p.image.includes("/assets/tv/"))
                                     ? "object-contain p-1"
                                     : "object-cover"
-                                }`}
+                                  }`}
                               />
                             )}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
@@ -21064,7 +20886,7 @@ export function CustomCleaningPackageModal({
             {/* Col 1 */}
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
-                <CalTrackLogo size={24} />
+                <SevoLogo size={24} />
                 <span className="uc-paint-footer-brand">Sevo</span>
               </div>
               <p className="uc-paint-footer-brand-desc">
@@ -21271,20 +21093,29 @@ export function CustomCleaningPackageModal({
               {/* Painting detailed view details layout (what's included, what's not included, benefits, dynamic timeline steps, ratings stats, reviews, and FAQs) */}
               {(() => {
                 const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [], benefits: [], excludes: [], steps: [] };
-                const rating = 4.8;
-                const totalReviewsCount = 1200;
+                const realReviews = Array.isArray(selectedMasonDetail.reviews) && selectedMasonDetail.reviews.length > 0
+                  ? selectedMasonDetail.reviews
+                  : (extra.reviews || []);
+                const hasReviews = realReviews.length > 0;
+                let rating = selectedMasonDetail.rating ? parseFloat(selectedMasonDetail.rating) : 0;
+                if (!rating && hasReviews) {
+                  const validRatings = realReviews.map(r => parseFloat(r.rating)).filter(n => !isNaN(n));
+                  if (validRatings.length > 0) {
+                    rating = validRatings.reduce((a, b) => a + b, 0) / validRatings.length;
+                  }
+                }
+                const totalReviewsCount = realReviews.length;
+                const r5 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 5).length;
+                const r4 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 4).length;
+                const r3 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 3).length;
+                const r2 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 2).length;
+                const r1 = realReviews.filter(r => Math.round(parseFloat(r.rating) || 5) === 1).length;
 
-                const r5 = 1056; // 88%
-                const r4 = 96;   // 8%
-                const r3 = 24;   // 2%
-                const r2 = 12;   // 1%
-                const r1 = 12;   // 1%
-
-                const w5 = (r5 / totalReviewsCount) * 100;
-                const w4 = (r4 / totalReviewsCount) * 100;
-                const w3 = (r3 / totalReviewsCount) * 100;
-                const w2 = (r2 / totalReviewsCount) * 100;
-                const w1 = (r1 / totalReviewsCount) * 100;
+                const w5 = totalReviewsCount > 0 ? (r5 / totalReviewsCount) * 100 : 0;
+                const w4 = totalReviewsCount > 0 ? (r4 / totalReviewsCount) * 100 : 0;
+                const w3 = totalReviewsCount > 0 ? (r3 / totalReviewsCount) * 100 : 0;
+                const w2 = totalReviewsCount > 0 ? (r2 / totalReviewsCount) * 100 : 0;
+                const w1 = totalReviewsCount > 0 ? (r1 / totalReviewsCount) * 100 : 0;
 
                 return (
                   <div className="flex flex-col gap-6">
@@ -21368,59 +21199,67 @@ export function CustomCleaningPackageModal({
                     )}
 
                     {/* RATINGS & REVIEWS STATS BOX */}
-                    <div className="text-left pt-2 border-t border-[#E8E3DB]">
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
-                      <div className="flex items-center gap-5 p-4 border border-[#E8E3DB] rounded-2xl bg-white shadow-3xs">
-                        <div className="flex flex-col items-center min-w-[70px]">
-                          <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(2)}</span>
-                          <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
-                        </div>
-                        <div className="flex-1 flex flex-col gap-1.5">
-                          {[
-                            { star: 5, count: r5, width: w5 },
-                            { star: 4, count: r4, width: w4 },
-                            { star: 3, count: r3, width: w3 },
-                            { star: 2, count: r2, width: w2 },
-                            { star: 1, count: r1, width: w1 },
-                          ].map(row => (
-                            <div key={row.star} className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                              <span className="min-w-[20px] flex items-center gap-0.5 text-slate-400">
-                                <Star size={10} className="fill-slate-400 text-slate-400" /> {row.star}
-                              </span>
-                              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-                                <div style={{ width: `${row.width}%` }} className="h-full bg-slate-700 rounded-full" />
+                    {hasReviews && (
+                      <div className="text-left pt-2 border-t border-[#E8E3DB]">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
+                        <div className="flex items-center gap-5 p-4 border border-[#E8E3DB] rounded-2xl bg-white shadow-3xs">
+                          <div className="flex flex-col items-center min-w-[70px]">
+                            <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(1)}</span>
+                            <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
+                          </div>
+                          <div className="flex-1 flex flex-col gap-1.5">
+                            {[
+                              { star: 5, count: r5, width: w5 },
+                              { star: 4, count: r4, width: w4 },
+                              { star: 3, count: r3, width: w3 },
+                              { star: 2, count: r2, width: w2 },
+                              { star: 1, count: r1, width: w1 },
+                            ].map(row => (
+                              <div key={row.star} className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                <span className="min-w-[20px] flex items-center gap-0.5 text-slate-400">
+                                  <Star size={10} className="fill-slate-400 text-slate-400" /> {row.star}
+                                </span>
+                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
+                                  <div style={{ width: `${row.width}%` }} className="h-full bg-slate-700 rounded-full" />
+                                </div>
+                                <span className="min-w-[30px] text-right text-[9px] text-slate-400">{row.count.toLocaleString()}</span>
                               </div>
-                              <span className="min-w-[30px] text-right text-[9px] text-slate-400">{row.count.toLocaleString()}</span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()}
 
               {/* Customer Reviews List */}
-              <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                {(() => {
-                  const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
-                  return extra.reviews.map((rev, idx) => (
-                    <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4 space-y-1.5 mb-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
-                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
-                          <Star className="fill-indigo-600 text-indigo-600" size={12} />
-                          <span>{rev.rating}</span>
+              {(() => {
+                const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
+                const realReviews = Array.isArray(selectedMasonDetail.reviews) && selectedMasonDetail.reviews.length > 0
+                  ? selectedMasonDetail.reviews
+                  : (extra.reviews || []);
+                if (!realReviews.length) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                    {realReviews.map((rev, idx) => (
+                      <div key={idx} className="bg-[#F5F0E6]/50 border border-[#E8E3DB] rounded-2xl p-4 space-y-1.5 mb-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                          <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
+                            <Star className="fill-indigo-600 text-indigo-600" size={12} />
+                            <span>{rev.rating}</span>
+                          </div>
                         </div>
+                        <p className="text-xs text-slate-600 leading-relaxed italic">
+                          "{rev.comment || rev.text}"
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed italic">
-                        "{rev.comment || rev.text}"
-                      </p>
-                    </div>
-                  ));
-                })()}
-              </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Frequently Asked Questions */}
               <div className="space-y-2.5 border-t border-[#E8E3DB] pt-5 text-left">

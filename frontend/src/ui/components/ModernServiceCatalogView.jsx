@@ -56,64 +56,7 @@ function resolveServiceIcon(name = "") {
   return Wrench
 }
 
-function getServiceDefaultVariants(serviceName = "") {
-  const n = (serviceName || "").toLowerCase()
-  if (n.includes("full home") || n.includes("home cleaning")) {
-    return [
-      { id: "apartment", label: "Full Apartment", keywords: ["apartment", "bhk", "flat", "furnished"], description: "Complete deep cleaning for 1, 2, 3+ BHK apartments" },
-      { id: "bungalow", label: "Full Bungalow / Duplex", keywords: ["bungalow", "duplex", "villa", "independent"], description: "Multi-floor villa and independent house deep cleaning" },
-      { id: "partial", label: "Partial Home Cleaning", keywords: ["partial", "room", "balcony", "window"], description: "Focused cleaning for specific rooms, balconies and areas" },
-    ]
-  }
-  if (n.includes("bath")) {
-    return [
-      { id: "standard", label: "Standard Clean", keywords: ["standard", "regular", "basic"], description: "Deep cleaning of floor tiles, wall tiles, basin & WC" },
-      { id: "intense", label: "Intense Stain Removal", keywords: ["intense", "stain", "hard water", "deep"], description: "Heavy hard-water and limescale stain removal with machine scrubbing" },
-      { id: "movein", label: "Move-in Deep Clean", keywords: ["move-in", "movein", "vacant"], description: "Thorough sanitization before moving into a new home" },
-    ]
-  }
-  if (n.includes("kitchen")) {
-    return [
-      { id: "standard", label: "Standard Cleaning", keywords: ["standard", "regular"], description: "Surface degreasing of slab, sink, gas stove & exterior cabinets" },
-      { id: "deep", label: "Chimney & Degreasing", keywords: ["chimney", "oil", "grease", "deep"], description: "Heavy oil and grease removal from tiles and chimney" },
-      { id: "complete", label: "Full Modular Kitchen", keywords: ["modular", "complete", "inside", "full"], description: "Inside-out deep scrub including shelves, trolleys and appliances" },
-    ]
-  }
-  if (n.includes("sofa") || n.includes("carpet") || n.includes("upholstery")) {
-    return [
-      { id: "sofa", label: "Sofa Shampooing", keywords: ["sofa", "couch", "seating"], description: "Injection-extraction deep foam wash for fabric sofas" },
-      { id: "cushion", label: "Cushion & Recliner", keywords: ["cushion", "recliner", "chair"], description: "Delicate dry cleaning and stain treatment" },
-      { id: "carpet", label: "Carpet Deep Clean", keywords: ["carpet", "rug", "mat"], description: "High-power dust extraction and shampooing" },
-    ]
-  }
-  if (n.includes("ac") && (n.includes("service") || n.includes("clean"))) {
-    return [
-      { id: "powerjet", label: "Power Jet Wash", keywords: ["power jet", "jet", "water"], description: "High-pressure water jet cleaning of indoor and outdoor coils" },
-      { id: "foam", label: "Foam Jet Deep Wash", keywords: ["foam", "antibacterial", "deep"], description: "Antibacterial foam wash for 2x deeper dirt removal" },
-      { id: "master", label: "Master Service + Checkup", keywords: ["master", "inspection", "comprehensive"], description: "Complete cleaning plus 12-point diagnostic check" },
-    ]
-  }
-  if (n.includes("ac") && (n.includes("repair") || n.includes("diagnos"))) {
-    return [
-      { id: "lesscooling", label: "Less / No Cooling", keywords: ["cooling", "compressor", "gas"], description: "Compressor, fan motor and gas pressure diagnosis" },
-      { id: "waterleak", label: "Water Leakage", keywords: ["leak", "water", "drain", "drip"], description: "Drain tray, drain pipe blockage and coil freezing fix" },
-      { id: "noise", label: "Noise / Smell / Power", keywords: ["noise", "smell", "power", "vibration"], description: "Vibration dampening, blower cleaning and electrical check" },
-    ]
-  }
-  if (n.includes("paint")) {
-    return [
-      { id: "fullhome", label: "Full Home Repaint", keywords: ["full home", "entire", "apartment"], description: "Laser measurement consultation for whole apartment" },
-      { id: "rooms", label: "1-2 Rooms / Rental", keywords: ["room", "rental", "tenant"], description: "Quick refresh painting for tenant handover" },
-      { id: "waterproofing", label: "Waterproofing & Seepage", keywords: ["waterproofing", "damp", "seepage", "terrace"], description: "Crack filling, dampness treatment and waterproof primer" },
-    ]
-  }
-  if (n.includes("pest")) {
-    return [
-      { id: "cockroach", label: "Cockroach Control", keywords: ["cockroach", "roach", "gel"], description: "Odorless gel baiting plus crack spray treatment" },
-      { id: "termite", label: "Termite Protection", keywords: ["termite", "wood", "drill"], description: "Drill-fill-seal barrier protection with warranty" },
-      { id: "bedbug", label: "Bed Bugs & Ants", keywords: ["bed bug", "ant", "spray"], description: "2-session intensive spray treatment for mattresses and furniture" },
-    ]
-  }
+function getServiceDefaultVariants() {
   return []
 }
 
@@ -605,8 +548,8 @@ export function ModernServiceCatalogView({
         setServices(matchedSubs)
         setPackages(allPkgs)
 
-        // Set initial active sub-service, respecting url subtab if provided
-        const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab")
+        // Set initial active sub-service, respecting url subtab or service if provided
+        const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab") || searchParams.get("service")
         let initialSub = initialSubFromCatKey || matchedSubs[0]
         if (urlSubTab) {
           const found = matchedSubs.find(s =>
@@ -856,204 +799,111 @@ export function ModernServiceCatalogView({
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
-      {/* ── 1. Compact Modern Category Header (Brings packages immediately above the fold) ── */}
-      <div className="bg-white border-b border-slate-200/80 sticky top-0 z-30 backdrop-blur-md bg-white/95">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5">
+      {/* ── 1. Clean Category Navigation & Trust Header ── */}
+      <div className="bg-white border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Back button + Title + Badges */}
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Left: Back button + Title + Subservice breadcrumb */}
+            <div className="flex items-center gap-3 min-w-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 -ml-1 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer shrink-0"
                 aria-label="Back to home"
               >
-                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                <ChevronLeft className="w-4 h-4" />
+                <span>All Services</span>
               </button>
+              <span className="text-slate-300 font-bold hidden sm:inline">/</span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">
+                  <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
                     {category?.name || "Professional Services"}
                   </h1>
                   {activeSubService && (
                     <>
-                      <span className="text-slate-300 font-bold hidden sm:inline">/</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg truncate hidden sm:inline">
+                      <span className="text-slate-300 font-bold hidden sm:inline">•</span>
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg truncate hidden sm:inline">
                         {activeSubService.name}
                       </span>
                     </>
                   )}
-                  {Boolean(category?.rating) && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full shrink-0">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
-                      {category.rating} {category.jobs_count_str ? `• ${category.jobs_count_str}` : ""}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsChangeServiceModalOpen(true)}
-                    className="text-[10px] sm:text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50/90 hover:bg-emerald-100/80 border border-emerald-200/80 px-2.5 py-0.5 rounded-full transition-colors cursor-pointer shrink-0 shadow-2xs"
-                  >
-                    Change Service
-                  </button>
                 </div>
-                <p className="hidden sm:block text-xs text-slate-500 truncate max-w-xl mt-0.5">
-                  {category?.desc || category?.description || "Professional doorstep service with 30-day revisit warranty"}
-                </p>
               </div>
             </div>
 
-            {/* Right: Sleek Trust Badges */}
-            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none py-0.5 shrink-0">
-              <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>30-Day Guarantee</span>
+            {/* Right: Calm Guarantee & Change Category link */}
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>30-Day Revisit Guarantee</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                <span>On-Time Arrival</span>
-              </span>
-              <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
-                <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Fixed Rate Card</span>
-              </span>
+              <span className="text-slate-200 hidden sm:inline">|</span>
+              <button
+                type="button"
+                onClick={() => setIsChangeServiceModalOpen(true)}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+              >
+                Change Service
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
+        {/* ── Horizontal Sub-Service Switcher (Clean, intuitive, zero-admin feel) ── */}
+        {services.length > 0 && !isGoodsTransportCategory && (
+          <div className="w-full overflow-x-auto scrollbar-none py-1 flex items-center gap-2 pb-3 mb-5 border-b border-slate-200/80">
+            {services.map(sub => {
+              const isSelected = activeSubService?.id === sub.id
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveSubService(sub)
+                    setSearchParams((prev) => {
+                      const next = new URLSearchParams(prev)
+                      next.set("subtab", sub.name)
+                      next.set("subTab", sub.name)
+                      return next
+                    }, { replace: true })
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-emerald-700 border-emerald-700 text-white shadow-xs font-black ring-2 ring-emerald-700/20"
+                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  {sub.image && (
+                    <img
+                      src={resolveImageUrl(sub.image)}
+                      alt={sub.name}
+                      className="w-4 h-4 object-contain rounded-full bg-white/80"
+                    />
+                  )}
+                  <span>{sub.name}</span>
+                </button>
+              )
+            })}
+            {isAcApplianceCategory && (
+              <button
+                type="button"
+                onClick={() => navigate("/ac-inspection")}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs font-bold shrink-0 shadow-xs cursor-pointer transition-colors"
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Need Diagnosis? Book Inspection</span>
+              </button>
+            )}
+          </div>
+        )}
 
-        {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
-          {/* ════ SERVICES SUBTABS (Mobile Horizontal Bar + Desktop Vertical Sidebar) ════ */}
-          {services.length > 0 && !isGoodsTransportCategory && (
-            <>
-              {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile, Blinkit style) */}
-              <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-1.5 sm:py-2 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
-                {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
-                  return (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveSubService(sub)
-                        setSearchParams((prev) => {
-                          const next = new URLSearchParams(prev)
-                          next.set("subtab", sub.name)
-                          next.set("subTab", sub.name)
-                          return next
-                        }, { replace: true })
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-bold shrink-0 transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs font-black"
-                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {sub.image && (
-                        <img
-                          src={resolveImageUrl(sub.image)}
-                          alt={sub.name}
-                          className="w-4 h-4 object-contain rounded-full bg-white/80"
-                        />
-                      )}
-                      <span>{sub.name}</span>
-                    </button>
-                  )
-                })}
-                {isAcApplianceCategory && (
-                  <button
-                    type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shrink-0 shadow-xs cursor-pointer"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Book Inspection</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Desktop Vertical Services Sidebar */}
-              <div className="hidden lg:flex lg:w-[240px] shrink-0 flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 pb-1">
-                  Services
-                </h3>
-                {services.map(sub => {
-                  const isSelected = activeSubService?.id === sub.id
-                  const IconComp = resolveServiceIcon(sub.name)
-
-                  return (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveSubService(sub)
-                        setSearchParams((prev) => {
-                          const next = new URLSearchParams(prev)
-                          next.set("subtab", sub.name)
-                          next.set("subTab", sub.name)
-                          return next
-                        }, { replace: true })
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
-                        isSelected
-                          ? "bg-emerald-50/90 border-emerald-600 shadow-xs"
-                          : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200 text-slate-700"
-                      }`}
-                    >
-                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
-                        isSelected ? "bg-white text-emerald-700 shadow-xs border border-emerald-200" : "bg-slate-50 text-slate-600"
-                      }`}>
-                        {sub.image ? (
-                          <img
-                            src={resolveImageUrl(sub.image)}
-                            alt={sub.name}
-                            className="w-6 h-6 object-contain"
-                          />
-                        ) : (
-                          <IconComp className="w-5 h-5" />
-                        )}
-                      </div>
-                      <span className={`flex-1 min-w-0 text-xs leading-snug ${
-                        isSelected ? "font-black text-emerald-900" : "font-bold text-slate-700"
-                      }`}>
-                        {sub.name}
-                      </span>
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
-                    </button>
-                  )
-                })}
-
-                {/* Special, not-from-admin "AC Inspection / Estimation" entry */}
-                {isAcApplianceCategory && (
-                  <button
-                    type="button"
-                    onClick={() => navigate("/ac-inspection")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
-                  >
-                    <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
-                      <AlertCircle className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="block text-xs font-black text-amber-900 leading-snug">
-                        Not Sure? Book Inspection
-                      </span>
-                      <span className="block text-[10px] font-semibold text-amber-700">
-                        Certified diagnostic visit
-                      </span>
-                    </div>
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ════ CONTENT + BOOKING SUMMARY ════ */}
-          <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* ════ LEFT COLUMN (~68% width / 8 cols) ════ */}
-          <div className="lg:col-span-8 space-y-4">
+        {/* ── Main Layout: Centered Packages or Packages + Cart Summary ── */}
+        <div className={`w-full items-start ${cartItems.length > 0 ? "grid grid-cols-1 lg:grid-cols-12 gap-8" : "max-w-4xl mx-auto"}`}>
+          {/* ════ PACKAGES COLUMN ════ */}
+          <div className={cartItems.length > 0 ? "lg:col-span-8 space-y-4" : "w-full space-y-4"}>
 
             {/* Goods & Transport horizontal service pills -- replaces the
                 vertical Services sidebar (hidden above for this category)
@@ -1371,19 +1221,23 @@ export function ModernServiceCatalogView({
 
                           {/* Metrics: Rating & Duration in a single clean line */}
                           <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                            {Boolean(pkg.rating || category?.rating) && (
-                              <span className="inline-flex items-center gap-1 font-bold text-slate-800">
-                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                                <span>{pkg.rating || category.rating || "4.8"}</span>
-                                <span className="text-slate-400 font-normal">
-                                  {pkg.reviews_count ? `(${pkg.reviews_count})` : "(12K+)"}
+                            {Boolean(pkg.rating) && (
+                              <>
+                                <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                  <span>{pkg.rating}</span>
+                                  {pkg.reviews_count ? (
+                                    <span className="text-slate-400 font-normal">
+                                      ({pkg.reviews_count})
+                                    </span>
+                                  ) : null}
                                 </span>
-                              </span>
+                                <span>•</span>
+                              </>
                             )}
-                            {Boolean(pkg.rating || category?.rating) && <span>•</span>}
                             <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
                               <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{pkg.duration || "45–60 min"}</span>
+                              <span>{pkg.duration || "Standard Service"}</span>
                             </span>
                           </div>
 
@@ -1531,86 +1385,9 @@ export function ModernServiceCatalogView({
 
           </div>
 
-          {/* ════ RIGHT COLUMN (~32% width / 4 cols, sticky sidebar on desktop, hidden on mobile) ════ */}
-          <div className="hidden lg:block lg:col-span-4 space-y-4 lg:sticky lg:top-24">
-            {cartItems.length === 0 ? (
-              /* State A: SEVO Assurance & Service Guarantees (Discovery Mode) */
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-5">
-                <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900 leading-tight">
-                      The SEVO Promise
-                    </h3>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      Doorstep service you can trust
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3.5 text-xs">
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
-                      🛡️
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 leading-tight">30-Day Revisit Guarantee</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        Free technician revisit if the exact same issue recurs within 30 days.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
-                      ⭐
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 leading-tight">Verified & Trained Experts</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        Strictly background-checked technicians with standard tools and uniforms.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
-                      ₹
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 leading-tight">Transparent Upfront Rates</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        Fixed rate cards with no surprise charges or hidden consultation fees.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs">
-                      🔐
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 leading-tight">Secure Doorstep Start OTP</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        Work begins only after you verify the professional via your booking OTP.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                  <p className="text-xs font-bold text-slate-700">
-                    Ready to book?
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Click "+ Add" on any package to start your order.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              /* State B: Active Cart Summary (Selection Mode) */
+          {/* ════ RIGHT COLUMN: Active Cart Summary (Only rendered when items are in cart) ════ */}
+          {cartItems.length > 0 && (
+            <div className="hidden lg:block lg:col-span-4 space-y-4 lg:sticky lg:top-24">
               <div id="booking-summary-card" className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -1717,20 +1494,19 @@ export function ModernServiceCatalogView({
                   <span>Verified pricing • 30-day doorstep warranty</span>
                 </div>
               </div>
-            )}
 
-            {/* Support Callout */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                <Headphones className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-black text-slate-800">Need help booking?</div>
-                <div className="text-[11px] text-slate-500">Hosur customer care: 080-4824-SEVO</div>
+              {/* Support Callout */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                  <Headphones className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-black text-slate-800">Need help booking?</div>
+                  <div className="text-[11px] text-slate-500">Hosur customer care: 080-4824-SEVO</div>
+                </div>
               </div>
             </div>
-          </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -2015,22 +1791,15 @@ export function ModernServiceCatalogView({
                   </div>
                 </div>
 
-                {/* 5. Customer Reviews & Rating */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex text-amber-400">
-                        {"★★★★★".split("").map((s, i) => (
-                          <span key={i} className="text-sm leading-none">{s}</span>
-                        ))}
-                      </div>
-                      <span className="text-xs font-black text-slate-900">4.8 / 5</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-slate-500">Based on 1,240+ verified bookings</span>
+                {/* 5. SEVO Service Standards */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-black text-slate-900">SEVO Certified Service Quality</span>
                   </div>
-                  <div className="text-xs text-slate-600 italic border-t border-slate-200/60 pt-2">
-                    "Specialist arrived promptly with complete tools, explained the diagnostic findings clearly, and completed the repair neatly. Highly recommended!"
-                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Delivered by verified, background-checked professionals using standardized tools and transparent pricing.
+                  </p>
                 </div>
               </div>
 

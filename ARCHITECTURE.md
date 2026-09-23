@@ -1,11 +1,11 @@
-# CalTrack High-Level Architecture Documentation
+# sevo High-Level Architecture Documentation
 
 ## System Topology & Architecture Overview
 
-CalTrack is structured as a high-performance, maintainable **Modular Monolith** designed for multi-tenant service workforce management, dispatch, live GPS tracking, billing, inventory, and payroll.
+sevo is structured as a high-performance, maintainable **Modular Monolith** designed for multi-tenant service workforce management, dispatch, live GPS tracking, billing, inventory, and payroll.
 
 ```text
-CalTrack Ecosystem
+sevo Ecosystem
 │
 ├── Frontend (React + Vite + TailwindCSS)
 │   ├── App & Router (`src/app/`, `src/app/router/`)

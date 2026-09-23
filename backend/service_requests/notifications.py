@@ -23,7 +23,7 @@ def build_customer_tracking_url(service_request_or_token) -> str:
     Construct the canonical public customer live tracking URL.
     - Resolves the unguessable UUID tracking_token (never sequential ServiceRequest IDs).
     - Respects settings.FRONTEND_URL.
-    - Handles production base paths (/Caltrack) gracefully whether FRONTEND_URL
+    - Handles production base paths (/sevo) gracefully whether FRONTEND_URL
       already includes it or whether it's configured via FRONTEND_BASE_PATH / FRONTEND_SUBPATH.
     - Guaranteed to point to the existing public tracking page and work after reload.
     """
@@ -42,9 +42,9 @@ def build_customer_tracking_url(service_request_or_token) -> str:
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
     subpath = os.getenv("FRONTEND_SUBPATH", "").strip().rstrip("/")
     if not subpath:
-        # In production, Vite builds with base '/Caltrack/' and main.jsx uses basename '/Caltrack'
-        if not getattr(settings, "DEBUG", False) and "/Caltrack" not in frontend_url and "localhost" not in frontend_url:
-            subpath = os.getenv("FRONTEND_BASE_PATH", "/Caltrack").strip().rstrip("/")
+        # In production, Vite builds with base '/sevo/' and main.jsx uses basename '/sevo'
+        if not getattr(settings, "DEBUG", False) and "/sevo" not in frontend_url and "localhost" not in frontend_url:
+            subpath = os.getenv("FRONTEND_BASE_PATH", "/sevo").strip().rstrip("/")
     if subpath and not subpath.startswith("/"):
         subpath = f"/{subpath}"
     if subpath and frontend_url.endswith(subpath):
@@ -852,7 +852,7 @@ def notify_reschedule_created(reschedule_request) -> None:
         logger.info("[Reschedule] No admin email found for booking %s", booking.request_id)
         return
 
-    subject = f"[CalTrack] Reschedule Request — {booking.request_id}"
+    subject = f"[sevo] Reschedule Request — {booking.request_id}"
     try:
         _sent = send_mail(
             subject,
@@ -891,7 +891,7 @@ def notify_reschedule_decision(reschedule_request) -> None:
         return
 
     decision = reschedule_request.status  # APPROVED or REJECTED
-    subject = f"[CalTrack] Reschedule {decision.title()} — {booking.request_id}"
+    subject = f"[sevo] Reschedule {decision.title()} — {booking.request_id}"
     if decision == "APPROVED":
         body = (
             f"Great news! Your reschedule request for booking {booking.request_id} has been APPROVED.\n\n"
@@ -927,7 +927,7 @@ def notify_employee_reschedule_request(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] New Schedule Confirmation Required — {booking.request_id}"
+    subject = f"[sevo] New Schedule Confirmation Required — {booking.request_id}"
     body = _render_html_template(
         title="Reschedule Confirmation Required",
         greeting=f"Hello {emp.user.get_full_name() or emp.user.username},",
@@ -971,7 +971,7 @@ def notify_admin_employee_rejection(reschedule_request) -> None:
 
     emp = reschedule_request.proposed_technician
     emp_name = emp.user.get_full_name() if emp else "Employee"
-    subject = f"[CalTrack] Employee Declined Reschedule — {booking.request_id} (Action Required)"
+    subject = f"[sevo] Employee Declined Reschedule — {booking.request_id} (Action Required)"
     body = (
         f"An employee has declined the reschedule assignment.\n\n"
         f"Booking: {booking.request_id}\n"
@@ -1000,7 +1000,7 @@ def notify_customer_slot_suggestion(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] Admin Suggested a New Slot — {booking.request_id}"
+    subject = f"[sevo] Admin Suggested a New Slot — {booking.request_id}"
     body = _render_html_template(
         title="New Slot Suggested",
         greeting=f"Hello {reschedule_request.requested_by.get_full_name() or 'Customer'},",
@@ -1036,7 +1036,7 @@ def notify_customer_rescheduled(reschedule_request) -> None:
 
     booking = reschedule_request.booking
     emp = reschedule_request.proposed_technician
-    subject = f"[CalTrack] Booking Rescheduled Successfully — {booking.request_id}"
+    subject = f"[sevo] Booking Rescheduled Successfully — {booking.request_id}"
     body = _render_html_template(
         title="Booking Rescheduled",
         greeting=f"Hello {reschedule_request.requested_by.get_full_name() or 'Customer'},",
@@ -1071,7 +1071,7 @@ def notify_customer_reschedule_rejected(reschedule_request) -> None:
         return
 
     booking = reschedule_request.booking
-    subject = f"[CalTrack] Reschedule Request Rejected — {booking.request_id}"
+    subject = f"[sevo] Reschedule Request Rejected — {booking.request_id}"
     body = (
         f"Unfortunately, your reschedule request for booking {booking.request_id} could not be approved.\n\n"
         f"Reason: {reschedule_request.get_rejection_reason_display() if reschedule_request.rejection_reason else 'N/A'}\n"
@@ -1172,7 +1172,7 @@ def notify_customer_cancelled(service_request, reason="") -> None:
         logger.info("[Cancellation] Customer opted out of booking_confirmations -- skipping cancellation notification for booking %s.", service_request.request_id)
         return
 
-    subject = f"[CalTrack] Booking Cancelled — {service_request.request_id}"
+    subject = f"[sevo] Booking Cancelled — {service_request.request_id}"
     body = _render_html_template(
         title="Booking Cancelled",
         greeting=f"Hello {customer.get_full_name() if customer else 'Customer'},",
@@ -1236,7 +1236,7 @@ def notify_customer_technician_delayed(service_request, reason="", delay_count=1
         )
         return
 
-    subject = f"[CalTrack] Service Delay Update — {service_request.request_id} (#{delay_count})"
+    subject = f"[sevo] Service Delay Update — {service_request.request_id} (#{delay_count})"
 
     # Persistent dedup: NotificationOutbox already records every send, so it
     # doubles as the "have we told them about this delay yet?" ledger without
@@ -1305,7 +1305,7 @@ def notify_refund_status_change(refund_request) -> None:
 
     status = refund_request.status
     booking = refund_request.booking
-    subject = f"[CalTrack] Refund {status.title()} — {booking.request_id}"
+    subject = f"[sevo] Refund {status.title()} — {booking.request_id}"
 
     status_messages = {
         "APPROVED":  f"Your refund of ₹{refund_request.amount} for booking {booking.request_id} has been APPROVED and will be processed shortly.",
@@ -1346,7 +1346,7 @@ def notify_complaint_created(complaint) -> None:
 
     customer = complaint.raised_by
     booking_ref = complaint.booking.request_id if complaint.booking else "General"
-    subject = f"[CalTrack] New Complaint — {complaint.get_category_display()} (Booking: {booking_ref})"
+    subject = f"[sevo] New Complaint — {complaint.get_category_display()} (Booking: {booking_ref})"
     body = (
         f"A new complaint has been filed.\n\n"
         f"Category: {complaint.get_category_display()}\n"
@@ -1374,7 +1374,7 @@ def notify_complaint_status_change(complaint) -> None:
         logger.info("[Complaint] Customer opted out of complaint_updates -- skipping status change notification.")
         return
 
-    subject = f"[CalTrack] Complaint Update — {complaint.get_status_display()}"
+    subject = f"[sevo] Complaint Update — {complaint.get_status_display()}"
     body = (
         f"Your complaint has been updated.\n\n"
         f"Category: {complaint.get_category_display()}\n"
@@ -1410,7 +1410,7 @@ def notify_complaint_response(complaint, response) -> None:
     for email in recipients:
         try:
             _sent = send_mail(
-                f"[CalTrack] New Response on Your Complaint",
+                f"[sevo] New Response on Your Complaint",
                 f"A new response has been added to your complaint.\n\n{response.message}",
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
@@ -1433,7 +1433,7 @@ def notify_complaint_assigned(complaint) -> None:
     customer = complaint.raised_by
     try:
         _sent = send_mail(
-            "[CalTrack] Complaint Assigned To You",
+            "[sevo] Complaint Assigned To You",
             (
                 f"A complaint has been assigned to you.\n\n"
                 f"Category: {complaint.get_category_display()}\n"

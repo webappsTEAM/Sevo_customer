@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-const filepath = 'c:/Users/user/Caltrackk/Caltrack/frontend/src/ui/pages/BookingPage.jsx';
+const filepath = 'c:/Users/user/sevok/sevo/frontend/src/ui/pages/BookingPage.jsx';
 const lines = fs.readFileSync(filepath, 'utf8').split('\n');
 
 lines.forEach((line, idx) => {

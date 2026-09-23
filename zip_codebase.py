@@ -17,7 +17,13 @@ import zipfile
 # Determine project root directory (directory where this script is located)
 SCRIPT_DIR = Path(__file__).resolve().parent
 CUSTOMER_DIR = (SCRIPT_DIR.parent.parent / "CUS" / "calservices").resolve() if (SCRIPT_DIR.parent.parent / "CUS" / "calservices").exists() else Path(r"C:\Users\user\Desktop\SEVO\CUS\calservices").resolve()
-VENDOR_DIR = (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").resolve() if (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").exists() else Path(r"C:\Users\user\Desktop\SEVO\VEN\calservice-vendor").resolve()
+VENDOR_DIR = (
+    (SCRIPT_DIR.parent.parent / "VEN" / "vendor").resolve()
+    if (SCRIPT_DIR.parent.parent / "VEN" / "vendor").exists()
+    else (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").resolve()
+    if (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").exists()
+    else Path(r"C:\Users\user\Desktop\SEVO\VEN\vendor").resolve()
+)
 
 # Default directory patterns to exclude (installables, bloat, caches, build artifacts)
 DEFAULT_EXCLUDE_DIRS = {

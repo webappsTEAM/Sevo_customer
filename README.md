@@ -1,6 +1,6 @@
-# QuickTIMS / CalTrack — Developer Onboarding & Setup Guide
+# QuickTIMS / sevo — Developer Onboarding & Setup Guide
 
-Welcome to the **QuickTIMS / CalTrack** repository! This is a multi-tenant workforce management SaaS platform designed to handle employee timesheets (with GPS + photo verification), scheduling, tasks, leaves, and payroll.
+Welcome to the **QuickTIMS / sevo** repository! This is a multi-tenant workforce management SaaS platform designed to handle employee timesheets (with GPS + photo verification), scheduling, tasks, leaves, and payroll.
 
 ---
 

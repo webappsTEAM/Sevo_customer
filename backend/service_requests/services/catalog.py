@@ -319,16 +319,38 @@ def _logistics_tier_for_package(package):
     return None
 
 
-def _logistics_category_for_service_slug(svc_slug):
+def _logistics_category_for_service_slug(svc_slug, service=None, package=None):
     """
-    LogisticsCategory a Service maps to by slug substring, or None if it
-    isn't a Goods & Transport service at all. Shared by create_package and
-    update_package's tier-creation fallback so the two paths can never
-    disagree about which packages are "Goods & Transport".
+    LogisticsCategory a Service or Package maps to canonically.
+    Prioritizes:
+    1. Direct ServiceTier link on package (if present)
+    2. Service's parent CatalogCategory slug
+    3. Explicit service slug matching
     """
     from logistics.models import LogisticsCategory
 
-    svc_slug = (svc_slug or "").lower()
+    if package and getattr(package, "gt_service_tier_id", None):
+        try:
+            from logistics.models import ServiceTier
+            tier = ServiceTier.objects.filter(id=package.gt_service_tier_id).first()
+            if tier and tier.category:
+                return tier.category
+        except Exception:
+            pass
+
+    cat_slug = ""
+    if service:
+        cat_slug = getattr(getattr(service, "category", None), "slug", "") or ""
+    cat_slug = cat_slug.lower()
+
+    if cat_slug in ("goods_transport_truck", "trucks", "truck", "mini-trucks", "mini_trucks"):
+        return LogisticsCategory.TRUCK
+    if cat_slug in ("goods_transport_two_wheeler", "two-wheelers", "two_wheelers", "2-wheelers"):
+        return LogisticsCategory.TWO_WHEELER
+    if cat_slug in ("packers_movers", "packers-and-movers", "packers-movers", "relocation"):
+        return LogisticsCategory.PACKERS_MOVERS
+
+    svc_slug = (svc_slug or (getattr(service, "slug", "") if service else "")).lower()
     if "truck" in svc_slug:
         return LogisticsCategory.TRUCK
     if "two-wheeler" in svc_slug or "2-wheeler" in svc_slug or "wheeler" in svc_slug:
@@ -347,7 +369,14 @@ def _gt_tier_defaults_from_package(package, cat_enum):
     logically identical to the incremental diff update_package normally does
     on an already-linked tier."""
     price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
-    gt_city = (package.gt_city or "hosur").strip().lower() or "hosur"
+    gt_city = (package.gt_city or "").strip().lower()
+    if not gt_city:
+        try:
+            from settings_hub.models import City
+            active_city = City.objects.filter(is_active=True, is_launched=True).first()
+            gt_city = active_city.slug if active_city else "hosur"
+        except Exception:
+            gt_city = "hosur"
     return {
         "category": cat_enum,
         "name": package.name,
@@ -406,10 +435,15 @@ def create_package(data, actor):
         pass
     try:
         from logistics.models import ServiceTier
-        cat_enum = _logistics_category_for_service_slug(getattr(package.service, "slug", ""))
+        cat_enum = _logistics_category_for_service_slug(getattr(package.service, "slug", ""), service=getattr(package, "service", None), package=package)
         if cat_enum:
             if not package.gt_city:
-                package.gt_city = "hosur"
+                try:
+                    from settings_hub.models import City
+                    active_city = City.objects.filter(is_active=True, is_launched=True).first()
+                    package.gt_city = active_city.slug if active_city else "hosur"
+                except Exception:
+                    package.gt_city = "hosur"
                 package.save(update_fields=["gt_city"])
             # Keyed on the package's own slug, so a brand new package creates
             # its own new tier rather than colliding with an unrelated one.
@@ -638,10 +672,15 @@ def update_package(package, data, actor, reason=None):
             # booking page while its old tier kept showing stale data).
             # Create the tier it should have had instead of doing nothing.
             from logistics.models import ServiceTier
-            cat_enum = _logistics_category_for_service_slug(getattr(pkg.service, "slug", ""))
+            cat_enum = _logistics_category_for_service_slug(getattr(pkg.service, "slug", ""), service=getattr(pkg, "service", None), package=pkg)
             if cat_enum:
                 if not pkg.gt_city:
-                    pkg.gt_city = "hosur"
+                    try:
+                        from settings_hub.models import City
+                        active_city = City.objects.filter(is_active=True, is_launched=True).first()
+                        pkg.gt_city = active_city.slug if active_city else "hosur"
+                    except Exception:
+                        pkg.gt_city = "hosur"
                     pkg.save(update_fields=["gt_city"])
                 tier, _created = ServiceTier.objects.update_or_create(
                     slug=pkg.slug,

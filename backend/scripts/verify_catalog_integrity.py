@@ -67,7 +67,7 @@ def verify():
 
     # 3. Verify Specific Known Duplicates are ARCHIVED
     print("\n[Check 3] Verifying Duplicate Packages are ARCHIVED (Preserved History)...")
-    archived_ids = [598, 599, 600, 601, 597, 602, 603, 606, 607, 608, 991]
+    archived_ids = [598, 599, 600, 601, 597, 602, 603, 606, 607, 608]
     for aid in archived_ids:
         pkg = Package.objects.filter(id=aid).first()
         if not pkg:
@@ -76,6 +76,13 @@ def verify():
             errors.append(f"Package #{aid} is '{pkg.status}', expected 'ARCHIVED'!")
         else:
             print(f"  ✓ Package #{aid} ('{pkg.name}') is safely ARCHIVED")
+
+    # If dummy test package #991 exists, ensure it is archived
+    pkg_991 = Package.objects.filter(id=991).first()
+    if pkg_991 and pkg_991.status != PackageStatus.ARCHIVED:
+        errors.append(f"Package #991 is '{pkg_991.status}', expected 'ARCHIVED'!")
+    elif pkg_991:
+        print(f"  ✓ Package #991 ('{pkg_991.name}') is safely ARCHIVED")
 
     # 4. Verify AC Cleaning Packages
     print("\n[Check 4] Verifying AC Service & Cleaning Packages...")

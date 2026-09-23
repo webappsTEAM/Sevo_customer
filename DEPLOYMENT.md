@@ -1,8 +1,8 @@
-# CalTrack Deployment & Operations Guide
+# sevo Deployment & Operations Guide
 
 ## Infrastructure Stack
 
-- **Web Server / Reverse Proxy**: Nginx (`caltrack-nginx.conf`)
+- **Web Server / Reverse Proxy**: Nginx (`sevo-nginx.conf`)
 - **Frontend App**: React + Vite (Static build served via Nginx)
 - **Backend Application**: Django + Gunicorn / Daphne (`quicktims.asgi:application`)
 - **Database**: PostgreSQL (Single-schema with company-level scoping)

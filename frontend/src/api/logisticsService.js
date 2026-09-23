@@ -196,10 +196,11 @@ export async function fetchPackersMoversQuote({
 /**
  * P1-11: Fetch authoritative booking slot availability evaluated server-side.
  */
-export async function fetchLogisticsSlots({ date, category = "goods_transport_truck" } = {}) {
+export async function fetchLogisticsSlots({ date, category = "goods_transport_truck", city = "" } = {}) {
   const params = {}
   if (date) params.date = date
   if (category) params.category = category
+  if (city) params.city = city
   const qs = new URLSearchParams(params).toString()
   try {
     const res = await apiRequest(`/logistics/slots/${qs ? `?${qs}` : ""}`)
@@ -211,4 +212,40 @@ export async function fetchLogisticsSlots({ date, category = "goods_transport_tr
     }
   }
 }
+
+/**
+ * Fetch dynamic list of cities configured in system settings.
+ * Pass { launchedOnly: true } to restrict to launched operating cities.
+ */
+export async function fetchLogisticsCities({ launchedOnly = false } = {}) {
+  try {
+    const url = launchedOnly ? "/settings/cities/?launched=true" : "/settings/cities/"
+    const res = await apiRequest(url)
+    return unwrapResults(res)
+  } catch (err) {
+    console.warn("Could not load cities:", err)
+    return []
+  }
+}
+
+/**
+ * Fetch dynamic FAQs for Goods Transport & Packers/Movers.
+ * Filterable by category ("truck", "two_wheeler", "packers_movers") and city.
+ */
+export async function fetchGTFaqs({ category = "", city = "" } = {}) {
+  const params = {}
+  if (category) params.category = category
+  if (city) params.city = city
+  const qs = new URLSearchParams(params).toString()
+  try {
+    const res = await apiRequest(`/logistics/faqs/${qs ? `?${qs}` : ""}`)
+    if (Array.isArray(res)) return res
+    if (Array.isArray(res?.data)) return res.data
+    return []
+  } catch (err) {
+    console.warn("Failed to fetch GT FAQs:", err)
+    return []
+  }
+}
+
 

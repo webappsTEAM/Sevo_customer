@@ -36,8 +36,8 @@ if "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("testserver")
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
-# Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
-# Set FORCE_SCRIPT_NAME=/Caltrack in production .env
+# Required when Django is served under a subpath (e.g. /sevo/) behind Nginx.
+# Set FORCE_SCRIPT_NAME=/sevo in production .env
 FORCE_SCRIPT_NAME = os.getenv("FORCE_SCRIPT_NAME", "")
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -211,7 +211,7 @@ if EMAIL_HOST:
     DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.EmailOrUsernameModelBackend",
@@ -420,7 +420,7 @@ if _email_user and _email_pass:
     DEFAULT_FROM_EMAIL = _email_user
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" # Prints to console for dev
-    DEFAULT_FROM_EMAIL = "noreply@caltrack.com"
+    DEFAULT_FROM_EMAIL = "noreply@sevo.com"
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 AUTO_GENERATE_OTP = os.getenv("AUTO_GENERATE_OTP", "False").strip().lower() in ("1", "true", "yes")
@@ -477,6 +477,9 @@ GOOGLE_MAPS_API_KEY = (
     or ""
 ).strip()
 
+# S-06: Road curvature factor for straight-line routing fallback.
+LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
+
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
@@ -523,6 +526,7 @@ LOGGING = {
 }
 
 if "test" in sys.argv:
+    TESTING = True
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }

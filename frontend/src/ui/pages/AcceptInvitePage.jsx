@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { apiRequest } from "../../api/client.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
-import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
 import { Loader2, Lock, ArrowRight, User, Check, Mail, X } from "lucide-react"
 import { setTokens } from "../../state/auth/tokens.js"
 
@@ -12,12 +12,12 @@ import { setTokens } from "../../state/auth/tokens.js"
 const CW = 200
 const CH = 130
 const CARDS = [
-  { id: 1, src: "/mockups/caltrack_dashboard_mockup_1778231495839.png", x: -250, y: -150, z: 80, r: -6, title: "Executive Dashboard" },
-  { id: 2, src: "/mockups/caltrack_scheduling_mockup_1778231584856.png", x: -80, y: -160, z: 50, r: 4, title: "Smart Scheduling" },
-  { id: 3, src: "/mockups/caltrack_live_map_mockup_1778231560076.png", x: 80, y: -145, z: 70, r: -3, title: "Live Tracking Map" },
-  { id: 4, src: "/mockups/caltrack_mobile_app_mockup_1778231517495.png", x: 250, y: -155, z: 40, r: 8, title: "Mobile Field App" },
-  { id: 5, src: "/mockups/caltrack_analytics_mockup_1778231608789.png", x: -220, y: 0, z: 60, r: 5, title: "Workforce Analytics" },
-  { id: 6, src: "/mockups/caltrack_payroll_mockup_1778231538875.png", x: -60, y: 10, z: 90, r: -4, title: "Payroll Processing" },
+  { id: 1, src: "/mockups/sevo_dashboard_mockup_1778231495839.png", x: -250, y: -150, z: 80, r: -6, title: "Executive Dashboard" },
+  { id: 2, src: "/mockups/sevo_scheduling_mockup_1778231584856.png", x: -80, y: -160, z: 50, r: 4, title: "Smart Scheduling" },
+  { id: 3, src: "/mockups/sevo_live_map_mockup_1778231560076.png", x: 80, y: -145, z: 70, r: -3, title: "Live Tracking Map" },
+  { id: 4, src: "/mockups/sevo_mobile_app_mockup_1778231517495.png", x: 250, y: -155, z: 40, r: 8, title: "Mobile Field App" },
+  { id: 5, src: "/mockups/sevo_analytics_mockup_1778231608789.png", x: -220, y: 0, z: 60, r: 5, title: "Workforce Analytics" },
+  { id: 6, src: "/mockups/sevo_payroll_mockup_1778231538875.png", x: -60, y: 10, z: 90, r: -4, title: "Payroll Processing" },
 ]
 
 function HoloCard({ card, index }) {
@@ -53,7 +53,7 @@ export function AcceptInvitePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
+  const ONBOARDING_DISMISSED_KEY = "sevo.onboarding.dismissed"
   const adminRoute = () =>
     localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true" ? routes.dashboard : routes.get_started
 
@@ -106,7 +106,7 @@ export function AcceptInvitePage() {
 
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="absolute top-8 left-8 z-50 pointer-events-none">
           <div className="pointer-events-auto">
-            <CalTrackLogo size="md" showTagline={false} />
+            <SevoLogo size="md" showTagline={false} />
           </div>
         </motion.div>
 
@@ -127,10 +127,14 @@ export function AcceptInvitePage() {
           </div>
 
           {inviteData?.region && (
-            <div style={{ padding: "16px 20px", borderRadius: 14, border: "1.5px solid var(--stroke2)",
-              background: "var(--surface)", marginBottom: 24 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)",
-                textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+            <div style={{
+              padding: "16px 20px", borderRadius: 14, border: "1.5px solid var(--stroke2)",
+              background: "var(--surface)", marginBottom: 24
+            }}>
+              <div style={{
+                fontSize: 11, fontWeight: 800, color: "var(--muted)",
+                textTransform: "uppercase", letterSpacing: 1, marginBottom: 10
+              }}>
                 Company Operating Region
               </div>
               <div style={{ fontSize: 24, marginBottom: 6 }}>

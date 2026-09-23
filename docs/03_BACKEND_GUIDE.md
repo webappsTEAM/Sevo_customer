@@ -1,4 +1,4 @@
-# CalTrack / QuickTIMS — Backend Engineering Guide
+# sevo / QuickTIMS — Backend Engineering Guide
 
 ## 1. Directory Structure
 

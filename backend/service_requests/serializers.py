@@ -176,6 +176,8 @@ class PackageSerializer(serializers.ModelSerializer):
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
+    rating = serializers.SerializerMethodField()
+    reviews_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -194,6 +196,24 @@ class PackageSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
+
+    def get_rating(self, obj):
+        if obj.reviews and isinstance(obj.reviews, list) and len(obj.reviews) > 0:
+            ratings = []
+            for r in obj.reviews:
+                if isinstance(r, dict) and "rating" in r:
+                    try:
+                        ratings.append(float(r["rating"]))
+                    except (ValueError, TypeError):
+                        pass
+            if ratings:
+                return round(sum(ratings) / len(ratings), 2)
+        return None
+
+    def get_reviews_count(self, obj):
+        if obj.reviews and isinstance(obj.reviews, list):
+            return len(obj.reviews)
+        return 0
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
@@ -1885,7 +1905,7 @@ class EstimationSerializer(serializers.ModelSerializer):
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
+    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:

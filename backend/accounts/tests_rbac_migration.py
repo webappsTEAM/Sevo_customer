@@ -29,7 +29,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 1. Super Admin A (role based, no superuser)
         self.super_admin_role = User.objects.create_user(
             username="superadmin_role_only",
-            email="super_role@caltrack.com",
+            email="super_role@sevo.com",
             password="Password123!",
             role=User.Role.SUPER_ADMIN,
             is_staff=True,
@@ -39,7 +39,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 2. Super Admin B (superuser based, custom role)
         self.super_admin_flag = User.objects.create_user(
             username="superadmin_flag_only",
-            email="super_flag@caltrack.com",
+            email="super_flag@sevo.com",
             password="Password123!",
             role=User.Role.ADMIN,
             is_staff=True,
@@ -49,7 +49,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 3. Normal Admin
         self.admin = User.objects.create_user(
             username="admin_audit",
-            email="admin@caltrack.com",
+            email="admin@sevo.com",
             password="Password123!",
             role=User.Role.ADMIN,
             is_staff=True,
@@ -59,7 +59,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 4. Manager
         self.manager = User.objects.create_user(
             username="manager_audit",
-            email="manager@caltrack.com",
+            email="manager@sevo.com",
             password="Password123!",
             role=User.Role.MANAGER,
             is_staff=True,
@@ -69,7 +69,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 5. Support Agent
         self.support = User.objects.create_user(
             username="support_audit",
-            email="support@caltrack.com",
+            email="support@sevo.com",
             password="Password123!",
             role=User.Role.SUPPORT,
             is_staff=False,
@@ -79,7 +79,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 6. Finance Officer
         self.finance = User.objects.create_user(
             username="finance_audit",
-            email="finance@caltrack.com",
+            email="finance@sevo.com",
             password="Password123!",
             role=User.Role.FINANCE,
             is_staff=False,
@@ -89,7 +89,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 7. Catalog Manager
         self.catalog = User.objects.create_user(
             username="catalog_audit",
-            email="catalog@caltrack.com",
+            email="catalog@sevo.com",
             password="Password123!",
             role=User.Role.CATALOG,
             is_staff=False,
@@ -99,7 +99,7 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
         # 8. Employee / Technician
         self.employee = User.objects.create_user(
             username="technician_audit",
-            email="technician@caltrack.com",
+            email="technician@sevo.com",
             password="Password123!",
             role=User.Role.EMPLOYEE,
             is_staff=False,

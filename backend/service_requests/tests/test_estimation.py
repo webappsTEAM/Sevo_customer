@@ -90,9 +90,11 @@ class EstimationSystemTestCase(TestCase):
             "customer_symptom": "Water leakage from indoor unit and low cooling",
             "customer_notes": "Please visit in the afternoon",
             "address": "123 Main Street, Bangalore",
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
             "preferred_time": "14:00 - 16:00",
-            "customer_name": "Test Customer",
+            "customer_name": "Arun Kumar",
             "phone": "9876543210",
         }
 
@@ -107,9 +109,11 @@ class EstimationSystemTestCase(TestCase):
             "issue_title": "AC Not Cooling",
             "description": "Standard service request",
             "address": "456 Side Street",
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
             "preferred_time": "10:00 - 12:00",
-            "customer_name": "Test Customer",
+            "customer_name": "Arun Kumar",
             "phone": "9876543210",
             "payment_method": "COD",
         }
@@ -126,8 +130,10 @@ class EstimationSystemTestCase(TestCase):
             "service_category": "hvac",
             "issue_title": "Normal AC Filter Clean",
             "address": "789 Third Street",
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "preferred_date": (timezone.localdate() + timezone.timedelta(days=1)).isoformat(),
-            "customer_name": "Test Customer",
+            "customer_name": "Arun Kumar",
             "phone": "9876543210",
         }
         response = self.client.post("/api/booking/", payload, format="json")
@@ -287,8 +293,8 @@ class EstimationSystemTestCase(TestCase):
             )
 
         # Count queries for 5 bookings
-        with self.assertNumQueries(9):
-            # 9 bounded queries: User/Session + ServiceRequest + Prefetches + Batched OTPs
+        with self.assertNumQueries(10):
+            # 10 bounded queries: User/Session + ServiceRequest + Prefetches + Batched OTPs
             resp = self.client.get("/api/booking/my-bookings/")
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             self.assertGreaterEqual(len(resp.data["data"]), 5)

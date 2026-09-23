@@ -259,7 +259,7 @@ def quote_logistics_fare(
 ):
     """
     Compute a real, itemised, distance-based fare for one goods-transport
-    booking, per CALTRACK_PHASE_14 H.1. Supports multi-stop ordered routes
+    booking, per sevo_PHASE_14 H.1. Supports multi-stop ordered routes
     via waypoints=[(lat, lng), ...].
     """
     if tier is None:
@@ -423,12 +423,8 @@ def quote_logistics_fare(
         "stops": stops,
         "cargo_hash": cargo_hash_str,
     }
-    try:
-        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
-    except Exception as cache_err:
-        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
 
-    return LogisticsFareBreakdown(
+    breakdown = LogisticsFareBreakdown(
         quote_id=quote_id,
         quote_hash=quote_hash,
         created_at=created_at,
@@ -469,6 +465,13 @@ def quote_logistics_fare(
         estimate_notice=estimate_notice,
         currency=getattr(tier, "currency", "INR") or "INR",
     )
+    cached_data["breakdown"] = dict(breakdown)
+    try:
+        cache.set(f"gt_quote_{quote_id}", cached_data, timeout=900)
+    except Exception as cache_err:
+        logger.warning("Could not cache logistics quote %s: %s", quote_id, cache_err)
+
+    return breakdown
 
 
 # GT audit Update 18 -- which vehicle classes a booking can actually be
@@ -699,6 +702,7 @@ def resolve_logistics_fare_v2(
             except (ValueError, TypeError):
                 raise UnresolvedLogisticsFareError("Submitted quote expiry timestamp is invalid or malformed.")
 
+        cached_quote = None
         if submitted_quote_id:
             cached_quote = cache.get(f"gt_quote_{submitted_quote_id}")
             if not cached_quote:
@@ -812,6 +816,39 @@ def resolve_logistics_fare_v2(
 
         if cargo_summary and cargo_summary.get("has_prohibited", False):
             raise UnresolvedLogisticsFareError(cargo_summary.get("prohibited_reason") or "Prohibited cargo cannot be transported.")
+
+        if submitted_quote_id and cached_quote:
+            # Verified quote price lock: use the authoritative locked quote snapshot
+            if cached_quote.get("breakdown") and isinstance(cached_quote["breakdown"], dict):
+                locked_breakdown = LogisticsFareBreakdown(cached_quote["breakdown"])
+            else:
+                locked_breakdown = LogisticsFareBreakdown(
+                    quote_id=submitted_quote_id,
+                    quote_hash=cached_quote.get("quote_hash"),
+                    created_at=cached_quote.get("created_at"),
+                    quoted_at=cached_quote.get("created_at"),
+                    expires_at=cached_quote.get("expires_at"),
+                    tier_id=cached_quote.get("tier_id") or getattr(logistics_tier, "id", None),
+                    tier_name=cached_quote.get("tier_name") or getattr(logistics_tier, "name", ""),
+                    vehicle_class=cached_quote.get("vehicle_class") or getattr(logistics_tier, "vehicle_class", ""),
+                    weight_class=cached_quote.get("weight_class") or getattr(logistics_tier, "weight_class", ""),
+                    pickup_lat=str(pickup_lat) if pickup_lat is not None else None,
+                    pickup_lng=str(pickup_lng) if pickup_lng is not None else None,
+                    drop_lat=str(drop_lat) if drop_lat is not None else None,
+                    drop_lng=str(drop_lng) if drop_lng is not None else None,
+                    total=_money(cached_quote["total"]),
+                    distance_km=_money(cached_quote.get("distance_km", "0")),
+                    chargeable_km=_money(cached_quote.get("chargeable_km", "0")),
+                    stops=cached_quote.get("stops", stop_count),
+                    currency=getattr(logistics_tier, "currency", "INR") or "INR",
+                    is_authoritative=cached_quote.get("is_authoritative", True),
+                    is_estimate=cached_quote.get("is_estimate", False),
+                    distance_source=cached_quote.get("distance_source", "google_maps"),
+                )
+            if not locked_breakdown.get("is_cargo_fit", True):
+                reason = locked_breakdown.get("cargo_fit_reason") or "Selected vehicle cannot safely carry this cargo."
+                raise UnresolvedLogisticsFareError(f"VEHICLE_CAPACITY_EXCEEDED: {reason}")
+            return _money(cached_quote["total"]), locked_breakdown
 
         breakdown = quote_logistics_fare(
             tier=logistics_tier,

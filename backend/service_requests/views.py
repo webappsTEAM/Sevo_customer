@@ -333,7 +333,7 @@ class BookingCreateView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
                 if not cached.get("in_progress"):
-                    return Response(cached["body"], status=cached["status"])
+                    return Response(cached["body"], status=status.HTTP_200_OK)
                 # Wait briefly for in-progress concurrent request
                 for _ in range(20):
                     time.sleep(0.1)
@@ -349,7 +349,7 @@ class BookingCreateView(APIView):
                                 status=status.HTTP_409_CONFLICT,
                             )
                         if not cached.get("in_progress"):
-                            return Response(cached["body"], status=cached["status"])
+                            return Response(cached["body"], status=status.HTTP_200_OK)
                 return Response(
                     {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
                     status=status.HTTP_409_CONFLICT,
@@ -594,12 +594,20 @@ class BookingCreateView(APIView):
                 or serializer.validated_data.get("idempotency_key")
                 or request.data.get("idempotency_key")
             )
+            ac_qty_val = serializer.validated_data.get("ac_quantity")
+            if ac_qty_val is None:
+                ac_qty_val = request.data.get("ac_quantity")
+            if ac_qty_val is None:
+                ac_qty_val = request.data.get("quantity")
+            if ac_qty_val is None:
+                ac_qty_val = 1
+
             ac_details = {
                 "ac_type": serializer.validated_data.get("ac_type") or request.data.get("ac_type") or request.data.get("type"),
                 "ac_brand": serializer.validated_data.get("ac_brand") or request.data.get("ac_brand") or request.data.get("brand") or "Other",
                 "ac_capacity": serializer.validated_data.get("ac_capacity") or request.data.get("ac_capacity") or request.data.get("capacity"),
-                "ac_quantity": serializer.validated_data.get("ac_quantity") or request.data.get("ac_quantity") or request.data.get("quantity") or 1,
-                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or serializer.validated_data.get("description"),
+                "ac_quantity": ac_qty_val,
+                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or "",
                 "customer_notes": serializer.validated_data.get("customer_notes") or request.data.get("customer_notes") or request.data.get("notes") or "",
             }
             booking_data = {
@@ -628,7 +636,7 @@ class BookingCreateView(APIView):
                     return Response({"success": False, "errors": e.detail}, status=status.HTTP_400_BAD_REQUEST)
                 raise e
 
-            return _success(
+            res = _success(
                 data={
                     "request_id": sr.request_id,
                     "id": sr.id,
@@ -655,6 +663,15 @@ class BookingCreateView(APIView):
                 message="Your AC estimation request has been submitted successfully.",
                 status_code=201 if created else 200,
             )
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.set(idem_cache_key, {
+                    "body": res.data,
+                    "status": res.status_code,
+                    "in_progress": False,
+                    "payload_hash": req_payload_hash,
+                }, timeout=86400)
+            return res
 
         # Ensure cart_data carries clean numeric prices matching authoritative fare
         clean_cart = serializer.validated_data.get("cart_data")
@@ -1103,7 +1120,7 @@ class CustomerMyBookingsView(APIView):
 
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback", "estimation").prefetch_related(
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
             Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
@@ -1311,6 +1328,10 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
+            if hasattr(sr, "estimation") and sr.estimation:
+                from service_requests.models import Estimation
+                sr.estimation.status = Estimation.Status.CANCELLED
+                sr.estimation.save(update_fields=["status"])
             # Cancel job in workforce system after transaction commits to prevent distributed deadlock
             transaction.on_commit(lambda: WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason))
 
@@ -1908,6 +1929,7 @@ def _build_tracking_payload(sr, has_full_access):
         # populated for logistics bookings; every other booking gets the
         # empty defaults, so no existing consumer changes shape.
         "logistics": _build_logistics_progress(sr),
+        "logistics_leg": getattr(sr, "logistics_leg", "") or "",
         "service_location": {
             "address": dest_address,
             "latitude": dest_lat,
@@ -4668,7 +4690,7 @@ class CustomerQuotePDFView(APIView):
 
         # Draw header
         p.setFont("Helvetica-Bold", 18)
-        p.drawString(100, 750, "CalTrack Painting Service Quotation")
+        p.drawString(100, 750, "sevo Painting Service Quotation")
         p.setFont("Helvetica", 10)
         p.drawString(100, 735, f"Date generated: {quote.created_at.strftime('%d/%m/%Y %H:%M')}")
         

@@ -196,7 +196,7 @@ class ImageUploadEndpointTestCase(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="admin_test_user",
-            email="admin_test@caltrack.com",
+            email="admin_test@sevo.com",
             password="TestPassword@123",
             role="admin",
             is_staff=True,
@@ -267,7 +267,7 @@ class ImageUploadEndpointTestCase(TestCase):
         """Non-admin user is rejected with 403 Forbidden."""
         customer_user = User.objects.create_user(
             username="regular_customer",
-            email="cust@caltrack.com",
+            email="cust@sevo.com",
             password="Password@123",
             role="customer",
             is_staff=False,
@@ -424,7 +424,7 @@ class ImagePipelineSizeAndQualityMatrixTestCase(TestCase):
 
         admin_user = User.objects.create_user(
             username="pkg_admin_tester",
-            email="pkg_admin@caltrack.com",
+            email="pkg_admin@sevo.com",
             password="Password@123",
             role="admin",
             is_staff=True,

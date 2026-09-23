@@ -16,7 +16,7 @@ from server-side facts:
   - stops actually visited, from TripStop.completed_at -- real recorded
     progress, not a claim in the completion payload;
   - additional work the customer already approved, from the existing
-    WorkExtension flow, which is the mechanism CALTRACK_PHASE_14 H.1
+    WorkExtension flow, which is the mechanism sevo_PHASE_14 H.1
     explicitly designates for deviations.
 
 Nothing here trusts a client-supplied amount. A completion payload can

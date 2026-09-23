@@ -1,4 +1,4 @@
-# CalTrack / QuickTIMS — Real-Time Geolocation, Logistics & Transport
+# sevo / QuickTIMS — Real-Time Geolocation, Logistics & Transport
 
 ## 1. Real-Time Geolocation Architecture
 

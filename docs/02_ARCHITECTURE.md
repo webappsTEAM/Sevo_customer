@@ -1,4 +1,4 @@
-# CalTrack / QuickTIMS — Architecture & Engineering Design
+# sevo / QuickTIMS — Architecture & Engineering Design
 
 ## 1. Architectural Philosophy
 The system implements a **Modular Monolith** with clear domain separation. Rather than splitting into complex microservices prematurely, each capability is housed as an independent Django domain application on the backend and modular feature directory on the frontend.
