@@ -351,6 +351,19 @@ export default function HomePageCustomizerPage() {
     { id: "mobileBanners", label: "Mobile App Banners", icon: Smartphone, color: "text-sky-600 bg-sky-50" },
     { id: "mobileAds", label: "Mobile Advertisement", icon: Megaphone, color: "text-orange-600 bg-orange-50" },
     { id: "mobileTopCards", label: "Mobile Quick Access Cards", icon: LayoutGrid, color: "text-emerald-700 bg-emerald-50" },
+    // Added 2026-09-23 per explicit request ("make the 'Best Seller' has
+    // reliable data and the counts... give privilege to admin to update
+    // this from the admin panel"): the customer app's Home "Bestsellers"
+    // strip used to be built ENTIRELY from the separate Vendor Grocery
+    // Hub's own live product feed, grouped client-side -- the admin here
+    // had no way to control which tiles showed or what "+N more" said, and
+    // that vendor feed can carry stale/unreliable category groupings. This
+    // tab lets the admin author the tiles directly (title, image, a
+    // manually-entered product count, and a link) the same way Mobile Top
+    // Cards works -- the app now prefers this admin-authored list whenever
+    // it's non-empty, falling back to the old auto-grouped vendor tiles
+    // only when the admin hasn't configured any yet.
+    { id: "mobileBestsellers", label: "Mobile Bestsellers", icon: Star, color: "text-amber-600 bg-amber-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
     { id: "testimonials", label: "Customer Reviews", icon: Award, color: "text-orange-600 bg-orange-50" },
     { id: "footer", label: "Footer & Contacts", icon: FileText, color: "text-slate-600 bg-slate-100" },
@@ -1517,6 +1530,155 @@ export default function HomePageCustomizerPage() {
                           value={card.link || ""}
                           onChange={(e) => updateTopCardField("link", e.target.value)}
                           placeholder="?category=cleaning, /categories/... or leave blank"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MOBILE BESTSELLERS */}
+          {/* Added 2026-09-23 per explicit request ("make the 'Best Seller'
+              has reliable data and the counts... give privilege to admin to
+              update this from the admin panel") -- same Add/Delete/enable-
+              toggle pattern as Mobile Quick Access Cards above, plus a
+              manually-entered "Product Count" field since that number used
+              to come from an uncontrolled, separate vendor feed. */}
+          {activeTab === "mobileBestsellers" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-600" />
+                    Mobile App — Bestsellers
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    The "Bestsellers" tiles on the customer app's Home screen (Groceries mode). Add, remove, relabel or reorder any number of tiles here -- each one's title, image, product count and link are fully admin-controlled instead of being auto-generated from the vendor product feed. Leave this list empty to fall back to the old auto-grouped tiles.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newTile = { id: `bs-${Date.now()}`, title: "New Category", thumbnails: [], productCount: 0, link: "", enabled: true }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: [...(prev.mobile?.bestsellers || []), newTile] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Tile
+                </button>
+              </div>
+
+              {(!config.mobile?.bestsellers || config.mobile.bestsellers.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No Bestsellers tiles yet -- add one above. Until then the app falls back to its own auto-grouped vendor product tiles.</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(config.mobile?.bestsellers || []).map((tile, idx) => {
+                  const updateTileField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.bestsellers || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  // Each tile shows a 2x2 grid of up to 4 admin-uploaded
+                  // product thumbnails on the customer app (matching the
+                  // vendor-derived Bestsellers tile it replaces) instead of
+                  // one flat image -- this immutably updates a single slot
+                  // in tile.thumbnails while preserving the rest of the tile.
+                  const updateTileThumbnail = (slotIdx, newPath) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.bestsellers || [])]
+                      const prevThumbs = [...(newItems[idx]?.thumbnails || [])]
+                      prevThumbs[slotIdx] = newPath
+                      newItems[idx] = { ...newItems[idx], thumbnails: prevThumbs }
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={tile.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Tile #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateTileField("enabled", tile.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${tile.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {tile.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.bestsellers || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title</label>
+                        <input
+                          type="text"
+                          value={tile.title || ""}
+                          onChange={(e) => updateTileField("title", e.target.value)}
+                          placeholder="Vegetables & Fruits"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Thumbnails (2x2 grid, up to 4)</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[0, 1, 2, 3].map((slotIdx) => (
+                            <ImageUploadField
+                              key={slotIdx}
+                              value={(tile.thumbnails || [])[slotIdx] || ""}
+                              onChange={(newPath) => updateTileThumbnail(slotIdx, newPath)}
+                              section="mobile-bestsellers"
+                              fallbackSrc=""
+                              label={`Thumb ${slotIdx + 1}`}
+                              aspectRatio="aspect-square"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Product Count (shown as "+N more")</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={tile.productCount ?? 0}
+                          onChange={(e) => updateTileField("productCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          placeholder="193"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={tile.link || ""}
+                          onChange={(e) => updateTileField("link", e.target.value)}
+                          placeholder="?category=vegetables_groceries, /categories/... or leave blank"
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
                         />
                       </div>

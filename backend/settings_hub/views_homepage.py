@@ -26,6 +26,14 @@ ALLOWED_SECTIONS = {
     # Supabase Storage folder (homepage/mobile-*) instead of being mixed
     # into the web's "offers"/"categories" folders.
     "mobile-banners", "mobile-ads", "mobile-top-cards",
+    # Added 2026-09-23 per explicit request ("make the 'Best Seller' has
+    # reliable data and the counts... give privilege to admin to update
+    # this from the admin panel"): backs the new "Mobile Bestsellers" admin
+    # nav section (HomePageCustomizerPage.jsx tab mobileBestsellers) so the
+    # app's Home "Bestsellers" tiles can be admin-authored (title, image,
+    # a manually-entered product count, link) instead of being entirely
+    # derived from the separate Vendor Grocery Hub's own live product feed.
+    "mobile-bestsellers",
 }
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -100,6 +108,15 @@ def _resolve_image_urls(config_data):
             if k in ("image_path", "image", "avatar", "photo", "cover", "heroImage", "heroIllustration") and isinstance(v, str) and v:
                 resolved[f"{k}_url"] = SupabaseStorageService.get_public_url(v)
             if k == "collageImages" and isinstance(v, list):
+                resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
+            # Added 2026-09-23 alongside the "Mobile Bestsellers" tab: each
+            # tile carries up to 4 raw Supabase Storage paths in
+            # "thumbnails" (a 2x2 grid, same shape as "collageImages"
+            # above) -- without this, the mobile app would only ever see
+            # the raw storage path, not a fetchable CDN URL (the exact
+            # "image_url vs image" bug already fixed once for every other
+            # image field on this page).
+            if k == "thumbnails" and isinstance(v, list):
                 resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
         return resolved
     elif isinstance(config_data, list):
@@ -277,7 +294,30 @@ class HomePageConfigAPIView(APIView):
                         "topCards": [
                             {"id": "groceries", "label": "Groceries", "image": "", "link": "", "enabled": True},
                             {"id": "services", "label": "Services", "image": "", "link": "", "enabled": True}
-                        ]
+                        ],
+                        # Added 2026-09-23 per explicit request ("make the
+                        # 'Best Seller' has reliable data and the counts...
+                        # give privilege to admin to update this from the
+                        # admin panel"): the Home screen's "Bestsellers"
+                        # tiles used to be built entirely from the separate
+                        # Vendor Grocery Hub's own live product feed, grouped
+                        # client-side — the admin had no control over which
+                        # tiles showed or what count each one displayed.
+                        # Fixed again the same day (reference screenshot vs.
+                        # first cut, "the best seller should have been
+                        # updated like this by the admin"): a tile is a 2x2
+                        # GRID of up to 4 product photos, not one flat image
+                        # — so each entry here is {id, title, thumbnails
+                        # (list of up to 4 image paths), productCount, link,
+                        # enabled}, and "thumbnails" gets the same
+                        # list-of-strings CDN resolution as "collageImages"
+                        # above (see _resolve_image_urls). productCount is
+                        # manually entered since that number used to come
+                        # from an uncontrolled feed. The customer app's
+                        # homepage_repository.dart prefers this list over
+                        # the auto-grouped vendor tiles whenever it's
+                        # non-empty.
+                        "bestsellers": []
                     }
                 }
                 return Response({
