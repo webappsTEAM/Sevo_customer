@@ -106,9 +106,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     titleSuffix: "& Vendors",
     subtitle: "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
     ctaText: "Join as a Professional",
-    ctaUrl: "https://calservices-vendor.vercel.app",
+    ctaUrl: "https://vendor.sevo.co.in",
     learnMoreText: "Learn more",
-    learnMoreUrl: "https://calservices-vendor.vercel.app",
+    learnMoreUrl: "https://vendor.sevo.co.in",
     image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
     features: [
       { id: "vf-1", icon: "📅", label: "Flexible Timings" },

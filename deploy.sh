@@ -2,7 +2,7 @@
 # =============================================================================
 # sevo — VPS Deployment Script
 # Run this on the VPS after cloning/uploading the code.
-# URL: caldimproducts.com/sevo
+# URL: sevo.co.in
 #
 # USAGE:
 #   chmod +x deploy.sh
@@ -209,7 +209,7 @@ nginx -t && echo "  Nginx config OK — run 'sudo systemctl reload nginx' to app
 echo ""
 echo "========================================"
 echo " DEPLOYMENT COMPLETE"
-echo " Visit: https://caldimproducts.com/sevo"
+echo " Visit: https://sevo.co.in"
 echo ""
 echo " Service status:"
 systemctl status sevo-backend --no-pager -l | head -5

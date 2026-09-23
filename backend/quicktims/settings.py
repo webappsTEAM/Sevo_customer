@@ -31,7 +31,10 @@ _allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if _allowed_hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1", "sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"]
+for _prod_host in ("sevo.co.in", "www.sevo.co.in", "vendor.sevo.co.in"):
+    if _prod_host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_prod_host)
 if "testserver" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("testserver")
 
@@ -330,7 +333,10 @@ _default_cors_origins = [
     "http://127.0.0.1:5176",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -347,6 +353,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://.*\.127\.0\.0\.1:517[0-9]$",
     r"^http://localhost:517[0-9]$",
     r"^http://127\.0\.0\.1:517[0-9]$",
+    r"^https://.*\.sevo\.co\.in$",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -368,7 +375,11 @@ _default_csrf_origins = [
     "http://*.127.0.0.1:5174",
     "http://*.127.0.0.1:5175",
     "http://*.127.0.0.1:5176",
-    # Production VPS
+    # Production VPS & New Domains
+    "https://sevo.co.in",
+    "https://www.sevo.co.in",
+    "https://vendor.sevo.co.in",
+    "https://*.sevo.co.in",
     "https://caldimproducts.com",
     "https://www.caldimproducts.com",
 ]
@@ -444,7 +455,7 @@ RAZORPAYX_MOCK_MODE = os.getenv("RAZORPAYX_MOCK_MODE", "0").strip().lower() in (
 PAYMENT_SANDBOX_MODE = os.getenv("PAYMENT_SANDBOX_MODE", "0").strip().lower() in ("1", "true", "yes")
 
 # ── Workforce Integration ────────────────────────────────────────────────────
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
+WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce" if DEBUG else "https://vendor.sevo.co.in/api/workforce").rstrip("/")
 WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default").strip()
 WORKFORCE_WEBHOOK_SECRET = os.getenv(
     "WORKFORCE_WEBHOOK_SECRET",

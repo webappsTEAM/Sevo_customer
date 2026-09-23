@@ -32,7 +32,8 @@ export const RAZORPAY_KEY_ID =
   import.meta.env.VITE_RAZORPAY_KEY_ID ?? "";
 
 export const VENDOR_PLATFORM_URL =
-  import.meta.env.VITE_VENDOR_PLATFORM_URL ?? "http://localhost:5176";
+  import.meta.env.VITE_VENDOR_PLATFORM_URL ??
+  (import.meta.env.PROD ? "https://vendor.sevo.co.in" : "http://localhost:5176");
 
 export const VENDOR_API_URL =
   import.meta.env.VITE_VENDOR_API_URL ?? "http://localhost:8001";
