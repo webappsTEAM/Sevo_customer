@@ -1,0 +1,230 @@
+import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from "react"
+import { useLocation } from "react-router-dom"
+import { createPortal } from "react-dom"
+import { motion, AnimatePresence } from "framer-motion"
+import { routes } from "../routes.js"
+import { useAuth } from "../../state/auth/useAuth.js"
+import {
+  User, Shield, Palette, Bell, CreditCard, Users2,
+  Building2, Database, AlertTriangle, ShieldCheck,
+  CheckCircle2, X, ChevronRight, FileText,
+  Info, XCircle, MapPin,
+} from "lucide-react"
+
+/* ── Lazy section imports ─────────────────────────────────────── */
+const ProfileSection = lazy(() => import("./settings/ProfileSection.jsx"))
+const AccountSecuritySection = lazy(() => import("./settings/AccountSecuritySection.jsx"))
+const AppearanceSection = lazy(() => import("./settings/AppearanceSection.jsx"))
+const NotificationsSection = lazy(() => import("./settings/NotificationsSection.jsx"))
+const BillingSection = lazy(() => import("./settings/BillingSection.jsx"))
+const TeamMembersSection = lazy(() => import("./settings/TeamMembersSection.jsx"))
+const InvoicesSection = lazy(() => import("./settings/InvoicesSection.jsx"))
+const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
+const AccessControlSection = lazy(() => import("./settings/AccessControlSection.jsx"))
+const LocationsSettingsSection = lazy(() => import("./LocationsPage.jsx").then(m => ({ default: m.LocationsPage })))
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function Toast({ message, type = "success", onDismiss }) {
+  useEffect(() => { const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t) }, [onDismiss])
+  const getIcon = () => {
+    switch (type) {
+      case "success":
+        return <CheckCircle2 size={15} />
+      case "error":
+        return <XCircle size={15} />
+      case "warn":
+      case "warning":
+        return <AlertTriangle size={15} />
+      case "info":
+      default:
+        return <Info size={15} />
+    }
+  }
+  return (
+    <div className="settingsToast" data-type={type}>
+      {getIcon()}
+      <span>{message}</span>
+      <button onClick={onDismiss} className="settingsToastClose"><X size={13} /></button>
+    </div>
+  )
+}
+
+function SectionHeader({ title, subtitle }) {
+  return (
+    <div className="mb-10">
+      <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">{title}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">{subtitle}</p>
+    </div>
+  )
+}
+
+export function Field({ label, children, half }) {
+  return (
+    <div className={`flex flex-col gap-2 ${half ? "w-1/2" : "w-full"}`}>
+      <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em] ml-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+const TABS = [
+  {
+    id: "profile",
+    label: "My Profile",
+    subtitle: "Update your personal information, avatar, timezone, and language.",
+    icon: <User size={15} />,
+    to: routes.settings_profile,
+  },
+  {
+    id: "security",
+    label: "Account & Security",
+    subtitle: "Email, password, two-factor authentication, and active sessions.",
+    icon: <Shield size={15} />,
+    to: routes.settings_security,
+  },
+  {
+    id: "appearance",
+    label: "Appearance",
+    subtitle: "Theme, accent color, density, and font size preferences.",
+    icon: <Palette size={15} />,
+    to: routes.settings_appearance,
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    subtitle: "Email, in-app, and SMS notification preferences per event.",
+    icon: <Bell size={15} />,
+    to: routes.settings_notifications,
+  },
+  {
+    id: "team",
+    label: "Administrators & Managers",
+    subtitle: "Invite members, assign roles, and manage workspace access.",
+    icon: <Users2 size={15} />,
+    adminOnly: true,
+    to: routes.settings_team,
+  },
+  {
+    id: "rbac",
+    label: "Access Control",
+    subtitle: "Module visibility, data modification rights, and role-based permissions.",
+    icon: <ShieldCheck size={15} />,
+    adminOnly: true,
+    to: routes.settings_rbac,
+  },
+  {
+    id: "location",
+    label: "Locations & Service Areas",
+    subtitle: "Manage service sites, warehouse hubs, GPS boundaries, and operational coverage.",
+    icon: <MapPin size={15} />,
+    adminOnly: true,
+  },
+]
+
+/* ── Page ────────────────────────────────────────────────────── */
+export function SettingsPage({ section: sectionProp }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin" || user?.role === "manager"
+  const location = useLocation()
+
+  const [activeSection, setActiveSection] = useState("profile")
+  const [, setDirty] = useState(false)
+  const [, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+
+  const filteredTabs = useMemo(() => TABS.filter(t => !t.adminOnly || isAdmin), [isAdmin])
+
+  const markDirty = useCallback(() => setDirty(true), [])
+  const showToast = useCallback((msg, type = "success") => setToast({ msg, type, id: Date.now() }), [])
+
+  useEffect(() => {
+    const section = sectionProp || new URLSearchParams(location.search).get("section")
+    if (!section) return
+    const match = filteredTabs.find(s => s.id === section)
+    if (match) setActiveSection(match.id)
+  }, [location.search, sectionProp, filteredTabs])
+
+  const activeSub = filteredTabs.find(s => s.id === activeSection) || filteredTabs[0]
+
+  const Loader = () => (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-8 h-8 border-2 border-indigo-100 dark:border-slate-800 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin" />
+    </div>
+  )
+
+  return (
+    <div className="flex min-h-screen bg-bg dark:bg-slate-950/20">
+
+      {/* ── Sidebar ──────────────────────────────────────────────── */}
+      <aside className="w-[280px] shrink-0 border-r border-stroke dark:border-slate-800 bg-surface dark:bg-slate-900/40 py-10 sticky top-0 h-screen overflow-y-auto">
+        <div className="px-8 pb-6 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">
+          {isAdmin ? "Settings" : "My Settings"}
+        </div>
+        <nav className="flex flex-col gap-1 px-4">
+          {filteredTabs.map(tab => {
+            const isActive = activeSection === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${isActive
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 shadow-sm shadow-indigo-100/20 dark:shadow-none"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+              >
+                <span className={`${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"} shrink-0`}>
+                  {tab.icon}
+                </span>
+                {tab.label}
+              </button>
+            )
+          })}
+        </nav>
+      </aside>
+
+      {/* ── Content ──────────────────────────────────────────────── */}
+      <main className="flex-1 px-14 py-12 overflow-y-auto">
+
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-10">
+          <span className="opacity-50">Settings</span>
+          <ChevronRight size={12} className="opacity-30" />
+          <span className="text-indigo-600 dark:text-indigo-400">{activeSub?.label}</span>
+        </div>
+
+        {/* Animated section */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <Suspense fallback={<Loader />}>
+              {activeSection === "profile" && <ProfileSection markDirty={markDirty} showToast={showToast} Field={Field} SectionHeader={SectionHeader} />}
+              {activeSection === "security" && <AccountSecuritySection markDirty={markDirty} showToast={showToast} Field={Field} SectionHeader={SectionHeader} />}
+              {activeSection === "appearance" && <AppearanceSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "notifications" && <NotificationsSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "billing" && <BillingSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "team" && <TeamMembersSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "invoices" && <InvoicesSection />}
+              {activeSection === "organization" && <WorkspaceSection showToast={showToast} SectionHeader={SectionHeader} />}
+              {activeSection === "location" && <LocationsSettingsSection />}
+              {activeSection === "rbac" && <AccessControlSection />}
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>
+
+        {toast && createPortal(
+          <Toast key={toast.id} message={toast.msg} type={toast.type} onDismiss={() => setToast(null)} />,
+          document.body
+        )}
+
+      </main>
+    </div>
+  )
+}

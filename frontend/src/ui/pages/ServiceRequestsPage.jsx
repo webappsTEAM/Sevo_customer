@@ -1,0 +1,1883 @@
+import React, { useState, useEffect, useMemo } from "react"
+import { createPortal } from "react-dom"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Search, Wrench, ShieldAlert, AlertCircle, Clock, CheckCircle2,
+  User, Phone, Mail, MapPin, Calendar, FileText, ArrowRight, CornerDownLeft,
+  Eye, RefreshCw, Star, HelpCircle, X, Info, XCircle, AlertTriangle,
+  Filter, Zap, ChevronDown, ClipboardCheck, Users, TrendingUp,
+  CheckCheck, Ban, Repeat2, ThumbsUp, Send, Copy
+} from "lucide-react"
+import { apiRequest } from "../../api/client.js"
+import { useLocation, useNavigate } from "react-router-dom"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { CATEGORY_TO_ROLES_MAP, TECHNICIAN_ROLES } from "../../utils/roles.js"
+import { AdminReschedulesPanel, AdminRefundsPanel, AdminComplaintsPanel } from "./AdminServicePanels.jsx"
+
+/* ─── Toast ─────────────────────────────────────────────────────────────── */
+function Toast({ message, type = "success", onDismiss }) {
+  useEffect(() => { const t = setTimeout(onDismiss, 3500); return () => clearTimeout(t) }, [onDismiss])
+  const icons = { success: <CheckCircle2 size={15} />, error: <XCircle size={15} />, warn: <AlertTriangle size={15} />, info: <Info size={15} /> }
+  return (
+    <div className="settingsToast" data-type={type}>
+      {icons[type] || icons.info}
+      <span>{message}</span>
+      <button onClick={onDismiss} className="settingsToastClose"><X size={13} /></button>
+    </div>
+  )
+}
+
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+const STATUS_META = {
+  new_request: { label: "New", color: "#3B82F6", bg: "#EFF6FF", border: "#BFDBFE" },
+  confirmed: { label: "Confirmed", color: "#0EA5E9", bg: "#E0F2FE", border: "#BAE6FD" },
+  waiting_for_payment: { label: "Awaiting Pay", color: "#EAB308", bg: "#FEFCE8", border: "#FEF08A" },
+  reviewed: { label: "Reviewed", color: "#6366F1", bg: "#EEF2FF", border: "#C7D2FE" },
+  assigned: { label: "Assigned", color: "#8B5CF6", bg: "#F5F3FF", border: "#DDD6FE" },
+  accepted: { label: "Accepted", color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A" },
+  in_progress: { label: "In Progress", color: "#F97316", bg: "#FFF7ED", border: "#FDBA74" },
+  completed: { label: "Completed", color: "#10B981", bg: "#ECFDF5", border: "#6EE7B7" },
+  awaiting_verification: { label: "Verifying", color: "#14B8A6", bg: "#F0FDFA", border: "#99F6E4" },
+  verified: { label: "Verified", color: "#059669", bg: "#D1FAE5", border: "#6EE7B7" },
+  feedback_pending: { label: "Feedback", color: "#64748B", bg: "#F8FAFC", border: "#CBD5E1" },
+  feedback_received: { label: "Fb Received", color: "#EC4899", bg: "#FDF2F8", border: "#FBCFE8" },
+  closed: { label: "Closed", color: "#475569", bg: "#F1F5F9", border: "#CBD5E1" },
+  rejected: { label: "Rejected", color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
+  rework_requested: { label: "Rework", color: "#DC2626", bg: "#FEF2F2", border: "#FCA5A5" },
+  on_the_way: { label: "On The Way", color: "#06B6D4", bg: "#ECFEFF", border: "#A5F3FC" },
+}
+
+const PRIORITY_META = {
+  low: { label: "Low", color: "#64748B", bg: "#F1F5F9" },
+  normal: { label: "Normal", color: "#3B82F6", bg: "#EFF6FF" },
+  high: { label: "High", color: "#F97316", bg: "#FFF7ED" },
+  urgent: { label: "Urgent", color: "#EF4444", bg: "#FEF2F2" },
+}
+
+const CAT_EMOJIS = {
+  plumbing: "🔧", electrical: "⚡", carpentry: "🪵", hvac: "❄️",
+  cleaning: "🧹", pest_control: "🦟", painting: "🎨",
+  appliance_repair: "🏠", security: "📷", general: "🔨",
+}
+
+const PIPELINE_ORDER = [
+  "new_request", "confirmed", "waiting_for_payment", "reviewed", "assigned", "accepted",
+  "on_the_way", "in_progress", "completed", "awaiting_verification",
+  "verified", "feedback_pending", "feedback_received", "closed",
+]
+
+/* ─── Sub-components ─────────────────────────────────────────────────────── */
+function StatusBadge({ status, size = "sm" }) {
+  const m = STATUS_META[status] || { label: status, color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" }
+  const padding = size === "sm" ? "3px 8px" : "4px 10px"
+  const fontSize = size === "sm" ? "0.62rem" : "0.7rem"
+  return (
+    <span style={{
+      background: m.bg, color: m.color, border: `1px solid ${m.border}`,
+      borderRadius: 99, padding, fontSize, fontWeight: 700,
+      whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+      {m.label}
+    </span>
+  )
+}
+
+function PriorityBadge({ priority }) {
+  const m = PRIORITY_META[priority] || { label: priority, color: "#64748B", bg: "#F1F5F9" }
+  const isUrgent = priority === "urgent"
+  return (
+    <span style={{
+      background: m.bg, color: m.color,
+      borderRadius: 99, padding: "2px 7px", fontSize: "0.6rem", fontWeight: 800,
+      letterSpacing: "0.04em", textTransform: "uppercase",
+      display: "inline-flex", alignItems: "center", gap: 3,
+      animation: isUrgent ? "srPulse 1.4s ease-in-out infinite" : "none",
+    }}>
+      {m.label}
+    </span>
+  )
+}
+
+function TechAvatar({ name, size = 32 }) {
+  const initial = (name || "?").charAt(0).toUpperCase()
+  const colors = ["#7C3AED", "#2563EB", "#059669", "#D97706", "#DC2626", "#0891B2"]
+  const color = colors[initial.charCodeAt(0) % colors.length]
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      background: color + "20", color, border: `2px solid ${color}40`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontWeight: 700, fontSize: size * 0.38, flexShrink: 0,
+    }}>
+      {initial}
+    </div>
+  )
+}
+
+/* ─── Pipeline Lane Counts ───────────────────────────────────────────────── */
+function PipelineLanes({ requests, activeStatus, onFilter }) {
+  const counts = useMemo(() => {
+    const c = {}
+    requests.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
+    return c
+  }, [requests])
+
+  const urgent = requests.filter(r => r.priority === "urgent").length
+
+  return (
+    <div className="sr-pipeline">
+      <button
+        className={`sr-lane ${!activeStatus ? "sr-lane--active" : ""}`}
+        onClick={() => onFilter("")}
+        style={!activeStatus ? { "--lc": "#7C3AED" } : {}}
+      >
+        <span className="sr-lane-count">{requests.length}</span>
+        <span className="sr-lane-label">All</span>
+      </button>
+
+      {urgent > 0 && (
+        <button
+          className="sr-lane sr-lane--urgent"
+          onClick={() => onFilter("urgent_filter")}
+        >
+          <span className="sr-lane-count">{urgent}</span>
+          <span className="sr-lane-label">🚨 Urgent</span>
+        </button>
+      )}
+
+      {PIPELINE_ORDER.filter(s => counts[s]).map(s => {
+        const m = STATUS_META[s]
+        const isActive = activeStatus === s
+        return (
+          <button
+            key={s}
+            className={`sr-lane ${isActive ? "sr-lane--active" : ""}`}
+            onClick={() => onFilter(isActive ? "" : s)}
+            style={isActive ? { "--lc": m.color } : {}}
+          >
+            <span className="sr-lane-count" style={{ color: m.color }}>{counts[s]}</span>
+            <span className="sr-lane-label">{m.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ─── Dispatch Workforce Panel ────────────────────────────────────────────── */
+function DispatchWorkforcePanel({ onDispatch, loading }) {
+  const [notes, setNotes] = useState("")
+
+  return (
+    <div className="sr-assign-panel">
+      <div className="sr-assign-title"><Send size={13} /> Dispatch to Workforce System</div>
+      <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: 10, lineHeight: 1.4 }}>
+        This booking will be transmitted to the external Workforce system for automated technician allocation and scheduling.
+      </div>
+      <textarea
+        className="sr-input"
+        style={{ width: "100%", minHeight: 60, fontSize: "0.82rem", padding: "8px 10px", borderRadius: 8, border: "1px solid #cbd5e1", marginBottom: 12 }}
+        placeholder="Optional dispatch notes or customer instructions..."
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+      />
+      <button
+        className="sr-btn-primary"
+        disabled={loading}
+        onClick={() => onDispatch(notes)}
+      >
+        {loading ? <RefreshCw size={13} className="sr-spin" /> : <Send size={13} />}
+        Dispatch Booking
+      </button>
+    </div>
+  )
+}
+
+/* ─── Main Component ─────────────────────────────────────────────────────── */
+export function ServiceRequestsPage() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const path = location.pathname
+  const [requests, setRequests] = useState([])
+  const [allRequests, setAllRequests] = useState([])
+  const [categoriesMap, setCategoriesMap] = useState({})
+  const [selectedId, setSelectedId] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [actionSuccess, setActionSuccess] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [showAssign, setShowAssign] = useState(false)
+  const [adminTab, setAdminTab] = useState("bookings") // bookings, reschedules, refunds, complaints
+
+  const showToast = (msg, type = "success") => setToast({ msg, type, id: Date.now() })
+
+  // Filters
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [priorityFilter, setPriorityFilter] = useState("")
+
+  // Document Vault State
+  const [docSearch, setDocSearch] = useState("")
+  const [docStatusFilter, setDocStatusFilter] = useState("all")
+  const [docCategoryFilter, setDocCategoryFilter] = useState("all")
+  const [docSort, setDocSort] = useState("newest")
+  const [previewInvoice, setPreviewInvoice] = useState(null)
+
+  const documentVaultData = useMemo(() => {
+    let list = [...allRequests]
+    if (docSearch.trim()) {
+      const q = docSearch.toLowerCase()
+      list = list.filter(r =>
+        r.request_id?.toLowerCase().includes(q) ||
+        r.customer_id?.toLowerCase().includes(q) ||
+        r.customer_name?.toLowerCase().includes(q) ||
+        r.email?.toLowerCase().includes(q) ||
+        r.issue_title?.toLowerCase().includes(q) ||
+        r.service_category?.toString().toLowerCase().includes(q)
+      )
+    }
+    if (docStatusFilter === "paid") {
+      list = list.filter(r => r.payment_status === "paid" || r.payment_status === "collected")
+    } else if (docStatusFilter === "pending") {
+      list = list.filter(r => r.payment_status !== "paid" && r.payment_status !== "collected")
+    }
+    if (docCategoryFilter !== "all") {
+      list = list.filter(r => r.service_category?.toString() === docCategoryFilter)
+    }
+
+    if (docSort === "newest") {
+      list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    } else if (docSort === "oldest") {
+      list.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+    } else if (docSort === "amount_high") {
+      list.sort((a, b) => parseFloat(b.total_amount || 0) - parseFloat(a.total_amount || 0))
+    } else if (docSort === "amount_low") {
+      list.sort((a, b) => parseFloat(a.total_amount || 0) - parseFloat(b.total_amount || 0))
+    }
+
+    const totalCount = allRequests.length
+    const totalAmount = allRequests.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0)
+    const paidItems = allRequests.filter(r => r.payment_status === "paid" || r.payment_status === "collected")
+    const paidCount = paidItems.length
+    const paidAmount = paidItems.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0)
+    const pendingItems = allRequests.filter(r => r.payment_status !== "paid" && r.payment_status !== "collected")
+    const pendingCount = pendingItems.length
+    const pendingAmount = pendingItems.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0)
+
+    return {
+      filteredList: list,
+      totalCount,
+      totalAmount,
+      paidCount,
+      paidAmount,
+      pendingCount,
+      pendingAmount
+    }
+  }, [allRequests, docSearch, docStatusFilter, docCategoryFilter, docSort])
+
+  /* Load list */
+  const loadRequests = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiRequest("/admin/service-requests/?page_size=200")
+      if (res?.success) {
+        const raw = res.data
+        const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : [])
+        setAllRequests(data)
+        setRequests(data)
+      } else setError(res?.message || "Failed to load requests.")
+    } catch (err) {
+      setError("Failed to fetch service requests from server.")
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      navigate('/booking')
+      return
+    }
+    if (path === "/customers/reschedules") setAdminTab("reschedules")
+    else if (path === "/customers/refunds") setAdminTab("refunds")
+    else if (path === "/customers/complaints") setAdminTab("complaints")
+    else if (path === "/customers/bookings") setAdminTab("bookings")
+  }, [path, user, navigate])
+
+  useEffect(() => {
+    loadRequests()
+    apiRequest("/catalog/categories/")
+      .then(res => {
+        if (res?.success) {
+          const cmap = {}
+          res.data.forEach(c => {
+            const slug = c.slug || c.name.toLowerCase().replace(/ /g, "_")
+            const entry = { name: c.name, image: c.image, slug }
+            cmap[c.id.toString()] = entry
+            cmap[slug] = entry
+          })
+          setCategoriesMap(cmap)
+        }
+      })
+      .catch(err => console.error("Error loading categories:", err))
+  }, [])
+
+  const getCategoryInfo = (catIdOrSlug) => {
+    if (!catIdOrSlug) return { name: "General", emoji: "🔧" }
+    const key = catIdOrSlug.toString()
+    const name = categoriesMap[key]?.name || key.replace(/_/g, " ")
+    const slug = name.toLowerCase().replace(/ /g, "_")
+    const emoji = CAT_EMOJIS[slug] || "🔧"
+    return { name, emoji }
+  }
+
+  /* Client-side filtering */
+  const filtered = useMemo(() => {
+    let list = allRequests
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(r =>
+        r.request_id?.toLowerCase().includes(q) ||
+        r.customer_name?.toLowerCase().includes(q) ||
+        r.issue_title?.toLowerCase().includes(q) ||
+        r.phone?.includes(q)
+      )
+    }
+    if (statusFilter === "urgent_filter") {
+      list = list.filter(r => r.priority === "urgent")
+    } else if (statusFilter) {
+      list = list.filter(r => r.status === statusFilter)
+    }
+    if (priorityFilter) list = list.filter(r => r.priority === priorityFilter)
+    return list
+  }, [allRequests, search, statusFilter, priorityFilter])
+
+  /* Load detail */
+  useEffect(() => {
+    if (!selectedId) { setDetail(null); return }
+    let active = true
+    setDetailLoading(true)
+    setActionSuccess(null)
+    setShowAssign(false)
+    apiRequest(`/admin/service-requests/${selectedId}/`)
+      .then(res => { if (active && res?.success) setDetail(res.data) })
+      .catch(err => console.error(err))
+      .finally(() => { if (active) setDetailLoading(false) })
+    return () => { active = false }
+  }, [selectedId])
+
+  const refreshAll = async () => {
+    const [detRes, listRes] = await Promise.all([
+      apiRequest(`/admin/service-requests/${selectedId}/`),
+      apiRequest("/admin/service-requests/?page_size=200"),
+    ])
+    if (detRes?.success) setDetail(detRes.data)
+    if (listRes?.success) {
+      const raw = listRes.data
+      const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : [])
+      setAllRequests(data)
+      setRequests(data)
+    }
+  }
+
+  const handleAction = async (endpoint, method = "PATCH", payload = {}) => {
+    setActionLoading(true)
+    setActionSuccess(null)
+    try {
+      const res = await apiRequest(`/admin/service-requests/${selectedId}/${endpoint}`, { method, json: payload })
+      if (res?.success) {
+        showToast(res.message || "Done!", "success")
+        setActionSuccess(res.message || "Operation completed.")
+        await refreshAll()
+      } else showToast(res?.message || "Failed.", "error")
+    } catch (err) {
+      showToast(err?.body?.message || "An error occurred.", "error")
+    } finally { setActionLoading(false) }
+  }
+
+  const handleDispatch = async (notes = "") => {
+    setActionLoading(true)
+    try {
+      const res = await apiRequest(`/admin/service-requests/${selectedId}/dispatch/`, {
+        method: "POST", json: { notes },
+      })
+      if (res?.success) {
+        showToast("Booking dispatched to Workforce!", "success")
+        setShowAssign(false)
+        await refreshAll()
+      } else {
+        const msg = res?.message || (res?.errors ? Object.values(res.errors).flat().join("; ") : "Dispatch failed.")
+        showToast(msg, "error")
+      }
+    } catch (err) {
+      const msg = err?.body?.message || err?.body?.detail || "Dispatch error."
+      showToast(msg, "error")
+    } finally { setActionLoading(false) }
+  }
+
+  const handlePriorityChange = async (p) => {
+    setActionLoading(true)
+    try {
+      const res = await apiRequest(`/admin/service-requests/${selectedId}/priority/`, { method: "PATCH", json: { priority: p } })
+      if (res?.success) { showToast("Priority updated.", "success"); await refreshAll() }
+    } catch (err) { showToast("Error.", "error") }
+    finally { setActionLoading(false) }
+  }
+
+  /* ── Render ── */
+  /* ── Render ── */
+  if (path === "/customers/list") {
+    const customersData = []
+    const customerMap = {}
+    allRequests.forEach(r => {
+      if (!customerMap[r.customer_name]) {
+        customerMap[r.customer_name] = {
+          name: r.customer_name,
+          email: r.email || "—",
+          phone: r.phone || "—",
+          bookingsCount: 0,
+          totalSpent: 0,
+          lastBookingDate: r.created_at,
+        }
+        customersData.push(customerMap[r.customer_name])
+      }
+      const c = customerMap[r.customer_name]
+      c.bookingsCount++
+      c.totalSpent += parseFloat(r.total_amount || 0)
+      if (new Date(r.created_at) > new Date(c.lastBookingDate)) {
+        c.lastBookingDate = r.created_at
+      }
+    })
+
+    return (
+      <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+        <SrStyles />
+        <div>
+          <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight">Customer Directory</h1>
+          <p className="text-xs font-semibold text-slate-500 mt-1">
+            List of registered customers, bookings frequency, and total service spent.
+          </p>
+        </div>
+
+        <div className="bg-surface dark:bg-slate-900/40 rounded-3xl border border-stroke dark:border-slate-800 shadow-sm overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-bg/50 dark:bg-slate-800/30">
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Customer Name</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Contact</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Bookings</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Total Revenue</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Last Booking</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stroke dark:divide-slate-800">
+              {customersData.length > 0 ? (
+                customersData.map((c, i) => (
+                  <tr key={i} className="hover:bg-bg/20 dark:hover:bg-slate-800/10 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center font-bold">
+                          {c.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="font-bold text-slate-800 dark:text-slate-200">{c.name}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs">
+                      <div>📧 {c.email}</div>
+                      <div className="text-slate-400 mt-0.5">📞 {c.phone}</div>
+                    </td>
+                    <td className="px-6 py-4 text-xs font-bold">{c.bookingsCount} bookings</td>
+                    <td className="px-6 py-4 text-xs font-extrabold text-slate-800 dark:text-slate-200">₹{c.totalSpent.toLocaleString("en-IN")}</td>
+                    <td className="px-6 py-4 text-xs text-slate-500">{new Date(c.lastBookingDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="p-8 text-center text-slate-400 italic text-sm">No customers registered yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (path === "/customers/payments") {
+    const getItemTotal = (r) => parseFloat(r.total_amount || 0)
+    const getItemBase = (r) => parseFloat(r.base_amount || r.total_amount || 0)
+    const getItemExt = (r) => parseFloat(r.approved_extension_amount || 0)
+
+    const paidRequests = allRequests.filter(r => r.payment_status === "paid" || r.payment_status === "collected")
+    const totalCollected = paidRequests.reduce((sum, r) => sum + getItemTotal(r), 0)
+    const totalPending = allRequests.filter(r => ["pending", "processing"].includes(r.payment_status)).reduce((sum, r) => sum + getItemTotal(r), 0)
+
+    return (
+      <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+        <SrStyles />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight">Customer Payments Ledger</h1>
+            <p className="text-xs font-semibold text-slate-500 mt-1">
+              Verify client transactions, booking bills, and collected revenue details.
+            </p>
+          </div>
+        </div>
+
+        {/* Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="p-6 bg-surface dark:bg-slate-900/40 rounded-3xl border border-stroke dark:border-slate-800 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Revenue Collected</span>
+            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-2">₹{totalCollected.toLocaleString("en-IN")}</h2>
+          </div>
+          <div className="p-6 bg-surface dark:bg-slate-900/40 rounded-3xl border border-stroke dark:border-slate-800 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Pending Payments</span>
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white mt-2">₹{totalPending.toLocaleString("en-IN")}</h2>
+          </div>
+          <div className="p-6 bg-surface dark:bg-slate-900/40 rounded-3xl border border-stroke dark:border-slate-800 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Transactions Count</span>
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white mt-2">{allRequests.length}</h2>
+          </div>
+        </div>
+
+        <div className="bg-surface dark:bg-slate-900/40 rounded-3xl border border-stroke dark:border-slate-800 shadow-sm overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-bg/50 dark:bg-slate-800/30">
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Transaction ID</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Original Work</th>
+                <th className="px-6 py-4 text-xs font-black text-indigo-500 uppercase tracking-wider">Additional Work</th>
+                <th className="px-6 py-4 text-xs font-black text-emerald-600 uppercase tracking-wider">Total Amount</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Method</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-wider">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stroke dark:divide-slate-800">
+              {allRequests.length > 0 ? (
+                allRequests.map((r, i) => {
+                  const baseAmt = getItemBase(r)
+                  const extAmt = getItemExt(r)
+                  const totAmt = getItemTotal(r)
+                  const isPaid = r.payment_status === "paid" || r.payment_status === "collected"
+
+                  return (
+                    <tr key={i} className="hover:bg-bg/20 dark:hover:bg-slate-800/10 transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{r.transaction_id || `TXN-${r.request_id}`}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-800 dark:text-slate-200">{r.customer_name}</div>
+                        <div className="text-[10px] text-slate-400">{r.email}</div>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">₹{baseAmt.toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        {extAmt > 0 ? `₹${extAmt.toLocaleString("en-IN")}` : "—"}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">₹{totAmt.toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4 text-xs font-bold">{r.payment_method || "COD"}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          isPaid ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                        }`}>
+                          {isPaid ? "PAID" : "PENDING"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500">{new Date(r.created_at || Date.now()).toLocaleDateString("en-IN")}</td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan="8" className="p-8 text-center text-slate-400 italic text-sm">No transaction records found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (path === "/customers/documents") {
+    const { filteredList, totalCount, totalAmount, paidCount, paidAmount, pendingCount, pendingAmount } = documentVaultData
+
+    return (
+      <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+        <SrStyles />
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-tight flex items-center gap-2">
+              <FileText className="text-indigo-600 dark:text-indigo-400" size={26} />
+              Customer Invoice Vault
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+              Access client billing documents, generated receipt invoices, and proof logs.
+            </p>
+          </div>
+          <button
+            onClick={loadRequests}
+            className="self-start md:self-auto px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-all shadow-sm"
+          >
+            <RefreshCw size={14} className={loading ? "sr-spin" : ""} />
+            Refresh Vault
+          </button>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Vault Documents</span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{totalCount}</span>
+              <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">₹{totalAmount.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Paid / Collected Invoices</span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{paidCount}</span>
+              <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">₹{paidAmount.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Pending Payment</span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{pendingCount}</span>
+              <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400">₹{pendingAmount.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Active Search Results</span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{filteredList.length}</span>
+              <span className="text-xs font-bold text-slate-400">Filtered</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Search, Filter & Sort Toolbar */}
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search customer, ID, issue..."
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {docSearch && (
+              <button onClick={() => setDocSearch("")} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Status Filter */}
+            <select
+              value={docStatusFilter}
+              onChange={(e) => setDocStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none"
+            >
+              <option value="all">All Statuses</option>
+              <option value="paid">Paid & Collected</option>
+              <option value="pending">Pending / Unpaid</option>
+            </select>
+
+            {/* Sort */}
+            <select
+              value={docSort}
+              onChange={(e) => setDocSort(e.target.value)}
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="amount_high">Amount: High → Low</option>
+              <option value="amount_low">Amount: Low → High</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Invoice Grid */}
+        {filteredList.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+            <FileText className="mx-auto text-slate-300 dark:text-slate-700 mb-3" size={48} />
+            <h3 className="font-bold text-slate-700 dark:text-slate-300">No matching invoices found</h3>
+            <p className="text-xs text-slate-400 mt-1">Try adjusting your search query or status filter.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredList.map((r) => {
+              const catInfo = getCategoryInfo(r.service_category)
+              const isPaid = r.payment_status === "paid" || r.payment_status === "collected"
+              
+              return (
+                <div key={r.id} className="p-5 bg-white dark:bg-slate-900/60 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                        <FileText size={20} />
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/30">
+                          {r.request_id}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          isPaid ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                        }`}>
+                          {isPaid ? "PAID" : "PENDING"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-bold text-base text-slate-900 dark:text-white leading-snug">{r.customer_name}</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold flex items-center gap-1.5">
+                        <span>{catInfo.emoji}</span>
+                        <span>{r.issue_title || catInfo.name}</span>
+                      </p>
+                      {r.phone && <p className="text-[11px] text-slate-400 mt-0.5">📞 {r.phone}</p>}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-end">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Amount</span>
+                        <span className="text-lg font-black text-slate-900 dark:text-white">₹{parseFloat(r.total_amount || 0).toLocaleString("en-IN")}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg uppercase">
+                        {r.payment_method || "COD"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => setPreviewInvoice(r)}
+                      className="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-1"
+                      title="Quick Preview"
+                    >
+                      <Eye size={14} />
+                      Preview
+                    </button>
+                    <a
+                      href={`/api/booking/${r.id}/invoice/`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 text-center py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-500/20 flex items-center justify-center gap-1.5"
+                    >
+                      <FileText size={14} />
+                      Download Invoice
+                    </a>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Invoice Preview Modal */}
+        {previewInvoice && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-5 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+              <button
+                onClick={() => setPreviewInvoice(null)}
+                className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white">Invoice #{previewInvoice.request_id}</h2>
+                  <p className="text-xs text-slate-500 font-semibold">CalTrack Customer Billing Document</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Customer Name:</span>
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200">{previewInvoice.customer_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Phone / Email:</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{previewInvoice.phone} {previewInvoice.email ? `• ${previewInvoice.email}` : ""}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Service Title:</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{previewInvoice.issue_title || getCategoryInfo(previewInvoice.service_category).name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Payment Method:</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">{previewInvoice.payment_method || "COD"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Payment Status:</span>
+                  <span className={`font-black uppercase ${
+                    previewInvoice.payment_status === "paid" || previewInvoice.payment_status === "collected" ? "text-emerald-600" : "text-amber-600"
+                  }`}>
+                    {previewInvoice.payment_status || "PENDING"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-xs text-slate-400 font-bold block uppercase">Grand Total</span>
+                  <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                    ₹{parseFloat(previewInvoice.total_amount || 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+                <a
+                  href={`/api/booking/${previewInvoice.id}/invoice/`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
+                >
+                  <FileText size={15} />
+                  Download PDF
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950">
+      <div className="flex bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 pt-3 gap-6 flex-shrink-0">
+        <button onClick={() => setAdminTab('bookings')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'bookings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Service Bookings</button>
+        <button onClick={() => setAdminTab('reschedules')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'reschedules' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Reschedule Requests</button>
+        <button onClick={() => setAdminTab('refunds')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'refunds' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Refund Requests</button>
+        <button onClick={() => setAdminTab('complaints')} className={`font-bold text-sm pb-3 border-b-2 transition-colors ${adminTab === 'complaints' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Complaints</button>
+      </div>
+      
+      <div className="flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-950">
+        <SrStyles />
+        {adminTab === 'bookings' && (
+          <div className="sr-root" style={{ height: '100%' }}>
+
+      {/* ── Left Pane ── */}
+      <div className="sr-left">
+        {/* Header */}
+        <div className="sr-left-header">
+          <div className="sr-left-title">
+            <Wrench size={15} style={{ color: "#7C3AED" }} />
+            Service Requests
+          </div>
+          <button className="sr-icon-btn" onClick={loadRequests} title="Refresh">
+            <RefreshCw size={14} className={loading ? "sr-spin" : ""} />
+          </button>
+        </div>
+
+        {/* Pipeline Lanes */}
+        <PipelineLanes requests={allRequests} activeStatus={statusFilter} onFilter={setStatusFilter} />
+
+        {/* Search + Filters */}
+        <div className="sr-filters">
+          <div className="sr-search-wrap">
+            <Search size={14} className="sr-search-icon" />
+            <input
+              className="sr-search"
+              placeholder="Search ID (AC0826, CUS0025), customer, phone..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && <button className="sr-search-clear" onClick={() => setSearch("")}><X size={12} /></button>}
+          </div>
+          <select className="sr-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+            <option value="">All Priorities</option>
+            {Object.entries(PRIORITY_META).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* List */}
+        <div className="sr-list">
+          {loading && filtered.length === 0 ? (
+            <div className="sr-center-msg">
+              <RefreshCw size={20} className="sr-spin" style={{ color: "#7C3AED" }} />
+              <span>Loading...</span>
+            </div>
+          ) : error ? (
+            <div className="sr-center-msg">
+              <AlertCircle size={20} style={{ color: "#EF4444" }} />
+              <span style={{ color: "#EF4444", fontSize: "0.78rem" }}>{error}</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="sr-center-msg">
+              <HelpCircle size={20} style={{ color: "#94a3b8" }} />
+              <span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>No requests found</span>
+            </div>
+          ) : (
+            filtered.map(r => {
+              const isSelected = r.id === selectedId
+              const sm = STATUS_META[r.status] || STATUS_META.closed
+              const pm = PRIORITY_META[r.priority] || PRIORITY_META.normal
+              return (
+                <button
+                  key={r.id}
+                  className={`sr-list-item ${isSelected ? "sr-list-item--active" : ""} ${r.priority === "urgent" ? "sr-list-item--urgent" : ""}`}
+                  onClick={() => setSelectedId(r.id)}
+                  style={isSelected ? { "--lc": sm.color } : {}}
+                >
+                  <div className="sr-item-top">
+                    <div className="sr-item-meta">
+                      <span className="sr-item-id">{r.request_id}</span>
+                      <span className="sr-item-emoji">{getCategoryInfo(r.service_category).emoji}</span>
+                      <PriorityBadge priority={r.priority} />
+                    </div>
+                    <span className="sr-item-date">{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                  </div>
+
+                  <div className="sr-item-title">{r.issue_title}</div>
+                  <div className="sr-item-customer">
+                    <User size={11} /> {r.customer_name} {r.customer_id ? `(${r.customer_id})` : ""} · {r.phone}
+                  </div>
+
+                  <div className="sr-item-bottom">
+                    <StatusBadge status={r.status} />
+                    {(r.technician_name || r.assigned_employee) && (
+                      <div className="sr-item-tech">
+                        <TechAvatar name={r.technician_name || r.assigned_employee?.full_name} size={18} />
+                        <span>{(r.technician_name || r.assigned_employee?.full_name)?.split(" ")[0]}</span>
+                      </div>
+                    )}
+                  </div>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* ── Right Pane ── */}
+      <div className="sr-right">
+        <AnimatePresence mode="wait">
+          {detailLoading ? (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="sr-center-full">
+              <RefreshCw size={28} className="sr-spin" style={{ color: "#7C3AED" }} />
+              <span className="sr-loading-text">Loading details...</span>
+            </motion.div>
+          ) : !detail ? (
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="sr-center-full">
+              <div className="sr-empty-icon"><Wrench size={32} /></div>
+              <h3 className="sr-empty-title">Select a Request</h3>
+              <p className="sr-empty-desc">Choose a service request from the list to view details and take action.</p>
+            </motion.div>
+          ) : (
+            <motion.div key={`detail-${detail.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="sr-detail">
+
+              {/* Detail Header */}
+              <div className="sr-detail-header">
+                <div className="sr-detail-header-left">
+                  <div className="sr-detail-id-row">
+                    <span className="sr-detail-id">{detail.request_id}</span>
+                    <span className="sr-detail-cat">
+                      {getCategoryInfo(detail.service_category).emoji} {getCategoryInfo(detail.service_category).name}
+                    </span>
+                    <StatusBadge status={detail.status} size="md" />
+                  </div>
+                  <h2 className="sr-detail-title">{detail.issue_title}</h2>
+                  <div className="sr-detail-sub">
+                    <Calendar size={12} /> {detail.preferred_date} &nbsp;·&nbsp;
+                    <Clock size={12} /> Created {new Date(detail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </div>
+                </div>
+
+                <div className="sr-detail-header-right">
+                  <div className="sr-priority-control">
+                    <span className="sr-priority-label">Priority</span>
+                    <select
+                      className="sr-priority-select"
+                      value={detail.priority}
+                      onChange={e => handlePriorityChange(e.target.value)}
+                      disabled={actionLoading}
+                      style={{ color: PRIORITY_META[detail.priority]?.color }}
+                    >
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Success Banner */}
+              {actionSuccess && (
+                <div className="sr-success-banner">
+                  <CheckCircle2 size={15} /> {actionSuccess}
+                </div>
+              )}
+
+              {/* Pipeline Progress */}
+              <div className="sr-pipeline-progress">
+                {PIPELINE_ORDER.slice(0, 7).map((s, i) => {
+                  const idx = PIPELINE_ORDER.indexOf(detail.status)
+                  const done = PIPELINE_ORDER.indexOf(s) < idx
+                  const active = s === detail.status
+                  const m = STATUS_META[s]
+                  return (
+                    <React.Fragment key={s}>
+                      <div className={`sr-pp-step ${done ? "sr-pp-step--done" : active ? "sr-pp-step--active" : ""}`}
+                        style={active ? { "--ppc": m.color } : {}}>
+                        <div className="sr-pp-dot" style={active ? { background: m.color } : done ? { background: "#10B981" } : {}}>
+                          {done && <CheckCheck size={8} />}
+                        </div>
+                        <span className="sr-pp-label">{m.label}</span>
+                      </div>
+                      {i < 6 && <div className={`sr-pp-line ${done ? "sr-pp-line--done" : ""}`} />}
+                    </React.Fragment>
+                  )
+                })}
+              </div>
+
+              {/* Two-column info grid */}
+              <div className="sr-info-grid">
+                {/* Customer */}
+                <div className="sr-info-card">
+                  <div className="sr-info-card-title"><User size={13} /> Customer</div>
+                  {detail.customer_id && (
+                    <div className="sr-info-row">
+                      <span className="sr-info-key">Customer ID</span>
+                      <span className="sr-info-val font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900">{detail.customer_id}</span>
+                    </div>
+                  )}
+                  <div className="sr-info-row"><span className="sr-info-key">Name</span><span className="sr-info-val">{detail.customer_name}</span></div>
+                  <div className="sr-info-row">
+                    <span className="sr-info-key">Phone</span>
+                    <a href={`tel:${detail.phone}`} className="sr-info-link">{detail.phone}</a>
+                  </div>
+                  {detail.email && (
+                    <div className="sr-info-row">
+                      <span className="sr-info-key">Email</span>
+                      <a href={`mailto:${detail.email}`} className="sr-info-link">{detail.email}</a>
+                    </div>
+                  )}
+                  <div className="sr-info-row sr-info-row--col">
+                    <span className="sr-info-key"><MapPin size={11} /> Address</span>
+                    <span className="sr-info-val sr-info-val--sm">{detail.address}</span>
+                  </div>
+                </div>
+
+                {/* Technician Snapshot (External Workforce) */}
+                <div className="sr-info-card">
+                  <div className="sr-info-card-title"><Users size={13} /> Field Technician</div>
+                  {(detail.technician_name || detail.assigned_employee) ? (
+                    <div className="sr-tech-assigned">
+                      <TechAvatar name={detail.technician_name || detail.assigned_employee?.full_name} size={40} />
+                      <div>
+                        <div className="sr-tech-name">{detail.technician_name || detail.assigned_employee?.full_name}</div>
+                        <div className="sr-tech-role">{detail.technician_phone || "External Workforce"}</div>
+                        {detail.technician_rating && (
+                          <div className="sr-tech-id" style={{ color: "#d97706", fontWeight: 600 }}>⭐ {detail.technician_rating} Rating</div>
+                        )}
+                        {detail.workforce_job_id && (
+                          <div className="sr-tech-id" style={{ color: "#6366f1" }}>Job: {detail.workforce_job_id}</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sr-tech-unassigned">
+                      <HelpCircle size={20} style={{ color: "#94a3b8" }} />
+                      <span>{detail.status === "confirmed" ? "Ready for Workforce Dispatch" : "No technician assigned yet"}</span>
+                      {detail.status === "confirmed" && (
+                        <button
+                          className="sr-btn-sm"
+                          onClick={() => setShowAssign(v => !v)}
+                        >
+                          <Send size={11} /> Dispatch Now
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Booking Details */}
+              {(detail.cart_data || detail.total_amount > 0 || detail.preferred_time) && (
+                (() => {
+                  let parsedCart = [];
+                  if (typeof detail.cart_data === "string") {
+                    try { parsedCart = JSON.parse(detail.cart_data); } catch (e) { }
+                  } else if (Array.isArray(detail.cart_data)) {
+                    parsedCart = detail.cart_data;
+                  }
+
+                  if (parsedCart.length === 0 && !detail.total_amount && !detail.preferred_time) return null;
+
+                  return (
+                    <div className="sr-desc-card" style={{ marginBottom: 15 }}>
+                      <div className="sr-info-card-title"><ClipboardCheck size={13} /> Booking Details</div>
+
+                      {(detail.preferred_date || detail.preferred_time) && (
+                        <div className="sr-info-row" style={{ marginBottom: 15 }}>
+                          <span className="sr-info-key"><Clock size={11} /> Preferred Schedule</span>
+                          <span className="sr-info-val sr-info-val--sm">
+                            {detail.preferred_date ? new Date(detail.preferred_date).toLocaleDateString("en-IN", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ""} 
+                            {detail.preferred_date && detail.preferred_time ? " at " : ""}
+                            {detail.preferred_time}
+                          </span>
+                        </div>
+                      )}
+
+                      {parsedCart.length > 0 && (
+                        <div className="sr-cart-items" style={{ marginBottom: 15 }}>
+                          <table style={{ width: "100%", fontSize: "0.85rem", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748B", textAlign: "left" }}>
+                                <th style={{ padding: "8px 0", fontWeight: 600 }}>Service</th>
+                                <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "center" }}>Qty</th>
+                                <th style={{ padding: "8px 0", fontWeight: 600, textAlign: "right" }}>Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {parsedCart.map((item, idx) => (
+                                <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                  <td style={{ padding: "10px 0", color: "#334155" }}>
+                                    <div style={{ fontWeight: 500 }}>{item.name}</div>
+                                    {item.categoryName && <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{item.categoryName}</div>}
+                                  </td>
+                                  <td style={{ padding: "10px 0", textAlign: "center", color: "#475569" }}>{item.quantity}</td>
+                                  <td style={{ padding: "10px 0", textAlign: "right", color: "#475569" }}>₹{item.price}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {(detail.total_amount > 0 || parsedCart.length > 0) && (
+                        <div className="sr-info-row" style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12, justifyContent: "space-between", alignItems: "flex-end" }}>
+                          <div>
+                            <div className="sr-info-key" style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem" }}>Total Amount</div>
+                            {detail.payment_method && (
+                              <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ textTransform: "uppercase", fontWeight: 700, color: "#475569" }}>{detail.payment_method}</span>
+                                {detail.payment_status && (
+                                  <span style={{ 
+                                    padding: "2px 6px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase",
+                                    background: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#dcfce7" : "#fef9c3",
+                                    color: detail.payment_status === "completed" || detail.payment_status === "processing" ? "#166534" : "#854d0e",
+                                    border: `1px solid ${detail.payment_status === "completed" || detail.payment_status === "processing" ? "#bbf7d0" : "#fef08a"}`
+                                  }}>
+                                    {detail.payment_status === "processing" ? "Paid" : detail.payment_status}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span className="sr-info-val" style={{ fontWeight: 800, color: "#7C3AED", fontSize: "1.15rem" }}>₹{Number(detail.total_amount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Description + Photo */}
+              <div className="sr-desc-card">
+                <div className="sr-info-card-title"><FileText size={13} /> Issue Description</div>
+                <p className="sr-desc-text">{detail.description || <em style={{ color: "#94a3b8" }}>No description provided.</em>}</p>
+                {detail.photo && (
+                  <div className="sr-photo-wrap">
+                    <a href={detail.photo} target="_blank" rel="noreferrer" className="sr-photo-link">
+                      <img src={detail.photo} alt="Customer photo" className="sr-photo" />
+                      <div className="sr-photo-hover"><Eye size={18} /></div>
+                    </a>
+                    <span className="sr-photo-label">Customer Attached Photo</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Dispatch Panel (expandable) */}
+              {showAssign && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                  <DispatchWorkforcePanel onDispatch={handleDispatch} loading={actionLoading} />
+                </motion.div>
+              )}
+
+              {/* Completion Proofs */}
+              {((detail.completion_proofs || detail.proofs || detail.employee_job?.proofs)?.length > 0) && (
+                <div className="sr-proofs-card">
+                  <div className="sr-info-card-title"><Eye size={13} /> Completion Proofs</div>
+                  {(detail.completion_notes || detail.employee_job?.notes) && (
+                    <div className="sr-proof-note">&ldquo;{detail.completion_notes || detail.employee_job?.notes}&rdquo;</div>
+                  )}
+                  <div className="sr-proof-grid">
+                    {(detail.completion_proofs || detail.proofs || detail.employee_job?.proofs || []).map((proof, idx) => (
+                      <div key={proof.id || idx} className="sr-proof-item">
+                        {proof.photo ? (
+                          <a href={proof.photo} target="_blank" rel="noreferrer" className="sr-proof-photo-link">
+                            <img src={proof.photo} alt="Proof" className="sr-proof-photo" />
+                            <div className="sr-proof-hover"><Eye size={14} /></div>
+                          </a>
+                        ) : (
+                          <a href={proof.document || proof.file} target="_blank" rel="noreferrer" className="sr-proof-doc">
+                            <FileText size={20} style={{ color: "#7C3AED" }} />
+                            <span>Document</span>
+                          </a>
+                        )}
+                        {proof.note && <div className="sr-proof-caption">{proof.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {detail.feedback?.is_submitted && (
+                <div className="sr-feedback-card">
+                  <div className="sr-info-card-title"><Star size={13} /> Customer Feedback</div>
+                  <div className="sr-fb-row">
+                    <div className="sr-fb-rating">
+                      <Star size={20} style={{ fill: "#F59E0B", color: "#F59E0B" }} />
+                      <span className="sr-fb-score">{detail.feedback.rating}</span>
+                      <span className="sr-fb-of">/5</span>
+                    </div>
+                    <div className="sr-fb-meta">
+                      <div className="sr-fb-meta-row">
+                        <span className="sr-fb-key">Behaviour</span>
+                        <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.employee_behaviour}</span>
+                      </div>
+                      <div className="sr-fb-meta-row">
+                        <span className="sr-fb-key">Work Quality</span>
+                        <span className="sr-fb-val" style={{ textTransform: "capitalize" }}>{detail.feedback.work_quality}</span>
+                      </div>
+                      <div className="sr-fb-meta-row">
+                        <span className="sr-fb-key">Resolved</span>
+                        <span className="sr-fb-val">{detail.feedback.issue_resolved ? "✅ Yes" : "❌ No"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {detail.feedback.comment && (
+                    <div className="sr-fb-comment">&ldquo;{detail.feedback.comment}&rdquo;</div>
+                  )}
+                </div>
+              )}
+
+              {/* Feedback Token URL */}
+              {detail.feedback && !["closed", "rejected"].includes(detail.status) && (
+                <div className="sr-token-card">
+                  <div className="sr-token-label">Feedback Link</div>
+                  <div className="sr-token-url-row">
+                    <span className="sr-token-url">{`${window.location.origin}/feedback/${detail.feedback.feedback_token}`}</span>
+                    <button
+                      className="sr-token-copy"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/feedback/${detail.feedback.feedback_token}`)
+                        showToast("Copied!", "success")
+                      }}
+                    >
+                      <Copy size={12} /> Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Action Buttons ── */}
+              <div className="sr-actions">
+                <div className="sr-actions-title">Workflow Actions</div>
+                <div className="sr-actions-row">
+
+                  {/* NEW_REQUEST / CONFIRMED */}
+                  {["new_request", "confirmed"].includes(detail.status) && (
+                    <>
+                      <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("review/")}>
+                        <ClipboardCheck size={14} /> Mark Reviewed
+                      </button>
+                      <button
+                        className="sr-btn-action sr-btn-action--primary"
+                        onClick={() => setShowAssign(v => !v)}
+                      >
+                        <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
+                      </button>
+                      <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
+                        <Ban size={14} /> Reject
+                      </button>
+                    </>
+                  )}
+
+                  {/* REVIEWED */}
+                  {detail.status === "reviewed" && (
+                    <>
+                      <button
+                        className="sr-btn-action sr-btn-action--primary"
+                        onClick={() => setShowAssign(v => !v)}
+                      >
+                        <Users size={14} /> {showAssign ? "Close Assign Panel" : "Assign Technician"}
+                      </button>
+                      <button className="sr-btn-action sr-btn-action--danger" disabled={actionLoading} onClick={() => handleAction("reject/")}>
+                        <Ban size={14} /> Reject
+                      </button>
+                    </>
+                  )}
+
+                  {/* AWAITING_VERIFICATION */}
+                  {detail.status === "awaiting_verification" && (
+                    <>
+                      <button className="sr-btn-action sr-btn-action--success" disabled={actionLoading} onClick={() => handleAction("verify/")}>
+                        <CheckCheck size={14} /> Verify & Send Feedback
+                      </button>
+                      <button className="sr-btn-action sr-btn-action--warning" disabled={actionLoading} onClick={() => handleAction("request-rework/")}>
+                        <Repeat2 size={14} /> Request Rework
+                      </button>
+                    </>
+                  )}
+
+                  {/* FEEDBACK_RECEIVED */}
+                  {detail.status === "feedback_received" && (
+                    <button className="sr-btn-action sr-btn-action--primary" disabled={actionLoading} onClick={() => handleAction("close/")}>
+                      <CheckCircle2 size={14} /> Close Request
+                    </button>
+                  )}
+
+                  {/* SEND/RESEND FEEDBACK EMAIL */}
+                  {!["closed", "rejected"].includes(detail.status) && (
+                    <button
+                      className="sr-btn-action sr-btn-action--ghost"
+                      disabled={actionLoading}
+                      onClick={() => handleAction("resend-feedback/", "POST")}
+                    >
+                      <Send size={14} /> {detail.feedback ? "Resend Feedback Email" : "Send Feedback Email"}
+                    </button>
+                  )}
+
+                  {/* CLOSED */}
+                  {detail.status === "closed" && (
+                    <div className="sr-status-msg sr-status-msg--closed">
+                      <CheckCircle2 size={14} /> This request is fully closed.
+                    </div>
+                  )}
+
+                  {/* REJECTED */}
+                  {detail.status === "rejected" && (
+                    <div className="sr-status-msg sr-status-msg--rejected">
+                      <Ban size={14} /> This request has been rejected.
+                    </div>
+                  )}
+
+                  {/* LOADING */}
+                  {actionLoading && (
+                    <div className="sr-status-msg">
+                      <RefreshCw size={13} className="sr-spin" /> Processing...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Toast */}
+      {toast && createPortal(
+        <Toast key={toast.id} message={toast.msg} type={toast.type} onDismiss={() => setToast(null)} />,
+        document.body
+      )}
+    </div>
+        )}
+
+        {adminTab === 'reschedules' && <AdminReschedulesPanel showToast={showToast} />}
+        {adminTab === 'refunds' && <AdminRefundsPanel showToast={showToast} />}
+        {adminTab === 'complaints' && <AdminComplaintsPanel showToast={showToast} />}
+      </div>
+    </div>
+  )
+}
+
+/* ── Styles ─────────────────────────────────────────────────────────────── */
+function SrStyles() {
+  return (
+    <style>{`
+      @keyframes srPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+      .sr-spin { animation: srSpin 0.8s linear infinite; }
+      @keyframes srSpin { to { transform: rotate(360deg); } }
+
+      .sr-root {
+        display: flex;
+        height: calc(100vh - 64px);
+        overflow: hidden;
+        background: #f8fafc;
+        font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      }
+
+      /* ── Left Pane ── */
+      .sr-left {
+        width: 380px;
+        min-width: 320px;
+        max-width: 420px;
+        border-right: 1px solid #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        overflow: hidden;
+      }
+      @media (max-width: 768px) { .sr-left { width: 100%; max-width: 100%; } }
+
+      .sr-left-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid #f1f5f9;
+        flex-shrink: 0;
+      }
+      .sr-left-title {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: #1e293b;
+        letter-spacing: -0.01em;
+      }
+      .sr-icon-btn {
+        background: none;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.35rem;
+        cursor: pointer;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        transition: all 0.2s ease;
+      }
+      .sr-icon-btn:hover { background: #f1f5f9; color: #7C3AED; }
+
+      /* ── Pipeline Lanes ── */
+      .sr-pipeline {
+        display: flex;
+        gap: 0.45rem;
+        overflow-x: auto;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid #f1f5f9;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+        flex-shrink: 0;
+      }
+      .sr-pipeline::-webkit-scrollbar {
+        height: 4px;
+      }
+      .sr-pipeline::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .sr-lane {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.15rem;
+        padding: 0.35rem 0.6rem;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 58px;
+        font-family: inherit;
+        transition: all 0.15s ease;
+      }
+      .sr-lane:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+      }
+      .sr-lane--active {
+        background: #eff6ff;
+        border-color: var(--lc, #3B82F6);
+        box-shadow: 0 1px 3px rgba(59, 130, 246, 0.15);
+      }
+      .sr-lane--urgent {
+        background: #fef2f2;
+        border-color: #fecaca;
+        animation: srPulse 1.5s ease-in-out infinite;
+      }
+      .sr-lane--urgent:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+      }
+      .sr-lane-count {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #1e293b;
+        line-height: 1;
+      }
+      .sr-lane--active .sr-lane-count {
+        color: var(--lc, #3B82F6);
+      }
+      .sr-lane-label {
+        font-size: 0.62rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .sr-lane--active .sr-lane-label {
+        color: var(--lc, #3B82F6);
+        font-weight: 800;
+      }
+
+      /* ── Filters ── */
+      .sr-filters {
+        padding: 0.5rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        border-bottom: 1px solid #f1f5f9;
+        flex-shrink: 0;
+      }
+      .sr-search-wrap { position: relative; }
+      .sr-search-icon { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+      .sr-search {
+        width: 100%;
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem 0.5rem 2.2rem;
+        font-size: 0.78rem;
+        font-family: inherit;
+        color: #1e293b;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+      }
+      .sr-search:focus { border-color: #7C3AED; background: white; }
+      .sr-search-clear {
+        position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer; color: #94a3b8;
+      }
+      .sr-select {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        font-family: inherit;
+        color: #475569;
+        font-weight: 600;
+        outline: none;
+        cursor: pointer;
+        width: 100%;
+      }
+      .sr-select:focus { border-color: #7C3AED; }
+
+      /* ── List Items ── */
+      .sr-list {
+        flex: 1;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+      }
+      .sr-list-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        width: 100%;
+        text-align: left;
+        padding: 0.85rem 1rem;
+        border: none;
+        background: none;
+        border-left: 3px solid transparent;
+        border-bottom: 1px solid #f8fafc;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: inherit;
+      }
+      .sr-list-item:hover { background: #f8fafc; }
+      .sr-list-item--active {
+        background: #faf5ff;
+        border-left-color: var(--lc, #7C3AED);
+      }
+      .sr-list-item--urgent { border-left-color: #EF4444 !important; }
+
+      .sr-item-top { display: flex; align-items: center; justify-content: space-between; }
+      .sr-item-meta { display: flex; align-items: center; gap: 0.35rem; }
+      .sr-item-id { font-size: 0.68rem; font-weight: 800; color: #7C3AED; text-transform: uppercase; letter-spacing: 0.05em; }
+      .sr-item-emoji { font-size: 0.9rem; }
+      .sr-item-date { font-size: 0.65rem; font-weight: 600; color: #94a3b8; }
+      .sr-item-title { font-size: 0.82rem; font-weight: 700; color: #1e293b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sr-item-customer { display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: #64748b; font-weight: 600; }
+      .sr-item-bottom { display: flex; align-items: center; justify-content: space-between; }
+      .sr-item-tech { display: flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; color: #64748b; font-weight: 600; }
+
+      /* ── Right Pane ── */
+      .sr-right {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+        background: #f8fafc;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+      }
+      .sr-center-full {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+      .sr-loading-text { font-size: 0.78rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+      .sr-empty-icon {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: white; border: 1px solid #e2e8f0;
+        display: flex; align-items: center; justify-content: center; color: #94a3b8;
+      }
+      .sr-empty-title { font-size: 0.92rem; font-weight: 800; color: #475569; }
+      .sr-empty-desc { font-size: 0.78rem; color: #94a3b8; text-align: center; max-width: 280px; }
+
+      /* ── Detail ── */
+      .sr-detail { display: flex; flex-direction: column; gap: 1rem; max-width: 860px; }
+
+      .sr-detail-header {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 1.25rem;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .sr-detail-header-left { flex: 1; }
+      .sr-detail-id-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+      .sr-detail-id { font-size: 0.72rem; font-weight: 800; color: #7C3AED; letter-spacing: 0.05em; text-transform: uppercase; }
+      .sr-detail-cat { font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: capitalize; background: #f1f5f9; border-radius: 99px; padding: 2px 8px; }
+      .sr-detail-title { font-size: 1.15rem; font-weight: 800; color: #1e293b; line-height: 1.3; }
+      .sr-detail-sub { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: #94a3b8; font-weight: 600; margin-top: 0.35rem; }
+
+      .sr-priority-control { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-end; }
+      .sr-priority-label { font-size: 0.62rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+      .sr-priority-select {
+        background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px;
+        padding: 0.35rem 0.6rem; font-size: 0.78rem; font-weight: 700;
+        font-family: inherit; cursor: pointer; outline: none;
+      }
+
+      .sr-success-banner {
+        display: flex; align-items: center; gap: 0.5rem;
+        background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 10px;
+        padding: 0.65rem 1rem; font-size: 0.8rem; color: #059669; font-weight: 600;
+      }
+
+      /* ── Pipeline Progress ── */
+      .sr-pipeline-progress {
+        background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+        padding: 0.85rem 1rem;
+        display: flex; align-items: center; overflow-x: auto;
+        scrollbar-width: none; gap: 0;
+      }
+      .sr-pipeline-progress::-webkit-scrollbar { display: none; }
+      .sr-pp-step { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 56px; }
+      .sr-pp-dot {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: #e2e8f0; display: flex; align-items: center; justify-content: center;
+        color: white; font-size: 0.55rem; transition: all 0.3s ease;
+      }
+      .sr-pp-step--done .sr-pp-dot { background: #10B981; }
+      .sr-pp-step--active .sr-pp-dot {
+        background: var(--ppc, #7C3AED);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--ppc, #7C3AED) 20%, transparent);
+      }
+      .sr-pp-label { font-size: 0.58rem; font-weight: 700; color: #94a3b8; text-align: center; white-space: nowrap; }
+      .sr-pp-step--done .sr-pp-label, .sr-pp-step--active .sr-pp-label { color: #1e293b; }
+      .sr-pp-line { flex: 1; height: 2px; background: #e2e8f0; min-width: 14px; }
+      .sr-pp-line--done { background: #10B981; }
+
+      /* ── Info Grid ── */
+      .sr-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      @media (max-width: 640px) { .sr-info-grid { grid-template-columns: 1fr; } }
+      .sr-info-card {
+        background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem;
+        display: flex; flex-direction: column; gap: 0.6rem;
+      }
+      .sr-info-card-title {
+        display: flex; align-items: center; gap: 0.35rem;
+        font-size: 0.72rem; font-weight: 800; color: #475569;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        margin-bottom: 0.25rem;
+      }
+      .sr-info-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+      .sr-info-row--col { flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+      .sr-info-key { font-size: 0.7rem; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+      .sr-info-val { font-size: 0.8rem; font-weight: 700; color: #1e293b; text-align: right; }
+      .sr-info-val--sm { font-size: 0.75rem; line-height: 1.4; text-align: left; color: #475569; }
+      .sr-info-link { font-size: 0.8rem; font-weight: 700; color: #7C3AED; text-decoration: none; }
+      .sr-info-link:hover { text-decoration: underline; }
+
+      .sr-tech-assigned { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; }
+      .sr-tech-name { font-size: 0.88rem; font-weight: 700; color: #1e293b; }
+      .sr-tech-role { font-size: 0.72rem; color: #64748b; }
+      .sr-tech-id { font-size: 0.65rem; color: #94a3b8; font-weight: 600; }
+      .sr-tech-unassigned {
+        display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+        padding: 1rem 0; color: #94a3b8; font-size: 0.78rem; font-weight: 600; text-align: center;
+      }
+
+      .sr-desc-card {
+        background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem;
+        display: flex; flex-direction: column; gap: 0.75rem;
+      }
+      .sr-desc-text { font-size: 0.82rem; color: #475569; line-height: 1.6; }
+      .sr-photo-wrap { display: flex; flex-direction: column; gap: 0.35rem; }
+      .sr-photo-link { position: relative; display: inline-block; border-radius: 10px; overflow: hidden; width: 140px; height: 90px; }
+      .sr-photo { width: 100%; height: 100%; object-fit: cover; }
+      .sr-photo-hover {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.4);
+        display: flex; align-items: center; justify-content: center; color: white;
+        opacity: 0; transition: opacity 0.2s;
+      }
+      .sr-photo-link:hover .sr-photo-hover { opacity: 1; }
+      .sr-photo-label { font-size: 0.68rem; color: #94a3b8; font-weight: 600; }
+
+      /* ── Assign Panel ── */
+      .sr-assign-panel {
+        background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem;
+        display: flex; flex-direction: column; gap: 0.75rem;
+        border-top: 3px solid #7C3AED;
+      }
+      .sr-assign-title {
+        display: flex; align-items: center; gap: 0.35rem;
+        font-size: 0.75rem; font-weight: 800; color: #7C3AED;
+        text-transform: uppercase; letter-spacing: 0.04em;
+      }
+      .sr-emp-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 220px; overflow-y: auto; }
+      .sr-emp-card {
+        display: flex; align-items: center; gap: 0.6rem;
+        padding: 0.6rem 0.75rem; border: 1.5px solid #e2e8f0;
+        border-radius: 10px; cursor: pointer; transition: all 0.15s ease;
+        background: #f8fafc;
+      }
+      .sr-emp-card:hover { border-color: #7C3AED; background: #faf5ff; }
+      .sr-emp-card--selected { border-color: #7C3AED; background: #faf5ff; }
+      .sr-emp-info { flex: 1; }
+      .sr-emp-name { font-size: 0.82rem; font-weight: 700; color: #1e293b; }
+      .sr-emp-role { font-size: 0.68rem; color: #64748b; }
+      .sr-empty-mini { font-size: 0.78rem; color: #94a3b8; text-align: center; padding: 1rem; }
+
+      /* ── Proofs ── */
+      .sr-proofs-card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; }
+      .sr-proof-note { font-size: 0.78rem; color: #475569; font-style: italic; padding: 0.5rem 0; }
+      .sr-proof-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+      .sr-proof-item { display: flex; flex-direction: column; gap: 0.25rem; }
+      .sr-proof-photo-link { position: relative; display: block; height: 70px; border-radius: 8px; overflow: hidden; }
+      .sr-proof-photo { width: 100%; height: 100%; object-fit: cover; }
+      .sr-proof-hover {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.4);
+        display: flex; align-items: center; justify-content: center; color: white;
+        opacity: 0; transition: opacity 0.2s;
+      }
+      .sr-proof-photo-link:hover .sr-proof-hover { opacity: 1; }
+      .sr-proof-doc {
+        height: 70px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 0.25rem; font-size: 0.65rem; color: #64748b; text-decoration: none;
+      }
+      .sr-proof-caption { font-size: 0.62rem; color: #94a3b8; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+      /* ── Feedback ── */
+      .sr-feedback-card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; }
+      .sr-fb-row { display: flex; align-items: flex-start; gap: 1rem; margin-top: 0.5rem; }
+      .sr-fb-rating { display: flex; align-items: center; gap: 0.35rem; }
+      .sr-fb-score { font-size: 2rem; font-weight: 900; color: #1e293b; }
+      .sr-fb-of { font-size: 0.9rem; color: #94a3b8; font-weight: 700; }
+      .sr-fb-meta { flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+      .sr-fb-meta-row { display: flex; justify-content: space-between; }
+      .sr-fb-key { font-size: 0.72rem; color: #94a3b8; font-weight: 600; }
+      .sr-fb-val { font-size: 0.75rem; font-weight: 700; color: #1e293b; }
+      .sr-fb-comment {
+        margin-top: 0.75rem; background: #f8fafc; border: 1px solid #f1f5f9;
+        border-radius: 10px; padding: 0.65rem; font-size: 0.8rem; color: #475569;
+        font-style: italic; line-height: 1.5;
+      }
+
+      /* ── Token Card ── */
+      .sr-token-card {
+        background: #faf5ff; border: 1px solid #DDD6FE; border-radius: 12px; padding: 0.75rem 1rem;
+        display: flex; flex-direction: column; gap: 0.35rem;
+      }
+      .sr-token-label { font-size: 0.65rem; font-weight: 800; color: #7C3AED; text-transform: uppercase; letter-spacing: 0.05em; }
+      .sr-token-url-row { display: flex; align-items: center; gap: 0.5rem; }
+      .sr-token-url { font-size: 0.72rem; color: #64748b; font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sr-token-copy {
+        display: flex; align-items: center; gap: 0.3rem;
+        background: #7C3AED; color: white; border: none; border-radius: 7px;
+        padding: 0.3rem 0.6rem; font-size: 0.68rem; font-weight: 700; cursor: pointer;
+        font-family: inherit; white-space: nowrap; flex-shrink: 0;
+      }
+
+      /* ── Actions ── */
+      .sr-actions {
+        background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem;
+      }
+      .sr-actions-title { font-size: 0.68rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+      .sr-actions-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+      .sr-btn-action {
+        display: flex; align-items: center; gap: 0.4rem;
+        font-size: 0.75rem; font-weight: 700; font-family: inherit;
+        padding: 0.55rem 1rem; border-radius: 10px; cursor: pointer;
+        border: 1.5px solid transparent; transition: all 0.15s ease;
+      }
+      .sr-btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+      .sr-btn-action--primary { background: #7C3AED; color: white; border-color: #7C3AED; }
+      .sr-btn-action--primary:hover:not(:disabled) { background: #6d28d9; }
+      .sr-btn-action--success { background: #059669; color: white; border-color: #059669; }
+      .sr-btn-action--success:hover:not(:disabled) { background: #047857; }
+      .sr-btn-action--danger { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+      .sr-btn-action--danger:hover:not(:disabled) { background: #fee2e2; }
+      .sr-btn-action--warning { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+      .sr-btn-action--warning:hover:not(:disabled) { background: #fef3c7; }
+      .sr-btn-action--ghost { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+      .sr-btn-action--ghost:hover:not(:disabled) { background: #f1f5f9; color: #1e293b; }
+
+      .sr-status-msg {
+        display: flex; align-items: center; gap: 0.4rem;
+        font-size: 0.78rem; font-weight: 600; color: #64748b;
+      }
+      .sr-status-msg--closed { color: #059669; }
+      .sr-status-msg--rejected { color: #dc2626; }
+
+      .sr-btn-primary {
+        display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+        background: #7C3AED; color: white; border: none; border-radius: 10px;
+        padding: 0.6rem 1rem; font-size: 0.78rem; font-weight: 700; font-family: inherit;
+        cursor: pointer; transition: all 0.15s ease; width: 100%;
+      }
+      .sr-btn-primary:hover:not(:disabled) { background: #6d28d9; }
+      .sr-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+      .sr-btn-sm {
+        display: flex; align-items: center; gap: 0.3rem;
+        background: #7C3AED; color: white; border: none; border-radius: 8px;
+        padding: 0.35rem 0.75rem; font-size: 0.72rem; font-weight: 700; font-family: inherit;
+        cursor: pointer;
+      }
+      .sr-center-msg {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 0.5rem; padding: 2.5rem 1rem; color: #94a3b8;
+      }
+    `}</style>
+  )
+}
