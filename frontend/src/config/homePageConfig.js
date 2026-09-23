@@ -67,7 +67,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-7", name: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", link: "?category=home_pest_control&subtab=sofa-cleaning", enabled: true },
     { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
     { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
-    { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
+    { id: "cat-10", name: "Vegetables", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
     { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true }
   ],
   pillarModal: {
@@ -323,6 +323,35 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     email: "support@caldimengg.com",
     workingHours: "Mon – Sun (8 AM – 8 PM)",
     copyrightText: "© 2026 CALDIM ENGINEERING PRIVATE LIMITED. All rights reserved."
+  },
+  // Added 2026-09-17 per explicit request ("add a side section 'Mobile' ...
+  // give the access to upload the banners, advertisement, top cards
+  // [Groceries, Services] images"). Kept as its own top-level key, separate
+  // from "hero"/"offers"/"categories" above, so an admin can upload
+  // different creative for the mobile app without touching the website —
+  // and so the app never accidentally shows a web-only asset. Consumed by
+  // the customer app's homepage_repository.dart / home_screen.dart via
+  // GET /api/settings/homepage/'s "mobile" key.
+  mobile: {
+    // Home-screen banner carousel -- same shape as offers.items (a single
+    // admin-uploaded image + an optional click-through link, no
+    // code-drawn text on top of it).
+    banners: [],
+    // In-app advertisement card(s) -- same shape as banners.
+    ads: [],
+    // The quick-access card row at the top of the app's Home screen.
+    // Fixed 2026-09-18 per explicit request ("Top cards 'Groceries' and
+    // 'Services' could be editable like add new, delete and make text also
+    // editable from admin panel"): this used to be a fixed { groceries,
+    // services } pair with only an image+link each and no editable label.
+    // Now a plain list -- any number of cards, each with its own id, label,
+    // image and link -- so the admin can add, delete and relabel cards, not
+    // just swap their photo. Falls back to the matching catalog category's
+    // own image on the app side when a card's image is left empty here.
+    topCards: [
+      { id: "groceries", label: "Groceries", image: "", link: "", enabled: true },
+      { id: "services", label: "Services", image: "", link: "", enabled: true }
+    ]
   }
 }
 
@@ -575,9 +604,52 @@ export function mergeWithDefaultConfig(parsed) {
     pestItems: mergedPestItems
   }
 
+  // Mobile section merge -- banners/ads/topCards are all plain lists (no
+  // per-index default fallback needed, unlike offers/categories, since an
+  // empty list is a perfectly valid "nothing configured yet" state).
+  //
+  // Fixed 2026-09-18: topCards used to be a fixed { groceries, services }
+  // object -- now an admin-managed list, any length, each item carrying its
+  // own editable label. A config saved before this change (or the very
+  // first default) may still have that old object shape; upgrade it to the
+  // equivalent 2-item list in memory here so nothing already published is
+  // lost -- the next Publish click saves it back as a real list.
+  const parsedMobile = parsed.mobile || {}
+  const rawTopCards = parsedMobile.topCards
+  const topCardsList = Array.isArray(rawTopCards)
+    ? rawTopCards
+    : (rawTopCards && typeof rawTopCards === "object"
+        ? [
+            { id: "groceries", label: "Groceries", ...(rawTopCards.groceries || {}) },
+            { id: "services", label: "Services", ...(rawTopCards.services || {}) }
+          ]
+        : DEFAULT_HOME_PAGE_CONFIG.mobile.topCards)
+
+  const mergedMobile = {
+    ...DEFAULT_HOME_PAGE_CONFIG.mobile,
+    ...parsedMobile,
+    banners: (Array.isArray(parsedMobile.banners) ? parsedMobile.banners : []).map((b) => ({
+      ...b,
+      image: resolveDisplayImageUrl(b.image, "")
+    })),
+    ads: (Array.isArray(parsedMobile.ads) ? parsedMobile.ads : []).map((a) => ({
+      ...a,
+      image: resolveDisplayImageUrl(a.image, "")
+    })),
+    topCards: topCardsList.map((card, idx) => ({
+      id: card.id || `tc-${idx}`,
+      label: card.label || "",
+      link: card.link || "",
+      enabled: card.enabled !== undefined ? card.enabled : true,
+      ...card,
+      image: resolveDisplayImageUrl(card.image, "")
+    }))
+  }
+
   return {
     ...DEFAULT_HOME_PAGE_CONFIG,
     ...parsed,
+    mobile: mergedMobile,
     hero: {
       ...DEFAULT_HOME_PAGE_CONFIG.hero,
       ...parsedHero,

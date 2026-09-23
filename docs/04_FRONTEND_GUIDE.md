@@ -1,98 +1,149 @@
-# sevo / QuickTIMS — Frontend Engineering Guide
+# Sevo / CalTrack — Frontend Engineering Guide
 
 ## 1. Directory Structure Overview
 
 ```text
 frontend/
 ├── src/
-│   ├── main.jsx                 # Vite application root entry point
-│   ├── app/                     # App initialization, routing configs, providers
-│   │   ├── router/              # Route configuration and route guards (AuthGuard, RoleGuard)
-│   │   └── App.jsx              # Core root component with theme & global toast
-│   ├── api/ & services/         # Axios / Fetch client and domain API adapters
-│   ├── auth/                    # Auth context, token storage, login/signup handlers
-│   ├── store/ & state/          # Redux Toolkit store, rootReducer, and domain slices
-│   ├── features/                # Feature-based domain modules
-│   │   ├── booking/             # Service booking flow & wizard
-│   │   ├── tracking/            # Real-time Leaflet map & WebSocket listener
-│   │   ├── customer/            # Customer portal, order history, quotations
-│   │   ├── technician/          # Field worker job card, status controls, proof upload
-│   │   ├── admin/               # Admin dashboards, scheduling, dispatch board
-│   │   ├── logistics/           # Goods & transport booking & fleet view
-│   │   └── payroll/             # Payslips and staff compensation
-│   ├── components/ & ui/        # Shared presentation components (cards, tables, modals, badges)
-│   ├── hooks/                   # Custom React hooks (useGeolocation, useWebSocket, useAuth)
-│   └── utils/                   # Formatting helpers (currency, date-fns, validation)
-├── index.html                   # HTML template
-├── vite.config.js               # Vite bundler configuration & proxy settings
-└── package.json                 # Dependencies and scripts
+│   ├── main.jsx                 # Vite application entry point and root providers
+│   ├── app/                     # App initialization and provider setup
+│   ├── api/ & services/         # API clients, axios instance, and domain service adapters
+│   │   ├── client.js            # Base HTTP client with JWT interceptors
+│   │   ├── authService.js       # Customer and admin authentication logic
+│   │   ├── bookingService.js    # Service requests & checkout API handlers
+│   │   ├── logisticsService.js  # Logistics rates, vehicle quotes, and bookings
+│   │   ├── geocoding.js         # Forward/Reverse geocoding & coordinate search
+│   │   ├── routing.js           # Polyline calculation and distance matrix
+│   │   ├── websocketService.js  # Live location WebSocket client
+│   │   ├── addressService.js    # Customer saved addresses CRUD
+│   │   └── customerCareService.js # Tickets, feedback, and complaint handlers
+│   ├── auth/                    # Auth context, session helpers, token storage
+│   ├── store/ & state/          # Redux Toolkit store and domain slices
+│   │   ├── store.js             # Root store configuration
+│   │   ├── inventorySlice.js    # Vegetable stock, units, and inventory history
+│   │   ├── liveLocationSlice.js # Real-time technician coordinates & WS state
+│   │   ├── customerAnalyticsSlice.js # Customer metrics, merges, and LTV
+│   │   └── trialSlice.js        # Tenant trial and subscription state
+│   ├── ui/                      # Main presentation layer and components
+│   │   ├── App.jsx              # Main router switchboard & layout wrapper
+│   │   ├── routes.js            # Centralized application route definitions
+│   │   ├── styles.css           # Global design system, colors, animations
+│   │   ├── components/          # Reusable UI widgets and complex feature modals
+│   │   │   ├── ModernServiceCatalogView.jsx # Multi-vertical catalog renderer
+│   │   │   ├── CustomerEntryFlowModal.jsx   # Phone/OTP/Google login modal
+│   │   │   ├── VegCartDrawerModal.jsx       # Floating vegetable cart drawer
+│   │   │   ├── AllServicesDrawer.jsx        # Full service catalog drawer
+│   │   │   ├── ActiveSessionBar.jsx         # Floating active booking status bar
+│   │   │   ├── SupportHelpCenterModal.jsx   # Live support ticket creator
+│   │   │   ├── AddressPicker/               # Leaflet map location picker
+│   │   │   └── vegetables/                  # Product cards, recipe cards, details
+│   │   └── pages/               # Top-level route page components
+│   │       ├── LandingPage.jsx              # Customer homepage
+│   │       ├── BookingPage.jsx              # Multi-step service booking wizard
+│   │       ├── QuotationDecisionPage.jsx    # Public quotation review & signature
+│   │       ├── LiveTrackingPage.jsx         # Real-time Leaflet technician tracking
+│   │       ├── MiniTruckBookingHosurPage.jsx# Hosur truck booking interface
+│   │       ├── TwoWheelerBookingHosurPage.jsx # 2-Wheeler parcel dispatch
+│   │       ├── PackersMoversBookingHosurPage.jsx # Packers & movers calculator
+│   │       ├── FeedbackPage.jsx             # Public post-service rating page
+│   │       ├── CustomersDashboardPage.jsx   # Customer management dashboard
+│   │       └── catalog/ / settings/         # Admin & management pages
+│   └── utils/                   # Formatting helpers (currency, date-fns, validators)
+├── index.html                   # HTML entry template
+├── vite.config.js               # Vite bundler and proxy configuration
+└── package.json                 # Dependencies and build scripts
 ```
 
 ---
 
-## 2. State Management Strategy (Redux Toolkit)
+## 2. Customer Application Route Architecture (`routes.js`)
 
-The frontend manages global application state using **Redux Toolkit**:
+The application routes are centralized in `frontend/src/ui/routes.js`:
+
+### A. Customer Discovery & Booking Routes
+- `/home` (`routes.landing`): Primary customer homepage showcasing multi-vertical categories, fresh vegetables, logistics cards, and promotional banners.
+- `/booking` (`routes.booking`): Step-by-step home service booking wizard with dynamic add-ons, date/time picker, and address selector.
+- `/vegetables` (`routes.vegetables`): Full-screen vegetable & grocery catalog with recipe integration and dynamic filtering.
+- `/trucks/hosur` (`routes.truck_booking_hosur`): Hosur mini-truck transport booking.
+- `/two-wheelers/hosur` (`routes.two_wheeler_booking_hosur`): Two-wheeler rapid delivery booking.
+- `/packers-and-movers/hosur` (`routes.packers_movers_booking_hosur`): Household moving & relocation calculator.
+
+### B. Public Token-Authenticated Routes (Zero-Login)
+- `/customer/quote/:token` (`routes.customer_quotation`): Interactive customer quotation decision page (view items, accept/decline, digital signature).
+- `/track/:bookingId` (`routes.live_tracking`): Public live technician GPS tracking page (authenticated via `?token=` query param).
+- `/feedback/:token` (`routes.feedback`): Post-service customer feedback and rating submission.
+
+### C. Customer Self-Service Account Hub
+- `/account` (`routes.account`): Customer profile and quick-action dashboard.
+- `/account/bookings` (`routes.account_bookings`): Booking history, active service status, and downloadable invoices.
+- `/account/addresses` (`routes.account_addresses`): Saved address book with interactive map coordinates.
+- `/account/wallet` (`routes.account_wallet`): Customer wallet balance and transaction logs.
+- `/account/referral` (`routes.account_referral`): Referral code and rewards.
+- `/account/help` (`routes.account_help`): Support tickets and help center.
+
+---
+
+## 3. State Management Architecture (Redux Toolkit)
+
+Global state is managed via Redux Toolkit slices:
 
 ```text
-                           +----------------------------------------+
-                           |             Root Store                 |
-                           +-------------------+--------------------+
-                                               |
-           +-----------------+-----------------+-----------------+-----------------+
-           |                 |                 |                 |                 |
-           v                 v                 v                 v                 v
-    +--------------+  +--------------+  +--------------+  +--------------+  +--------------+
-    |  authSlice   |  | bookingSlice |  | trackingSlice|  |  jobsSlice   |  | uiStateSlice |
-    | User session |  | Active cart  |  | Live coords  |  | Tech tasks   |  | Modals, theme|
-    | & tokens     |  | & quote state|  | & WS status  |  | & dispatch   |  | & toasts     |
-    +--------------+  +--------------+  +--------------+  +--------------+  +--------------+
+                             +----------------------------------------+
+                             |             Redux Store                |
+                             +-------------------+--------------------+
+                                                 |
+             +-----------------+-----------------+-----------------+-----------------+
+             |                 |                 |                 |                 |
+             v                 v                 v                 v                 v
+      +--------------+  +--------------+  +--------------+  +--------------+  +--------------+
+      |inventorySlice|  |liveLocSlice  |  | analytics    |  |  trialSlice  |  | auth / ui    |
+      |Veg catalog & |  |WS connection |  |Customer LTV, |  |Subscription  |  |Auth token &  |
+      |stock records |  |& GPS coords  |  |merges & SLA  |  |limits & tier |  |modal states |
+      +--------------+  +--------------+  +--------------+  +--------------+  +--------------+
 ```
 
-### Key Principles:
-- **Never prop drill**: Shared entities across routes live in Redux slices.
-- **Local Component State**: Ephemeral UI toggles (dropdown open, form inputs before submit) use `useState`.
-- **Async Actions**: All API network calls use `createAsyncThunk` with structured `pending`, `fulfilled`, and `rejected` states.
+### Key Redux Slices:
+1. **`inventorySlice`**:
+   - Stores vegetable catalog with pricing, package unit options (`kg`, `g`, pieces), and real-time stock limits.
+   - Dispatches stock changes when items are added to cart.
+2. **`liveLocationSlice`**:
+   - Manages WebSocket connection state (`CONNECTING`, `OPEN`, `CLOSED`).
+   - Ingests incoming technician coordinate packets and updates current latitude, longitude, heading, speed, and calculated ETA.
+3. **`customerAnalyticsSlice`**:
+   - Tracks customer engagement, merge requests, and dispute logs.
 
 ---
 
-## 3. Real-Time Geolocation & Live Map Component
+## 4. Key Customer Feature Components
 
-The tracking view connects via WebSocket to the Daphne backend:
+### A. `ModernServiceCatalogView.jsx`
+- Dynamically renders category cards with rich icons, package descriptions, starting prices, and promotional tags.
+- Provides search and quick filtering by vertical (Home Services, Vegetables, Logistics).
 
-1. **`useLiveTracking` hook**:
-   - Opens WebSocket connection to `ws://<backend>/ws/live-location/<request_id>/`.
-   - Listens for technician coordinate packets `{ lat, lng, speed, heading, timestamp }`.
-   - Dispatches coordinates to `trackingSlice`.
-2. **`LiveMap.jsx` (Leaflet / React-Leaflet)**:
-   - Renders customer location marker (destination) and moving technician vehicle icon.
-   - Smoothly interpolates vehicle position between updates.
-   - Computes route polyline and estimated time of arrival (ETA).
+### B. `VegCartDrawerModal.jsx` & `VegetableRecommendationSection.jsx`
+- Sliding side drawer enabling quick review of fresh vegetable items and recipe kits.
+- Supports smooth increment/decrement of quantities with automatic unit conversion (e.g., 250g, 500g, 1kg).
+- Real-time stock validation preventing orders exceeding current inventory.
+
+### C. `AddressPicker/` (Leaflet Geolocation Component)
+- Full-featured interactive map picker using Leaflet and React-Leaflet.
+- Draggable marker allows precision pinning down to doorsteps.
+- Auto-fetches street name, locality, and postal code via reverse geocoding.
+
+### D. `QuotationDecisionPage.jsx`
+- Standalone, mobile-responsive page accessible via secure link.
+- Shows itemized labor charges, parts costs, taxes, and inspection discounts.
+- Includes interactive canvas for customer digital signature before submission.
+
+### E. `CustomerLiveTrackingModal.jsx` & `LiveTrackingPage.jsx`
+- Real-time map displaying technician's moving icon along the route to customer location.
+- Live progress steps: `ASSIGNED` -> `EN_ROUTE` -> `ARRIVED` -> `IN_PROGRESS` -> `COMPLETED`.
+- Displays estimated arrival time (ETA) and technician contact information.
 
 ---
 
-## 4. Design Guidelines & Component Standard
+## 5. Styling, Theming & Design System
 
-- **Colors & Theming**: Configured via CSS variables with consistent dark/light mode palette.
-- **Named Exports**: All components and page modules use explicit named exports:
-  ```javascript
-  export function ServiceBookingModal({ isOpen, onClose, serviceId }) { ... }
-  ```
-- **Animations**: Subtle page entry transitions and status badge pulse animations for live status indicators.
-- **Accessibility**: Semantic HTML5 elements (`<header>`, `<main>`, `<section>`, `<nav>`) and descriptive form labels.
-
----
-
-## 5. Vegetable Stock & Capacity Management (`/inventory/vegetables`)
-
-- **State Management**: `inventorySlice` manages `vegetables` catalog items and `historyByProduct` ledgers.
-- **Admin Dashboard (`VegetableStockAdminPage.jsx`)**:
-  - Live stock state indicators (`In Stock`, `Out of Stock`, `Not Tracked`).
-  - **Set Default Modal**: Baseline daily stock with instant application toggle (`apply_now`).
-  - **Restock Modal**: Additive stock increment in `kg` / `g`.
-  - **Adjust Modal**: Absolute stock level correction requiring mandatory reason.
-  - **History Modal**: Custom date range picker with PDF print/download.
-- **Customer Product Pages**:
-  - Uncapped quantity input supporting `kg`/`g` conversion.
-  - Reactive Out-of-Stock badge and disabled purchase flow when capacity reaches zero.
-
+- **CSS Variables & Custom Styles (`styles.css`)**: Consistent color tokens for primary brands, dark mode surfaces, glassmorphism cards, and alert badges.
+- **Micro-Animations**: Smooth drawer slide-ins, pulsing live tracking indicators, and button ripple effects.
+- **Responsive Layout**: Designed mobile-first to ensure flawless usability on smartphones, tablets, and desktop displays.

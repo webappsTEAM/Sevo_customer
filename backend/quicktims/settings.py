@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment settings from .env (reloaded with correct DB password)
-load_dotenv(BASE_DIR / ".env", override=True)
+_dotenv_override = os.getenv("SEVO_DOTENV_OVERRIDE", "1").strip() != "0"
+load_dotenv(BASE_DIR / ".env", override=_dotenv_override)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -65,6 +66,7 @@ INSTALLED_APPS = [
     "logistics",
     "orders",
     "carts",
+    "vegetable_orders",
     "customer_care",
     "reports",
     "workforce_integration",
@@ -100,10 +102,21 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
+_argv_str = " ".join(sys.argv).lower()
+IS_TESTING = (
+    "test" in sys.argv
+    or "pytest" in sys.modules
+    or "pytest" in _argv_str
+    or "unittest" in _argv_str
+    or os.getenv("DJANGO_TEST_SQLITE") == "1"
+    or os.getenv("SEVO_TESTING") == "1"
+)
 
 if IS_TESTING:
     TESTING = True
+    PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+    ]
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -155,6 +168,19 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+
+_e2e_sqlite_path = os.getenv("SEVO_E2E_SQLITE_PATH")
+if _e2e_sqlite_path:
+    if DEBUG or IS_TESTING:
+        DATABASES["default"] = {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": Path(_e2e_sqlite_path),
+        }
+    else:
+        import logging
+        logging.getLogger(__name__).warning(
+            "SEVO_E2E_SQLITE_PATH is ignored because DEBUG is False and IS_TESTING is False."
+        )
 
 
 
@@ -536,8 +562,20 @@ LOGGING = {
     },
 }
 
-if "test" in sys.argv:
-    TESTING = True
+if "test" in sys.argv or IS_TESTING:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
+    }
+
+# ── Test Database Safety Guard ───────────────────────────────────────────────
+if IS_TESTING:
+    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    if "sqlite3" not in _final_engine:
+        raise RuntimeError(
+            f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "
+            f"but final DATABASES['default']['ENGINE'] is '{_final_engine}'. "
+            "Tests must run on SQLite only to protect shared/production databases."
+        )
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }

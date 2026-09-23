@@ -291,8 +291,10 @@ urlpatterns = [
     path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
 
     # ── Painting & Waterproofing Quotes & Rate Card ──────────────────────────
-    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),            name='customer-quote-decide'),
     path('booking/quote/<str:token>/pdf/',               CustomerQuotePDFView.as_view(),               name='customer-quote-pdf'),
+    path('booking/<int:booking_id>/quote/pdf/',          CustomerQuotePDFView.as_view(),               name='customer-booking-quote-pdf'),
+    path('booking/<str:identifier>/quote/pdf/',          CustomerQuotePDFView.as_view(),               name='customer-booking-str-quote-pdf'),
+    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),            name='customer-quote-decide'),
     path('admin/painting/rate-card/',                    AdminPaintingRateCardListView.as_view(),       name='admin-painting-rate-card-list'),
     path('admin/painting/rate-card/<int:pk>/',           AdminPaintingRateCardDetailView.as_view(),     name='admin-painting-rate-card-detail'),
     path('admin/painting/quotes/create/',                AdminQuoteCreateView.as_view(),                name='admin-painting-quote-create'),

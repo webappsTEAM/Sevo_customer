@@ -1,18 +1,19 @@
-# sevo / QuickTIMS — Architecture & Engineering Design
+# Sevo / CalTrack — Architecture & Engineering Design
 
 ## 1. Architectural Philosophy
-The system implements a **Modular Monolith** with clear domain separation. Rather than splitting into complex microservices prematurely, each capability is housed as an independent Django domain application on the backend and modular feature directory on the frontend.
+The system implements a **Modular Monolith** architecture with strict domain boundaries. Each core vertical and capability operates as an independent Django domain application on the backend, complemented by modular UI feature components and state slices on the frontend.
 
 ```text
                                +-------------------------------------------------+
                                |                   User / Client                 |
+                               | (Customer Web / Admin Portal / Technician Web)  |
                                +-----------------------+-------------------------+
                                                        |
                                             HTTP / WebSocket / HTTPS
                                                        |
                                                        v
                                +-------------------------------------------------+
-                               |             Nginx / Reverse Proxy               |
+                               |              Nginx / Reverse Proxy              |
                                +-----------+-------------------------+-----------+
                                            |                         |
                            Static / SPA    |                         | API / WS Requests
@@ -52,9 +53,9 @@ The system implements a **Modular Monolith** with clear domain separation. Rathe
 
 ---
 
-## 2. Request Handling & Architectural Layers
+## 2. Request Handling & Backend Architectural Layers
 
-For all backend operations, the project enforces a three-tier separation of concerns:
+For all backend operations, the project enforces a clear separation of concerns across four distinct tiers:
 
 ```text
 [ HTTP Request / WebSocket ]
@@ -63,7 +64,7 @@ For all backend operations, the project enforces a three-tier separation of conc
       [ Views / API Layer ]  ──>  Serializers (Data validation & transformation)
              │
              ▼
-     [ Services Layer ]      ──>  Encapsulated business logic & transactional actions
+     [ Services Layer ]      ──>  Encapsulated business logic & transactional workflows
              │
              ▼
      [ Selectors Layer ]     ──>  Optimized database reads & filtered querysets
@@ -73,19 +74,19 @@ For all backend operations, the project enforces a three-tier separation of conc
 ```
 
 1. **Views (`views.py`, `payment_views.py`, `technician_views.py`)**:
-   - Receive HTTP requests, perform authentication/permission checks, and route payload to serializers.
-   - Do not contain heavy business calculations or raw database mutations.
+   - Receive HTTP requests, validate permissions, route payload to serializers, and invoke appropriate domain services.
+   - Kept thin: free from raw database mutations or heavy business calculations.
 2. **Serializers (`serializers.py`)**:
-   - Validate incoming payload structure, types, and constraints.
+   - Validate incoming payload structure, types, and domain constraints.
 3. **Services (`services/*.py`)**:
-   - Execute domain business logic (e.g. calculation of dynamic quotations, assigning technicians, generating invoices, dispatching notifications).
+   - Execute core business logic (e.g., dynamic quotation calculation, technician dispatch, invoice generation, customer notification triggers).
    - Atomic database write operations wrapped in transactions (`@transaction.atomic`).
 4. **Selectors (`selectors/*.py`)**:
    - Provide clean, reusable querying interfaces with proper indexing, caching, and `select_related`/`prefetch_related` optimizations.
 
 ---
 
-## 3. Real-Time WebSocket Data Flow
+## 3. Real-Time Geolocation WebSocket Data Flow
 
 Real-time geolocation tracking is decoupled from heavy database writes:
 
@@ -98,44 +99,85 @@ Real-time geolocation tracking is decoupled from heavy database writes:
                            ┌───────────────────────────┴───────────────────────────┐
                            │                                                       │
                            ▼                                                       ▼
-                [ Redis Channel Layer ]                                  [ Redis Geolocation Cache ]
-                           │                                            (Last known coords per tech)
-                           ▼                                                       │
-           [ Broadcast to Customer/Admin Rooms ]                                   ▼
-                           │                                            [ Periodic Async Flush ]
-                           ▼                                                       │
-              [ Leaflet Map Live Render ]                                          ▼
-                                                                           [ Database History ]
+                [ Redis Channel Layer ]                                [ Redis In-Memory State ]
+             Group: `location_<request_id>`                          Key: `tech:loc:<tech_id>`
+                           │                                          (TTL: 3600 seconds)
+                           │                                                       │
+                           ▼                                                       ▼ (Debounced Batch)
+               [ Customer Live Map ]                                     [ Celery Periodic Task ]
+             Receives live coordinates &                                           │
+                interpolates marker                                                ▼
+                                                                     [ PostgreSQL LocationHistory ]
 ```
 
 ---
 
-## 4. Multi-Tenant Isolation Pattern
+## 4. Customer Token-Based Public Access Architecture
 
-1. Every user belongs to a `Company` tenant organization.
-2. Models inherit from `CompanyScopedModel` and use `CompanyScopedManager`.
-3. Default querysets automatically enforce `filter(company=request.user.company)`.
-4. Guarantees cross-tenant data isolation at the ORM layer.
-
----
-
-## 5. Vegetable Stock & Daily Capacity Architecture
-
-The Vegetable Stock sub-domain handles daily perishable inventory where stock represents vendor selling capacity rather than static warehouse physical bins.
+To enable frictionless customer access without forcing account creation or active sessions for time-sensitive workflows, CalTrack implements **Cryptographic Token Authorization**:
 
 ```text
-[ Daily 4:00 AM Celery Beat Reset ]  ──>  [ InventoryItem.default_daily_quantity_grams ]
-                                                        │
-                                                        ▼
-[ Customer Cart Checkout ]  ──(Atomic Row Lock)──> [ reserve_stock_for_booking_items() ]
-                                                        │
-                                    ┌───────────────────┴───────────────────┐
-                                    ▼                                       ▼
-                       [ StockMovement (SOLD) ]               [ Invalidate Tenant Cache ]
+                                  +-----------------------------+
+                                  |   SMS / Email / WhatsApp    |
+                                  |  (Sent with signed tokens)  |
+                                  +--------------+--------------+
+                                                 |
+                   +-----------------------------+-----------------------------+
+                   |                             |                             |
+                   v                             v                             v
+    +------------------------------+ +------------------------------+ +------------------------------+
+    |     Quotation Decision       | |       Customer Tracking      | |       Feedback Review        |
+    |  /customer/quote/:token      | |   /track/:id?token=:token    | |      /feedback/:token        |
+    +--------------+---------------+ +--------------+---------------+ +--------------+---------------+
+                   |                                |                                |
+                   v                                v                                v
+    +------------------------------+ +------------------------------+ +------------------------------+
+    | • Validates token validity   | | • Establishes WS connection  | | • Submits multi-criteria     |
+    | • Renders itemized breakdown | | • Stream real-time coords    | |   star ratings & notes       |
+    | • Accepts/Declines with sign | | • Displays ETA & live map    | | • Closes feedback loop       |
+    +------------------------------+ +------------------------------+ +------------------------------+
 ```
 
-### Key Architectural Characteristics:
-1. **Integer Gram Standard**: All internal stock mathematical operations, booking reservations, and movements are executed and persisted in integer grams to eliminate floating-point drift.
-2. **Deterministic Locking**: Deadlock-free reservations acquire row locks via `select_for_update()` ordered strictly by ascending `InventoryItem.id`.
-3. **Idempotent Daily Reset**: Automatic daily reset (scheduled at 4:00 AM via Celery) resets available capacity to `default_daily_quantity_grams` and records an audit movement, with self-healing checks on checkout.
-4. **Ledger-Based History**: Daily opening, restocked, sold, and closing history are computed dynamically from `StockMovement` immutable audit rows without dedicated secondary history tables.
+### Security Properties:
+1. **Scope-Limited Tokens**: Tokens are bound strictly to a single `ServiceRequest` or `Quotation` UUID.
+2. **Deterministic Expiry**: Quotation tokens have configurable validity windows (default: 48 hours).
+3. **No Credential Leaks**: Tokens grant read/action rights only for the specific target record, never exposing customer passwords or broader account data.
+
+---
+
+## 5. Multi-Vertical Frontend Customer Architecture
+
+The customer web portal (`frontend/src/ui`) is engineered around high-conversion, modular workflows:
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                                      CUSTOMER WEB APPLICATION                                     |
++---------------------------------------------------------------------------------------------------+
+|                                                                                                   |
+|  [ ModernServiceCatalogView / LandingPage ]                                                       |
+|  ├── Home Services Grid (AC, Cleaning, Electrical, Plumbing, Painting, Pest Control)             |
+|  ├── Fresh Vegetables & Recipes Carousel (Dynamic unit toggle, stock badge, recipe modal)         |
+|  ├── Logistics & Moving Cards (Mini Trucks, 2-Wheelers, Packers & Movers)                         |
+|  └── Active Session / Cart Bar (Persistent cross-vertical booking indicators)                     |
+|                                                                                                   |
+|  [ Booking Engine ]                   [ Vegetable Cart Drawer ]         [ Logistics Booking ]     |
+|  ├── Multi-step package selection     ├── Uncapped quantity inputs      ├── Rate calculator       |
+|  ├── Dynamic add-ons & inspection     ├── Real-time weight conversions  ├── Vehicle selection     |
+|  └── Leaflet Address Picker modal     └── Stock availability validation └── Floor & elevator cfg  |
+|                                                                                                   |
+|  [ Customer Account Hub (/account) ]                                                              |
+|  ├── Bookings Timeline & Invoices     ├── Saved Addresses & Geocoding   ├── Wallet & Refunds      |
+|  ├── AMC Contract Management          ├── Referral Program              ├── Support Ticket Modal  |
++---------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## 6. Address & Geolocation Subsystem Architecture
+
+The customer application provides an interactive location selection pipeline:
+
+1. **GPS Auto-Detect**: Uses browser Geolocation API (`navigator.geolocation`) with high-accuracy fallback.
+2. **Reverse Geocoding**: Converts coordinates to readable street names, postal codes, and city metadata using OpenStreetMap / Nominatim.
+3. **Interactive Map Pinning (`AddressPicker.jsx`)**: Draggable Leaflet map marker updating coordinate state in real time.
+4. **Distance & Routing Matrix (`routing.js`)**: Calculates road distance, duration, and route polyline for logistics and technician travel.

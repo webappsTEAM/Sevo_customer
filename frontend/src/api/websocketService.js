@@ -22,13 +22,13 @@ export function getWebSocketBaseUrl() {
     return `${wsProto}://${host}/ws`
   }
 
-  // 3. Connect via current window origin in production, direct to 127.0.0.1:8000 in local dev
+  // 3. Connect via current window origin in production, direct to port 8000 in local dev
   if (typeof window !== "undefined") {
     const isSecure = window.location.protocol === "https:"
     const hostname = window.location.hostname
-    // If in local development, connect directly to Django ASGI on 127.0.0.1:8000
+    // In local dev, connect directly to Django Daphne on port 8000 using the active hostname (localhost or 127.0.0.1)
     if ((hostname === "localhost" || hostname === "127.0.0.1") && window.location.port !== "8000") {
-      return `${isSecure ? "wss" : "ws"}://127.0.0.1:8000/ws`
+      return `${isSecure ? "wss" : "ws"}://${hostname}:8000/ws`
     }
     const host = window.location.host
     return `${isSecure ? "wss" : "ws"}://${host}/ws`

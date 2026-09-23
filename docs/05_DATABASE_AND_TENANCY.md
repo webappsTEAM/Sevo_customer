@@ -1,8 +1,8 @@
-# sevo / QuickTIMS — Multi-Tenancy & Database Architecture
+# Sevo / CalTrack — Multi-Tenancy & Database Architecture
 
 ## 1. Multi-Tenant Data Isolation Strategy
 
-sevo enforces multi-tenancy using **tenant-scoped row-level data isolation** within PostgreSQL. Every tenant organization is represented as a `Company` record, and all domain tables reference this parent company.
+CalTrack enforces multi-tenancy using **tenant-scoped row-level data isolation** within PostgreSQL. Every tenant organization is represented as a `Company` record, and all domain tables reference this parent company.
 
 ```text
                                +-----------------------------+
@@ -18,8 +18,8 @@ sevo enforces multi-tenancy using **tenant-scoped row-level data isolation** wit
 |            CompanyScopedModel            |      |            CompanyScopedModel            |
 |       (ServiceRequest / Bookings)        |      |         (Inventory / Stock Items)        |
 |  - company_id: FK(Company)               |      |  - company_id: FK(Company)               |
-|  - customer_id: FK(User)                 |      |  - item_name: "1.5 Ton AC Compressor"    |
-|  - status: "IN_PROGRESS"                 |      |  - quantity: 14                          |
+|  - customer_id: FK(User)                 |      |  - item_name: "Fresh Tomatoes"           |
+|  - status: "IN_PROGRESS"                 |      |  - stock_quantity: 45.5 kg               |
 +------------------------------------------+      +------------------------------------------+
 ```
 
@@ -61,15 +61,15 @@ class CompanyScopedModel(models.Model):
 ## 3. Key Entity-Relationship (ER) Diagram
 
 ```text
-+-----------------------+           +-----------------------+
-|        Company        | 1       * |         User          |
-+-----------------------+ <-------- +-----------------------+
-| id: UUID (PK)         |           | id: UUID (PK)         |
-| name: VarChar         |           | company_id: FK        |
-| slug: VarChar         |           | role: Enum            |
-+-----------+-----------+           +-----------+-----------+
-            | 1                                 | 1
-            |                                   |
++-----------------------+           +-----------------------+           +-----------------------+
+|        Company        | 1       * |         User          | 1       * |    CustomerAddress    |
++-----------------------+ <-------- +-----------------------+ <-------- +-----------------------+
+| id: UUID (PK)         |           | id: UUID (PK)         |           | id: UUID (PK)         |
+| name: VarChar         |           | company_id: FK        |           | user_id: FK(User)     |
+| slug: VarChar         |           | role: Enum            |           | latitude: Decimal     |
++-----------+-----------+           +-----------+-----------+           | longitude: Decimal    |
+            | 1                                 | 1                     | formatted_address:Text|
+            |                                   |                       +-----------------------+
             | *                                 | *
 +-----------v-----------+           +-----------v-----------+
 |    ServiceCategory    |           |    ServiceRequest     |
@@ -78,16 +78,18 @@ class CompanyScopedModel(models.Model):
 | company_id: FK        | <-------- | company_id: FK        |
 | name: VarChar         |           | customer_id: FK(User) |
 | base_price: Decimal   |           | technician_id: FK     |
-+-----------------------+           | status: StateEnum     |
-                                    +-----------+-----------+
-                                                | 1
-                                                |
-                                                | 1
-                                    +-----------v-----------+
-                                    |       Quotation       |
-                                    +-----------------------+
-                                    | id: UUID (PK)         |
-                                    | service_request_id:FK |
++-----------+-----------+           | address_id: FK        |
+            | 1                     | status: StateEnum     |
+            | *                     +-----------+-----------+
++-----------v-----------+                       | 1
+|    ServicePackage     |                       |
++-----------------------+                       | 1
+| id: UUID (PK)         |           +-----------v-----------+
+| category_id: FK       |           |       Quotation       |
+| name: VarChar         |           +-----------------------+
+| price: Decimal        |           | id: UUID (PK)         |
++-----------------------+           | service_request_id:FK |
+                                    | token: UUID (Unique)  |
                                     | subtotal: Decimal     |
                                     | tax: Decimal          |
                                     | grand_total: Decimal  |
@@ -97,44 +99,58 @@ class CompanyScopedModel(models.Model):
 
 ---
 
-## 4. Vegetable Stock & Inventory Models
+## 4. Vegetable Stock, Recipe & Cart Models
 
 ```text
-+-----------------------+           +-----------------------+
-|        Package        | 1       1 |     InventoryItem     |
-+-----------------------+ <-------> +-----------------------+
-| id: BigAutoField (PK) |           | id: BigAutoField (PK) |
-| name: VarChar         |           | org_id: FK(Company)   |
-| stock_item_id: FK(1:1)|           | stock_quantity_grams  |
-| base_price: Decimal   |           | default_daily_qty_g   |
-+-----------------------+           | unit: VarChar         |
-                                    | last_reset_date: Date |
-                                    +-----------+-----------+
-                                                | 1
-                                                |
-                                                | *
-                                    +-----------v-----------+
-                                    |     StockMovement     |
-                                    +-----------------------+
-                                    | id: BigAutoField (PK) |
-                                    | org_id: FK(Company)   |
-                                    | item_id: FK           |
-                                    | movement_type: Enum   |
-                                    | delta_grams: Integer  |
-                                    | balance_after_grams   |
-                                    | reason: Text          |
-                                    | booking_ref: VarChar  |
-                                    | created_at: DateTime  |
-                                    +-----------------------+
++-------------------------+           +-------------------------+
+|      VegetableItem      | 1       * |      RecipePackage      |
++-------------------------+ <-------- +-------------------------+
+| id: UUID (PK)           |           | id: UUID (PK)           |
+| name: VarChar           |           | name: VarChar (Sambhar) |
+| price_per_kg: Decimal   |           | ingredients_json: JSON  |
+| stock_kg: Decimal       |           | prep_instructions: Text |
+| default_daily_stock: Dec|           +-------------------------+
++------------+------------+
+             | 1
+             | *
++------------v------------+           +-------------------------+
+|  VegetableStockHistory  |           |          Cart           |
++-------------------------+           +-------------------------+
+| id: UUID (PK)           |           | id: UUID (PK)           |
+| vegetable_id: FK        |           | customer_id: FK(User)   |
+| change_type: Enum       |           | session_token: VarChar  |
+| delta_kg: Decimal       |           +------------+------------+
+| reason: VarChar         |                        | 1
++-------------------------+                        | *
+                                      +------------v------------+
+                                      |        CartItem         |
+                                      +-------------------------+
+                                      | id: UUID (PK)           |
+                                      | cart_id: FK             |
+                                      | item_type: Enum         |
+                                      | item_id: UUID           |
+                                      | quantity: Decimal       |
+                                      | unit: VarChar (kg/g)    |
+                                      +-------------------------+
 ```
 
 ---
 
-## 5. Migration & Seeding Workflows
+## 5. Logistics & Fleet Models
 
-The repository contains automated seed scripts located in `backend/` for catalog initialization:
-- `python seed_catalog.py` — Populates standard service categories (Plumbing, Electrical, Carpentry, AC Repair, Masonry).
-- `python seed_ac_and_repair_services_data.py` — Populates complex appliance repair subservices.
-- `python seed_all_68_vegetable_recipes.py` — Populates customized meal kit recipes and pricing packages.
-- `python setup_tenants.py` — Provisions initial demo company tenant and admin account.
-
+```text
++-----------------------+           +-----------------------+
+|        Vehicle        | 1       * |   TransportBooking    |
++-----------------------+ <-------- +-----------------------+
+| id: UUID (PK)         |           | id: UUID (PK)         |
+| type: Enum (Tata Ace) |           | customer_id: FK(User) |
+| license_plate: VarChar|           | pickup_lat / lng      |
+| max_payload_kg: Int   |           | drop_lat / lng        |
++-----------------------+           | distance_km: Decimal  |
+                                    | helper_count: Int     |
+                                    | floor_no: Int         |
+                                    | has_elevator: Bool    |
+                                    | estimated_cost: Dec   |
+                                    | status: TripStatusEnum|
+                                    +-----------------------+
+```

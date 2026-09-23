@@ -55,12 +55,11 @@ export function BookingCancellationModal({
   }
 
   const isGraceExpired = isAccepted && remainingSecs <= 0
+  const isCustom = selectedReason === "Other reason (please specify)"
+  const canSubmit = !isSubmitting && !isGraceExpired && Boolean(
+    selectedReason && (!isCustom || customReason.trim().length > 0)
+  )
 
-  const canSubmit =
-    !isSubmitting &&
-    !isGraceExpired &&
-    Boolean(selectedReason) &&
-    (selectedReason !== "Other reason (please specify)" || customReason.trim().length > 0)
 
   const handleConfirmCancel = async () => {
     const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason

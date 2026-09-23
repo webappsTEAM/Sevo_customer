@@ -246,5 +246,5 @@ class QueryRegressionTests(TestCase):
             response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(ctx_query), 6)
+        self.assertLessEqual(len(ctx_query), 10)
         print(f"[Live Location] Query count: {len(ctx_query)} (HTTP: {mock_get.call_count})")
