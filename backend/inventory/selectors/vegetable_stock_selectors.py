@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db.models import Sum, Q
 
-from inventory.models import InventoryItem, StockMovement
+from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import format_grams_for_display, parse_pack_size_grams
 
 
@@ -40,9 +40,9 @@ def get_stock_status(product) -> Dict[str, Any]:
     }
 
 
-def get_admin_stock_status(product, for_date: Optional[date] = None) -> Dict[str, Any]:
+def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None) -> Dict[int, Dict[str, Any]]:
     """
-    Admin-facing stock status with full analytics & configuration columns:
+    Bulk optimized admin status selector to avoid N+1 queries across products:
     - opening stock (today's opening or for_date opening)
     - current stock (live available stock)
     - consumed stock (sold quantity on for_date/today)
@@ -52,143 +52,165 @@ def get_admin_stock_status(product, for_date: Optional[date] = None) -> Dict[str
     - offer_price & offer_percentage
     - vegetable_gram (pack size string e.g. "500 g", "1 kg")
     """
-    item = getattr(product, "stock_item", None)
+    if not products:
+        return {}
+
     target_date = for_date or timezone.localdate()
 
-    # Price & Offer % matching customer cards (e.g. Ash Gourd: Price=₹46, MRP=₹55, Offer=16% OFF)
-    raw_base = float(product.base_price or 0)
-    raw_offer = float(product.offer_price) if product.offer_price is not None else None
+    # Collect stock items that are present
+    items = []
+    item_by_prod_id = {}
+    for prod in products:
+        item = getattr(prod, "stock_item", None)
+        if item:
+            items.append(item)
+            item_by_prod_id[prod.id] = item
 
-    if raw_offer is not None and raw_offer > 0:
-        # In this catalog schema, base_price is selling price (e.g. ₹46) and offer_price is MRP/original price (e.g. ₹55)
-        # OR if raw_offer < raw_base: raw_offer is selling price and raw_base is MRP
-        if raw_offer > raw_base:
-            selling_price = raw_base
-            mrp_price = raw_offer
-        else:
-            selling_price = raw_offer
-            mrp_price = raw_base
-        
-        offer_pct = round(((mrp_price - selling_price) / mrp_price) * 100) if mrp_price > 0 else 0
-    else:
-        selling_price = raw_base
-        mrp_price = raw_base
-        offer_pct = 0
-        
-        # Fallback to tag if defined (e.g. "14% OFF" for Amla, "23% OFF" for Tomato)
-        tag_val = getattr(product, "tag", "") or ""
-        if tag_val and "%" in tag_val:
-            import re
-            m = re.search(r"(\d+(?:\.\d+)?)\s*%", tag_val)
-            if m:
-                offer_pct = round(float(m.group(1)))
-                if offer_pct > 0 and selling_price > 0:
-                    mrp_price = round(selling_price / (1 - offer_pct / 100.0), 2)
+    veg_ids = [item.id for item in items]
 
-    veg_gram = getattr(product, "duration", "") or "500 g"
+    # Pre-fetch target_date movements for all vegetable items in ONE query
+    movements_by_veg: Dict[int, list] = {v_id: [] for v_id in veg_ids}
+    if veg_ids:
+        day_movements = VegetableStockMovement.objects.filter(
+            vegetable_id__in=veg_ids,
+            created_at__date=target_date,
+        ).order_by("id")
+        for m in day_movements:
+            movements_by_veg[m.vegetable_id].append(m)
 
-    # Consumed Stock & Opening Stock Calculation from StockMovements
-    consumed_grams = 0
-    opening_grams = None
-    if item:
-        day_movements = list(
-            StockMovement.objects.filter(
-                item=item,
-                created_at__date=target_date,
-            ).order_by("id")
-        )
-        # When default daily opening stock is explicitly configured on the item, use it as opening balance
-        if item.default_daily_quantity_grams is not None:
-            opening_grams = item.default_daily_quantity_grams
-        elif day_movements:
-            earliest = day_movements[0]
-            if earliest.movement_type == StockMovement.MovementType.DAILY_RESET:
-                opening_grams = earliest.balance_after_grams
-            else:
-                opening_grams = earliest.balance_after_grams - earliest.delta_grams
-            consumed_grams = sum(abs(m.delta_grams) for m in day_movements if m.movement_type == StockMovement.MovementType.SOLD)
-        else:
-            # Check previous closing movement
-            prev_m = StockMovement.objects.filter(
-                item=item,
-                created_at__date__lt=target_date,
-            ).order_by("-created_at").first()
-            if prev_m:
-                opening_grams = prev_m.balance_after_grams
-            else:
-                opening_grams = item.default_daily_quantity_grams or item.stock_quantity_grams or 0
+    # For items without target_date movements, find latest prior movement
+    needed_prev_ids = [
+        item.id for item in items
+        if not movements_by_veg.get(item.id)
+    ]
+    prev_m_by_veg = {}
+    if needed_prev_ids:
+        prev_movements = VegetableStockMovement.objects.filter(
+            vegetable_id__in=needed_prev_ids,
+            created_at__date__lt=target_date,
+        ).order_by("vegetable_id", "-created_at")
+        for pm in prev_movements:
+            if pm.vegetable_id not in prev_m_by_veg:
+                prev_m_by_veg[pm.vegetable_id] = pm
 
-        if day_movements:
-            consumed_grams = sum(abs(m.delta_grams) for m in day_movements if m.movement_type == StockMovement.MovementType.SOLD)
-
-    reorder_threshold_grams = item.reorder_threshold if item and item.reorder_threshold else 0
-    restock_level_grams = item.default_daily_quantity_grams if item and item.default_daily_quantity_grams else (item.reorder_quantity if item else 0)
-
-    if not item or item.stock_quantity_grams is None:
-        return {
-            "state": "not_tracked",
-            "today_available_grams": None,
-            "default_daily_grams": item.default_daily_quantity_grams if item else None,
-            "today_available_display": "Not Tracked",
-            "default_daily_display": format_grams_for_display(item.default_daily_quantity_grams) if item and item.default_daily_quantity_grams else "None",
-            "opening_stock_grams": opening_grams,
-            "opening_stock_display": format_grams_for_display(opening_grams) if opening_grams is not None else "—",
-            "consumed_stock_grams": consumed_grams,
-            "consumed_stock_display": format_grams_for_display(consumed_grams),
-            "consumed_date": target_date.strftime("%Y-%m-%d"),
-            "restock_level_grams": restock_level_grams,
-            "restock_level_display": format_grams_for_display(restock_level_grams) if restock_level_grams else "—",
-            "reorder_level_grams": reorder_threshold_grams,
-            "reorder_level_display": format_grams_for_display(reorder_threshold_grams) if reorder_threshold_grams else "—",
-            "price": selling_price,
-            "mrp": mrp_price,
-            "offer_price": mrp_price if mrp_price != selling_price else None,
-            "offer_percentage": offer_pct,
-            "vegetable_gram": veg_gram,
-            "unit": item.unit if item else "g",
-        }
-
-    live_grams = item.stock_quantity_grams
-    state = "in_stock" if live_grams > 0 else "out_of_stock"
-
-    return {
-        "state": state,
-        "today_available_grams": live_grams,
-        "default_daily_grams": item.default_daily_quantity_grams,
-        "today_available_display": format_grams_for_display(live_grams),
-        "default_daily_display": format_grams_for_display(item.default_daily_quantity_grams) if item.default_daily_quantity_grams is not None else "None",
-        "opening_stock_grams": opening_grams if opening_grams is not None else live_grams,
-        "opening_stock_display": format_grams_for_display(opening_grams if opening_grams is not None else live_grams),
-        "consumed_stock_grams": consumed_grams,
-        "consumed_stock_display": format_grams_for_display(consumed_grams),
-        "consumed_date": target_date.strftime("%Y-%m-%d"),
-        "restock_level_grams": restock_level_grams,
-        "restock_level_display": format_grams_for_display(restock_level_grams) if restock_level_grams else "—",
-        "reorder_level_grams": reorder_threshold_grams,
-        "reorder_level_display": format_grams_for_display(reorder_threshold_grams) if reorder_threshold_grams else "—",
-        "price": selling_price,
-        "mrp": mrp_price,
-        "offer_price": mrp_price if mrp_price != selling_price else None,
-        "offer_percentage": offer_pct,
-        "vegetable_gram": veg_gram,
-        "unit": item.unit or "g",
-    }
-
-
-def get_bulk_admin_stock_status(products: list) -> Dict[int, Dict[str, Any]]:
-    """
-    Bulk optimized admin status selector to avoid N+1 queries.
-    """
     result = {}
     for prod in products:
-        result[prod.id] = get_admin_stock_status(prod)
+        item = item_by_prod_id.get(prod.id)
+
+        # Price & Offer % matching customer cards
+        raw_base = float(prod.base_price or 0)
+        raw_offer = float(prod.offer_price) if prod.offer_price is not None else None
+
+        if raw_offer is not None and raw_offer > 0:
+            if raw_offer > raw_base:
+                selling_price = raw_base
+                mrp_price = raw_offer
+            else:
+                selling_price = raw_offer
+                mrp_price = raw_base
+            
+            offer_pct = round(((mrp_price - selling_price) / mrp_price) * 100) if mrp_price > 0 else 0
+        else:
+            selling_price = raw_base
+            mrp_price = raw_base
+            offer_pct = 0
+            
+            tag_val = getattr(prod, "tag", "") or ""
+            if tag_val and "%" in tag_val:
+                import re
+                m = re.search(r"(\d+(?:\.\d+)?)\s*%", tag_val)
+                if m:
+                    offer_pct = round(float(m.group(1)))
+                    if offer_pct > 0 and selling_price > 0:
+                        mrp_price = round(selling_price / (1 - offer_pct / 100.0), 2)
+
+        veg_gram = getattr(prod, "duration", "") or "500 g"
+
+        # Consumed Stock & Opening Stock Calculation from VegetableStockMovements
+        consumed_grams = 0
+        opening_grams = None
+
+        if item:
+            item_day_movements = movements_by_veg.get(item.id, [])
+            if item_day_movements:
+                earliest = item_day_movements[0]
+                opening_grams = earliest.balance_after_grams - earliest.delta_grams
+                consumed_grams = sum(abs(m.delta_grams) for m in item_day_movements if m.movement_type == VegetableStockMovement.MovementType.SOLD)
+            else:
+                prev_m = prev_m_by_veg.get(item.id)
+                if prev_m:
+                    opening_grams = prev_m.balance_after_grams
+                else:
+                    opening_grams = item.stock_quantity_grams or 0
+
+        reorder_threshold_grams = getattr(item, 'reorder_threshold', 0) if item else 0
+        restock_level_grams = item.default_daily_quantity_grams if item and item.default_daily_quantity_grams else 0
+
+        if not item or item.stock_quantity_grams is None:
+            result[prod.id] = {
+                "state": "not_tracked",
+                "today_available_grams": None,
+                "default_daily_grams": item.default_daily_quantity_grams if item else None,
+                "today_available_display": "Not Tracked",
+                "default_daily_display": format_grams_for_display(item.default_daily_quantity_grams) if item and item.default_daily_quantity_grams else "None",
+                "opening_stock_grams": opening_grams,
+                "opening_stock_display": format_grams_for_display(opening_grams) if opening_grams is not None else "—",
+                "consumed_stock_grams": consumed_grams,
+                "consumed_stock_display": format_grams_for_display(consumed_grams),
+                "consumed_date": target_date.strftime("%Y-%m-%d"),
+                "restock_level_grams": restock_level_grams,
+                "restock_level_display": format_grams_for_display(restock_level_grams) if restock_level_grams else "—",
+                "reorder_level_grams": reorder_threshold_grams,
+                "reorder_level_display": format_grams_for_display(reorder_threshold_grams) if reorder_threshold_grams else "—",
+                "price": selling_price,
+                "mrp": mrp_price,
+                "offer_price": mrp_price if mrp_price != selling_price else None,
+                "offer_percentage": offer_pct,
+                "vegetable_gram": veg_gram,
+                "unit": item.unit if item else "g",
+            }
+        else:
+            live_grams = item.stock_quantity_grams
+            state = "in_stock" if live_grams > 0 else "out_of_stock"
+
+            result[prod.id] = {
+                "state": state,
+                "today_available_grams": live_grams,
+                "default_daily_grams": item.default_daily_quantity_grams,
+                "today_available_display": format_grams_for_display(live_grams),
+                "default_daily_display": format_grams_for_display(item.default_daily_quantity_grams) if item.default_daily_quantity_grams is not None else "None",
+                "opening_stock_grams": opening_grams if opening_grams is not None else live_grams,
+                "opening_stock_display": format_grams_for_display(opening_grams if opening_grams is not None else live_grams),
+                "consumed_stock_grams": consumed_grams,
+                "consumed_stock_display": format_grams_for_display(consumed_grams),
+                "consumed_date": target_date.strftime("%Y-%m-%d"),
+                "restock_level_grams": restock_level_grams,
+                "restock_level_display": format_grams_for_display(restock_level_grams) if restock_level_grams else "—",
+                "reorder_level_grams": reorder_threshold_grams,
+                "reorder_level_display": format_grams_for_display(reorder_threshold_grams) if reorder_threshold_grams else "—",
+                "price": selling_price,
+                "mrp": mrp_price,
+                "offer_price": mrp_price if mrp_price != selling_price else None,
+                "offer_percentage": offer_pct,
+                "vegetable_gram": veg_gram,
+                "unit": item.unit or "g",
+            }
+
     return result
+
+
+def get_admin_stock_status(product, for_date: Optional[date] = None) -> Dict[str, Any]:
+    """
+    Admin-facing stock status with full analytics & configuration columns.
+    Delegates to get_bulk_admin_stock_status.
+    """
+    res = get_bulk_admin_stock_status([product], for_date=for_date)
+    return res.get(product.id, {})
 
 
 def get_daily_stock_history(product, start_date: date, end_date: date) -> List[Dict[str, Any]]:
     """
-    Reporting selector: derives daily opening, sold, and closing history from StockMovement.
-    No dedicated history table.
+    Reporting selector: derives daily opening, sold, and closing history from VegetableStockMovement.
     
     For each date in range [start_date, end_date]:
     - opening_grams: balance_after of the earliest movement that day (or prior day's closing).
@@ -199,16 +221,14 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     if not item:
         return []
 
-    # Filter all movements for this item within date window
     movements = list(
-        StockMovement.objects.filter(
-            item=item,
+        VegetableStockMovement.objects.filter(
+            vegetable=item,
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         ).order_by("id")
     )
 
-    # Group movements by local date
     movements_by_date: Dict[date, list] = {}
     for m in movements:
         d = timezone.localtime(m.created_at).date()
@@ -220,9 +240,8 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     curr_date = start_date
     prior_closing = None
 
-    # Resolve baseline prior closing if movements exist before start_date
-    prev_movement = StockMovement.objects.filter(
-        item=item,
+    prev_movement = VegetableStockMovement.objects.filter(
+        vegetable=item,
         created_at__date__lt=start_date,
     ).order_by("-created_at").first()
     if prev_movement:
@@ -234,18 +253,12 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
         day_movements = movements_by_date.get(curr_date, [])
         
         if day_movements:
-            # Earliest movement
             earliest = day_movements[0]
-            # Opening stock
-            if earliest.movement_type == StockMovement.MovementType.DAILY_RESET:
-                opening = earliest.balance_after_grams
-            else:
-                # If earliest is not daily reset, opening before this movement was balance_after - delta
-                opening = earliest.balance_after_grams - earliest.delta_grams
+            opening = earliest.balance_after_grams - earliest.delta_grams
 
-            sold = sum(abs(m.delta_grams) for m in day_movements if m.movement_type == StockMovement.MovementType.SOLD)
-            restocked = sum(m.delta_grams for m in day_movements if m.movement_type == StockMovement.MovementType.RESTOCK)
-            adjustments = sum(m.delta_grams for m in day_movements if m.movement_type == StockMovement.MovementType.ADJUSTMENT)
+            sold = sum(abs(m.delta_grams) for m in day_movements if m.movement_type == VegetableStockMovement.MovementType.SOLD)
+            restocked = sum(m.delta_grams for m in day_movements if m.movement_type == VegetableStockMovement.MovementType.RESTOCK)
+            adjustments = sum(m.delta_grams for m in day_movements if m.movement_type == VegetableStockMovement.MovementType.ADJUSTMENT)
             latest = day_movements[-1]
             closing = latest.balance_after_grams
             prior_closing = closing
@@ -267,21 +280,20 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
             ]
             has_activity = True
         else:
-            # No movements on this date
-            if curr_date == today and (item.stock_quantity_grams is not None or item.default_daily_quantity_grams is not None):
-                opening = item.stock_quantity_grams or 0
-                sold = 0
-                restocked = 0
-                adjustments = 0
-                closing = item.stock_quantity_grams or 0
-                movement_items = []
-                has_activity = True
-            elif prior_closing is not None:
+            if prior_closing is not None:
                 opening = prior_closing
                 sold = 0
                 restocked = 0
                 adjustments = 0
                 closing = prior_closing
+                movement_items = []
+                has_activity = True
+            elif curr_date == today and item.stock_quantity_grams is not None:
+                opening = item.stock_quantity_grams or 0
+                sold = 0
+                restocked = 0
+                adjustments = 0
+                closing = item.stock_quantity_grams or 0
                 movement_items = []
                 has_activity = True
             else:

@@ -56,6 +56,12 @@ export function BookingCancellationModal({
 
   const isGraceExpired = isAccepted && remainingSecs <= 0
 
+  const canSubmit =
+    !isSubmitting &&
+    !isGraceExpired &&
+    Boolean(selectedReason) &&
+    (selectedReason !== "Other reason (please specify)" || customReason.trim().length > 0)
+
   const handleConfirmCancel = async () => {
     const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason
     if (!finalReason.trim()) {
@@ -114,6 +120,7 @@ export function BookingCancellationModal({
 
       const resolvedPhone = phone ||
         savedObj?.phone ||
+        savedObj?.customer_phone ||
         localStorage.getItem("caltrack_customer_phone") || "";
 
       const payload = {

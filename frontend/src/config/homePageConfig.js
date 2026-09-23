@@ -67,7 +67,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     { id: "cat-7", name: "Sofa Cleaning", image: "/mockups/sofa_cleaning.png", link: "?category=home_pest_control&subtab=sofa-cleaning", enabled: true },
     { id: "cat-8", name: "Painting", image: "/mockups/category_home_repair_3d.jpg", link: "?category=paintings&subtab=interior-painting", enabled: true },
     { id: "cat-9", name: "Mason", image: "/mockups/service_building.png", link: "?category=mason", enabled: true },
-    { id: "cat-10", name: "Groceries & Veggies", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
+    { id: "cat-10", name: "Vegetables", image: "/assets/cat_food_health.jpg", link: "/vegetables", enabled: true },
     { id: "cat-11", name: "Goods & Transport", image: "/assets/cat_goods_transport.jpg", link: "?category=goods_transports", enabled: true }
   ],
   pillarModal: {
