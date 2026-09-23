@@ -462,13 +462,13 @@ function businessNowParts() {
 }
 
 function isSlotInPast(dateStr, slotStr) {
-  if (!dateStr || !slotStr) return false
+  if (!slotStr) return false
 
   const business = businessNowParts()
   const todayStr = business.dateStr
 
-  // Normalize dateStr
-  const cleanDateStr = String(dateStr).split('T')[0].trim()
+  // Normalize dateStr (default to today if omitted or empty)
+  const cleanDateStr = dateStr ? String(dateStr).split('T')[0].trim() : todayStr
 
   // If date is before today, it's in the past
   if (cleanDateStr < todayStr) return true
@@ -9757,7 +9757,7 @@ function StepWorkflowCheckout({
                                   if (selectedDate) setShowSlotPicker(false)
                                 }}
                                 className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
-                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-40 pointer-events-none"
                                   : isSel
                                   ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
                                   : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
@@ -10649,7 +10649,19 @@ export function BookingPage() {
       }
     }
   }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
-  const [selDate, setSelDate] = useState("")
+  const [selDate, setSelDate] = useState(() => {
+    try {
+      const b = businessNowParts()
+      if (b.hour >= SAME_DAY_CUTOFF_HOUR) {
+        const d = new Date(b.now)
+        d.setDate(d.getDate() + 1)
+        return d.toISOString().split('T')[0]
+      }
+      return b.dateStr || ""
+    } catch {
+      return ""
+    }
+  })
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
