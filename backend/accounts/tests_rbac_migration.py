@@ -36,12 +36,19 @@ class CompleteRBACSecurityAuditTestSuite(TestCase):
             is_superuser=False
         )
 
-        # 2. Super Admin B (superuser based, custom role)
+        # 2. Super Admin B (superuser flag, no assigned role). Deliberately
+        # NOT role=ADMIN: accounts.permissions.is_super_admin() intentionally
+        # does not grant Super Admin to is_superuser=True accounts that also
+        # carry an explicit non-super role such as "admin" -- see that
+        # function's docstring for the defense-in-depth rationale (this
+        # exact "dual identity" combination was a real, now-removed
+        # vulnerability). A blank/unset role is the documented case where a
+        # genuine superuser flag still bypasses normally.
         self.super_admin_flag = User.objects.create_user(
             username="superadmin_flag_only",
             email="super_flag@sevo.com",
             password="Password123!",
-            role=User.Role.ADMIN,
+            role="",
             is_staff=True,
             is_superuser=True
         )

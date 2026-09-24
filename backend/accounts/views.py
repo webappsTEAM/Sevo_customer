@@ -1838,7 +1838,15 @@ class CustomerAddressDetailView(APIView):
             return _cs(_serialize_address(addr), message="Address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            if isinstance(detail, dict) and "detail" in detail:
+                detail = detail["detail"]
+            # _get_address_or_404 (called by update_saved_address) raises DRF's
+            # NotFound for a cross-customer/missing address, which carries its
+            # own status_code=404 -- this was previously discarded in favor of
+            # _ce's hardcoded 400 default, so attempting to PATCH another
+            # customer's address returned 400 instead of the 404 that get()
+            # already returns for the same address, one line up.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
     def delete(self, request, pk):
         try:
@@ -1848,7 +1856,9 @@ class CustomerAddressDetailView(APIView):
             detail = getattr(exc, "detail", str(exc))
             if isinstance(detail, dict) and "detail" in detail:
                 detail = detail["detail"]
-            return _ce(str(detail), 400)
+            # Same fix as patch() above: respect the real status_code (404 for
+            # a cross-customer/missing address) instead of always forcing 400.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
 
 class CustomerAddressSetDefaultView(APIView):
@@ -1861,7 +1871,12 @@ class CustomerAddressSetDefaultView(APIView):
             return _cs(_serialize_address(addr), message="Default address updated.")
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            if isinstance(detail, dict) and "detail" in detail:
+                detail = detail["detail"]
+            # Same fix as CustomerAddressDetailView.patch()/delete(): respect
+            # the real status_code (404 for a cross-customer/missing address)
+            # instead of always forcing 400.
+            return _ce(str(detail), getattr(exc, "status_code", 400))
 
 
 class CustomerAddressServiceabilityView(APIView):

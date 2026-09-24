@@ -537,12 +537,19 @@ class CustomerPaymentsView(APIView):
         technician_holds_qs = bookings_qs.filter(
             payment_status="collected",
             total_amount__gt=0
-        ).select_related("customer", "technician").order_by("-created_at")
+        # NOTE: ServiceRequest has no technician/assigned_employee relation
+        # at all -- technician identity for cash-collection reporting is
+        # tracked purely as the denormalized payment_collected_by_name
+        # string field (there is no FK to join here; the earlier
+        # `select_related("customer", "technician")` referenced a relation
+        # that never existed on this model, which is why this endpoint
+        # crashed with FieldError on every real request).
+        ).select_related("customer").order_by("-created_at")
 
         technician_holds_list = []
         for b in technician_holds_qs[:100]:
             cname = b.customer_name or (b.customer.get_full_name() if b.customer else "") or (b.customer.username if b.customer else "") or "Customer"
-            tech_name = b.payment_collected_by_name or (b.technician.get_full_name() if b.technician else "") or "Assigned Technician"
+            tech_name = b.payment_collected_by_name or "Assigned Technician"
             technician_holds_list.append({
                 "id": b.id,
                 "booking_id": b.request_id,

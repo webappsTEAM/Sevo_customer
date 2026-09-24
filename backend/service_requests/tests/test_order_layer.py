@@ -87,8 +87,20 @@ class BookingCreateOrderLayerTests(APITestCase):
 
     def test_orderitem_amount_reflects_post_discount_total_not_pre_coupon_fare(self):
         """The whole point of placing the hook after the coupon block: if a
-        coupon knocks Rs.500 off a Rs.5000 booking, OrderItem.item_amount
-        must be Rs.4500, not the pre-discount Rs.5000."""
+        coupon knocks Rs.500 off the authoritative Home Services total,
+        OrderItem.item_amount must reflect that post-discount total, not the
+        pre-discount fare.
+
+        The authoritative total is NOT the raw Rs.5000 item price submitted
+        in cart_data: per the documented HS-B-01 pricing authority
+        (services/home_services_pricing.py, resolve_home_services_fare --
+        "Subtotal + GST + Platform Fee - Coupon + Tip"), the server always
+        adds 18% GST (Rs.900) and the Rs.29 platform fee on top of the item
+        total before any coupon is applied, giving a pre-discount subtotal
+        of Rs.5929. A flat Rs.500 coupon off that authoritative subtotal
+        lands at Rs.5429, not Rs.4500 (which would only be correct if the
+        raw cart price were trusted directly and GST/platform fee were
+        skipped -- they are not, by design)."""
         Coupon.objects.create(
             code="SAVE500",
             name="Flat 500 off",
@@ -103,11 +115,11 @@ class BookingCreateOrderLayerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
 
         sr = ServiceRequest.objects.get(request_id=response.data["data"]["request_id"])
-        self.assertEqual(sr.total_amount, Decimal("4500.00"))
+        self.assertEqual(sr.total_amount, Decimal("5429.00"))
 
         item = OrderItem.objects.get(service_request=sr)
-        self.assertEqual(item.item_amount, Decimal("4500.00"))
-        self.assertEqual(item.order.total_amount, Decimal("4500.00"))
+        self.assertEqual(item.item_amount, Decimal("5429.00"))
+        self.assertEqual(item.order.total_amount, Decimal("5429.00"))
 
     def test_duplicate_idempotency_key_does_not_create_second_order(self):
         """A client retry with the same Idempotency-Key returns the cached

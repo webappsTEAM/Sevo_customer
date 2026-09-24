@@ -298,11 +298,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='estimation',
-            constraint=models.CheckConstraint(check=models.Q(('ac_quantity__gte', 1)), name='check_estimation_ac_quantity_gte_1'),
+            constraint=models.CheckConstraint(condition=models.Q(('ac_quantity__gte', 1)), name='check_estimation_ac_quantity_gte_1'),
         ),
         migrations.AddConstraint(
             model_name='estimationfee',
-            constraint=models.CheckConstraint(check=models.Q(('amount__gte', Decimal('0.00'))), name='check_estimation_fee_amount_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('amount__gte', Decimal('0.00'))), name='check_estimation_fee_amount_gte_0'),
         ),
         migrations.AddIndex(
             model_name='estimationquotation',
@@ -322,23 +322,23 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='estimationquotation',
-            constraint=models.CheckConstraint(check=models.Q(('subtotal__gte', Decimal('0.00'))), name='check_quotation_subtotal_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('subtotal__gte', Decimal('0.00'))), name='check_quotation_subtotal_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotation',
-            constraint=models.CheckConstraint(check=models.Q(('tax_amount__gte', Decimal('0.00'))), name='check_quotation_tax_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('tax_amount__gte', Decimal('0.00'))), name='check_quotation_tax_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotation',
-            constraint=models.CheckConstraint(check=models.Q(('discount_amount__gte', Decimal('0.00'))), name='check_quotation_discount_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('discount_amount__gte', Decimal('0.00'))), name='check_quotation_discount_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotation',
-            constraint=models.CheckConstraint(check=models.Q(('total_amount__gte', Decimal('0.00'))), name='check_quotation_total_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('total_amount__gte', Decimal('0.00'))), name='check_quotation_total_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotation',
-            constraint=models.CheckConstraint(check=models.Q(('version__gte', 1)), name='check_quotation_version_gte_1'),
+            constraint=models.CheckConstraint(condition=models.Q(('version__gte', 1)), name='check_quotation_version_gte_1'),
         ),
         migrations.AddIndex(
             model_name='estimationquotationitem',
@@ -346,23 +346,23 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='estimationquotationitem',
-            constraint=models.CheckConstraint(check=models.Q(('quantity__gt', Decimal('0.00'))), name='check_quote_item_quantity_gt_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('quantity__gt', Decimal('0.00'))), name='check_quote_item_quantity_gt_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotationitem',
-            constraint=models.CheckConstraint(check=models.Q(('unit_price__gte', Decimal('0.00'))), name='check_quote_item_unit_price_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('unit_price__gte', Decimal('0.00'))), name='check_quote_item_unit_price_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotationitem',
-            constraint=models.CheckConstraint(check=models.Q(('tax_amount__gte', Decimal('0.00'))), name='check_quote_item_tax_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('tax_amount__gte', Decimal('0.00'))), name='check_quote_item_tax_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotationitem',
-            constraint=models.CheckConstraint(check=models.Q(('discount_amount__gte', Decimal('0.00'))), name='check_quote_item_discount_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('discount_amount__gte', Decimal('0.00'))), name='check_quote_item_discount_gte_0'),
         ),
         migrations.AddConstraint(
             model_name='estimationquotationitem',
-            constraint=models.CheckConstraint(check=models.Q(('line_total__gte', Decimal('0.00'))), name='check_quote_item_line_total_gte_0'),
+            constraint=models.CheckConstraint(condition=models.Q(('line_total__gte', Decimal('0.00'))), name='check_quote_item_line_total_gte_0'),
         ),
         migrations.AddIndex(
             model_name='inspection',

@@ -1622,6 +1622,245 @@ class RefundEvidence(models.Model):
         return f"RefundEvidence({self.pk}) for {self.refund_request.refund_id}"
 
 
+# GT Porter-parity fix (this session, 2026-09-23): Porter is publicly known to
+# sometimes charge a cancellation fee once a partner/technician has already
+# been assigned and is en route -- SEVO currently has NO such concept
+# anywhere (grepped for cancellation_fee/CancellationFee/cancel_fee across
+# views.py, models.py, and every service module: zero hits before this).
+# CustomerBookingCancelView (views.py) unconditionally creates a FULL-amount
+# RefundRequest for any paid, not-yet-OTP-verified cancellation, regardless
+# of how far dispatch had progressed.
+#
+# THIS SESSION DELIBERATELY DOES NOT INVENT A FEE AMOUNT, PERCENTAGE, OR
+# THRESHOLD -- Porter's exact numbers are not public information, and the
+# task's own instructions are explicit: do not invent undocumented values.
+# What this model does is make the *rule* configurable through SEVO's own
+# admin (matching the "business values come from DB/admin, not hardcoded
+# constants" requirement) with every field defaulting to "no fee charged" --
+# so wiring this in changes NOTHING about current behavior until an admin
+# (a human, with the actual business context) fills in real numbers.
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. Should a fee apply once a technician/vehicle is ASSIGNED but before
+#      pickup? (fee_mode stays NONE until this is answered.)
+#   2. If yes: a flat rupee amount, or a percentage of the fare? How much?
+#   3. Should there be a grace period after assignment where cancellation is
+#      still free (Porter-style "cancel within N seconds/minutes, no fee")?
+#   4. Does the fee apply per service category (goods_transport vs
+#      packers_movers) or platform-wide?
+# Until someone with product/business authority answers these, fee_mode
+# stays NONE and CustomerBookingCancelView's behavior is unchanged.
+class GTCancellationPolicy(models.Model):
+    class FeeMode(models.TextChoices):
+        NONE    = "NONE",    "No cancellation fee (current behavior, default)"
+        FLAT    = "FLAT",    "Flat rupee amount"
+        PERCENT = "PERCENT", "Percentage of the booking's total_amount"
+
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings "
+                   "(goods_transport, packers_movers, etc). Set a specific "
+                   "category to override for just that category.",
+    )
+    fee_mode = models.CharField(
+        max_length=10, choices=FeeMode.choices, default=FeeMode.NONE,
+        help_text="NONE (default) preserves today's behavior exactly: full "
+                   "refund request, no fee, regardless of dispatch progress.",
+    )
+    flat_fee_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Used when fee_mode=FLAT. Rupees deducted from the refund "
+                   "amount if the fee applies.",
+    )
+    percent_fee = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Used when fee_mode=PERCENT. Percentage (0-100) of "
+                   "total_amount deducted from the refund amount if the fee "
+                   "applies.",
+    )
+    applies_only_after_assignment = models.BooleanField(
+        default=True,
+        help_text="If True (recommended, matches Porter's publicly observed "
+                   "behavior), the fee never applies while the booking is "
+                   "still searching for a technician/vehicle -- only once "
+                   "one has been assigned. If False, the fee applies to any "
+                   "cancellation of a paid booking regardless of dispatch "
+                   "state.",
+    )
+    grace_period_seconds = models.PositiveIntegerField(
+        default=0,
+        help_text="Cancellations within this many seconds of assignment are "
+                   "still free, even if applies_only_after_assignment "
+                   "would otherwise charge a fee. 0 disables the grace "
+                   "period.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Cancellation Fee Policy"
+        verbose_name_plural = "GT Cancellation Fee Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTCancellationPolicy({scope}, {self.fee_mode})"
+
+    def fee_for(self, service_request):
+        """Returns the Decimal fee amount for this booking's cancellation,
+        or Decimal('0') if no fee applies. Never raises -- an unconfigured
+        or misconfigured policy must never block a cancellation."""
+        from decimal import Decimal
+        if not self.is_active or self.fee_mode == self.FeeMode.NONE:
+            return Decimal("0")
+        if self.applies_only_after_assignment:
+            assigned_at = getattr(service_request, "accepted_at", None) or getattr(service_request, "assigned_at", None)
+            if not assigned_at:
+                return Decimal("0")
+            if self.grace_period_seconds:
+                import django.utils.timezone as tz
+                elapsed = (tz.now() - assigned_at).total_seconds()
+                if elapsed < self.grace_period_seconds:
+                    return Decimal("0")
+        total = getattr(service_request, "total_amount", None) or Decimal("0")
+        if self.fee_mode == self.FeeMode.FLAT:
+            fee = Decimal(str(self.flat_fee_amount))
+        else:
+            fee = (Decimal(str(total)) * Decimal(str(self.percent_fee)) / Decimal("100"))
+        return min(fee, Decimal(str(total)))
+
+
+def get_gt_cancellation_fee(service_request):
+    """Looks up the applicable GTCancellationPolicy for a booking's service
+    category (falling back to the platform-wide, blank-category policy) and
+    returns the Decimal fee to deduct from its refund, or Decimal('0') if
+    none is configured. Safe to call unconditionally: no policy rows exist
+    until an admin creates one, so this returns 0 today for every booking --
+    see the GTCancellationPolicy docstring above for the exact business
+    decision still required before this can charge anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTCancellationPolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTCancellationPolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    return policy.fee_for(service_request)
+
+
+# GT Porter-vs-SEVO gap pass (2026-09-23): Porter publicly bills "extra
+# waiting charges" when a customer keeps the driver/crew waiting beyond a
+# free window at pickup/drop (a widely-observed feature of Porter's fare
+# breakdown; the exact free-minutes allowance and per-minute rate are not
+# published anywhere this session could verify, so they are NOT invented
+# here). Grepped the whole backend for waiting_charge/WAITING_CHARGE/
+# wait_charge before this: zero hits anywhere. TripStop (above) already
+# has arrived_at/completed_at per stop -- the dwell-time data this needs
+# already exists, so this is the same "safely derivable using existing
+# architecture" case as GTCancellationPolicy, not a new architecture.
+#
+# Mirrors that same pattern exactly: every field defaults to "no charge",
+# so wiring this in changes NOTHING about current behavior until an admin
+# fills in real numbers.
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. How many free minutes of waiting are allowed per stop before a
+#      charge applies?
+#   2. What is the per-minute (or per-block-of-N-minutes) rate charged
+#      after that, and does it apply per stop or once per trip?
+#   3. Does this apply platform-wide or only to specific GT categories
+#      (goods_transport_truck / goods_transport_two_wheeler /
+#      packers_movers)?
+#   4. Is there a cap on the total waiting charge per booking?
+# Until someone with product/business authority answers these,
+# free_minutes stays at its default (unlimited/no charge) and no booking
+# is charged anything extra for waiting time.
+class GTWaitingChargePolicy(models.Model):
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings. "
+                   "Set a specific category to override for just that "
+                   "category.",
+    )
+    is_enabled = models.BooleanField(
+        default=False,
+        help_text="False (default) preserves today's behavior exactly: no "
+                   "waiting charge is ever computed or applied.",
+    )
+    free_minutes_per_stop = models.PositiveIntegerField(
+        default=0,
+        help_text="Minutes of dwell time (completed_at - arrived_at) "
+                   "allowed per stop before a charge applies. 0 with "
+                   "is_enabled=True would charge from the first minute -- "
+                   "leave is_enabled=False until a real value is set.",
+    )
+    rate_per_minute = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Rupees charged per minute of waiting beyond "
+                   "free_minutes_per_stop, at each stop.",
+    )
+    max_charge_per_booking = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Optional cap on the total waiting charge across all "
+                   "stops in one booking. Blank = no cap.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Waiting Charge Policy"
+        verbose_name_plural = "GT Waiting Charge Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTWaitingChargePolicy({scope}, enabled={self.is_enabled})"
+
+    def charge_for(self, service_request):
+        """Returns the Decimal total waiting charge across every TripStop
+        on this booking that has both arrived_at and completed_at set, or
+        Decimal('0') if disabled/unconfigured. Never raises -- a stop still
+        in progress (completed_at is None) is simply skipped, not charged
+        for partial/ongoing waiting."""
+        from decimal import Decimal
+        if not self.is_active or not self.is_enabled:
+            return Decimal("0")
+        total_minutes_billable = 0
+        for stop in service_request.trip_stops.all():
+            if not stop.arrived_at or not stop.completed_at:
+                continue
+            dwell_seconds = (stop.completed_at - stop.arrived_at).total_seconds()
+            if dwell_seconds <= 0:
+                continue
+            dwell_minutes = int(dwell_seconds // 60)
+            billable = max(0, dwell_minutes - self.free_minutes_per_stop)
+            total_minutes_billable += billable
+        charge = Decimal(str(total_minutes_billable)) * Decimal(str(self.rate_per_minute))
+        if self.max_charge_per_booking is not None:
+            charge = min(charge, Decimal(str(self.max_charge_per_booking)))
+        return charge
+
+
+def get_gt_waiting_charge(service_request):
+    """Looks up the applicable GTWaitingChargePolicy for a booking's
+    service category (falling back to the platform-wide, blank-category
+    policy) and returns the Decimal waiting charge, or Decimal('0') if
+    none is configured/enabled. Safe to call unconditionally: no policy
+    rows exist until an admin creates one, and is_enabled defaults to
+    False, so this returns 0 today for every booking -- see the
+    GTWaitingChargePolicy docstring above for the exact business decision
+    still required before this can charge anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTWaitingChargePolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTWaitingChargePolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    return policy.charge_for(service_request)
+
 
 # ─── Slice 4: Complaint ───────────────────────────────────────────────────────
 
@@ -2879,7 +3118,7 @@ class Estimation(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(ac_quantity__gte=1),
+                condition=models.Q(ac_quantity__gte=1),
                 name="check_estimation_ac_quantity_gte_1"
             )
         ]
@@ -2943,7 +3182,7 @@ class EstimationFee(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(amount__gte=Decimal("0.00")),
+                condition=models.Q(amount__gte=Decimal("0.00")),
                 name="check_estimation_fee_amount_gte_0"
             )
         ]
@@ -3147,23 +3386,23 @@ class EstimationQuotation(models.Model):
                 name="unique_estimation_quotation_version"
             ),
             models.CheckConstraint(
-                check=models.Q(subtotal__gte=Decimal("0.00")),
+                condition=models.Q(subtotal__gte=Decimal("0.00")),
                 name="check_quotation_subtotal_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(tax_amount__gte=Decimal("0.00")),
+                condition=models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quotation_tax_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(discount_amount__gte=Decimal("0.00")),
+                condition=models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quotation_discount_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(total_amount__gte=Decimal("0.00")),
+                condition=models.Q(total_amount__gte=Decimal("0.00")),
                 name="check_quotation_total_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(version__gte=1),
+                condition=models.Q(version__gte=1),
                 name="check_quotation_version_gte_1"
             ),
         ]
@@ -3211,23 +3450,23 @@ class EstimationQuotationItem(models.Model):
         ordering = ["sort_order", "id"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(quantity__gt=Decimal("0.00")),
+                condition=models.Q(quantity__gt=Decimal("0.00")),
                 name="check_quote_item_quantity_gt_0"
             ),
             models.CheckConstraint(
-                check=models.Q(unit_price__gte=Decimal("0.00")),
+                condition=models.Q(unit_price__gte=Decimal("0.00")),
                 name="check_quote_item_unit_price_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(tax_amount__gte=Decimal("0.00")),
+                condition=models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quote_item_tax_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(discount_amount__gte=Decimal("0.00")),
+                condition=models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quote_item_discount_gte_0"
             ),
             models.CheckConstraint(
-                check=models.Q(line_total__gte=Decimal("0.00")),
+                condition=models.Q(line_total__gte=Decimal("0.00")),
                 name="check_quote_item_line_total_gte_0"
             ),
         ]

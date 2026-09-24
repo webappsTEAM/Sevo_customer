@@ -623,14 +623,26 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           }
           sessionStorage.removeItem("calservice_active_partner_search")
         } catch (_) { }
-        if (activeBId) {
-          cancelBooking(
-            activeBId,
-            "Search window expired (no delivery partner found within 10 minutes)",
-            activeToken || ""
-          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
-        }
         setBookingError("No delivery partner could be assigned within the search window. Please try again or schedule for later.")
+        if (activeBId) {
+          const attemptAutoCancel = (retriesLeft) =>
+            cancelBooking(
+              activeBId,
+              "Search window expired (no delivery partner found within 10 minutes)",
+              activeToken || ""
+            ).catch((err) => {
+              if (retriesLeft > 0) return attemptAutoCancel(retriesLeft - 1)
+              // The booking may still be active on the server even though the
+              // search window closed on this screen — don't leave the customer
+              // believing it was cancelled when we can't confirm that. Point
+              // them at support rather than silently swallowing the failure.
+              console.warn("Auto-cancel failed on timeout after retry:", err)
+              setBookingError(
+                "No delivery partner could be assigned within the search window, and we couldn't confirm the cancellation with our system. Please check your booking status or contact support before booking again."
+              )
+            })
+          attemptAutoCancel(1)
+        }
       }
     }
 

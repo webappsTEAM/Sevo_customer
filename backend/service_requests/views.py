@@ -339,7 +339,11 @@ class BookingCreateView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
                 if not cached.get("in_progress"):
-                    return Response(cached["body"], status=status.HTTP_200_OK)
+                    # Replay the ORIGINAL response status (usually 201), not a
+                    # hardcoded 200 -- matches the cache-write side (which always
+                    # stores "status") and the other two replay sites below,
+                    # which already do this correctly.
+                    return Response(cached["body"], status=cached.get("status", status.HTTP_200_OK))
                 # Wait briefly for in-progress concurrent request
                 for _ in range(20):
                     time.sleep(0.1)
@@ -355,7 +359,7 @@ class BookingCreateView(APIView):
                                 status=status.HTTP_409_CONFLICT,
                             )
                         if not cached.get("in_progress"):
-                            return Response(cached["body"], status=status.HTTP_200_OK)
+                            return Response(cached["body"], status=cached.get("status", status.HTTP_200_OK))
                 return Response(
                     {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
                     status=status.HTTP_409_CONFLICT,
@@ -1351,12 +1355,29 @@ class CustomerBookingCancelView(APIView):
             # anything is refunded.
             if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
                 try:
+                    # GT Porter-parity fix (this session, 2026-09-23): consult
+                    # the (currently unconfigured, fee_mode=NONE-by-default)
+                    # GTCancellationPolicy before creating the refund request.
+                    # See models.GTCancellationPolicy's docstring for the
+                    # exact business decision this is gated on -- until an
+                    # admin configures a policy row, get_gt_cancellation_fee
+                    # always returns 0 and this is a no-op: refund amount ==
+                    # sr.total_amount, identical to prior behavior.
+                    from service_requests.models import get_gt_cancellation_fee
+                    cancellation_fee = get_gt_cancellation_fee(sr)
+                    refund_amount = sr.total_amount - cancellation_fee
+                    refund_notes = f"Auto-created on booking cancellation. Cancellation reason: {reason}"
+                    refund_type = RefundType.FULL
+                    if cancellation_fee > 0:
+                        refund_notes += f" A cancellation fee of ₹{cancellation_fee} was deducted per the active GT cancellation policy."
+                        refund_type = RefundType.PARTIAL
                     sr_services.create_refund_request(
                         booking=sr,
                         customer=sr.customer,
-                        amount=sr.total_amount,
+                        amount=refund_amount,
                         reason=RefundReason.OTHER,
-                        additional_notes=f"Auto-created on booking cancellation. Cancellation reason: {reason}",
+                        additional_notes=refund_notes,
+                        refund_type=refund_type,
                     )
                 except Exception as refund_err:
                     logger.warning(f"Could not auto-create refund request for cancelled+paid booking {sr.id}: {refund_err}")
