@@ -217,6 +217,28 @@ export function MarketplacePage() {
     return getCategoryPathFromTree(categoryTree, currentCategorySlug)
   }, [categoryTree, currentCategorySlug, activeCategoryNode])
 
+  // Deduplicated / aggregated root categories for clean pill bar and side rail
+  const uniqueRootCategories = useMemo(() => {
+    if (!Array.isArray(categoryTree)) return []
+    const seen = new Map()
+    for (const cat of categoryTree) {
+      const key = (cat.slug || cat.name || "").toLowerCase().trim()
+      if (!seen.has(key)) {
+        seen.set(key, { ...cat })
+      } else {
+        const existing = seen.get(key)
+        const addCount = cat.total_product_count !== undefined ? cat.total_product_count : (cat.product_count || 0)
+        existing.total_product_count = (existing.total_product_count || existing.product_count || 0) + addCount
+        existing.product_count = existing.total_product_count
+        if (Array.isArray(cat.children) && cat.children.length > 0) {
+          const currentChildren = existing.children || []
+          existing.children = [...currentChildren, ...cat.children]
+        }
+      }
+    }
+    return Array.from(seen.values())
+  }, [categoryTree])
+
   // Total products in catalog across all categories
   const totalCatalogProductsCount = useMemo(() => {
     if (!Array.isArray(categoryTree)) return 0
@@ -603,7 +625,7 @@ export function MarketplacePage() {
       {/* Main Container */}
       <div>
         {/* Marketplace Header */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Link to={routes.landing} className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors">
@@ -614,7 +636,7 @@ export function MarketplacePage() {
                   <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider">
                     Seller Hub Marketplace
                   </span>
-                  <span className="text-xs text-slate-400 font-medium">Verified Stores</span>
+                  <span className="text-xs text-slate-400 font-medium hidden sm:inline">Verified Stores</span>
                 </div>
                 <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                   Sevo Mart
@@ -631,7 +653,7 @@ export function MarketplacePage() {
                   placeholder="Search groceries, dairy, staples, brands..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-sm rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-hidden transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-sm rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -682,19 +704,19 @@ export function MarketplacePage() {
                 placeholder="Search products, brands..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 text-sm rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 outline-hidden"
+                className="w-full pl-10 pr-4 py-2 bg-slate-100 text-sm rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 outline-none"
               />
             </div>
           </div>
 
           {/* Top Categories Pill Bar + Mobile Drawer Trigger */}
-          <div className="border-t border-slate-100 bg-slate-50/80 overflow-x-auto no-scrollbar">
+          <div className="border-t border-slate-100 bg-slate-50/90 overflow-x-auto no-scrollbar">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-2">
               {/* Mobile Category Drawer Button */}
               <button
                 type="button"
                 onClick={() => setCategoryDrawerOpen(true)}
-                className="lg:hidden flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg shrink-0 shadow-xs cursor-pointer hover:bg-emerald-700 transition-colors"
+                className="lg:hidden flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg shrink-0 shadow-sm cursor-pointer hover:bg-emerald-700 transition-colors"
                 aria-label="Open categories menu"
               >
                 <ListFilter className="w-3.5 h-3.5" />
@@ -708,32 +730,32 @@ export function MarketplacePage() {
               {/* All Option */}
               <button
                 onClick={() => handleSelectCategory(null)}
-                className={`px-3.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-sm ${
                   currentCategorySlug === "all"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                    ? "bg-slate-900 text-white shadow-md"
+                    : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                 }`}
               >
                 All
               </button>
 
-              {/* Root Categories Horizontal Pills */}
-              {categoryTree.map((cat) => {
+              {/* Unique Root Categories Horizontal Pills */}
+              {uniqueRootCategories.map((cat) => {
                 const isSelected = currentCategorySlug === cat.slug || breadcrumbs.some((b) => b.slug === cat.slug)
                 return (
                   <button
                     key={cat.id || cat.slug}
                     onClick={() => handleSelectCategory(cat)}
-                    className={`px-3.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${
                       isSelected
-                        ? "bg-slate-900 text-white shadow-xs"
-                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                        ? "bg-slate-900 text-white shadow-md"
+                        : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                     }`}
                   >
                     <span>{cat.name}</span>
                     {(cat.total_product_count || cat.product_count) > 0 && (
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                        isSelected ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"
+                        isSelected ? "bg-slate-700 text-emerald-300" : "bg-slate-100 text-slate-600"
                       }`}>
                         {cat.total_product_count || cat.product_count}
                       </span>
@@ -749,7 +771,7 @@ export function MarketplacePage() {
                   <select
                     value={selectedSeller}
                     onChange={(e) => setSelectedSeller(e.target.value)}
-                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 outline-hidden"
+                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 outline-none"
                   >
                     <option value="All">All Stores</option>
                     {availableSellers.map((s) => (
@@ -766,20 +788,53 @@ export function MarketplacePage() {
 
         {/* Hero Store Banner */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-linear-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg">
-            <div className="relative z-10 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-xs mb-3">
-                <ShieldCheck className="w-3.5 h-3.5" /> 100% Quality & Freshness Guarantee
+          <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-950 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl border border-emerald-800/30">
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm mb-3">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>100% Quality & Freshness Guarantee</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight text-white">
+                  Direct from Certified <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">Seller Hub Partners</span>
+                </h2>
+                <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
+                  Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5 mt-4 text-xs font-semibold text-emerald-100">
+                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
+                    <Truck className="w-3.5 h-3.5 text-emerald-400" /> Express Delivery
+                  </span>
+                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
+                    <PackageCheck className="w-3.5 h-3.5 text-emerald-400" /> Sealed & Tamper-Proof
+                  </span>
+                  <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10 shadow-sm">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Best Price Assured
+                  </span>
+                </div>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-snug">
-                Direct from Certified Seller Hub Partners
-              </h2>
-              <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-                Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
-              </p>
+
+              {/* Verified Stores Card */}
+              <div className="hidden md:flex flex-col gap-2.5 bg-white/10 backdrop-blur-md border border-white/15 p-5 rounded-2xl shrink-0 w-64 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-200 font-medium">Marketplace Hub</span>
+                  <span className="text-[11px] font-black text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                    Live Verified
+                  </span>
+                </div>
+                <div className="text-xl font-black text-white flex items-center gap-2">
+                  <Store className="w-5 h-5 text-emerald-400" />
+                  <span>{availableSellers.length > 0 ? availableSellers.length : 1} Local Store{availableSellers.length > 1 ? "s" : ""}</span>
+                </div>
+                <p className="text-[11px] text-slate-300 border-t border-white/10 pt-2 leading-relaxed">
+                  Dispatched straight from local vendor warehouses for quick delivery and freshness.
+                </p>
+              </div>
             </div>
-            {/* Ambient Background decoration */}
-            <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent pointer-events-none" />
+
+            {/* Ambient Background glows */}
+            <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-emerald-500/20 via-teal-500/10 to-transparent pointer-events-none" />
+            <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none" />
           </div>
         </section>
 
@@ -807,7 +862,7 @@ export function MarketplacePage() {
           <div className="flex items-start gap-6 lg:gap-8">
             {/* Desktop Left Category Rail */}
             <aside className="w-64 lg:w-72 shrink-0 hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-4">
-              <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs">
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm">
                 <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
                   <div className="flex items-center gap-2">
                     <ListFilter className="w-4 h-4 text-emerald-600" />
@@ -865,7 +920,7 @@ export function MarketplacePage() {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {categoryTree.map((cat) => (
+                    {uniqueRootCategories.map((cat) => (
                       <CategoryTreeItem
                         key={cat.id || cat.slug}
                         node={cat}
@@ -884,7 +939,7 @@ export function MarketplacePage() {
             {/* Right Products Container */}
             <div className="flex-1 min-w-0">
               {/* Breadcrumb Trail */}
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4 flex-wrap bg-white/70 border border-slate-200/80 px-4 py-2.5 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4 flex-wrap bg-white/70 border border-slate-200/80 px-4 py-2.5 rounded-xl shadow-sm">
                 <button
                   onClick={() => handleSelectCategory(null)}
                   className={`hover:text-emerald-700 transition-colors cursor-pointer ${
@@ -982,184 +1037,139 @@ export function MarketplacePage() {
               {/* Product Cards */}
               {!loading && products.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {products.map((product) => {
-                const cartItem = cart.items?.find((i) => i.seller_product_id === product.id)
-                const inCartQty = cartItem ? cartItem.quantity : 0
-                const price = Number(product.selling_price || 0)
-                const mrp = Number(product.mrp || 0)
-                const hasDiscount = mrp > price
-                const discountPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : 0
+                  {products.map((product) => {
+                    const cartItem = cart.items?.find((i) => i.seller_product_id === product.id)
+                    const inCartQty = cartItem ? cartItem.quantity : 0
+                    const price = Number(product.selling_price || 0)
+                    const mrp = Number(product.mrp || 0)
+                    const hasDiscount = mrp > price
+                    const discountPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : 0
 
-                return (
-                  <motion.div
-                    key={product.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
-                  >
-                    {/* Top Image & Badge */}
-                    <div
-                      className="relative p-4 bg-slate-50/50 cursor-pointer overflow-hidden flex items-center justify-center min-h-[160px]"
-                      onClick={() => handleOpenDetail(product)}
-                    >
-                      {hasDiscount && (
-                        <span className="absolute top-2.5 left-2.5 z-10 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">
-                          {discountPct}% OFF
-                        </span>
-                      )}
-
-                      <img
-                        src={product.primary_image || "/mockups/vegetables_realistic.png"}
-                        alt={product.title}
-                        className="w-full h-32 object-contain group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          e.target.src = "/mockups/vegetables_realistic.png"
-                        }}
-                      />
-
-                      {!product.in_stock && (
-                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center">
-                          <span className="bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg">
-                            Out of Stock
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Product Meta */}
-                    <div className="p-4 flex-1 flex flex-col justify-between">
-                      <div>
-                        {product.brand && (
-                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            {product.brand}
-                          </div>
-                        )}
-                        <h4
+                    return (
+                      <motion.div
+                        key={product.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:-translate-y-0.5"
+                      >
+                        {/* Top Image & Badge */}
+                        <div
+                          className="relative p-4 bg-slate-50/50 cursor-pointer overflow-hidden flex items-center justify-center min-h-[160px]"
                           onClick={() => handleOpenDetail(product)}
-                          className="text-sm font-extrabold text-slate-900 line-clamp-2 hover:text-emerald-700 cursor-pointer mt-0.5 leading-snug"
                         >
-                          {product.title}
-                        </h4>
-                        <div className="text-xs text-slate-500 mt-1 font-medium">
-                          {product.pack_size || product.unit || "1 unit"}
-                        </div>
-                      </div>
-
-                      {/* Store Tag */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1 text-[11px] text-slate-400 font-semibold truncate">
-                        <Store className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{product.seller_name || "Seller Store"}</span>
-                      </div>
-
-                      {/* Price & Add To Cart */}
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-base font-black text-slate-900">
-                            ₹{price}
-                          </div>
                           {hasDiscount && (
-                            <div className="text-xs text-slate-400 line-through">
-                              ₹{mrp}
+                            <span className="absolute top-2.5 left-2.5 z-10 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                              {discountPct}% OFF
+                            </span>
+                          )}
+
+                          <img
+                            src={product.primary_image || "/mockups/vegetables_realistic.png"}
+                            alt={product.title}
+                            className="w-full h-32 object-contain group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              e.target.src = "/mockups/vegetables_realistic.png"
+                            }}
+                          />
+
+                          {!product.in_stock && (
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
+                              <span className="bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-sm">
+                                Out of Stock
+                              </span>
                             </div>
                           )}
                         </div>
 
-                        {/* Add / Stepper CTA */}
-                        {product.in_stock ? (
-                          inCartQty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => handleAddToCart(product, 1)}
-                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 hover:border-emerald-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+                        {/* Product Meta */}
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            {product.brand && (
+                              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                {product.brand}
+                              </div>
+                            )}
+                            <h4
+                              onClick={() => handleOpenDetail(product)}
+                              className="text-sm font-extrabold text-slate-900 line-clamp-2 hover:text-emerald-700 cursor-pointer mt-0.5 leading-snug"
                             >
-                              ADD
-                            </button>
-                          ) : (
-                            <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleAddToCart(product, -1)}
-                                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="px-2 text-xs font-black">{inCartQty}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleAddToCart(product, 1)}
-                                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                              {product.title}
+                            </h4>
+                            <div className="text-xs text-slate-500 mt-1 font-medium">
+                              {product.pack_size || product.unit || "1 unit"}
                             </div>
-                          )
-                        ) : (
-                          <span className="text-[11px] font-bold text-slate-400 uppercase">
-                            Unavailable
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          )}
+                          </div>
+
+                          {/* Store Tag */}
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1 text-[11px] text-slate-400 font-semibold truncate">
+                            <Store className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{product.seller_name || "Seller Store"}</span>
+                          </div>
+
+                          {/* Price & Add To Cart */}
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-base font-black text-slate-900">
+                                ₹{price}
+                              </div>
+                              {hasDiscount && (
+                                <div className="text-xs text-slate-400 line-through">
+                                  ₹{mrp}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add / Stepper CTA */}
+                            {product.in_stock ? (
+                              inCartQty === 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddToCart(product, 1)}
+                                  className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 hover:border-emerald-600 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+                                >
+                                  ADD
+                                </button>
+                              ) : (
+                                <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-sm overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddToCart(product, -1)}
+                                    className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="px-2 text-xs font-black">{inCartQty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddToCart(product, 1)}
+                                    className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-[11px] font-bold text-slate-400 uppercase">
+                                Unavailable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </main>
       </div>
 
-      {/* ── Single-Seller Conflict Modal ── */}
-      <AnimatePresence>
-        {sellerConflict && (
-          <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 font-sans"
-            >
-              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-4">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                Replace items in cart?
-              </h3>
-              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                Your cart currently contains items from <strong>"{sellerConflict.current_seller_name}"</strong>.
-                Each order can only be placed with one seller at a time.
-              </p>
-              <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                Adding items from <strong>"{sellerConflict.new_seller_name}"</strong> will discard your existing cart items.
-              </p>
-
-              <div className="flex items-center gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setSellerConflict(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
-                >
-                  Keep Current Seller
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmSellerSwitch}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                >
-                  Clear & Switch
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* ── Product Detail Modal ── */}
       <AnimatePresence>
         {detailProduct && (
-          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1172,7 +1182,7 @@ export function MarketplacePage() {
                 </span>
                 <button
                   onClick={() => setDetailProduct(null)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1263,7 +1273,7 @@ export function MarketplacePage() {
       <AnimatePresence>
         {cartDrawerOpen && (
           <div className="fixed inset-0 z-[10000] overflow-hidden" onClick={() => setCartDrawerOpen(false)}>
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity" />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
 
             <motion.div
               initial={{ x: "100%" }}
@@ -1274,7 +1284,7 @@ export function MarketplacePage() {
               className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-[#F8FAFC] h-full flex flex-col shadow-2xl overflow-hidden font-sans z-10"
             >
               {/* Drawer Header */}
-              <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
+              <div className="px-5 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
                 <div className="flex items-center gap-2.5">
                   <ShoppingBag className="w-5 h-5 text-emerald-600" />
                   <div>
@@ -1307,62 +1317,156 @@ export function MarketplacePage() {
                   </div>
                 ) : (
                   <>
-                    {cart.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex items-center gap-3.5"
-                      >
-                        <img
-                          src={item.product_image || "/mockups/vegetables_realistic.png"}
-                          alt={item.product_title}
-                          className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
-                          onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-extrabold text-slate-900 truncate">
-                            {item.product_title}
-                          </h4>
-                          <div className="text-[11px] text-slate-400 font-medium">
-                            {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
-                          </div>
-                          <div className="text-xs font-black text-slate-900 mt-1">
-                            ₹{item.line_amount}
-                          </div>
-                        </div>
-
-                        {/* Stepper */}
-                        <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (item.quantity === 1) {
-                                removeMarketplaceCartItem(item.id).then(reloadCart)
-                              } else {
-                                updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
-                              }
-                            }}
-                            className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="px-2 text-xs font-black text-slate-900">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
-                            }}
-                            className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
+                    {/* Multi-Warehouse Split Warning Notice */}
+                    {cart?.multi_warehouse_notice && (
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
+                        <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">Multi-Warehouse Delivery</div>
+                          <div className="text-[11px] text-amber-800 mt-0.5">{cart.multi_warehouse_notice}</div>
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Grouped by Warehouse if available */}
+                    {Array.isArray(cart?.warehouse_groups) && cart.warehouse_groups.length > 0 ? (
+                      cart.warehouse_groups.map((group, gIdx) => (
+                        <div key={group.warehouse_id || gIdx} className="space-y-2.5">
+                          <div className="flex items-center justify-between px-1 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <Store className="w-3.5 h-3.5 text-emerald-600" />
+                              {group.warehouse_name || "Warehouse"}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                              1 Consolidated Delivery
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {group.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                              >
+                                <img
+                                  src={item.product_image || "/mockups/vegetables_realistic.png"}
+                                  alt={item.product_title}
+                                  className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                                  onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                                    {item.product_title}
+                                  </h4>
+                                  <div className="text-[11px] text-slate-400 font-medium">
+                                    {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                                  </div>
+                                  {item.seller_name && (
+                                    <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                      Seller: <span className="text-slate-700">{item.seller_name}</span>
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-black text-slate-900 mt-1">
+                                    ₹{item.line_amount}
+                                  </div>
+                                </div>
+
+                                {/* Stepper */}
+                                <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (item.quantity === 1) {
+                                        removeMarketplaceCartItem(item.id).then(reloadCart)
+                                      } else {
+                                        updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                      }
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="px-2 text-xs font-black text-slate-900">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                                    }}
+                                    className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      cart.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center gap-3.5"
+                        >
+                          <img
+                            src={item.product_image || "/mockups/vegetables_realistic.png"}
+                            alt={item.product_title}
+                            className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 shrink-0"
+                            onError={(e) => { e.target.src = "/mockups/vegetables_realistic.png" }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-extrabold text-slate-900 truncate">
+                              {item.product_title}
+                            </h4>
+                            <div className="text-[11px] text-slate-400 font-medium">
+                              {item.pack_size || item.unit} • ₹{item.unit_price_snapshot}
+                            </div>
+                            {item.seller_name && (
+                              <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                Seller: <span className="text-slate-700">{item.seller_name}</span>
+                              </div>
+                            )}
+                            <div className="text-xs font-black text-slate-900 mt-1">
+                              ₹{item.line_amount}
+                            </div>
+                          </div>
+
+                          {/* Stepper */}
+                          <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (item.quantity === 1) {
+                                  removeMarketplaceCartItem(item.id).then(reloadCart)
+                                } else {
+                                  updateMarketplaceCartItem(item.id, { quantity: item.quantity - 1 }).then(reloadCart)
+                                }
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-2 text-xs font-black text-slate-900">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateMarketplaceCartItem(item.id, { quantity: item.quantity + 1 }).then(reloadCart)
+                              }}
+                              className="p-1.5 hover:bg-slate-200 text-slate-700 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
 
                     {/* Delivery Address Section */}
-                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
                       <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
                         Delivery Address
                       </div>
@@ -1372,7 +1476,7 @@ export function MarketplacePage() {
                     </div>
 
                     {/* Bill Summary */}
-                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5 text-xs">
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5 text-xs">
                       <div className="font-black text-slate-900 uppercase tracking-wider text-[11px] mb-2">
                         Bill Summary
                       </div>
@@ -1382,7 +1486,9 @@ export function MarketplacePage() {
                       </div>
                       <div className="flex justify-between text-slate-600 font-medium">
                         <span>Delivery Fee</span>
-                        <span className="font-bold text-emerald-600">FREE</span>
+                        <span className="font-bold text-emerald-600">
+                          {cart?.delivery_count > 1 ? `FREE (${cart.delivery_count} shipments)` : "FREE"}
+                        </span>
                       </div>
                       <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-black text-slate-900">
                         <span>To Pay</span>
@@ -1434,7 +1540,7 @@ export function MarketplacePage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setCategoryDrawerOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             <motion.div
               initial={{ x: "-100%" }}
@@ -1488,7 +1594,7 @@ export function MarketplacePage() {
                 </div>
 
                 {/* Categories */}
-                {categoryTree.map((cat) => (
+                {uniqueRootCategories.map((cat) => (
                   <CategoryTreeItem
                     key={cat.id || cat.slug}
                     node={cat}
@@ -1506,10 +1612,9 @@ export function MarketplacePage() {
       </AnimatePresence>
 
       {/* ── Order Confirmation & Live Tracking Modal ── */}
-      {/* ── Order Confirmation & Live Tracking Modal ── */}
       <AnimatePresence>
         {trackingModalOpen && activeOrder && (
-          <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1517,7 +1622,7 @@ export function MarketplacePage() {
               className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 font-sans"
             >
               {/* Tracking Header */}
-              <div className="p-6 bg-gradient-to-b from-emerald-50 to-white border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-xs z-10">
+              <div className="p-6 bg-gradient-to-b from-emerald-50 to-white border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-black px-2.5 py-1 rounded-md ${
@@ -1541,7 +1646,7 @@ export function MarketplacePage() {
                   </div>
                   <button
                     onClick={() => setTrackingModalOpen(false)}
-                    className="p-1 text-slate-400 hover:text-slate-700 rounded-full"
+                    className="p-1 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1553,6 +1658,9 @@ export function MarketplacePage() {
                   </h3>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-0.5">
                     <span>Seller: <strong>{activeOrder.seller_name || "Seller Hub Partner"}</strong></span>
+                    {activeOrder.warehouse_name && (
+                      <span>Warehouse: <strong>{activeOrder.warehouse_name}</strong></span>
+                    )}
                     {activeOrder.delivery_slot && (
                       <span>Slot: <strong>{activeOrder.delivery_slot}</strong></span>
                     )}
@@ -1565,6 +1673,56 @@ export function MarketplacePage() {
 
               {/* Status Timeline */}
               <div className="p-6 space-y-6">
+                {/* Consolidated Delivery Group Info */}
+                {activeOrder.delivery_group && activeOrder.delivery_group.total_orders > 1 && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span className="text-xs font-black text-emerald-950">
+                          Consolidated Hub Delivery ({activeOrder.delivery_group.total_orders} Sellers)
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-extrabold">
+                        {activeOrder.delivery_group.warehouse_name || "Warehouse"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 leading-snug">
+                      Items from multiple sellers in this warehouse will be picked up together and delivered in one single trip.
+                    </p>
+
+                    {/* Sibling Orders List */}
+                    <div className="space-y-1.5 pt-1">
+                      {activeOrder.delivery_group.orders.map((sib) => (
+                        <div
+                          key={sib.order_number}
+                          className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                            sib.order_number === activeOrder.order_number
+                              ? "bg-white border-emerald-300 shadow-sm font-bold"
+                              : "bg-white/70 border-emerald-100 text-slate-700"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 truncate">
+                            <span className="text-slate-900 font-extrabold">{sib.seller_name}</span>
+                            <span className="text-[11px] text-slate-400 font-mono ml-1.5">#{sib.order_number}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-extrabold text-slate-900">₹{sib.total_amount}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                              sib.status === "DELIVERED"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : sib.status === "CANCELLED"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-700"
+                            }`}>
+                              {sib.status_label || sib.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Cancellation Pending Banner */}
                 {activeOrder.cancellation_pending && (
                   <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-medium flex items-center gap-2">
@@ -1614,7 +1772,7 @@ export function MarketplacePage() {
                         <div key={step.key} className="flex items-start gap-3.5 relative">
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                             isPassed
-                              ? "bg-emerald-600 text-white shadow-xs"
+                              ? "bg-emerald-600 text-white shadow-sm"
                               : "bg-slate-100 text-slate-400"
                           }`}>
                             {isPassed ? <Check className="w-3.5 h-3.5" /> : idx + 1}
@@ -1690,7 +1848,7 @@ export function MarketplacePage() {
               </div>
 
               {/* Actions */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 sticky bottom-0 bg-slate-50/95 backdrop-blur-xs">
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 sticky bottom-0 bg-slate-50/95 backdrop-blur-sm">
                 {activeOrder.status !== "CANCELLED" && activeOrder.status !== "DELIVERED" && (
                   <button
                     type="button"
@@ -1777,7 +1935,7 @@ export function MarketplacePage() {
       {/* ── Single-Seller Conflict Resolution Modal ── */}
       <AnimatePresence>
         {sellerConflict && (
-          <div id="seller-conflict-modal-backdrop" className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
+          <div id="seller-conflict-modal-backdrop" className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm font-sans">
             <motion.div
               id="seller-conflict-modal"
               initial={{ scale: 0.95, opacity: 0, y: 10 }}

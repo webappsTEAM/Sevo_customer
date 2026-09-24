@@ -364,6 +364,17 @@ class MarketplaceOrder(models.Model):
     seller_id = models.IntegerField(db_index=True)
     seller_name = models.CharField(max_length=255, blank=True, default="")
 
+    # Phase U: Consolidated delivery group & fulfillment warehouse linkage
+    delivery_group_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Shared identifier linking sibling marketplace orders checked out together from the same warehouse.",
+    )
+    warehouse_id = models.IntegerField(null=True, blank=True, db_index=True)
+    warehouse_name = models.CharField(max_length=255, blank=True, default="")
+
     vendor_order_id = models.IntegerField(null=True, blank=True, db_index=True)
     vendor_order_number = models.CharField(max_length=50, blank=True, default="")
 

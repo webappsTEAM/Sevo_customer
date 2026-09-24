@@ -60,7 +60,8 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketplaceOrder
         fields = [
-            "id", "order_number", "seller_id", "seller_name",
+            "id", "order_number", "delivery_group_id", "warehouse_id", "warehouse_name",
+            "seller_id", "seller_name",
             "vendor_order_id", "vendor_order_number", "status", "status_label",
             "total_amount", "subtotal_amount", "delivery_fee",
             "delivery_address", "customer_name", "customer_phone", "customer_email",
@@ -134,6 +135,9 @@ def serialize_marketplace_order(order):
         "order_type": "marketplace",
         "id": order.id,
         "order_number": order.order_number,
+        "delivery_group_id": order.delivery_group_id,
+        "warehouse_id": order.warehouse_id,
+        "warehouse_name": order.warehouse_name,
         "seller_id": order.seller_id,
         "seller_name": order.seller_name,
         "status": order.status,
@@ -142,6 +146,9 @@ def serialize_marketplace_order(order):
         "created_at": order.created_at,
         "detail": {
             "delivery_address": order.delivery_address,
+            "delivery_group_id": order.delivery_group_id,
+            "warehouse_id": order.warehouse_id,
+            "warehouse_name": order.warehouse_name,
             "seller_name": order.seller_name,
             "status": order.status,
             "status_label": order.get_status_display(),

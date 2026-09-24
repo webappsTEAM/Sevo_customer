@@ -66,6 +66,10 @@ class CartItem(models.Model):
     
     # For Marketplace (Vendor-approved Seller Hub items):
     seller_product_id = models.IntegerField(null=True, blank=True, db_index=True)
+    seller_id = models.IntegerField(null=True, blank=True, db_index=True)
+    seller_name = models.CharField(max_length=255, blank=True, default="")
+    warehouse_id = models.IntegerField(null=True, blank=True, db_index=True)
+    warehouse_name = models.CharField(max_length=255, blank=True, default="")
     product_title = models.CharField(max_length=255, blank=True, default="")
     product_sku = models.CharField(max_length=100, blank=True, default="")
     product_brand = models.CharField(max_length=150, blank=True, default="")

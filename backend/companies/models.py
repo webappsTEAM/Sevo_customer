@@ -89,6 +89,8 @@ class Company(models.Model):
     timezone = models.CharField(max_length=50, default="Asia/Kolkata")
     data_region = models.CharField(max_length=50, default="ap-south-1")
     address = models.TextField(blank=True, null=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     logo = models.ImageField(upload_to="company_logos/", blank=True, null=True)
 
     class ComplianceMode(models.TextChoices):
