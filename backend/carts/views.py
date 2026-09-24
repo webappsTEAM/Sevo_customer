@@ -77,13 +77,24 @@ class CartItemListView(APIView):
 
         data = serializer.validated_data
         package = Package.objects.get(id=data["package_id"])
-        unit_price = package.offer_price if package.offer_price is not None else package.base_price
+        
+        variant = None
+        if data.get("variant_id"):
+            variant = package.variants.filter(id=data["variant_id"], is_active=True).first()
+        if variant is None:
+            variant = package.variants.filter(is_default=True, is_active=True).first() or package.variants.filter(is_active=True).first()
+
+        if variant is not None:
+            unit_price = variant.base_price
+        else:
+            unit_price = package.offer_price if package.offer_price is not None else package.base_price
 
         with transaction.atomic():
             cart = _get_active_cart(request.user, cart_type, create=True)
             item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 package=package,
+                variant=variant,
                 customization=data.get("customization") or {},
                 defaults={
                     "quantity": data["quantity"],

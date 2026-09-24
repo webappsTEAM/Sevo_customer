@@ -8,12 +8,17 @@ class CartItemSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(source="package.name", read_only=True)
     package_slug = serializers.CharField(source="package.slug", read_only=True)
     package_image = serializers.CharField(source="package.image", read_only=True)
+    variant_id = serializers.IntegerField(source="variant.id", read_only=True, default=None, allow_null=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True, default=None, allow_null=True)
+    variant_pack_value = serializers.DecimalField(source="variant.pack_value", max_digits=10, decimal_places=2, read_only=True, default=None, allow_null=True)
+    variant_unit = serializers.CharField(source="variant.unit", read_only=True, default=None, allow_null=True)
     line_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
         fields = [
             "id", "package", "package_name", "package_slug", "package_image",
+            "variant", "variant_id", "variant_name", "variant_pack_value", "variant_unit",
             "quantity", "unit_price_snapshot", "customization",
             "line_amount", "created_at", "updated_at",
         ]
@@ -38,6 +43,7 @@ class CartSerializer(serializers.ModelSerializer):
 
 class CartItemCreateSerializer(serializers.Serializer):
     package_id = serializers.IntegerField()
+    variant_id = serializers.IntegerField(required=False, allow_null=True)
     quantity = serializers.IntegerField(min_value=1, default=1)
     customization = serializers.JSONField(required=False, default=dict)
 

@@ -16,6 +16,7 @@ from inventory.views import (
     VegetableCategoryApprovalActionView,
     VegetableApprovalListView,
     VegetableApprovalActionView,
+    VegetableVariantApprovalActionView,
     VegetableMyRequestsListView,
     VegetableSingleRequestView,
     VegetableCatalogTemplateView,
@@ -48,6 +49,7 @@ urlpatterns = [
     # Vegetable Requests & Approval
     path('vegetables/approval-queue/', VegetableApprovalListView.as_view(), name='vegetable-approval-queue'),
     path('vegetables/<int:pk>/review/', VegetableApprovalActionView.as_view(), name='vegetable-review'),
+    path('vegetables/variants/<int:pk>/review/', VegetableVariantApprovalActionView.as_view(), name='vegetable-variant-review'),
     path('vegetables/my-requests/', VegetableMyRequestsListView.as_view(), name='vegetable-my-requests'),
     path('vegetables/single-request/', VegetableSingleRequestView.as_view(), name='vegetable-single-request'),
 

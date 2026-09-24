@@ -67,6 +67,13 @@ class CartItem(models.Model):
         on_delete=models.CASCADE,
         related_name="cart_items",
     )
+    variant = models.ForeignKey(
+        "service_requests.PackageVariant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cart_items",
+    )
     quantity = models.PositiveIntegerField(default=1)
     # Snapshot, not a live lookup -- matches the *_snapshot convention used
     # throughout service_requests/orders (e.g. OrderItem.service_category_snapshot):

@@ -16,7 +16,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.permissions import IsAdminRole
 from inventory.models import Vegetable, VegetableCategory
-from inventory.utils.unit_conversion import format_grams_for_display
+from inventory.utils.unit_conversion import format_grams_for_display, format_stock_for_display
 from service_requests.models import Package, PackageStatus
 from .models import VegetableOrder, VegetableOrderItem, VegetableReturn
 from .serializers import (
@@ -40,13 +40,25 @@ def serialize_admin_order_detail(order: VegetableOrder) -> dict:
         customer_email = getattr(customer, "email", "") or ""
 
     items_data = []
-    for item in order.items.all().select_related("package"):
+    for item in order.items.all().select_related("package", "package__stock_item", "package__stock_item__category"):
         pkg = item.package
+        img = ""
+        if pkg:
+            if pkg.image and str(pkg.image).strip():
+                img = str(pkg.image).strip()
+            elif hasattr(pkg, 'stock_item') and pkg.stock_item:
+                if pkg.stock_item.image and str(pkg.stock_item.image).strip():
+                    img = str(pkg.stock_item.image).strip()
+                elif pkg.stock_item.category and pkg.stock_item.category.image and str(pkg.stock_item.category.image).strip():
+                    img = str(pkg.stock_item.category.image).strip()
+        if not img:
+            img = "/mockups/vegetables_realistic.png"
+
         items_data.append({
             "id": item.id,
             "package_id": pkg.id if pkg else None,
             "name": pkg.name if pkg else "Vegetable Item",
-            "image": pkg.image if pkg else "/mockups/vegetables_realistic.png",
+            "image": img,
             "pack_size": getattr(pkg, "duration", "") or "500g",
             "quantity_grams": item.quantity_grams,
             "quantity_display": format_grams_for_display(item.quantity_grams),
@@ -239,17 +251,29 @@ class VegetableAdminDashboardStatsView(APIView):
                 threshold = int(default_daily * 0.25)
                 if stock <= threshold:
                     pct = round((stock / default_daily) * 100, 1)
+                    img = ""
+                    if veg.image and str(veg.image).strip():
+                        img = str(veg.image).strip()
+                    elif veg.package and veg.package.image and str(veg.package.image).strip():
+                        img = str(veg.package.image).strip()
+                    elif veg.category and veg.category.image and str(veg.category.image).strip():
+                        img = str(veg.category.image).strip()
+                    if not img:
+                        img = "/mockups/vegetables_realistic.png"
+
                     low_stock_items.append({
                         "id": veg.id,
                         "product_id": veg.package_id,
                         "name": veg.package.name if veg.package else veg.name,
                         "sku": veg.sku,
                         "category_name": veg.category.name if veg.category else "Uncategorized",
-                        "image": veg.image or (veg.package.image if veg.package else "/mockups/vegetables_realistic.png"),
+                        "image": img,
+                        "unit_basis": veg.unit_basis,
+                        "unit": veg.unit,
                         "current_stock_grams": stock,
-                        "current_stock_display": format_grams_for_display(stock),
+                        "current_stock_display": format_stock_for_display(stock, unit_basis=veg.unit_basis, unit=veg.unit),
                         "default_daily_grams": default_daily,
-                        "default_daily_display": format_grams_for_display(default_daily),
+                        "default_daily_display": format_stock_for_display(default_daily, unit_basis=veg.unit_basis, unit=veg.unit),
                         "percentage_left": pct,
                         "is_out_of_stock": stock == 0,
                     })

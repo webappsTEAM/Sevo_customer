@@ -598,6 +598,66 @@ class VegetableStockWriteLockdownTestSuite(TestCase):
         self.pkg.refresh_from_db()
         self.assertEqual(self.pkg.base_price, Decimal("40.00"))  # unchanged
 
+    def test_update_details_endpoint_updates_image(self):
+        new_img_url = "https://images.unsplash.com/photo-spine-gourd.jpg"
+        res = self.client.patch(
+            f"/api/inventory/vegetable-stock/{self.pkg.id}/update-details/",
+            {"image": new_img_url}, format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["success"])
+        self.pkg.refresh_from_db()
+        self.item.refresh_from_db()
+        self.assertEqual(self.pkg.image, new_img_url)
+        self.assertEqual(self.item.image, new_img_url)
+
+    def test_vegetable_details_update_serializer_units_validation(self):
+        from inventory.serializers import VegetableDetailsUpdateSerializer
+        # 1. Valid WEIGHT units
+        s_weight = VegetableDetailsUpdateSerializer(
+            data={
+                "opening_stock_quantity": 10, "opening_stock_unit": "kg",
+                "current_stock_quantity": 500, "current_stock_unit": "g",
+                "restock_level_quantity": 2, "restock_level_unit": "kg",
+                "reorder_level_quantity": 1, "reorder_level_unit": "kg",
+                "unit_basis": "WEIGHT",
+            }
+        )
+        self.assertTrue(s_weight.is_valid(), s_weight.errors)
+
+        # 2. Incompatible COUNT unit on WEIGHT basis item
+        s_mismatch = VegetableDetailsUpdateSerializer(
+            data={
+                "current_stock_quantity": 10, "current_stock_unit": "pcs",
+                "unit_basis": "WEIGHT",
+            }
+        )
+        self.assertFalse(s_mismatch.is_valid())
+        self.assertIn("current_stock_unit", s_mismatch.errors)
+
+        # 3. Valid COUNT units across all six allowed variants
+        for count_unit in ["pcs", "bunch", "packet", "dozen"]:
+            s_count = VegetableDetailsUpdateSerializer(
+                data={
+                    "opening_stock_quantity": 20, "opening_stock_unit": count_unit,
+                    "current_stock_quantity": 15, "current_stock_unit": count_unit,
+                    "restock_level_quantity": 10, "restock_level_unit": count_unit,
+                    "reorder_level_quantity": 5, "reorder_level_unit": count_unit,
+                    "unit_basis": "COUNT",
+                }
+            )
+            self.assertTrue(s_count.is_valid(), f"Failed for unit {count_unit}: {s_count.errors}")
+
+        # 4. Incompatible WEIGHT unit on COUNT basis item
+        s_count_mismatch = VegetableDetailsUpdateSerializer(
+            data={
+                "current_stock_quantity": 10, "current_stock_unit": "kg",
+                "unit_basis": "COUNT",
+            }
+        )
+        self.assertFalse(s_count_mismatch.is_valid())
+        self.assertIn("current_stock_unit", s_count_mismatch.errors)
+
     def test_inventory_item_viewset_write_actions_refuse(self):
         create_res = self.client.post(
             "/api/inventory/items/",

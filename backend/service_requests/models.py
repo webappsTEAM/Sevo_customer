@@ -1104,6 +1104,90 @@ class Package(models.Model):
         return self.name
 
 
+class PackageVariant(models.Model):
+    """
+    A specific pack size, weight, or quantity option for a sellable Package / Vegetable.
+    Enables multi-variant products (e.g. 500g, 1kg, 2kg, 1pc, 4pcs) sharing a master inventory pool.
+    """
+    package = models.ForeignKey(Package, on_delete=models.CASCADE, related_name="variants")
+    vegetable = models.ForeignKey("inventory.Vegetable", on_delete=models.CASCADE, null=True, blank=True, related_name="variants")
+
+    name = models.CharField(max_length=120, blank=True)
+    pack_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
+    unit = models.CharField(max_length=20, default="kg")
+    unit_basis = models.CharField(max_length=20, choices=[("WEIGHT", "Weight"), ("COUNT", "Count")], default="WEIGHT")
+
+    base_price = models.DecimalField(max_digits=10, decimal_places=2)  # Selling price
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    sku = models.CharField(max_length=100, blank=True, null=True)
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+
+    # Vendor catalog workflow fields
+    status = models.CharField(
+        max_length=20,
+        choices=[("PENDING", "Pending"), ("APPROVED", "Approved"), ("REJECTED", "Rejected")],
+        default="APPROVED",
+        db_index=True
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=[("DIRECT", "Direct"), ("REQUEST", "Request")],
+        default="DIRECT",
+        db_index=True
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='requested_package_variants'
+    )
+    requested_at = models.DateTimeField(default=timezone.now)
+    rejection_reason = models.TextField(blank=True, default="")
+    is_resubmission = models.BooleanField(default=False)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviewed_package_variants'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "pack_value", "id"]
+
+    @property
+    def base_unit_deduction(self):
+        from inventory.utils.unit_conversion import to_base_units
+        return to_base_units(self.pack_value, self.unit, self.unit_basis)
+
+    @property
+    def display_name(self):
+        if self.name:
+            return self.name
+        val_str = f"{self.pack_value:g}" if self.pack_value else "1"
+        return f"{val_str} {self.unit}".strip()
+
+    def save(self, *args, **kwargs):
+        from inventory.utils.unit_conversion import unit_basis_for_unit
+        if self.unit:
+            self.unit_basis = unit_basis_for_unit(self.unit)
+        if not self.name:
+            val_str = f"{self.pack_value:g}" if self.pack_value else "1"
+            self.name = f"{val_str} {self.unit}".strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.package.name} - {self.display_name} (₹{self.base_price})"
+
+
 class AddOn(models.Model):
     """Optional extra scoped to one specific Package (e.g. 'Gas Top-up' on 'AC General Service')."""
     package     = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True, blank=True, related_name="addons")

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -6,25 +6,49 @@ import {
   AlertTriangle, XCircle, ArrowRight, RefreshCw, Layers,
   FileText, Sparkles, Check, Info, ShieldAlert, FolderOpen,
   PlusCircle, Edit3, ShieldCheck, Sprout, AlertCircle, X, Clock,
-  Search, Calendar, Tag, ChevronRight, ListFilter
+  Search, Calendar, Tag, ChevronRight, ListFilter, Lock
 } from "lucide-react"
 import { apiRequest, extractApiErrorMessage, API_BASE_URL } from "../../../api/client.js"
 import { routes } from "../../routes.js"
 import CategoryPathPicker from "../../components/vegetables/CategoryPathPicker.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
 
 export default function VegetableAdminCatalogUploadsPage() {
   const [mainTab, setMainTab] = useState("single") // "single" | "bulk" | "requests" | "rejected"
 
   // ── Single Request Form State ──
-  const [requestMode, setRequestMode] = useState("vegetable") // "vegetable" | "category" | "category_with_vegetable"
+  const [requestMode, setRequestMode] = useState("vegetable") // "vegetable" | "category_with_vegetable"
   const [categories, setCategories] = useState([])
   const [unitChoices, setUnitChoices] = useState([])
+  const [approvedVegetables, setApprovedVegetables] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [singleSubmitting, setSingleSubmitting] = useState(false)
   const [singleSuccess, setSingleSuccess] = useState(null)
   const [singleError, setSingleError] = useState(null)
 
   const [resubmitTarget, setResubmitTarget] = useState(null) // item being resubmitted if any
+
+  // ── Bulk Upload State ──
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [previewResult, setPreviewResult] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [commitLoading, setCommitLoading] = useState(false)
+  const [commitResult, setCommitResult] = useState(null)
+  const [bulkError, setBulkError] = useState(null)
+  const [bulkFilterTab, setBulkFilterTab] = useState("all") // "all" | "create" | "update" | "reject"
+
+  // ── My Requests State ──
+  const [myRequests, setMyRequests] = useState({ products: [], categories: [], variants: [] })
+  const [myRequestCounts, setMyRequestCounts] = useState({ all: 0, pending: 0, approved: 0, rejected: 0 })
+  const [myRequestsFilter, setMyRequestsFilter] = useState("all") // "all" | "pending" | "approved" | "rejected"
+  const [myRequestsSearch, setMyRequestsSearch] = useState("")
+  const [loadingMyRequests, setLoadingMyRequests] = useState(false)
+
+  // ── Rejected Items State ──
+  const [rejectedCategories, setRejectedCategories] = useState([])
+  const [rejectedVegetables, setRejectedVegetables] = useState([])
+  const [loadingRejected, setLoadingRejected] = useState(false)
+  const [rejectedFilterTab, setRejectedFilterTab] = useState("all") // "all" | "categories" | "products"
 
   const [singleForm, setSingleForm] = useState({
     parent_id: "",
@@ -43,59 +67,167 @@ export default function VegetableAdminCatalogUploadsPage() {
     image_url: "",
     description: "",
     tag: "Fresh",
+    variants: [
+      { pack_value: "1", unit: "kg", mrp: "", price: "", is_default: true }
+    ],
   })
 
-  // ── My Requests State ──
-  const [myRequests, setMyRequests] = useState({ products: [], categories: [] })
-  const [myRequestCounts, setMyRequestCounts] = useState({ all: 0, pending: 0, approved: 0, rejected: 0 })
-  const [loadingMyRequests, setLoadingMyRequests] = useState(false)
-  const [myRequestsFilter, setMyRequestsFilter] = useState("all") // "all" | "pending" | "approved" | "rejected"
-  const [myRequestsSearch, setMyRequestsSearch] = useState("")
+  // ── Variant Repeater Helpers ──
+  const handleAddVariantRow = () => {
+    setSingleForm(prev => {
+      const fallbackUnit = existingProduct?.unit || prev.variants[0]?.unit || prev.vegetable_unit || "kg"
+      return {
+        ...prev,
+        variants: [
+          ...prev.variants,
+          {
+            pack_value: "",
+            unit: fallbackUnit,
+            mrp: "",
+            price: "",
+            is_default: false,
+            is_existing: false,
+          }
+        ]
+      }
+    })
+  }
 
-  // ── Rejected Items State (for Resubmission) ──
-  const [rejectedCategories, setRejectedCategories] = useState([])
-  const [rejectedVegetables, setRejectedVegetables] = useState([])
-  const [loadingRejected, setLoadingRejected] = useState(false)
+  const handleRemoveVariantRow = (index) => {
+    setSingleForm(prev => {
+      if (prev.variants[index]?.is_existing) return prev
+      const nextVariants = prev.variants.filter((_, idx) => idx !== index)
+      if (nextVariants.length > 0 && !nextVariants.some(v => v.is_default)) {
+        nextVariants[0].is_default = true
+      }
+      return { ...prev, variants: nextVariants }
+    })
+  }
 
-  // ── Bulk Upload State ──
-  const fileInputRef = useRef(null)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [dragOver, setDragOver] = useState(false)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewResult, setPreviewResult] = useState(null)
-  const [bulkFilterTab, setBulkFilterTab] = useState("all") // all, create, update, reject
-  const [bulkError, setBulkError] = useState(null)
-  const [commitLoading, setCommitLoading] = useState(false)
-  const [commitResult, setCommitResult] = useState(null)
+  const handleVariantRowChange = (index, field, value) => {
+    setSingleForm(prev => {
+      if (prev.variants[index]?.is_existing) return prev
+      const nextVariants = prev.variants.map((row, idx) => {
+        if (idx !== index) {
+          if (field === "is_default" && value === true) {
+            return { ...row, is_default: false }
+          }
+          return row
+        }
+        return { ...row, [field]: value }
+      })
+      // If updating first non-existing row, sync with top-level singleForm fields for backwards compatibility
+      const updated = { ...prev, variants: nextVariants }
+      const firstEditableIdx = nextVariants.findIndex(v => !v.is_existing)
+      if (index === firstEditableIdx) {
+        if (field === "mrp") updated.mrp = value
+        if (field === "price") updated.price = value
+        if (field === "pack_value") updated.pack_value = value
+        if (field === "unit") updated.vegetable_unit = value
+      }
+      return updated
+    })
+  }
 
-  // ── Auto-fill Tracking for Product Name & Unit ──
+  // ── Auto-fill Tracking for Product Name & Unit & Existing Product ──
+  const [existingProduct, setExistingProduct] = useState(null)
   const lastAutoFilledProduceNameRef = useRef("")
   const lastAutoFilledBundleNameRef = useRef("")
   const lastAutoFilledUnitRef = useRef("")
 
+  const pendingVariantsForProduct = useMemo(() => {
+    if (!existingProduct) return []
+    return (myRequests.variants || []).filter(
+      v => (v.target_vegetable_id === existingProduct.id || v.target_vegetable === existingProduct.id || v.vegetable === existingProduct.id) &&
+           v.status === "PENDING"
+    )
+  }, [existingProduct, myRequests.variants])
+
+  const pendingProductForCategory = useMemo(() => {
+    if (existingProduct || !singleForm.category_id) return null
+    const catId = singleForm.category_id.toString()
+    return (myRequests.products || []).find(
+      p => (p.category_id?.toString() === catId || p.category?.toString() === catId) &&
+           p.status === "PENDING"
+    )
+  }, [existingProduct, singleForm.category_id, myRequests.products])
+
   const handleVegetableCategorySelect = (id, categoryObj) => {
-    setSingleForm(prev => {
-      let nextProduceName = prev.vegetable_name
-      let nextVegUnit = prev.vegetable_unit || "kg"
-      if (id && categoryObj && categoryObj.name) {
-        const prevName = (prev.vegetable_name || "").trim()
-        const prevAuto = (lastAutoFilledProduceNameRef.current || "").trim()
-        if (!prevName || prevName === prevAuto) {
-          nextProduceName = categoryObj.name
-          lastAutoFilledProduceNameRef.current = categoryObj.name
-        }
-        if (categoryObj.unit_of_measurement) {
-          nextVegUnit = categoryObj.unit_of_measurement
-          lastAutoFilledUnitRef.current = categoryObj.unit_of_measurement
-        }
+    setSingleError(null)
+    const catId = id ? parseInt(id) : null
+    
+    // Check if an approved vegetable already exists for this category
+    const matchedVeg = approvedVegetables.find(v => {
+      const vCatId = typeof v.category === "object" ? v.category?.id : v.category
+      if (catId && vCatId && parseInt(vCatId) === catId) return true
+      if (catId && v.category_id && parseInt(v.category_id) === catId) return true
+      if (categoryObj && categoryObj.name) {
+        const cName = categoryObj.name.trim().toLowerCase()
+        const vName = (v.name || "").replace(" (Produce)", "").trim().toLowerCase()
+        if (vName === cName) return true
       }
-      return {
+      return false
+    })
+
+    if (matchedVeg) {
+      setExistingProduct(matchedVeg)
+      const cleanName = (matchedVeg.name || "").replace(" (Produce)", "")
+      const vegUnit = matchedVeg.unit || "kg"
+
+      // Map existing approved variants as locked reference rows
+      const existingRows = (matchedVeg.variants || []).map(v => ({
+        id: v.id,
+        name: v.name,
+        pack_value: v.pack_value ? v.pack_value.toString().replace(/\.00$/, "") : "1",
+        unit: v.unit || vegUnit,
+        mrp: v.mrp ? Math.round(Number(v.mrp)).toString() : "",
+        price: v.base_price ? Math.round(Number(v.base_price)).toString() : "",
+        is_default: !!v.is_default,
+        is_existing: true,
+      }))
+
+      // Append 1 blank new row for the vendor to fill in
+      const initialNewRow = {
+        pack_value: "",
+        unit: vegUnit,
+        mrp: "",
+        price: "",
+        is_default: false,
+        is_existing: false,
+      }
+
+      setSingleForm(prev => ({
         ...prev,
         category_id: id,
-        vegetable_name: nextProduceName,
-        vegetable_unit: nextVegUnit,
-      }
-    })
+        vegetable_name: cleanName,
+        vegetable_sku: matchedVeg.sku || "",
+        vegetable_unit: vegUnit,
+        image_url: matchedVeg.image || prev.image_url,
+        description: matchedVeg.description || prev.description,
+        variants: existingRows.length > 0 ? [...existingRows, initialNewRow] : [initialNewRow],
+      }))
+    } else {
+      setExistingProduct(null)
+      setSingleForm(prev => {
+        let nextProduceName = prev.vegetable_name
+        if (id && categoryObj && categoryObj.name) {
+          const prevName = (prev.vegetable_name || "").trim()
+          const prevAuto = (lastAutoFilledProduceNameRef.current || "").trim()
+          if (!prevName || prevName === prevAuto) {
+            nextProduceName = categoryObj.name
+            lastAutoFilledProduceNameRef.current = categoryObj.name
+          }
+        }
+        return {
+          ...prev,
+          category_id: id,
+          vegetable_name: nextProduceName,
+          variants: prev.variants.some(v => v.is_existing)
+            ? [{ pack_value: "1", unit: "kg", mrp: "", price: "", is_default: true, is_existing: false }]
+            : prev.variants,
+        }
+      })
+    }
   }
 
   const handleCategoryNameChange = (val) => {
@@ -139,13 +271,18 @@ export default function VegetableAdminCatalogUploadsPage() {
   const loadCategories = async () => {
     try {
       setLoadingCategories(true)
-      const res = await apiRequest("/inventory/vegetable-categories/?status=APPROVED")
-      const list = res?.data?.data || (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []))
+      const [catRes, vegRes] = await Promise.all([
+        apiRequest("/inventory/vegetable-categories/?status=APPROVED"),
+        apiRequest("/inventory/vegetables/approval-queue/?status=APPROVED"),
+      ])
+      const list = catRes?.data?.data || (Array.isArray(catRes?.data) ? catRes.data : (Array.isArray(catRes) ? catRes : []))
       setCategories(list)
-      const uChoices = res?.data?.unit_choices || res?.unit_choices || []
+      const uChoices = catRes?.data?.unit_choices || catRes?.unit_choices || []
       if (Array.isArray(uChoices) && uChoices.length > 0) {
         setUnitChoices(uChoices)
       }
+      const vegList = vegRes?.data?.data || (Array.isArray(vegRes?.data) ? vegRes.data : (Array.isArray(vegRes) ? vegRes : []))
+      setApprovedVegetables(vegList)
     } catch (_) {
     } finally {
       setLoadingCategories(false)
@@ -180,6 +317,7 @@ export default function VegetableAdminCatalogUploadsPage() {
       setMyRequests({
         products: Array.isArray(data.products) ? data.products : [],
         categories: Array.isArray(data.categories) ? data.categories : [],
+        variants: Array.isArray(data.variants) ? data.variants : [],
       })
       setMyRequestCounts(counts)
     } catch (_) {
@@ -218,34 +356,142 @@ export default function VegetableAdminCatalogUploadsPage() {
       return
     }
 
-    // Pricing & Pack Size Validations
-    const mrpNum = parseFloat(singleForm.mrp)
-    if (isNaN(mrpNum) || mrpNum <= 0) {
-      setSingleError("Please enter a valid MRP greater than 0.")
+    // ── SUBMITTING NEW VARIANT(S) ON EXISTING APPROVED PRODUCT ──
+    if (existingProduct) {
+      const newVariantRows = singleForm.variants.filter(v => !v.is_existing)
+      if (newVariantRows.length === 0) {
+        setSingleError("Please add at least one new variant row using the '+ Add Variant' button.")
+        return
+      }
+
+      const compiledNewVariants = []
+      for (let i = 0; i < newVariantRows.length; i++) {
+        const v = newVariantRows[i]
+        const vVal = (v.pack_value || "").toString().trim()
+        const vUnit = v.unit || existingProduct.unit || "kg"
+        const vMrp = parseFloat(v.mrp || "0")
+        const vPrice = parseFloat(v.price || "0")
+
+        if (!vVal) {
+          setSingleError(`Pack Value is required for new variant #${i + 1}.`)
+          return
+        }
+        if (isNaN(vMrp) || vMrp <= 0) {
+          setSingleError(`Valid MRP is required for new variant #${i + 1}.`)
+          return
+        }
+        if (isNaN(vPrice) || vPrice <= 0) {
+          setSingleError(`Valid Selling Price is required for new variant #${i + 1}.`)
+          return
+        }
+        if (vPrice > vMrp) {
+          setSingleError(`New variant #${i + 1} selling price (₹${vPrice}) cannot be greater than MRP (₹${vMrp}).`)
+          return
+        }
+
+        compiledNewVariants.push({
+          pack_value: vVal,
+          unit: vUnit,
+          mrp: vMrp,
+          price: vPrice,
+          sku: v.sku || `${existingProduct.sku}-${vVal}${vUnit}`,
+        })
+      }
+
+      try {
+        setSingleSubmitting(true)
+        const payload = {
+          request_type: "variant",
+          target_vegetable_id: existingProduct.id,
+          variants: compiledNewVariants,
+        }
+
+        const res = await apiRequest("/inventory/vegetables/single-request/", {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        })
+
+        if (res?.success || res?.data?.success) {
+          setSingleSuccess({
+            message: res?.message || res?.data?.message || "New variant request(s) submitted for admin approval!",
+            resubmitted: false,
+          })
+          setExistingProduct(null)
+          setSingleForm({
+            parent_id: "",
+            category_id: "",
+            category_name: "",
+            category_slug: "",
+            category_description: "",
+            category_image: "",
+            category_unit: "",
+            vegetable_name: "",
+            vegetable_sku: "",
+            vegetable_unit: "kg",
+            mrp: "",
+            price: "",
+            pack_value: "1",
+            image_url: "",
+            description: "",
+            tag: "Fresh",
+            variants: [{ pack_value: "1", unit: "kg", mrp: "", price: "", is_default: true, is_existing: false }],
+          })
+          loadCategories()
+          loadMyRequests()
+        } else {
+          throw new Error(res?.message || res?.data?.message || "Failed to submit variant request.")
+        }
+      } catch (err) {
+        setSingleError(extractApiErrorMessage(err, "Failed to submit variant request."))
+      } finally {
+        setSingleSubmitting(false)
+      }
       return
     }
 
-    const priceNum = parseFloat(singleForm.price)
-    if (isNaN(priceNum) || priceNum <= 0) {
-      setSingleError("Please enter a valid Selling Price greater than 0.")
-      return
+    // ── SUBMITTING BRAND NEW PRODUCT ──
+    const compiledVariants = []
+    for (let i = 0; i < singleForm.variants.length; i++) {
+      const v = singleForm.variants[i]
+      const vVal = (v.pack_value || (i === 0 ? singleForm.pack_value : "")).toString().trim()
+      const vUnit = v.unit || (i === 0 ? singleForm.vegetable_unit : "kg")
+      const vMrp = parseFloat(v.mrp || (i === 0 ? singleForm.mrp : "0"))
+      const vPrice = parseFloat(v.price || (i === 0 ? singleForm.price : "0"))
+
+      if (!vVal) {
+        setSingleError(`Pack Value is required for variant row #${i + 1}.`)
+        return
+      }
+      if (isNaN(vMrp) || vMrp <= 0) {
+        setSingleError(`Valid MRP is required for variant row #${i + 1}.`)
+        return
+      }
+      if (isNaN(vPrice) || vPrice <= 0) {
+        setSingleError(`Valid Selling Price is required for variant row #${i + 1}.`)
+        return
+      }
+      if (vPrice > vMrp) {
+        setSingleError(`Variant #${i + 1} selling price (₹${vPrice}) cannot be greater than MRP (₹${vMrp}).`)
+        return
+      }
+
+      compiledVariants.push({
+        pack_value: vVal,
+        unit: vUnit,
+        mrp: vMrp,
+        price: vPrice,
+        is_default: !!v.is_default,
+      })
     }
 
-    if (priceNum > mrpNum) {
-      setSingleError(`Selling price (₹${priceNum}) cannot be greater than MRP (₹${mrpNum}).`)
-      return
-    }
-
-    if (!singleForm.pack_value.toString().trim()) {
-      setSingleError("Pack Size / Value is required (e.g. 500, 1, 250).")
-      return
-    }
+    const defaultVariant = compiledVariants.find(v => v.is_default) || compiledVariants[0]
 
     try {
       setSingleSubmitting(true)
 
-      const vegUnit = singleForm.vegetable_unit || "kg"
-      const packVal = singleForm.pack_value.toString().trim()
+      const vegUnit = singleForm.vegetable_unit || defaultVariant.unit || "kg"
+      const packVal = (defaultVariant.pack_value || singleForm.pack_value || "1").toString().trim()
       const formattedPackSize = packVal.toLowerCase().endsWith(vegUnit.toLowerCase())
         ? packVal
         : `${packVal} ${vegUnit}`
@@ -262,13 +508,14 @@ export default function VegetableAdminCatalogUploadsPage() {
         vegetable_name: singleForm.vegetable_name,
         vegetable_sku: singleForm.vegetable_sku,
         vegetable_unit: vegUnit,
-        mrp: mrpNum,
-        price: priceNum,
+        mrp: defaultVariant.mrp,
+        price: defaultVariant.price,
         pack_value: packVal,
         pack_size: formattedPackSize,
         image_url: singleForm.image_url,
         description: singleForm.description,
         tag: singleForm.tag,
+        variants: compiledVariants,
       }
 
       if (resubmitTarget) {
@@ -308,9 +555,11 @@ export default function VegetableAdminCatalogUploadsPage() {
           image_url: "",
           description: "",
           tag: "Fresh",
+          variants: [{ pack_value: "1", unit: "kg", mrp: "", price: "", is_default: true }],
         })
         loadRejectedItems()
         loadMyRequests()
+        loadCategories()
       } else {
         throw new Error(res?.message || res?.data?.message || "Failed to submit request.")
       }
@@ -338,7 +587,6 @@ export default function VegetableAdminCatalogUploadsPage() {
         category_slug: item.slug || "",
         category_description: item.description || "",
         category_image: item.image || "",
-        category_unit: item.unit_of_measurement || "",
       }))
     } else {
       setRequestMode("vegetable")
@@ -360,6 +608,16 @@ export default function VegetableAdminCatalogUploadsPage() {
         pack_value: rawPackVal,
         image_url: item.image || "",
         description: item.description || "",
+        variants: (item.variants && item.variants.length > 0)
+          ? item.variants.map(v => ({
+              pack_value: v.pack_value ? v.pack_value.toString().replace(/\.00$/, "") : "1",
+              unit: v.unit || item.unit || "kg",
+              mrp: v.mrp ? Math.round(Number(v.mrp)).toString() : rawMrp,
+              price: v.price || v.base_price ? Math.round(Number(v.price || v.base_price)).toString() : rawPrice,
+              is_default: !!v.is_default,
+              is_existing: false,
+            }))
+          : [{ pack_value: rawPackVal, unit: item.unit || "kg", mrp: rawMrp, price: rawPrice, is_default: true, is_existing: false }],
       }))
     }
   }
@@ -622,7 +880,9 @@ export default function VegetableAdminCatalogUploadsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <button
                     type="button"
-                    onClick={() => setRequestMode("vegetable")}
+                    onClick={() => {
+                      setRequestMode("vegetable")
+                    }}
                     className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                       requestMode === "vegetable"
                         ? "border-primary bg-primary/5 text-primary shadow-xs font-bold"
@@ -631,16 +891,19 @@ export default function VegetableAdminCatalogUploadsPage() {
                   >
                     <div className="flex items-center gap-2 font-bold text-sm">
                       <Sprout size={18} />
-                      <span>New Product Item</span>
+                      <span>Produce Product Item</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 font-normal">
-                      Add a produce or product item under an existing approved category.
+                      Add a produce item or propose new pack size variants for an existing catalog product.
                     </p>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setRequestMode("category_with_vegetable")}
+                    onClick={() => {
+                      setRequestMode("category_with_vegetable")
+                      setExistingProduct(null)
+                    }}
                     className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                       requestMode === "category_with_vegetable"
                         ? "border-primary bg-primary/5 text-primary shadow-xs font-bold"
@@ -738,12 +1001,20 @@ export default function VegetableAdminCatalogUploadsPage() {
               {/* Produce Product Fields */}
               {(requestMode === "vegetable" || requestMode === "category_with_vegetable") && (
                 <div className="p-5 rounded-2xl bg-muted/30 border border-border/60 space-y-4">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Sprout size={16} className="text-emerald-500" />
-                    <span>Produce Product Details</span>
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Sprout size={16} className="text-emerald-500" />
+                      <span>Produce Product Details</span>
+                    </h3>
+                    {existingProduct && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1">
+                        <Lock size={11} /> Existing Approved Product
+                      </span>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
+                    {/* Category Selector (Leaf Category) */}
                     {requestMode === "vegetable" && (
                       <div className="sm:col-span-2">
                         <CategoryPathPicker
@@ -758,159 +1029,328 @@ export default function VegetableAdminCatalogUploadsPage() {
                       </div>
                     )}
 
-                    <div className="sm:col-span-2">
-                      <label className="text-muted-foreground block mb-1">Product Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={singleForm.vegetable_name}
-                        onChange={(e) => setSingleForm(prev => ({ ...prev, vegetable_name: e.target.value }))}
-                        placeholder="e.g. Fresh Sweet Corn"
-                        className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-sm font-normal"
-                      />
-                    </div>
-
-                    {/* Pricing Row: MRP & Selling Price */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-muted-foreground font-semibold">MRP (₹) *</label>
-                          {discountPct > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                              {discountPct}% OFF (Save ₹{savingsAmt})
+                    {/* Existing Product Alert Banner */}
+                    {existingProduct && (
+                      <div className="sm:col-span-2 p-4 rounded-2xl bg-primary/5 border border-primary/20 text-xs flex items-start gap-3">
+                        <Sprout size={18} className="text-primary shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold text-foreground flex items-center gap-2">
+                            <span>Catalog Product: {existingProduct.name.replace(" (Produce)", "")}</span>
+                            <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-primary/10 text-primary uppercase">
+                              Adding Pack Variants
                             </span>
-                          )}
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            This category already has an approved catalog product. Existing pack sizes are shown below for reference. Use <strong>+ Add Variant</strong> to submit new pack sizes and pricing for admin approval.
+                          </p>
                         </div>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          required
-                          value={singleForm.mrp}
-                          onChange={(e) => setSingleForm({ ...singleForm, mrp: e.target.value })}
-                          placeholder="e.g. 55"
-                          className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-sm font-semibold"
-                        />
-                        <p className="text-[11px] text-muted-foreground mt-1 font-normal">
-                          Maximum Retail Price printed on packaging or benchmark rate.
-                        </p>
                       </div>
+                    )}
 
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-muted-foreground font-semibold">Selling Price (₹) *</label>
-                          {priceExceedsMrp && (
-                            <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                              <AlertTriangle size={11} /> Must be ≤ MRP
+                    {/* Pending Variant Warning Banner */}
+                    {pendingVariantsForProduct.length > 0 && (
+                      <div className="sm:col-span-2 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-3">
+                        <Clock size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold text-foreground flex items-center gap-2">
+                            <span>Pending Variant Request in Approval Queue</span>
+                            <span className="px-2 py-0.2 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                              {pendingVariantsForProduct.length} awaiting review
                             </span>
-                          )}
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            You already have {pendingVariantsForProduct.length === 1 ? "a variant request" : `${pendingVariantsForProduct.length} variant requests`} awaiting admin review for <strong>{existingProduct?.name?.replace(" (Produce)", "")}</strong>:{" "}
+                            <span className="font-semibold text-foreground">
+                              {pendingVariantsForProduct.map(v => `${v.pack_size || `${v.pack_value} ${v.unit}`}${v.price ? ` (₹${Math.round(Number(v.price))})` : ''}`).join(", ")}
+                            </span>.
+                            Submitting additional pack sizes will queue them alongside your pending request.
+                          </p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Pending Product Creation Warning Banner */}
+                    {pendingProductForCategory && (
+                      <div className="sm:col-span-2 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-3">
+                        <Clock size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold text-foreground">
+                            Product Request Already Pending Approval
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            A new product request (<strong>{pendingProductForCategory.name || pendingProductForCategory.vegetable_name}</strong>) under this category is currently in the approval queue.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Product Name (Locked when existingProduct is detected) */}
+                    <div className="sm:col-span-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-muted-foreground block text-xs font-semibold">
+                          Product Name *
+                        </label>
+                        {existingProduct && (
+                          <span className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                            <Lock size={12} className="text-primary" />
+                            <span>Locked to approved product</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
                         <input
-                          type="number"
-                          step="0.5"
-                          min="0"
+                          type="text"
                           required
-                          value={singleForm.price}
-                          onChange={(e) => setSingleForm({ ...singleForm, price: e.target.value })}
-                          placeholder="e.g. 46"
-                          className={`w-full p-2.5 rounded-xl border bg-background focus:outline-none text-sm font-semibold ${
-                            priceExceedsMrp
-                              ? "border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/20"
-                              : "border-border focus:border-primary"
+                          readOnly={!!existingProduct}
+                          value={singleForm.vegetable_name}
+                          onChange={(e) => setSingleForm(prev => ({ ...prev, vegetable_name: e.target.value }))}
+                          placeholder="e.g. Fresh Sweet Corn"
+                          className={`w-full p-2.5 rounded-xl border text-sm transition-all ${
+                            existingProduct
+                              ? "bg-muted/50 border-border text-foreground font-semibold cursor-not-allowed pr-9"
+                              : "bg-background border-border focus:outline-none focus:border-primary font-normal"
                           }`}
                         />
-                        {priceExceedsMrp ? (
-                          <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-semibold flex items-center gap-1">
-                            <AlertTriangle size={12} />
-                            Selling price (₹{singleForm.price}) cannot be higher than MRP (₹{singleForm.mrp}).
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-muted-foreground mt-1 font-normal">
-                            Proposed price listed in store and inventory once approved.
-                          </p>
+                        {existingProduct && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            <Lock size={15} />
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Pack Specification Row: Pack Size / Value & Locked Unit of Measurement */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-muted-foreground font-semibold">Pack Size / Value *</label>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary">
-                            Pack: {singleForm.pack_value || "1"} {singleForm.vegetable_unit || "kg"}
-                          </span>
+                    {/* ── Multi-Variant Repeater Table ── */}
+                    <div className="sm:col-span-2 p-4 rounded-2xl bg-card border border-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Layers size={14} className="text-primary" />
+                            <span>Pack Size & Pricing Variants ({singleForm.variants.length})</span>
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {existingProduct
+                              ? "Approved variants are locked for reference. Add new pack sizes below."
+                              : "Specify one or more quantity options (e.g. 500 g, 1 kg) for this produce item."}
+                          </p>
                         </div>
-                        <input
-                          type="text"
-                          required
-                          value={singleForm.pack_value}
-                          onChange={(e) => setSingleForm({ ...singleForm, pack_value: e.target.value })}
-                          placeholder="e.g. 500, 1, 250"
-                          className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-sm font-semibold"
-                        />
-                        <p className="text-[11px] text-muted-foreground mt-1 font-normal">
-                          Quantity portion of standard pack (pairs with the locked unit below).
-                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAddVariantRow}
+                          className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <PlusCircle size={13} />
+                          <span>Add Variant</span>
+                        </button>
                       </div>
 
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-muted-foreground font-semibold">Unit of Measurement *</label>
-                          <span className="text-[10px] text-muted-foreground/80 flex items-center gap-1 font-normal">
-                            🔒 Locked per category
-                          </span>
-                        </div>
-                        <select
-                          disabled
-                          value={singleForm.vegetable_unit}
-                          className="w-full p-2.5 rounded-xl border border-border bg-muted/50 text-foreground text-sm font-semibold cursor-not-allowed opacity-90"
-                        >
-                          {unitChoices.length > 0 ? (
-                            unitChoices.map((u) => (
-                              <option key={u.value} value={u.value}>
-                                {u.label}
-                              </option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="kg">Kilograms (kg)</option>
-                              <option value="g">Grams (g)</option>
-                              <option value="pcs">Pieces (pcs)</option>
-                              <option value="bunch">Bunch (bunch)</option>
-                              <option value="packet">Packet / Box (pkt)</option>
-                              <option value="dozen">Dozen (dz)</option>
-                            </>
-                          )}
-                        </select>
-                        <p className="text-[11px] text-muted-foreground mt-1 font-normal">
-                          Locked to the selected category's standard measurement unit.
-                        </p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-muted/50 text-muted-foreground font-semibold">
+                            <tr>
+                              <th className="py-2 px-2.5">Pack Value *</th>
+                              <th className="py-2 px-2.5">Unit *</th>
+                              <th className="py-2 px-2.5">MRP (₹) *</th>
+                              <th className="py-2 px-2.5">Selling Price (₹) *</th>
+                              <th className="py-2 px-2.5 text-center">Discount</th>
+                              <th className="py-2 px-2.5 text-center">Default</th>
+                              <th className="py-2 px-2.5 text-right">Status / Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {singleForm.variants.map((variant, idx) => {
+                              const isExisting = !!variant.is_existing
+                              const rowMrp = parseFloat(variant.mrp)
+                              const rowPrice = parseFloat(variant.price)
+                              const rowExceeds = !isExisting && !isNaN(rowMrp) && !isNaN(rowPrice) && rowPrice > rowMrp
+
+                              // Live discount computation matching storefront formula: Math.round(((mrp - price) / mrp) * 100)
+                              let discountDisplay = null
+                              if (rowExceeds) {
+                                discountDisplay = (
+                                  <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded inline-block">
+                                    Exceeds MRP
+                                  </span>
+                                )
+                              } else if (!isNaN(rowMrp) && !isNaN(rowPrice) && rowMrp > 0) {
+                                if (rowPrice < rowMrp) {
+                                  const discountPct = Math.round(((rowMrp - rowPrice) / rowMrp) * 100)
+                                  if (discountPct > 0) {
+                                    discountDisplay = (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 inline-flex items-center gap-0.5 font-mono shadow-2xs">
+                                        {discountPct}% OFF
+                                      </span>
+                                    )
+                                  } else {
+                                    discountDisplay = (
+                                      <span className="text-[11px] font-medium text-muted-foreground">
+                                        No discount
+                                      </span>
+                                    )
+                                  }
+                                } else {
+                                  discountDisplay = (
+                                    <span className="text-[11px] font-medium text-muted-foreground">
+                                      No discount
+                                    </span>
+                                  )
+                                }
+                              } else {
+                                discountDisplay = <span className="text-muted-foreground text-xs">—</span>
+                              }
+
+                              return (
+                                <tr key={idx} className={isExisting ? "bg-muted/20 opacity-85" : "hover:bg-muted/20"}>
+                                  <td className="py-2 px-2.5">
+                                    {isExisting ? (
+                                      <div className="font-semibold text-xs text-foreground px-1.5 py-1">
+                                        {variant.pack_value}
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        required
+                                        value={variant.pack_value}
+                                        onChange={(e) => handleVariantRowChange(idx, "pack_value", e.target.value)}
+                                        placeholder="e.g. 500 or 1"
+                                        className="w-24 p-1.5 rounded-lg border border-border bg-background text-xs font-semibold focus:outline-none focus:border-primary"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    {isExisting ? (
+                                      <div className="font-semibold text-xs text-foreground px-1.5 py-1">
+                                        {variant.unit}
+                                      </div>
+                                    ) : (
+                                      <select
+                                        value={variant.unit}
+                                        onChange={(e) => handleVariantRowChange(idx, "unit", e.target.value)}
+                                        className="p-1.5 rounded-lg border border-border bg-background text-xs font-semibold cursor-pointer focus:outline-none focus:border-primary"
+                                      >
+                                        {unitChoices.length > 0 ? (
+                                          unitChoices.map((u) => (
+                                            <option key={u.value} value={u.value}>
+                                              {u.label}
+                                            </option>
+                                          ))
+                                        ) : (
+                                          <>
+                                            <option value="kg">kg</option>
+                                            <option value="g">g</option>
+                                            <option value="pcs">pcs</option>
+                                            <option value="bunch">bunch</option>
+                                            <option value="packet">pkt</option>
+                                            <option value="dozen">dz</option>
+                                          </>
+                                        )}
+                                      </select>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    {isExisting ? (
+                                      <div className="font-medium text-xs text-muted-foreground px-1.5 py-1">
+                                        {variant.mrp ? `₹${variant.mrp}` : "—"}
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        required
+                                        value={variant.mrp}
+                                        onChange={(e) => handleVariantRowChange(idx, "mrp", e.target.value)}
+                                        placeholder="MRP"
+                                        className="w-20 p-1.5 rounded-lg border border-border bg-background text-xs font-semibold focus:outline-none focus:border-primary"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-2.5">
+                                    {isExisting ? (
+                                      <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400 px-1.5 py-1">
+                                        ₹{variant.price}
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        required
+                                        value={variant.price}
+                                        onChange={(e) => handleVariantRowChange(idx, "price", e.target.value)}
+                                        placeholder="Price"
+                                        className={`w-20 p-1.5 rounded-lg border bg-background text-xs font-semibold focus:outline-none ${
+                                          rowExceeds ? "border-rose-500 ring-1 ring-rose-500/20" : "border-border focus:border-primary"
+                                        }`}
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-2.5 text-center">
+                                    {discountDisplay}
+                                  </td>
+                                  <td className="py-2 px-2.5 text-center">
+                                    {isExisting ? (
+                                      variant.is_default ? (
+                                        <span className="text-[10px] font-black uppercase text-primary bg-primary/10 px-1.5 py-0.5 rounded">Default</span>
+                                      ) : (
+                                        <span className="text-muted-foreground text-xs">—</span>
+                                      )
+                                    ) : (
+                                      <input
+                                        type="radio"
+                                        name="default_variant"
+                                        checked={!!variant.is_default}
+                                        onChange={() => handleVariantRowChange(idx, "is_default", true)}
+                                        className="cursor-pointer"
+                                        title="Set as default displayed variant"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-2.5 text-right">
+                                    {isExisting ? (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                        <Lock size={10} /> Live
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveVariantRow(idx)}
+                                        className="p-1 rounded-md text-rose-500 hover:bg-rose-500/10 cursor-pointer"
+                                        title="Remove variant"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
-                      <div>
-                        <label className="text-muted-foreground block mb-1">SKU (optional)</label>
-                        <input
-                          type="text"
-                          value={singleForm.vegetable_sku}
-                          onChange={(e) => setSingleForm({ ...singleForm, vegetable_sku: e.target.value })}
-                          placeholder="e.g. VEG-SWEETCORN-01"
-                          className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-xs font-mono font-normal"
-                        />
-                      </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-muted-foreground block mb-1">SKU (optional)</label>
+                      <input
+                        type="text"
+                        value={singleForm.vegetable_sku}
+                        onChange={(e) => setSingleForm({ ...singleForm, vegetable_sku: e.target.value })}
+                        placeholder="e.g. VEG-SWEETCORN-01"
+                        className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-xs font-mono font-normal"
+                      />
+                    </div>
 
-                      <div>
-                        <label className="text-muted-foreground block mb-1">Image URL (optional)</label>
-                        <input
-                          type="text"
-                          value={singleForm.image_url}
-                          onChange={(e) => setSingleForm({ ...singleForm, image_url: e.target.value })}
-                          placeholder="e.g. https://... (leave blank for standard icon)"
-                          className="w-full p-2.5 rounded-xl border border-border bg-background focus:outline-none focus:border-primary text-xs font-normal"
-                        />
-                      </div>
+                    <div className="sm:col-span-2">
+                      <ImageUploader
+                        label="Produce Image (optional)"
+                        description="Upload a custom produce image or paste an image URL."
+                        value={singleForm.image_url}
+                        assetType="packages"
+                        fallbackSrc="/mockups/vegetables_realistic.png"
+                        aspectRatio="aspect-square"
+                        compact={false}
+                        onChange={(url) => setSingleForm(prev => ({ ...prev, image_url: url }))}
+                      />
                     </div>
 
                     <div className="sm:col-span-2">
@@ -935,7 +1375,15 @@ export default function VegetableAdminCatalogUploadsPage() {
                   className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
                 >
                   <PlusCircle size={16} />
-                  <span>{singleSubmitting ? "Submitting Request..." : resubmitTarget ? "Update & Resubmit for Approval" : "Submit Request for Admin Approval"}</span>
+                  <span>
+                    {singleSubmitting
+                      ? "Submitting Request..."
+                      : existingProduct
+                      ? "Submit New Variant(s) for Approval"
+                      : resubmitTarget
+                      ? "Update & Resubmit for Approval"
+                      : "Submit Request for Admin Approval"}
+                  </span>
                 </button>
               </div>
             </form>
@@ -1311,10 +1759,10 @@ export default function VegetableAdminCatalogUploadsPage() {
                             ) : (
                               <div>
                                 <div className="font-semibold text-xs text-foreground">
-                                  Unit: {item.unit_of_measurement || "kg"}
+                                  Category Item
                                 </div>
                                 <div className="text-[10px] text-muted-foreground">
-                                  Category definition
+                                  Hierarchy node
                                 </div>
                               </div>
                             )}
@@ -1391,9 +1839,31 @@ export default function VegetableAdminCatalogUploadsPage() {
                                 In Queue
                               </span>
                             ) : (
-                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1">
-                                <CheckCircle2 size={13} /> Live
-                              </span>
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1">
+                                  <CheckCircle2 size={13} /> Live
+                                </span>
+                                {isProduct && (
+                                  <button
+                                    onClick={() => {
+                                      const catId = item.category_id || item.category
+                                      const catObj = categories.find(c => c.id === catId || c.id?.toString() === catId?.toString())
+                                      setRequestMode("vegetable")
+                                      setMainTab("single")
+                                      setSingleSuccess(null)
+                                      setSingleError(null)
+                                      if (catId) {
+                                        handleVegetableCategorySelect(catId, catObj)
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                    title="Add a new pack variant to this approved product"
+                                  >
+                                    <PlusCircle size={12} />
+                                    <span>+ Variant</span>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>

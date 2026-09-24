@@ -48,8 +48,10 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     vegetable_category_slug = serializers.CharField(source="stock_item.category.slug", read_only=True, default=None)
     vegetable_category_parent_name = serializers.CharField(source="stock_item.category.parent.name", read_only=True, default=None)
     vegetable_category_full_path = serializers.CharField(source="stock_item.category.full_path", read_only=True, default=None)
+    image = serializers.SerializerMethodField()
     in_stock = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
+    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -61,8 +63,18 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
-            "in_stock", "max_quantity",
+            "in_stock", "max_quantity", "variants",
         ]
+
+    def get_image(self, obj):
+        if obj.image and str(obj.image).strip():
+            return str(obj.image).strip()
+        if hasattr(obj, 'stock_item') and obj.stock_item:
+            if obj.stock_item.image and str(obj.stock_item.image).strip():
+                return str(obj.stock_item.image).strip()
+            if obj.stock_item.category and obj.stock_item.category.image and str(obj.stock_item.category.image).strip():
+                return str(obj.stock_item.category.image).strip()
+        return ""
 
     def get_category(self, obj):
         if obj.service_id and obj.service:
@@ -82,6 +94,22 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
+
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
 
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
@@ -172,6 +200,30 @@ class AddOnSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class PackageVariantSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    vegetable_name = serializers.CharField(source="vegetable.name", read_only=True, default=None)
+    display_name = serializers.CharField(read_only=True)
+    base_unit_deduction = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    requested_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from service_requests.models import PackageVariant
+        model = PackageVariant
+        fields = '__all__'
+
+    def get_requested_by_name(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username or obj.requested_by.email
+        return "Admin"
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return obj.reviewed_by.get_full_name() or obj.reviewed_by.username or obj.reviewed_by.email
+        return None
+
+
 class PackageSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
@@ -182,6 +234,7 @@ class PackageSerializer(serializers.ModelSerializer):
     max_quantity = serializers.SerializerMethodField()
     vegetable_category = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
+    variants = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -200,6 +253,22 @@ class PackageSerializer(serializers.ModelSerializer):
 
     def get_max_quantity(self, obj):
         return self.get_stock_status(obj)["max_quantity"]
+
+    def get_variants(self, obj):
+        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        return [{
+            "id": v.id,
+            "name": v.display_name,
+            "pack_value": str(v.pack_value),
+            "unit": v.unit,
+            "unit_basis": v.unit_basis,
+            "base_price": str(v.base_price),
+            "mrp": str(v.mrp) if v.mrp else None,
+            "sku": v.sku,
+            "is_default": v.is_default,
+            "is_active": v.is_active,
+            "sort_order": v.sort_order,
+        } for v in variants_qs]
 
     def get_vegetable_category(self, obj):
         item = getattr(obj, "stock_item", None)
