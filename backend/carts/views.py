@@ -99,39 +99,22 @@ class CartItemListView(APIView):
 
             item_seller_id = p_data.get("seller_id")
             item_seller_name = p_data.get("seller_name") or ""
+            item_warehouse_id = p_data.get("warehouse_id")
+            item_warehouse_name = p_data.get("warehouse_name") or ""
             unit_price = Decimal(str(p_data.get("selling_price", 0)))
             mrp = Decimal(str(p_data.get("mrp", 0))) if p_data.get("mrp") else None
 
             with transaction.atomic():
                 cart = _get_active_cart(request.user, cart_type, create=True)
-                existing_items_count = cart.items.count()
-
-                # Single-seller rule enforcement
-                if existing_items_count > 0 and cart.seller_id and cart.seller_id != item_seller_id:
-                    if not data.get("clear_cart", False):
-                        return _error(
-                            f"Your cart already contains items from '{cart.seller_name or 'another store'}'.",
-                            status_code=status.HTTP_409_CONFLICT,
-                            error="seller_mismatch",
-                            current_seller_id=cart.seller_id,
-                            current_seller_name=cart.seller_name,
-                            new_seller_id=item_seller_id,
-                            new_seller_name=item_seller_name,
-                        )
-                    # Customer confirmed clearing cart to switch seller
-                    cart.items.all().delete()
-                    cart.seller_id = item_seller_id
-                    cart.seller_name = item_seller_name
-                    cart.save(update_fields=["seller_id", "seller_name", "updated_at"])
-                elif existing_items_count == 0 or not cart.seller_id:
-                    cart.seller_id = item_seller_id
-                    cart.seller_name = item_seller_name
-                    cart.save(update_fields=["seller_id", "seller_name", "updated_at"])
 
                 item, created = CartItem.objects.get_or_create(
                     cart=cart,
                     seller_product_id=seller_prod_id,
                     defaults={
+                        "seller_id": item_seller_id,
+                        "seller_name": item_seller_name,
+                        "warehouse_id": item_warehouse_id,
+                        "warehouse_name": item_warehouse_name,
                         "product_title": p_data.get("title", ""),
                         "product_sku": p_data.get("sku", ""),
                         "product_brand": p_data.get("brand", ""),
@@ -146,9 +129,13 @@ class CartItemListView(APIView):
                 )
                 if not created:
                     item.quantity += data["quantity"]
+                    item.seller_id = item_seller_id
+                    item.seller_name = item_seller_name
+                    item.warehouse_id = item_warehouse_id
+                    item.warehouse_name = item_warehouse_name
                     item.unit_price_snapshot = unit_price
                     item.mrp_snapshot = mrp
-                    item.save(update_fields=["quantity", "unit_price_snapshot", "mrp_snapshot", "updated_at"])
+                    item.save(update_fields=["quantity", "seller_id", "seller_name", "warehouse_id", "warehouse_name", "unit_price_snapshot", "mrp_snapshot", "updated_at"])
 
             return _success(CartItemSerializer(item).data, status_code=status.HTTP_201_CREATED)
 
