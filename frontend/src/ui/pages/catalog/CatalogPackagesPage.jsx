@@ -3144,7 +3144,7 @@ export function CatalogPackagesPage() {
   }
 
   const handleDeletePackage = async (pkg) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This will delete it from database and applications.`)) {
+    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This action cannot be undone.`)) {
       return
     }
     try {

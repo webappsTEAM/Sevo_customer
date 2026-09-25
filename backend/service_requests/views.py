@@ -31,7 +31,7 @@ from workforce_integration.services import WorkforceIntegrationService
 
 from . import services as sr_services
 from .models import (
-    Complaint, ServiceFeedback, ServiceRequest,
+    Complaint, ServiceFeedback, ServiceRequest, Service,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
@@ -39,6 +39,7 @@ from .models import (
     BookingSeries,
     BookingMessage,
     TripStop,
+    ACInspectionRateCategory, ACInspectionRateItem, ACInspectionConfiguration,
 )
 from .models import is_mason_category
 from .serializers import (
@@ -56,6 +57,11 @@ from .serializers import (
     TripStopSerializer,
     BookingSeriesSerializer,
     BookingMessageSerializer,
+    ACInspectionConfigurationSerializer,
+    ACInspectionRateItemSerializer,
+    ACInspectionRateCategorySerializer,
+    ACRateCardPublicItemSerializer,
+    ACRateCardPublicCategorySerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -788,11 +794,33 @@ class BookingCreateView(APIView):
         if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
             from logistics.models import ServiceTier
             tier_obj = ServiceTier.objects.filter(id=fare_breakdown["tier_id"]).first()
-            if tier_obj:
-                save_kwargs["logistics_tier"] = tier_obj
+        from service_requests.services.time_slot_service import (
+            resolve_service,
+            validate_slot_availability_for_booking,
+        )
+        resolved_svc, _ = resolve_service(
+            service_param=request.data.get("service_id") or serializer.validated_data.get("catalog_service_id") or serializer.validated_data.get("service_category"),
+            package_param=request.data.get("package_id"),
+            category_param=serializer.validated_data.get("service_category"),
+        )
 
         try:
             with atomic_transaction():
+                if resolved_svc:
+                    # Concurrency safety: acquire a row-lock on the Service during this transaction
+                    # to serialize concurrent bookings claiming capacity for this service.
+                    Service.objects.select_for_update().get(id=resolved_svc.id)
+                    is_slot_valid, slot_err = validate_slot_availability_for_booking(
+                        service=resolved_svc,
+                        target_date=serializer.validated_data.get("preferred_date"),
+                        preferred_time=serializer.validated_data.get("preferred_time"),
+                    )
+                    if not is_slot_valid:
+                        if idem_cache_key:
+                            from django.core.cache import cache
+                            cache.delete(idem_cache_key)
+                        return _error(slot_err or "Sorry, this time slot is no longer available. Please select another slot.", 400)
+
                 sr = serializer.save(**save_kwargs)
 
                 # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
@@ -993,34 +1021,32 @@ class BookingCreateView(APIView):
                 sr.request_id, sr.id, getattr(sr, "customer_id", getattr(sr.customer, "id", None)), timezone.now().isoformat(), order_err,
             )
 
-        # Dispatch booking notification to workforce management system.
+        # Dispatch to Workforce only when the booking is already CONFIRMED (COD /
+        # cash bookings). Online-payment bookings start in WAITING_FOR_PAYMENT and
+        # must NOT be dispatched until payment succeeds — PaymentVerifyView is
+        # responsible for firing dispatch once the status moves to CONFIRMED.
         #
-        # Fixes X-02: this used to call dispatch_job() synchronously and
-        # unwrap nothing from the result. WorkforceIntegrationService.dispatch_job()
-        # POSTs to a vendor endpoint (/jobs/dispatch/) that does not exist in
-        # workforce_api/urls.py, so it always fails after paying its full
-        # `timeout=5` cost (or whatever the network needs to fail) on every
-        # single booking creation request, before ever reaching the customer's
-        # response — and the vendor app dispatches independently anyway, via
-        # its own dispatch_pending_workforce_jobs polling loop reading this
-        # same shared table. Firing it in a background thread means a booking
-        # confirms immediately regardless of whether that integration call
-        # ever succeeds; if/when a real dispatch-webhook endpoint exists on
-        # the vendor side, this still delivers it, just without blocking the
-        # request that doesn't need to wait on it.
-        try:
-            from django.conf import settings
-            if getattr(settings, "TESTING", False):
-                WorkforceIntegrationService.dispatch_job(sr.id)
-            else:
-                import threading
-                threading.Thread(
-                    target=WorkforceIntegrationService.dispatch_job,
-                    args=(sr.id,),
-                    daemon=True,
-                ).start()
-        except Exception as dispatch_err:
-            logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
+        # Previously this used a raw daemon thread calling dispatch_job() directly,
+        # which had two bugs:
+        #   (a) No payment-status gate — WAITING_FOR_PAYMENT bookings were dispatched
+        #       immediately, reaching the Workforce system before the customer paid.
+        #   (b) Raw threads bypass the Celery task's idempotency guard and retry logic.
+        # Now uses async_dispatch_service_request.delay() which is idempotent (skips
+        # if already DISPATCHED), retries with exponential backoff, and tracks
+        # dispatch_status on the booking for observability.
+        if sr.status == ServiceRequest.Status.CONFIRMED:
+            def _dispatch_cod_booking():
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request.delay(sr.id)
+                except Exception as dispatch_err:
+                    logger.warning(f"Could not queue workforce dispatch for booking {sr.id}: {dispatch_err}")
+                    try:
+                        from service_requests.tasks import async_dispatch_service_request
+                        async_dispatch_service_request(sr.id)
+                    except Exception as direct_err:
+                        logger.error(f"Direct dispatch also failed for booking {sr.id}: {direct_err}")
+            transaction.on_commit(_dispatch_cod_booking)
 
         # Fixes HS-A-02 (partial): tell the customer an account was
         # created for them by this booking, since User.objects.create()
@@ -2313,6 +2339,91 @@ class CustomerQuoteDetailView(APIView):
         if res.get("success"):
             return _success(data=res.get("quote"))
         return _error(res.get("message", "Failed to fetch quote detail."), 400)
+
+
+class WorkforceQuoteDecisionBridgeView(APIView):
+    """
+    GET /api/workforce/quotes/decision/<str:token>/
+    POST /api/workforce/quotes/decision/<str:token>/
+
+    Bridge endpoint for the Customer Quotation Decision Page (QuotationDecisionPage.jsx).
+    Fetches quote details by decision_token directly from DB (with workforce fallback),
+    and records customer decision (ACCEPT / REQUEST_CHANGES / DECLINE).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        res = WorkforceIntegrationService.get_quote_by_token(token)
+        if not res.get("success") or not res.get("quote"):
+            return Response(
+                {"error": res.get("message", "This quotation link is not valid or has expired.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        q = res["quote"]
+        st = str(q.get("status") or "").upper()
+        can_decide = st in ("SENT_TO_CUSTOMER", "SENT", "NEW", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW")
+
+        payload = {
+            "id": q.get("quote_id"),
+            "quote_id": q.get("quote_id"),
+            "quote_number": q.get("quote_number"),
+            "quote_version": q.get("quote_version", 1),
+            "title": q.get("title") or q.get("service_name") or "Service Quotation",
+            "description": q.get("description") or "",
+            "service_category": q.get("service_category") or "",
+            "service_name": q.get("service_name") or q.get("title") or "",
+            "status": st,
+            "status_display": st.replace("_", " ").title(),
+            "can_decide": can_decide,
+            "valid_until": q.get("valid_until"),
+            "subtotal": float(q.get("subtotal") or q.get("subtotal_amount") or 0.0),
+            "subtotal_amount": float(q.get("subtotal") or q.get("subtotal_amount") or 0.0),
+            "tax_amount": float(q.get("tax_amount") or 0.0),
+            "discount_amount": float(q.get("discount_amount") or 0.0),
+            "total_amount": float(q.get("total_amount") or 0.0),
+            "net_payable": float(q.get("net_payable") or q.get("total_amount") or 0.0),
+            "inspection_fee": float(q.get("inspection_fee") or 0.0),
+            "inspection_fee_adjusted": float(q.get("inspection_fee_adjusted") or 0.0),
+            "advance_percent": float(q.get("advance_percent") or 0.0),
+            "advance_amount": float(q.get("advance_amount") or 0.0),
+            "balance_amount": float(q.get("balance_amount") or 0.0),
+            "invoice": {
+                "advance_amount": float(q.get("advance_amount") or 0.0),
+                "balance_amount": float(q.get("balance_amount") or 0.0),
+                "total_amount": float(q.get("total_amount") or 0.0),
+            },
+            "items": q.get("items") or [],
+            "measurements": q.get("measurements") or [],
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def post(self, request, token):
+        action = request.data.get("action") or request.data.get("decision") or ""
+        norm_decision = action.strip().upper()
+        if norm_decision in ["ACCEPT", "APPROVED", "CUSTOMER_ACCEPTED"]:
+            norm_decision = "CUSTOMER_ACCEPTED"
+        elif norm_decision in ["REQUEST_CHANGES", "REQUESTED_CHANGES", "CHANGES_REQUESTED", "CHANGE_REQUESTED"]:
+            norm_decision = "CHANGE_REQUESTED"
+        elif norm_decision in ["DECLINE", "REJECT", "REJECTED", "DECLINED"]:
+            norm_decision = "DECLINED"
+
+        res = WorkforceIntegrationService.decide_quote(token, norm_decision, request.data)
+        if res.get("success"):
+            return Response({
+                "success": True,
+                "message": res.get("message", "Quotation decision recorded successfully."),
+                "awaiting_admin_approval": norm_decision == "CUSTOMER_ACCEPTED",
+                "quote": {
+                    "status": norm_decision,
+                    "can_decide": False,
+                }
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "success": False,
+            "error": res.get("message", "Failed to record quote decision.")
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FeedbackTokenView(APIView):
@@ -4649,8 +4760,28 @@ class CustomerQuoteDecideView(APIView):
                             timezone.now().isoformat(), order_err,
                         )
 
-                    # Dispatch job to workforce management system
-                    WorkforceIntegrationService.dispatch_job(new_sr.id)
+                    # Dispatch job to workforce management system asynchronously.
+                    # Previously synchronous — a slow Workforce API response would block
+                    # the customer's HTTP request that approved the quote. Now uses the
+                    # Celery task which is idempotent and retries on transient failures.
+                    def _dispatch_quoted_booking():
+                        try:
+                            from service_requests.tasks import async_dispatch_service_request
+                            async_dispatch_service_request.delay(new_sr.id)
+                        except Exception as _dispatch_err:
+                            logger.warning(
+                                "Could not queue workforce dispatch for quoted booking %s: %s",
+                                new_sr.id, _dispatch_err,
+                            )
+                            try:
+                                from service_requests.tasks import async_dispatch_service_request
+                                async_dispatch_service_request(new_sr.id)
+                            except Exception as _direct_err:
+                                logger.error(
+                                    "Direct dispatch also failed for quoted booking %s: %s",
+                                    new_sr.id, _direct_err,
+                                )
+                    transaction.on_commit(_dispatch_quoted_booking)
 
                     # Log analytics event
                     from customer_analytics.models import BookingStatusEvent
@@ -4751,6 +4882,300 @@ class AdminPaintingRateCardDetailView(APIView):
             return _error("Rate card item not found.", 404)
         rate.delete()
         return _success(message="Rate card item deleted successfully.")
+
+
+# AC INSPECTION RATE CARD (POSTGRESQL SINGLE SOURCE OF TRUTH) VIEWS
+# ==============================================================================
+
+class AdminACRateCategoryListCreateView(APIView):
+    """
+    GET  /api/service-requests/admin/ac-inspection/categories/
+    POST /api/service-requests/admin/ac-inspection/categories/
+    """
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request):
+        include_inactive = request.query_params.get("include_inactive", "true").lower() == "true"
+        qs = ACInspectionRateCategory.objects.all().order_by("display_order", "id")
+        if not include_inactive:
+            qs = qs.filter(is_active=True)
+        serializer = ACInspectionRateCategorySerializer(qs, many=True)
+        return _success(data=serializer.data)
+
+    def post(self, request):
+        data = request.data.copy()
+        if not data.get("slug") and data.get("name"):
+            import re
+            data["slug"] = re.sub(r"[^a-z0-9]+", "-", data["name"].lower()).strip("-")
+        serializer = ACInspectionRateCategorySerializer(data=data)
+        if serializer.is_valid():
+            cat = serializer.save()
+            return _success(data=ACInspectionRateCategorySerializer(cat).data, status_code=201)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+
+class AdminACRateCategoryDetailView(APIView):
+    """
+    GET    /api/service-requests/admin/ac-inspection/categories/<int:pk>/
+    PATCH  /api/service-requests/admin/ac-inspection/categories/<int:pk>/
+    DELETE /api/service-requests/admin/ac-inspection/categories/<int:pk>/
+    """
+    def get_permissions(self):
+        if self.request.method in ["PATCH", "PUT", "DELETE"]:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request, pk):
+        try:
+            cat = ACInspectionRateCategory.objects.get(pk=pk)
+        except ACInspectionRateCategory.DoesNotExist:
+            return _error("Category not found.", 404)
+        return _success(data=ACInspectionRateCategorySerializer(cat).data)
+
+    def patch(self, request, pk):
+        try:
+            cat = ACInspectionRateCategory.objects.get(pk=pk)
+        except ACInspectionRateCategory.DoesNotExist:
+            return _error("Category not found.", 404)
+
+        serializer = ACInspectionRateCategorySerializer(cat, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return _success(data=ACInspectionRateCategorySerializer(updated).data)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+    def delete(self, request, pk):
+        try:
+            cat = ACInspectionRateCategory.objects.get(pk=pk)
+        except ACInspectionRateCategory.DoesNotExist:
+            return _error("Category not found.", 404)
+
+        # Safety: If category has items, soft-deactivate instead of hard deleting
+        if cat.items.exists():
+            cat.is_active = False
+            cat.save(update_fields=["is_active", "updated_at"])
+            cat.items.update(is_active=False)
+            return _success(message="Category and its items were deactivated because items exist.", data={"deactivated": True})
+
+        cat.delete()
+        return _success(message="Category deleted successfully.", data={"deleted": True})
+
+
+class AdminACRateItemListCreateView(APIView):
+    """
+    GET  /api/service-requests/admin/ac-inspection/items/
+    POST /api/service-requests/admin/ac-inspection/items/
+    """
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request):
+        qs = ACInspectionRateItem.objects.select_related("category").all().order_by("category__display_order", "display_order", "id")
+
+        category_id = request.query_params.get("category_id")
+        if category_id and category_id != "all":
+            if str(category_id).isdigit():
+                qs = qs.filter(category_id=int(category_id))
+            else:
+                qs = qs.filter(category__slug=category_id)
+
+        category_slug = request.query_params.get("category_slug")
+        if category_slug and category_slug != "all":
+            qs = qs.filter(category__slug=category_slug)
+
+        is_active = request.query_params.get("is_active")
+        if is_active is not None:
+            qs = qs.filter(is_active=(is_active.lower() == "true"))
+
+        search = request.query_params.get("search", "").strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(name__icontains=search) | Q(description__icontains=search))
+
+        serializer = ACInspectionRateItemSerializer(qs, many=True)
+        return _success(data=serializer.data)
+
+    def post(self, request):
+        serializer = ACInspectionRateItemSerializer(data=request.data)
+        if serializer.is_valid():
+            item = serializer.save()
+            return _success(data=ACInspectionRateItemSerializer(item).data, status_code=201)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+
+class AdminACRateItemDetailView(APIView):
+    """
+    GET    /api/service-requests/admin/ac-inspection/items/<int:pk>/
+    PATCH  /api/service-requests/admin/ac-inspection/items/<int:pk>/
+    DELETE /api/service-requests/admin/ac-inspection/items/<int:pk>/
+    """
+    def get_permissions(self):
+        if self.request.method in ["PATCH", "PUT", "DELETE"]:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request, pk):
+        try:
+            item = ACInspectionRateItem.objects.select_related("category").get(pk=pk)
+        except ACInspectionRateItem.DoesNotExist:
+            return _error("Item not found.", 404)
+        return _success(data=ACInspectionRateItemSerializer(item).data)
+
+    def patch(self, request, pk):
+        try:
+            item = ACInspectionRateItem.objects.select_related("category").get(pk=pk)
+        except ACInspectionRateItem.DoesNotExist:
+            return _error("Item not found.", 404)
+
+        serializer = ACInspectionRateItemSerializer(item, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return _success(data=ACInspectionRateItemSerializer(updated).data)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+    def delete(self, request, pk):
+        try:
+            item = ACInspectionRateItem.objects.get(pk=pk)
+        except ACInspectionRateItem.DoesNotExist:
+            return _error("Item not found.", 404)
+
+        # Safety requirement: Check if referenced in historical quotations
+        if item.quotation_snapshots.exists():
+            item.is_active = False
+            item.save(update_fields=["is_active", "updated_at"])
+            return _success(message="Item deactivated to preserve historical quotation snapshots.", data={"deactivated": True})
+
+        item.delete()
+        return _success(message="Item deleted successfully.", data={"deleted": True})
+
+
+class AdminACInspectionConfigView(APIView):
+    """
+    GET   /api/service-requests/admin/ac-inspection/config/
+    PATCH /api/service-requests/admin/ac-inspection/config/
+    """
+    def get_permissions(self):
+        if self.request.method in ["PATCH", "PUT", "POST"]:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request):
+        config = ACInspectionConfiguration.get_solo()
+        data = ACInspectionConfigurationSerializer(config).data
+        data["categories_count"] = ACInspectionRateCategory.objects.filter(is_active=True).count()
+        data["items_count"] = ACInspectionRateItem.objects.filter(is_active=True).count()
+        return _success(data=data)
+
+    def patch(self, request):
+        config = ACInspectionConfiguration.get_solo()
+        serializer = ACInspectionConfigurationSerializer(config, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            data = ACInspectionConfigurationSerializer(updated).data
+            data["categories_count"] = ACInspectionRateCategory.objects.filter(is_active=True).count()
+            data["items_count"] = ACInspectionRateItem.objects.filter(is_active=True).count()
+            return _success(data=data)
+        return _error("Validation error.", errors=serializer.errors, status_code=400)
+
+
+class AdminACInspectionResetDefaultsView(APIView):
+    """
+    POST /api/service-requests/admin/ac-inspection/reset-defaults/
+    Safely resets categories and items to default 65 items without deleting historical quotations.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            from seed_ac_inspection_db import seed_ac_inspection_database
+            seed_ac_inspection_database(force_reset=True)
+            categories = ACInspectionRateCategory.objects.all().order_by("display_order", "id")
+            items = ACInspectionRateItem.objects.all().order_by("category__display_order", "display_order", "id")
+            config = ACInspectionConfiguration.get_solo()
+            return _success(
+                data={
+                    "config": ACInspectionConfigurationSerializer(config).data,
+                    "categories": ACInspectionRateCategorySerializer(categories, many=True).data,
+                    "items": ACInspectionRateItemSerializer(items, many=True).data,
+                },
+                message="AC rate card catalog safely restored to defaults in PostgreSQL."
+            )
+        except Exception as e:
+            logger.exception("Failed to reset AC inspection defaults")
+            return _error(f"Failed to reset: {str(e)}", status_code=500)
+
+
+class ACRateCardPublicView(APIView):
+    """
+    GET /api/service-requests/ac-inspection/rate-card/
+    Public & Technician read-only endpoint returning active categories and items directly from DB.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        config = ACInspectionConfiguration.get_solo()
+        categories = ACInspectionRateCategory.objects.filter(is_active=True).prefetch_related("items").order_by("display_order", "id")
+        cat_serializer = ACRateCardPublicCategorySerializer(categories, many=True)
+        return _success(data={
+            "diagnostic_fee": float(config.diagnostic_fee),
+            "currency": config.currency,
+            "categories": cat_serializer.data,
+            "total_items": ACInspectionRateItem.objects.filter(is_active=True).count(),
+        })
+
+
+class TechnicianACQuotationCreateView(APIView):
+    """
+    POST /api/service-requests/technician/bookings/<id>/quotation/
+    Technician creates an EstimationQuotation with immutable snapshots for selected rate items.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, identifier=None):
+        from service_requests.services.quotation_service import QuotationService
+        from service_requests.models import ServiceRequest
+
+        try:
+            if str(identifier).isdigit():
+                sr = ServiceRequest.objects.select_related("estimation").get(pk=int(identifier))
+            else:
+                sr = ServiceRequest.objects.select_related("estimation").get(request_id=identifier)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+
+        if not hasattr(sr, "estimation") or not sr.estimation:
+            return _error("This booking has no AC estimation record.", 400)
+
+        items_data = request.data.get("items", [])
+        if not items_data:
+            return _error("At least one rate item or service item is required.", 400)
+
+        notes = request.data.get("notes", "")
+        vendor_id = request.data.get("vendor_id", "")
+        technician_id = request.data.get("technician_id", "")
+
+        try:
+            quotation = QuotationService.create_quotation(
+                estimation=sr.estimation,
+                items_data=items_data,
+                notes=notes,
+                vendor_id=vendor_id,
+                technician_id=technician_id,
+            )
+            from service_requests.serializers import EstimationQuotationSerializer
+            return _success(
+                data=EstimationQuotationSerializer(quotation).data,
+                message="Quotation created with rate card snapshot.",
+                status_code=201
+            )
+        except Exception as e:
+            logger.exception("Failed to create technician quotation snapshot")
+            return _error(f"Quotation creation failed: {str(e)}", status_code=400)
 
 
 class AdminQuoteCreateView(APIView):

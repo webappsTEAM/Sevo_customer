@@ -404,7 +404,10 @@ class WorkforceWebhookView(APIView):
                     )
 
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
-                elif event_type in ["employee_on_the_way", "job.on_the_way"]:
+                elif event_type in [
+                    "employee_on_the_way", "job.on_the_way", "technician.on_the_way",
+                    "technician.en_route", "job.en_route", "en_route", "job.started",
+                ]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -423,7 +426,7 @@ class WorkforceWebhookView(APIView):
                         transaction.on_commit(lambda: self._notify(notify_delivery_recipient, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
-                elif event_type in ["employee_arrived", "job.arrived"]:
+                elif event_type in ["employee_arrived", "job.arrived", "technician.arrived", "arrived"]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -435,7 +438,10 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_arrived"))
 
                 # ── 6. IN PROGRESS ──────────────────────────────────────────────────
-                elif event_type in ["service_started", "job.in_progress"]:
+                elif event_type in [
+                    "service_started", "job.in_progress", "work_started",
+                    "technician.in_progress", "in_progress",
+                ]:
                     if sr.status in ["accepted", "on_the_way", "arrived"]:
                         safe_apply_transition(sr, "in_progress")
                     sr.save()
@@ -443,7 +449,7 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_started"))
 
                 # ── 7. COMPLETED ─────────────────────────────────────────────────────
-                elif event_type in ["service_completed", "job.completed"]:
+                elif event_type in ["service_completed", "job.completed", "technician.completed", "completed"]:
                     BookingAssignment.objects.filter(booking=sr, status=BookingAssignment.Status.ACCEPTED).update(status=BookingAssignment.Status.COMPLETED)
                     if sr.status in ["in_progress", "arrived", "accepted"]:
                         safe_apply_transition(sr, "completed")
@@ -464,6 +470,37 @@ class WorkforceWebhookView(APIView):
                     # pattern as _notify -- a referral-processing failure must
                     # never affect the booking completion itself.
                     transaction.on_commit(lambda: self._process_referral(sr))
+
+                # ── 7b. CANCELLED (Workforce / Technician Cancellation) ─────────────
+                elif event_type in ["job.cancelled", "technician.cancelled", "cancelled", "service_cancelled"]:
+                    cancel_reason = str(
+                        payload.get("reason")
+                        or payload.get("cancellation_reason")
+                        or payload.get("notes")
+                        or "Cancelled by workforce system"
+                    ).strip()
+
+                    BookingAssignment.objects.filter(
+                        booking=sr,
+                        status__in=[
+                            BookingAssignment.Status.OFFERED,
+                            BookingAssignment.Status.ACCEPTED,
+                        ]
+                    ).update(status=BookingAssignment.Status.CANCELLED)
+
+                    if sr.status not in ["completed", "closed", "cancelled", "rejected"]:
+                        safe_apply_transition(sr, "cancelled")
+
+                    sr.cancelled_at = timezone.now()
+                    sr.cancelled_by_persona = "employee"
+                    if cancel_reason:
+                        sr.cancellation_note = cancel_reason[:500]
+                    if hasattr(sr, "cancellation_reason") and not sr.cancellation_reason:
+                        from service_requests.models import ServiceRequest
+                        sr.cancellation_reason = ServiceRequest.CancellationReason.OTHER
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_cancelled"))
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:

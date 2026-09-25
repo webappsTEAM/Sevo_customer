@@ -4,6 +4,7 @@ from django.urls import path
 from .views import (
     # Public & Customer
     BookingCreateView,
+
     BookingVerifyStartOTPView,
     CustomerMyBookingsView,
     CustomerBookingRetryPaymentView,
@@ -27,8 +28,17 @@ from .views import (
     CustomerQuoteDetailView,
     CustomerQuoteDecideView,
     CustomerQuotePDFView,
+    WorkforceQuoteDecisionBridgeView,
     AdminPaintingRateCardListView,
     AdminPaintingRateCardDetailView,
+    AdminACRateCategoryListCreateView,
+    AdminACRateCategoryDetailView,
+    AdminACRateItemListCreateView,
+    AdminACRateItemDetailView,
+    AdminACInspectionConfigView,
+    AdminACInspectionResetDefaultsView,
+    ACRateCardPublicView,
+    TechnicianACQuotationCreateView,
     AdminQuoteCreateView,
     AdminQuoteActionView,
 
@@ -124,9 +134,16 @@ from .views_estimation import (
     CustomerBookingDetailView,
     CustomerEstimationDetailView,
     CustomerInspectionDetailView,
+    CustomerBookingRateCardSnapshotView,
     CustomerQuotationDetailView,
     CustomerQuotationApproveView,
     CustomerQuotationRejectView,
+)
+from .views_ac_admin import (
+    AdminACInspectionListView,
+    AdminACInspectionDetailView,
+    AdminACInspectionEstimationApproveView,
+    AdminACInspectionEstimationSendBackView,
 )
 from .technician_views import (
     TechnicianAvailableBookingsView,
@@ -134,9 +151,33 @@ from .technician_views import (
     TechnicianUpdateLocationView,
     TechnicianStatusUpdateView,
     TechnicianVerifyStartOTPView,
+    TechnicianBookingDetailView,
+)
+from .views_time_slots import (
+    CustomerServiceTimeSlotsView,
+    AdminServiceTimeSlotListView,
+    AdminGlobalTimeSlotConfigView,
+    AdminServiceRevertDefaultView,
+    AdminServiceTimeSlotDetailView,
+    AdminServiceWeeklyScheduleView,
+    AdminServiceDateOverrideView,
+    AdminServiceDateOverrideDetailView,
+    AdminServiceTimeSlotPreviewView,
 )
 
 urlpatterns = [
+    # ── Service-wise Time Slot Management ─────────────────────────────────────
+    path("services/<str:service_id>/time-slots/", CustomerServiceTimeSlotsView.as_view(), name="customer-service-time-slots"),
+    path("admin/time-slots/services/", AdminServiceTimeSlotListView.as_view(), name="admin-time-slots-services-list"),
+    path("admin/time-slots/global-default/", AdminGlobalTimeSlotConfigView.as_view(), name="admin-time-slots-global-default"),
+    path("admin/time-slots/<str:service_id>/revert-default/", AdminServiceRevertDefaultView.as_view(), name="admin-time-slots-revert-default"),
+    path("admin/time-slots/<str:service_id>/", AdminServiceTimeSlotDetailView.as_view(), name="admin-time-slots-detail"),
+    path("admin/time-slots/<str:service_id>/config/", AdminServiceTimeSlotDetailView.as_view(), name="admin-time-slots-config"),
+    path("admin/time-slots/<str:service_id>/weekly-schedule/", AdminServiceWeeklyScheduleView.as_view(), name="admin-time-slots-weekly-schedule"),
+    path("admin/time-slots/<str:service_id>/date-overrides/", AdminServiceDateOverrideView.as_view(), name="admin-time-slots-date-overrides"),
+    path("admin/time-slots/<str:service_id>/date-overrides/<int:override_id>/", AdminServiceDateOverrideDetailView.as_view(), name="admin-time-slots-date-override-detail"),
+    path("admin/time-slots/<str:service_id>/preview/", AdminServiceTimeSlotPreviewView.as_view(), name="admin-time-slots-preview"),
+
     # ── Public & Customer ─────────────────────────────────────────────────────
     path("catalog/categories/",              CatalogCategoryListView.as_view(), name="catalog-categories"),
     path("catalog/services/",                CatalogServiceListView.as_view(),  name="catalog-services"),
@@ -145,6 +186,7 @@ urlpatterns = [
     path("catalog/vegetables/recipes/<str:pk>/", VegetableRecipeDetailView.as_view(), name="catalog-vegetables-recipe-detail"),
     path("catalog/vegetables/<int:product_id>/recommendations/", VegetableRecommendationListView.as_view(), name="catalog-vegetables-recommendations"),
     path("booking/",                         BookingCreateView.as_view(),    name="sr-booking"),
+
     path("booking/my-bookings/",             CustomerMyBookingsView.as_view(), name="sr-my-bookings"),
     path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
@@ -172,6 +214,8 @@ urlpatterns = [
     path("booking/<str:identifier>/estimation/", CustomerEstimationDetailView.as_view(), name="sr-booking-estimation-identifier"),
     path("booking/<int:pk>/inspection/",      CustomerInspectionDetailView.as_view(),    name="sr-booking-inspection-pk"),
     path("booking/<str:identifier>/inspection/", CustomerInspectionDetailView.as_view(), name="sr-booking-inspection-identifier"),
+    path("booking/<int:pk>/inspection-rate-card/", CustomerBookingRateCardSnapshotView.as_view(), name="sr-booking-inspection-rate-card-pk"),
+    path("booking/<str:identifier>/inspection-rate-card/", CustomerBookingRateCardSnapshotView.as_view(), name="sr-booking-inspection-rate-card-identifier"),
     path("booking/<int:pk>/quotation/",       CustomerQuotationDetailView.as_view(),     name="sr-booking-quotation-pk"),
     path("booking/<str:identifier>/quotation/", CustomerQuotationDetailView.as_view(),   name="sr-booking-quotation-identifier"),
     path("booking/<int:pk>/quotation/approve/", CustomerQuotationApproveView.as_view(),  name="sr-booking-quotation-approve-pk"),
@@ -295,17 +339,41 @@ urlpatterns = [
     path('customer/coupons/',                            CustomerCouponListView.as_view(),             name='customer-coupon-list'),
     path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
 
-    # ── Painting & Waterproofing Quotes & Rate Card ──────────────────────────
-    path('booking/quote/<str:token>/pdf/',               CustomerQuotePDFView.as_view(),               name='customer-quote-pdf'),
+    # ── Customer Quotation Decision & Tracking by Token ──────────────────────
+    path('booking/quote/<str:token>/',                   CustomerQuoteDetailView.as_view(),             name='customer-quote-detail'),
+    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),             name='customer-quote-decide'),
+    path('booking/quote/<str:token>/pdf/',               CustomerQuotePDFView.as_view(),                name='customer-quote-pdf'),
+    path('workforce/quotes/decision/<str:token>/',       WorkforceQuoteDecisionBridgeView.as_view(),    name='workforce-quote-decision-bridge'),
+    path('customer/quote-token/<str:token>/',            WorkforceQuoteDecisionBridgeView.as_view(),    name='customer-quote-token-bridge'),
     path('booking/<int:booking_id>/quote/pdf/',          CustomerQuotePDFView.as_view(),               name='customer-booking-quote-pdf'),
     path('booking/<str:identifier>/quote/pdf/',          CustomerQuotePDFView.as_view(),               name='customer-booking-str-quote-pdf'),
-    path('booking/quote/<str:token>/decide/',            CustomerQuoteDecideView.as_view(),            name='customer-quote-decide'),
     path('admin/painting/rate-card/',                    AdminPaintingRateCardListView.as_view(),       name='admin-painting-rate-card-list'),
     path('admin/painting/rate-card/<int:pk>/',           AdminPaintingRateCardDetailView.as_view(),     name='admin-painting-rate-card-detail'),
     path('admin/painting/quotes/create/',                AdminQuoteCreateView.as_view(),                name='admin-painting-quote-create'),
     path('admin/painting/quotes/<int:pk>/action/',       AdminQuoteActionView.as_view(),                name='admin-painting-quote-action'),
     path('admin/mason/quotes/create/',                   AdminQuoteCreateView.as_view(),                name='admin-mason-quote-create'),
     path('admin/mason/quotes/<int:pk>/action/',          AdminQuoteActionView.as_view(),                name='admin-mason-quote-action'),
+
+    # ── AC Inspection & Spare Parts Rate Card (PostgreSQL Single Source of Truth) ──
+    path('ac-inspection/rate-card/',                     ACRateCardPublicView.as_view(),                name='ac-rate-card-public'),
+    path('service-requests/ac-inspection/rate-card/',    ACRateCardPublicView.as_view(),                name='sr-ac-rate-card-public'),
+    path('admin/ac-inspection/categories/',              AdminACRateCategoryListCreateView.as_view(),   name='admin-ac-category-list'),
+    path('service-requests/admin/ac-inspection/categories/', AdminACRateCategoryListCreateView.as_view(), name='sr-admin-ac-category-list'),
+    path('admin/ac-inspection/categories/<int:pk>/',     AdminACRateCategoryDetailView.as_view(),       name='admin-ac-category-detail'),
+    path('service-requests/admin/ac-inspection/categories/<int:pk>/', AdminACRateCategoryDetailView.as_view(), name='sr-admin-ac-category-detail'),
+    path('admin/ac-inspection/items/',                   AdminACRateItemListCreateView.as_view(),       name='admin-ac-item-list'),
+    path('service-requests/admin/ac-inspection/items/',  AdminACRateItemListCreateView.as_view(),       name='sr-admin-ac-item-list'),
+    path('admin/ac-inspection/items/<int:pk>/',          AdminACRateItemDetailView.as_view(),           name='admin-ac-item-detail'),
+    path('service-requests/admin/ac-inspection/items/<int:pk>/', AdminACRateItemDetailView.as_view(),   name='sr-admin-ac-item-detail'),
+    path('admin/ac-inspection/config/',                  AdminACInspectionConfigView.as_view(),         name='admin-ac-inspection-config'),
+    path('service-requests/admin/ac-inspection/config/', AdminACInspectionConfigView.as_view(),         name='sr-admin-ac-inspection-config'),
+    path('admin/ac-inspection/reset-defaults/',          AdminACInspectionResetDefaultsView.as_view(),   name='admin-ac-inspection-reset'),
+    path('service-requests/admin/ac-inspection/reset-defaults/', AdminACInspectionResetDefaultsView.as_view(), name='sr-admin-ac-inspection-reset'),
+    path('technician/bookings/<str:identifier>/quotation/', TechnicianACQuotationCreateView.as_view(),  name='technician-ac-quotation-create'),
+    path('service-requests/technician/bookings/<str:identifier>/quotation/', TechnicianACQuotationCreateView.as_view(),  name='sr-technician-ac-quotation-create'),
+    path('technician/bookings/<int:identifier>/quotation/', TechnicianACQuotationCreateView.as_view(),  name='technician-ac-quotation-create-int'),
+    path('service-requests/technician/bookings/<int:identifier>/quotation/', TechnicianACQuotationCreateView.as_view(),  name='sr-technician-ac-quotation-create-int'),
+
     # ── Technician Portal / App Endpoints ─────────────────────────────────────
     path('technician/bookings/',                         TechnicianAvailableBookingsView.as_view(),    name='technician-bookings-list'),
     path('technician/bookings/<int:pk>/accept/',         TechnicianAcceptBookingView.as_view(),        name='technician-booking-accept'),
@@ -316,4 +384,61 @@ urlpatterns = [
     path('technician/bookings/<str:identifier>/status/', TechnicianStatusUpdateView.as_view(),         name='technician-booking-status-str'),
     path('technician/bookings/<int:pk>/verify-otp/',     TechnicianVerifyStartOTPView.as_view(),       name='technician-booking-verify-otp'),
     path('technician/bookings/<str:identifier>/verify-otp/', TechnicianVerifyStartOTPView.as_view(),   name='technician-booking-verify-otp-str'),
+    # Full detail for a single booking (includes cart_data, fare_breakdown, trip_stops)
+    path('technician/bookings/<int:pk>/detail/',          TechnicianBookingDetailView.as_view(),        name='technician-booking-detail'),
+    path('technician/bookings/<str:identifier>/detail/',  TechnicianBookingDetailView.as_view(),        name='technician-booking-detail-str'),
+
+    # ── Customer AC Inspection & Estimation Lifecycle ─────────────────────────
+    path('booking/<int:pk>/',                            CustomerBookingDetailView.as_view(),           name='customer-booking-detail-int'),
+    path('booking/<str:identifier>/',                    CustomerBookingDetailView.as_view(),           name='customer-booking-detail-str'),
+    path('service-requests/booking/<int:pk>/',           CustomerBookingDetailView.as_view(),           name='sr-customer-booking-detail-int'),
+    path('service-requests/booking/<str:identifier>/',   CustomerBookingDetailView.as_view(),           name='sr-customer-booking-detail-str'),
+
+    path('booking/<int:pk>/estimation/',                 CustomerEstimationDetailView.as_view(),        name='customer-estimation-detail-int'),
+    path('booking/<str:identifier>/estimation/',         CustomerEstimationDetailView.as_view(),        name='customer-estimation-detail-str'),
+    path('service-requests/booking/<int:pk>/estimation/', CustomerEstimationDetailView.as_view(),       name='sr-customer-estimation-detail-int'),
+    path('service-requests/booking/<str:identifier>/estimation/', CustomerEstimationDetailView.as_view(), name='sr-customer-estimation-detail-str'),
+
+    path('booking/<int:pk>/inspection/',                 CustomerInspectionDetailView.as_view(),        name='customer-inspection-detail-int'),
+    path('booking/<str:identifier>/inspection/',         CustomerInspectionDetailView.as_view(),        name='customer-inspection-detail-str'),
+    path('service-requests/booking/<int:pk>/inspection/', CustomerInspectionDetailView.as_view(),       name='sr-customer-inspection-detail-int'),
+    path('service-requests/booking/<str:identifier>/inspection/', CustomerInspectionDetailView.as_view(), name='sr-customer-inspection-detail-str'),
+
+    path('booking/<int:pk>/inspection-rate-card/',       CustomerBookingRateCardSnapshotView.as_view(), name='customer-inspection-rate-card-int'),
+    path('booking/<str:identifier>/inspection-rate-card/', CustomerBookingRateCardSnapshotView.as_view(), name='customer-inspection-rate-card-str'),
+    path('service-requests/booking/<int:pk>/inspection-rate-card/', CustomerBookingRateCardSnapshotView.as_view(), name='sr-customer-inspection-rate-card-int'),
+    path('service-requests/booking/<str:identifier>/inspection-rate-card/', CustomerBookingRateCardSnapshotView.as_view(), name='sr-customer-inspection-rate-card-str'),
+
+    path('booking/<int:pk>/quotation/',                  CustomerQuotationDetailView.as_view(),         name='customer-quotation-detail-int'),
+    path('booking/<str:identifier>/quotation/',          CustomerQuotationDetailView.as_view(),         name='customer-quotation-detail-str'),
+    path('service-requests/booking/<int:pk>/quotation/', CustomerQuotationDetailView.as_view(),         name='sr-customer-quotation-detail-int'),
+    path('service-requests/booking/<str:identifier>/quotation/', CustomerQuotationDetailView.as_view(), name='sr-customer-quotation-detail-str'),
+
+    path('booking/<int:pk>/quotation/approve/',          CustomerQuotationApproveView.as_view(),        name='customer-quotation-approve-int'),
+    path('booking/<str:identifier>/quotation/approve/',  CustomerQuotationApproveView.as_view(),        name='customer-quotation-approve-str'),
+    path('service-requests/booking/<int:pk>/quotation/approve/', CustomerQuotationApproveView.as_view(), name='sr-customer-quotation-approve-int'),
+    path('service-requests/booking/<str:identifier>/quotation/approve/', CustomerQuotationApproveView.as_view(), name='sr-customer-quotation-approve-str'),
+
+    path('booking/<int:pk>/quotation/reject/',           CustomerQuotationRejectView.as_view(),         name='customer-quotation-reject-int'),
+    path('booking/<str:identifier>/quotation/reject/',   CustomerQuotationRejectView.as_view(),         name='customer-quotation-reject-str'),
+    path('service-requests/booking/<int:pk>/quotation/reject/', CustomerQuotationRejectView.as_view(),  name='sr-customer-quotation-reject-int'),
+    path('service-requests/booking/<str:identifier>/quotation/reject/', CustomerQuotationRejectView.as_view(), name='sr-customer-quotation-reject-str'),
+
+    # ── Customer Admin: Dedicated AC Inspection Bookings Module ────────────────
+    path('admin/ac-inspections/',                        AdminACInspectionListView.as_view(),           name='admin-ac-inspections-list'),
+    path('service-requests/admin/ac-inspections/',       AdminACInspectionListView.as_view(),           name='sr-admin-ac-inspections-list'),
+    path('admin/ac-inspections/<int:pk>/',               AdminACInspectionDetailView.as_view(),         name='admin-ac-inspection-detail-int'),
+    path('service-requests/admin/ac-inspections/<int:pk>/', AdminACInspectionDetailView.as_view(),      name='sr-admin-ac-inspection-detail-int'),
+    path('admin/ac-inspections/<str:identifier>/',       AdminACInspectionDetailView.as_view(),         name='admin-ac-inspection-detail-str'),
+    path('service-requests/admin/ac-inspections/<str:identifier>/', AdminACInspectionDetailView.as_view(), name='sr-admin-ac-inspection-detail-str'),
+
+    path('admin/ac-inspections/<int:pk>/estimation/approve/', AdminACInspectionEstimationApproveView.as_view(), name='admin-ac-inspection-approve-int'),
+    path('service-requests/admin/ac-inspections/<int:pk>/estimation/approve/', AdminACInspectionEstimationApproveView.as_view(), name='sr-admin-ac-inspection-approve-int'),
+    path('admin/ac-inspections/<str:identifier>/estimation/approve/', AdminACInspectionEstimationApproveView.as_view(), name='admin-ac-inspection-approve-str'),
+    path('service-requests/admin/ac-inspections/<str:identifier>/estimation/approve/', AdminACInspectionEstimationApproveView.as_view(), name='sr-admin-ac-inspection-approve-str'),
+
+    path('admin/ac-inspections/<int:pk>/estimation/send-back/', AdminACInspectionEstimationSendBackView.as_view(), name='admin-ac-inspection-sendback-int'),
+    path('service-requests/admin/ac-inspections/<int:pk>/estimation/send-back/', AdminACInspectionEstimationSendBackView.as_view(), name='sr-admin-ac-inspection-sendback-int'),
+    path('admin/ac-inspections/<str:identifier>/estimation/send-back/', AdminACInspectionEstimationSendBackView.as_view(), name='admin-ac-inspection-sendback-str'),
+    path('service-requests/admin/ac-inspections/<str:identifier>/estimation/send-back/', AdminACInspectionEstimationSendBackView.as_view(), name='sr-admin-ac-inspection-sendback-str'),
 ]

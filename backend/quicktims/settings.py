@@ -222,7 +222,7 @@ USE_TZ = True
 # service_requests/booking_window.py, which the booking serializer calls -- the
 # frontend filter is a convenience, not the control. Tunable per environment.
 BOOKING_SAME_DAY_CUTOFF_HOUR = int(os.getenv("BOOKING_SAME_DAY_CUTOFF_HOUR", "18"))
-BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "60"))
+BOOKING_MIN_LEAD_MINUTES = int(os.getenv("BOOKING_MIN_LEAD_MINUTES", "30"))
 
 STATIC_URL = "static/"
 

@@ -113,6 +113,9 @@ const CatalogVendorApprovalsPage = lazy(() =>
 const PaintingRateCardPage = lazy(() =>
   import("./pages/catalog/PaintingRateCardPage.jsx").then(m => ({ default: m.PaintingRateCardPage || m.default }))
 )
+const ACInspectionRateCardPage = lazy(() =>
+  import("./pages/catalog/ACInspectionRateCardPage.jsx").then(m => ({ default: m.ACInspectionRateCardPage || m.default }))
+)
 const GTPricingPage = lazy(() =>
   import("./pages/catalog/GTPricingPage.jsx").then(m => ({ default: m.GTPricingPage || m.default }))
 )
@@ -121,6 +124,9 @@ const AdminRecipesPage = lazy(() =>
 )
 const AdminRecommendationsPage = lazy(() =>
   import("./pages/catalog/AdminRecommendationsPage.jsx").then(m => ({ default: m.AdminRecommendationsPage || m.default }))
+)
+const TimeSlotManagementPage = lazy(() =>
+  import("./pages/TimeSlotManagementPage.jsx").then(m => ({ default: m.TimeSlotManagementPage || m.default }))
 )
 
 const CustomersDashboardPage = lazy(() => import("./pages/CustomersDashboardPage.jsx").then(m => ({ default: m.CustomersDashboardPage })))
@@ -141,6 +147,10 @@ const ReferralsPage = lazy(() =>
 
 const ServiceRequestsPage = lazy(() =>
   import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage || m.default }))
+)
+
+const ACInspectionBookingsPage = lazy(() =>
+  import("./pages/ACInspectionBookingsPage.jsx").then(m => ({ default: m.ACInspectionBookingsPage || m.default }))
 )
 
 const FeedbackManagementPage = lazy(() =>
@@ -548,7 +558,10 @@ export function App() {
               <Route path={routes.catalog_change_log} element={<RequireModule module="catalog"><CatalogChangeLogPage /></RequireModule>} />
               <Route path={routes.catalog_vendor_approvals} element={<RequireModule module="catalog"><CatalogVendorApprovalsPage /></RequireModule>} />
               <Route path={routes.catalog_painting_rates} element={<RequireModule module="catalog"><PaintingRateCardPage /></RequireModule>} />
+              <Route path={routes.catalog_ac_inspection_rates} element={<RequireModule module="catalog"><ACInspectionRateCardPage /></RequireModule>} />
               <Route path={routes.catalog_gt_pricing} element={<RequireModule module="catalog"><GTPricingPage /></RequireModule>} />
+              <Route path={routes.time_slot_management} element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
+              <Route path="/admin/time-slots" element={<RequireModule module="time_slots"><TimeSlotManagementPage /></RequireModule>} />
               <Route path={routes.marketing_coupons} element={<RequireModule module="marketing"><CouponsPage /></RequireModule>} />
               <Route path={routes.marketing_offers} element={<RequireModule module="marketing"><OffersPage /></RequireModule>} />
               <Route path={routes.marketing_referrals} element={<RequireModule module="marketing"><ReferralsPage /></RequireModule>} />
@@ -582,6 +595,8 @@ export function App() {
               <Route path={routes.customers_payments} element={<CustomersPaymentsPage />} />
               <Route path={routes.customers_merges} element={<CustomerMergesPage />} />
               <Route path="/customers/bookings" element={<ServiceRequestsPage />} />
+              <Route path={routes.admin_ac_inspections} element={<ACInspectionBookingsPage />} />
+              <Route path="/customers/ac-inspections" element={<ACInspectionBookingsPage />} />
               <Route path="/customers/reschedules" element={<ServiceRequestsPage />} />
               <Route path="/customers/refunds" element={<ServiceRequestsPage />} />
               <Route path="/customers/documents" element={<ServiceRequestsPage />} />

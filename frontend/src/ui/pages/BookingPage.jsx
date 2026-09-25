@@ -34,6 +34,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { AC_BRANDS_LIST } from "../components/estimation/ACInspectionFormModal.jsx"
 import { ACInspectionFormModal } from "../components/estimation/ACInspectionFormModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { resolveImageUrl } from "../../utils/imageUrl.js"
@@ -44,6 +45,7 @@ import { CustomerTrackingMap } from "../customer/tracking/CustomerTrackingMap.js
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { EditModeToggleBar, SaveNoticeToast, EditableText, EditableImage } from "../components/SuperAdminEditControls.jsx"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
+import { useMultiServiceCart } from "../../state/multiServiceCart/useMultiServiceCart.js"
 import { createTrackingWebSocket } from "../../api/websocketService.js"
 import SavedAddressesPage from "./SavedAddressesPage.jsx"
 import "leaflet/dist/leaflet.css";
@@ -437,7 +439,7 @@ const DAYS_LIST = getNextDays(21)
 // convenience filter, and the two deliberately use the same numbers.
 const BOOKING_TIMEZONE = 'Asia/Kolkata'
 const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
-const SAME_DAY_MIN_LEAD_MINUTES = 60
+const SAME_DAY_MIN_LEAD_MINUTES = 30
 
 function businessNowParts() {
   try {
@@ -503,11 +505,11 @@ function isSlotInPast(dateStr, slotStr) {
     minutes = parseInt(parts[1], 10) || 0
   }
 
-  // Compare in business-timezone minutes, and keep the same minimum lead time
-  // the server applies, so a slot starting in a few minutes is not offered.
+  // Compare in business-timezone minutes, and keep 30 minutes minimum lead time
+  // so slots within 30 minutes are locked, but slots >= 30 mins away are available.
   const slotMinutes = hours * 60 + minutes
   const nowMinutes = business.hour * 60 + business.minute
-  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
+  return slotMinutes < nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -1383,14 +1385,14 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
               <div className="uc-pkg-divider" />
 
               <div className="uc-pkg-list">
-                {pkg.includes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-yes">
-                    <CheckCircle2 size={13} /> {item}
+                {pkg.includes.map((item, idx) => (
+                  <div key={idx} className="uc-pkg-item uc-pkg-yes">
+                    <CheckCircle2 size={13} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
                   </div>
                 ))}
-                {pkg.excludes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-no">
-                    <X size={12} /> {item}
+                {pkg.excludes.map((item, idx) => (
+                  <div key={idx} className="uc-pkg-item uc-pkg-no">
+                    <X size={12} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
                   </div>
                 ))}
               </div>
@@ -1435,17 +1437,18 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const platformFee = totalPrice === 0 || isPaintingOrMason || nonConsultCart.length === 0 ? 0 : Math.max(29, ...nonConsultCart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29))
   const grandTotal = totalPrice + roundedGst + platformFee
 
-  // Urban time slots: Morning / Afternoon / Evening
+  // Urban time slots (30-min intervals): Morning / Afternoon / Evening
   const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
+    { period: 'Morning', icon: '🌅', slots: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'] },
   ]
   const formatSlot = t => {
-    const [h] = t.split(':').map(Number)
+    const [h, m = 0] = t.split(':').map(Number)
     const ampm = h < 12 ? 'AM' : 'PM'
     const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}:00 ${ampm}`
+    const minStr = String(m).padStart(2, '0')
+    return `${h12}:${minStr} ${ampm}`
   }
 
   const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
@@ -2456,14 +2459,35 @@ export function RunningServiceManRadar() {
 
 function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
   const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
-  const [liveData, setLiveData] = useState(null)
+  const [liveData, setLiveData] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "null")
+        if (cached && (cached.request_id === rid || String(cached.id) === String(rid) || cached.booking_id === rid)) {
+          return cached
+        }
+      } catch (_) { }
+    }
+    return null
+  })
+  const [initialLoading, setInitialLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "null")
+        if (cached && (cached.request_id === rid || String(cached.id) === String(rid) || cached.booking_id === rid)) {
+          return false
+        }
+      } catch (_) { }
+    }
+    return !successData?.status
+  })
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
-  const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
@@ -2715,10 +2739,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       "completed",
       "closed",
       "reviewed",
-      "feedback_received",
-      "proof_submitted",
-      "awaiting_verification",
-      "verified"
+      "feedback_received"
     ].includes(String(liveData.status).toLowerCase())
   )
 
@@ -3824,52 +3845,65 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       )}
 
       {/* ─────────────────── ACTIVE QUOTE DECISION CARD (PHASE 3) ─────────────────── */}
-      {liveData?.quote && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: '1.5rem',
-            marginBottom: '1rem',
-            boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
-            border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-                liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
-              }`,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Quotation Details
+      {liveData?.quote && (liveData.quote.id || liveData.quote.quote_id || liveData.quote.quote_number) && liveData.quote.has_quote !== false && (() => {
+        const q = liveData.quote
+        const qStatus = String(q.status || "").toUpperCase()
+        const isAccepted = ["CUSTOMER_ACCEPTED", "APPROVED", "CONVERTED", "ACCEPTED", "ADMIN_APPROVED"].includes(qStatus)
+        const isChangesRequested = ["CHANGE_REQUESTED", "CHANGES_REQUESTED", "REQUESTED_CHANGES", "REQUOTE", "RE_QUOTE"].includes(qStatus)
+        const isDeclined = ["DECLINED", "CUSTOMER_DECLINED", "REJECTED", "ADMIN_REJECTED", "CANCELLED", "EXPIRED"].includes(qStatus)
+        const isPending = [
+          "SENT", "SENT_TO_CUSTOMER", "PENDING", "PENDING_APPROVAL", "PENDING_REVIEW", 
+          "PENDING REVIEW", "PENDING_ADMIN_REVIEW", "PENDING ADMIN REVIEW", 
+          "AWAITING_CUSTOMER", "AWAITING_APPROVAL", "QUOTATION_SENT", "QUOTE_SENT", 
+          "DRAFT", "VIEWED", "NEW", "OPEN"
+        ].includes(qStatus) || (!isAccepted && !isChangesRequested && !isDeclined)
+        
+        const totalEst = q.net_payable ?? (q.grand_total ?? (q.total_amount ?? 0))
+        const itemsList = Array.isArray(q.items) ? q.items : []
+        const measurementsList = Array.isArray(q.measurements) ? q.measurements : []
+        const totalArea = q.total_paintable_area || q.total_area || measurementsList.reduce((acc, m) => acc + (Number(m.final_area || m.calculated_area || 0)), 0)
+
+        return (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.4rem',
+              marginBottom: '1rem',
+              boxShadow: '0 8px 30px rgba(79, 70, 229, 0.12)',
+              border: `2px solid ${isPending ? "#4F46E5" : isAccepted ? "#10B981" : isChangesRequested ? "#F59E0B" : "#EF4444"}`,
+            }}
+          >
+            {/* Header: Title, Number, Status Badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Quotation Details
+                  </span>
+                  {q.quote_number && (
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 6, fontFamily: 'monospace' }}>
+                      #{q.raw_quote_number || (typeof q.quote_number === 'string' ? q.quote_number.replace(/-V\d+$/i, '') : q.quote_number)} (v{q.quote_version || q.version || 1})
+                    </span>
+                  )}
+                </div>
+                <h3 style={{ margin: '4px 0 0', fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+                  Total Estimate: ₹{totalEst}
+                </h3>
               </div>
-              <h3 style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
-                Total Estimate: ₹{liveData.quote.total_amount}
-              </h3>
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '4px 10px',
+                borderRadius: 8,
+                fontWeight: 800,
+                background: isPending ? "#EFF6FF" : isAccepted ? "#ECFDF5" : isChangesRequested ? "#FFFBEB" : "#FEF2F2",
+                color: isPending ? "#1E40AF" : isAccepted ? "#065F46" : isChangesRequested ? "#92400E" : "#991B1B"
+              }}>
+                {isPending ? "Pending Your Approval" : isAccepted ? "Accepted / Approved" : isChangesRequested ? "Changes Requested" : isDeclined ? "Declined" : qStatus.replace(/_/g, " ")}
+              </span>
             </div>
-            <span style={{
-              fontSize: '0.72rem',
-              padding: '4px 10px',
-              borderRadius: 8,
-              fontWeight: 800,
-              background:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              color:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
-            }}>
-              {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
-                  liveData.quote.status === "CONVERTED" ? "Converted to Work" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
-                      liveData.quote.status.replace(/_/g, " ")}
-            </span>
-          </div>
 
           <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
             Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
@@ -4079,9 +4113,111 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </div>
           )}
         </motion.div>
-      )}
+      )
+    })()}
 
-      {/* Decline Reason Modal Overlay */}
+    {/* ── Request Changes / Re-Quote Modal Overlay ── */}
+    {showRequestChangesModal && (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '1.5rem'
+      }}>
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          style={{
+            background: 'white',
+            borderRadius: 20,
+            padding: '1.75rem',
+            maxWidth: 440,
+            width: '100%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}
+        >
+          <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+            Request Changes / Re-Quotation
+          </h3>
+          <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#64748b' }}>
+            Tell our service professional what you would like modified (e.g. adjust square feet, change paint brand, remove an area, update pricing):
+          </p>
+
+          <textarea
+            placeholder="e.g., Please change the paint brand to Royal Luxury Emulsion, adjust square footage for living room to 350 sq.ft, and exclude balcony..."
+            value={changeNotes}
+            onChange={(e) => setChangeNotes(e.target.value)}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              height: 100,
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: '1.5px solid #cbd5e1',
+              fontSize: '0.85rem',
+              fontFamily: 'inherit',
+              marginBottom: 16,
+              resize: 'none',
+              outline: 'none'
+            }}
+          />
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => {
+                setShowRequestChangesModal(false)
+                setChangeNotes("")
+              }}
+              style={{
+                padding: '9px 16px',
+                background: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (!changeNotes.trim()) {
+                  alert("Please enter what changes you would like to request.")
+                  return
+                }
+                handleQuoteDecision("CHANGE_REQUESTED", "", changeNotes)
+                setShowRequestChangesModal(false)
+              }}
+              style={{
+                padding: '9px 18px',
+                background: '#f59e0b',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+              }}
+            >
+              Send Request
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    )}
+
+    {/* Decline Reason Modal Overlay */}
       {showDeclineReasonModal && (
         <div style={{
           position: 'fixed',
@@ -4746,10 +4882,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       <AnimatePresence>
         {showCancelModal && (
           <BookingCancellationModal
-            bookingId={liveData?.booking_id || liveData?.id || successData?.id}
-            requestId={rid || liveData?.request_id || successData?.request_id}
-            trackingToken={liveData?.tracking_token || successData?.tracking_token}
-            phone={liveData?.phone || successData?.phone || formData?.phone}
+            bookingId={liveData?.booking_id || liveData?.id || successData?.id || sessionSaved?.id}
+            requestId={rid || liveData?.request_id || successData?.request_id || sessionSaved?.request_id}
+            trackingToken={liveData?.tracking_token || successData?.tracking_token || resolvedToken}
+            phone={liveData?.phone || successData?.phone || sessionSaved?.phone || formData?.phone}
             isAccepted={isAccepted}
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
@@ -4816,7 +4952,7 @@ function StepBar({ step, total }) {
 }
 
 /* ── Cart Drawer Modal Component ── */
-export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout }) {
+export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout, onAddAnotherService, bagItemCount = 0 }) {
   if (!isOpen) return null;
 
   const itemTotal = (cart || []).reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
@@ -4968,6 +5104,19 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
               <span>Continue to Checkout</span>
               <ChevronRight size={16} strokeWidth={3} />
             </button>
+
+            {typeof onAddAnotherService === "function" && (
+              <button
+                onClick={() => {
+                  onAddAnotherService();
+                  onClose();
+                }}
+                className="w-full py-3 border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
+                title="Save this cart and pick another service category for the same booking"
+              >
+                <span>+ Add Another Service{bagItemCount > 0 ? ` (${bagItemCount} saved)` : ""}</span>
+              </button>
+            )}
 
             <button
               onClick={clearCart}
@@ -6319,29 +6468,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
-      case "Upcoming & Active":
-      case "Past Services":
-      case "My Bookings": {
-        const isUpcomingTab = activeTab === "Upcoming & Active"
-        const isPastTab = activeTab === "Past Services"
-        const currentFilter = isUpcomingTab ? "active" : isPastTab ? "completed" : bookingListFilter
-
-        const displayedBookings = realBookings.filter(b => {
-          if (b.parent_request) return false
-          const st = String(b.status || '').toLowerCase()
-          if (currentFilter === "active") {
-            return ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(st)
-          }
-          if (currentFilter === "completed") {
-            return ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)
-          }
-          return true
-        })
-
-        const activeCount = liveActiveBookings.length
-        const completedCount = completedBookings.length
-        const allCount = realBookings.filter(b => !b.parent_request).length
-
+      case "My Bookings":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div style={{ marginBottom: '1.25rem' }}>
@@ -6498,22 +6625,30 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 }
                 const noticeMsg = getRescheduleNotice(b.status)
 
+                // Multi-service booking: this card's siblings under the same
+                // Order, if any -- see orderGroups computed above.
+                const siblingGroup = b.order_id ? orderGroups[b.order_id] : null
+                const isFirstInGroup = siblingGroup && siblingGroup[0]?.id === b.id
+                const overallStatus = siblingGroup && siblingGroup.length > 1 ? computeOverallStatus(siblingGroup) : null
+
                 return (
                   <React.Fragment key={b.id}>
+                    {overallStatus && isFirstInGroup && (
+                      <div style={{ padding: '10px 16px', borderRadius: 12, background: overallStatus.bg, border: `1px solid ${overallStatus.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: overallStatus.color }}>
+                          This booking has {siblingGroup.length} services
+                        </span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: overallStatus.color, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                          Overall: {overallStatus.label}
+                        </span>
+                      </div>
+                    )}
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                             <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
-
-                            {/* Live Finding Partner Indicator if not yet assigned/accepted */}
-                            {!b.is_accepted && !b.technician && !b.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(b.status || '').toLowerCase()) && (
-                              <span style={{ fontSize: '0.7rem', padding: '3px 10px', borderRadius: 99, fontWeight: 800, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} className="animate-ping" />
-                                📡 Finding Partner...
-                              </span>
-                            )}
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
@@ -6937,11 +7072,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             // trust the now-authoritative rawStored (b.total_amount)
                             // directly instead of this discount-blind override heuristic.
                             const finalTot = rawStored > 0 ? rawStored : computedGrand;
+                            const isEstimationOrConsultation = Boolean(
+                              b.job_type === 'ESTIMATION' ||
+                              b.request_kind === 'ESTIMATION' ||
+                              isOnlyConsultation ||
+                              parsedCart.some(c => (c.name || '').includes('Consultation') || (c.title || '').includes('Consultation'))
+                            );
+                            const hasQuotationAbove = Boolean(
+                              (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ||
+                              (b.quotation_history && b.quotation_history.length > 0)
+                            );
 
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                                <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8 }}>
-                                  📦 Booked Service Modules ({parsedCart.length})
+                                <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.04em' }}>
+                                  {isEstimationOrConsultation
+                                    ? (hasQuotationAbove ? `📋 Initial Site Consultation Request (${parsedCart.length})` : `📋 Booked Site Consultation & Inspection (${parsedCart.length})`)
+                                    : `📦 Booked Service Modules (${parsedCart.length})`}
                                 </div>
                                 <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -7385,445 +7532,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
-      }
-
-      case "Book Again": {
-        const pastCompleted = (realBookings || []).filter(b =>
-          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
-        )
-
-        const seenPackages = new Set()
-        const uniqueRebookItems = []
-        for (const b of pastCompleted) {
-          const key = b.package_id || b.issue_title || b.service_category
-          if (!seenPackages.has(key)) {
-            seenPackages.add(key)
-            uniqueRebookItems.push(b)
-          }
-        }
-
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: '1.4rem' }}>⚡</span>
-                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Book Again</h3>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
-                Re-order your previous home services in Hosur with 1 tap. Previous address and preferences are pre-selected.
-              </p>
-            </div>
-
-            {uniqueRebookItems.length === 0 ? (
-              <div>
-                <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0', marginBottom: 24 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                    <RefreshCw size={26} />
-                  </div>
-                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Previous Services to Re-book</h4>
-                  <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
-                    Once you complete a service, you can re-order it here instantly. Explore our most popular Hosur home services below:
-                  </p>
-                </div>
-
-                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Popular Hosur Services</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                  {[
-                    { name: 'Foam & Power Jet AC Service', price: '₹499', cat: 'ac_appliances', icon: '❄️' },
-                    { name: 'Intense Bathroom Cleaning', price: '₹399', cat: 'cleaning_pest', icon: '🧹' },
-                    { name: 'Sofa & Fabric Deep Shampoo', price: '₹499', cat: 'cleaning_pest', icon: '🛋️' },
-                    { name: 'Home Pest & Cockroach Control', price: '₹799', cat: 'cleaning_pest', icon: '🐜' },
-                    { name: 'Waterproofing & Masonry Inspection', price: '₹0 (Free Quote)', cat: 'masonry', icon: '🧱' },
-                    { name: 'Hosur Local Goods Transport', price: '₹299 onwards', cat: 'goods_transport', icon: '🚚' },
-                  ].map((srv, idx) => (
-                    <div key={idx} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: '1.4rem' }}>{srv.icon}</span>
-                        <div>
-                          <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#0f172a' }}>{srv.name}</div>
-                          <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700, marginTop: 2 }}>{srv.price}</div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          window.location.href = `/home?category=${srv.cat}`;
-                        }}
-                        style={{ padding: '6px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        Book
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {uniqueRebookItems.map((b) => {
-                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
-                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
-                  return (
-                    <div
-                      key={b.id}
-                      style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: 16,
-                        padding: '1.25rem',
-                        background: 'white',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 12,
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{title}</span>
-                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
-                            ✓ Serviced
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>📅 Last booked: {b.preferred_date || 'Recently'}</span>
-                          <span>•</span>
-                          <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span>
-                        </div>
-                        {b.address && (
-                          <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: 4 }}>
-                            📍 {b.address}
-                          </div>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {b.total_amount && (
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Previous Rate</div>
-                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a' }}>₹{Number(b.total_amount).toLocaleString('en-IN')}</div>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRebookBooking(b)}
-                          style={{
-                            padding: '10px 20px',
-                            background: 'linear-gradient(135deg, #059669, #047857)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 10,
-                            fontWeight: 800,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            boxShadow: '0 2px 8px rgba(5,150,105,0.25)'
-                          }}
-                        >
-                          <RefreshCw size={14} /> Book Again
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </motion.div>
-        )
-      }
-
-      case "30-Day Warranties": {
-        const completedServices = (realBookings || []).filter(b =>
-          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
-        )
-
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <ShieldCheck size={26} color="#059669" />
-                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>30-Day Doorstep Guarantee</h3>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
-                Every service completed with SEVO is backed by our signature 30-Day Doorstep Guarantee.
-              </p>
-            </div>
-
-            <div style={{
-              background: 'linear-gradient(135deg, #064e3b, #065f46)',
-              borderRadius: 18,
-              padding: '1.5rem',
-              color: 'white',
-              marginBottom: '1.5rem',
-              boxShadow: '0 4px 16px rgba(6,78,59,0.2)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: '1.5rem' }}>🛡️</span>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a7f3d0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Zero-Cost Revisit Promise
-                  </div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white' }}>
-                    Issue resurfacing? We fix it completely free.
-                  </div>
-                </div>
-              </div>
-              <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#d1fae5', lineHeight: 1.5 }}>
-                If any serviced part or appliance develops the same issue within 30 days of completion, our verified professional will revisit your doorstep to re-inspect and resolve it with zero inspection or service fee.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
-                  ✓ 100% Free Doorstep Revisit
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
-                  ✓ Genuine Parts Guarantee
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
-                  ✓ Priority Dispatch Support
-                </div>
-              </div>
-            </div>
-
-            <h4 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-              Your Protected Services ({completedServices.length})
-            </h4>
-
-            {completedServices.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }}>
-                <ShieldCheck size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
-                <h5 style={{ margin: '0 0 4px', fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>No Covered Services Yet</h5>
-                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
-                  When you complete a service, its active 30-day revisit warranty and days remaining will appear right here.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { onClose(); window.location.href = "/home"; }}
-                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
-                >
-                  Explore Guaranteed Services
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {completedServices.map((b) => {
-                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
-                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
-                  const bookingDate = new Date(b.created_at || b.preferred_date || Date.now())
-                  const daysPassed = Math.floor((Date.now() - bookingDate.getTime()) / (1000 * 60 * 60 * 24))
-                  const isWarrantyActive = daysPassed <= 30
-                  const daysRemaining = Math.max(0, 30 - daysPassed)
-                  const expiryDate = new Date(bookingDate.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })
-
-                  return (
-                    <div
-                      key={b.id}
-                      style={{
-                        border: isWarrantyActive ? '1.5px solid #a7f3d0' : '1px solid #e2e8f0',
-                        borderRadius: 16,
-                        padding: '1.25rem',
-                        background: isWarrantyActive ? '#f0fdf4' : 'white',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
-                        <div>
-                          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>{title}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 2 }}>
-                            Booking #{b.request_id || `SR-${b.id}`} • Completed: {b.preferred_date || 'Recently'}
-                          </div>
-                        </div>
-
-                        <span style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          padding: '4px 12px',
-                          borderRadius: 99,
-                          background: isWarrantyActive ? '#dcfce7' : '#f1f5f9',
-                          color: isWarrantyActive ? '#15803d' : '#64748b',
-                          border: isWarrantyActive ? '1px solid #86efac' : '1px solid #e2e8f0',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6
-                        }}>
-                          <ShieldCheck size={14} />
-                          {isWarrantyActive ? `Active Guarantee (${daysRemaining} days left)` : 'Warranty Expired'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 10, marginTop: 6 }}>
-                        <div style={{ fontSize: '0.78rem', color: isWarrantyActive ? '#065f46' : '#64748b', fontWeight: 600 }}>
-                          {isWarrantyActive ? `🛡️ Full doorstep protection active until ${expiryDate}` : `Expired on ${expiryDate}`}
-                        </div>
-
-                        {isWarrantyActive ? (
-                          <a
-                            href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I want to claim a 30-day warranty revisit for booking #${b.request_id || b.id} (${title})`)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              padding: '6px 14px',
-                              background: '#059669',
-                              color: 'white',
-                              borderRadius: 8,
-                              fontSize: '0.78rem',
-                              fontWeight: 800,
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              boxShadow: '0 2px 6px rgba(5,150,105,0.2)'
-                            }}
-                          >
-                            Claim Free Revisit →
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleRebookBooking(b)}
-                            style={{
-                              padding: '6px 14px',
-                              background: '#f1f5f9',
-                              color: '#334155',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: 8,
-                              fontSize: '0.78rem',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Renew / Book Again
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </motion.div>
-        )
-      }
-
-      case "My Invoices": {
-        const invoicedBookings = (realBookings || []).filter(b => !b.parent_request && b.status !== 'draft')
-
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <FileText size={24} color="#059669" />
-                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Invoices & Receipts</h3>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
-                Download official GST-compliant tax invoices and payment summaries for all your SEVO bookings.
-              </p>
-            </div>
-
-            {invoicedBookings.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                <FileText size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
-                <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Invoices Generated Yet</h4>
-                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
-                  Once you place or complete a service booking, your downloadable tax invoice will appear here automatically.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { onClose(); window.location.href = "/home"; }}
-                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
-                >
-                  Book a Service
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {invoicedBookings.map((b) => {
-                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
-                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
-                  const isPaid = ['paid', 'collected'].includes(String(b.payment_status || '').toLowerCase())
-
-                  return (
-                    <div
-                      key={b.id}
-                      style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: 16,
-                        padding: '1.25rem',
-                        background: 'white',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 12,
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.98rem' }}>{title}</span>
-                          <span style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 800,
-                            padding: '2px 8px',
-                            borderRadius: 99,
-                            background: isPaid ? '#ecfdf5' : '#fffbeb',
-                            color: isPaid ? '#059669' : '#d97706',
-                            border: isPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
-                          }}>
-                            {isPaid ? '✓ Paid' : 'Payment Pending'}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>#{b.request_id || `SR-${b.id}`}</span>
-                          <span>•</span>
-                          <span>{b.preferred_date || 'Date N/A'}</span>
-                          <span>•</span>
-                          <span>Mode: {(b.payment_method || 'COD').toUpperCase()}</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Total Amount</div>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
-                            ₹{Number(b.total_amount || 0).toLocaleString('en-IN')}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')}
-                          style={{
-                            padding: '8px 16px',
-                            background: '#f8fafc',
-                            border: '1.5px solid #cbd5e1',
-                            borderRadius: 10,
-                            color: '#0f172a',
-                            fontWeight: 800,
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            transition: 'all 0.15s ease'
-                          }}
-                          onMouseOver={e => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.color = '#059669'; }}
-                          onMouseOut={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
-                        >
-                          <FileText size={14} /> Download PDF
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </motion.div>
-        )
-      }
-
       case "Saved Addresses":
         return (
           <SavedAddressesPage user={user} onClose={onClose} />
@@ -10713,8 +10421,21 @@ function StepWorkflowCheckout({
   const navigate = useNavigate()
   const routerLocation = useLocation()
   const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
-  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
-  const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  const [slotData, setSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [slotFetchError, setSlotFetchError] = useState(null)
+
+  const isServiceOpenOnDate = slotData?.is_open ?? true
+  const closedReason = slotData?.reason || null
+  const slotDurationMinutes = slotData?.slot_duration_minutes || 30
+
+  const isSlotSelected = Boolean(
+    selectedDate &&
+    selectedTime &&
+    isServiceOpenOnDate &&
+    (slotData ? slotData.all_slots?.some(s => s.time === selectedTime && s.available) ?? true : !isSlotInPast(selectedDate, selectedTime))
+  )
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || !isSlotSelected)
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
@@ -10842,10 +10563,132 @@ function StepWorkflowCheckout({
     return dates
   }, [])
 
-  const timeSlots = [
-    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
-    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
-  ]
+  const serviceParams = useMemo(() => {
+    let serviceId = null
+    let serviceSlug = null
+    let packageId = null
+    let categorySlug = category?.slug || category?.id || null
+
+    if (cart && cart.length > 0) {
+      for (const item of cart) {
+        if (item.service_id) serviceId = item.service_id
+        if (item.serviceId) serviceId = item.serviceId
+        if (item.service_slug) serviceSlug = item.service_slug
+        if (item.serviceSlug) serviceSlug = item.serviceSlug
+        if (item.service && typeof item.service === "object") {
+          serviceId = item.service.id || serviceId
+          serviceSlug = item.service.slug || serviceSlug
+        } else if (item.service && (typeof item.service === "string" || typeof item.service === "number")) {
+          serviceId = item.service
+        }
+        if (item.package_id) packageId = item.package_id
+        if (item.packageId) packageId = item.packageId
+        if (item.package) packageId = item.package
+        if (item.catalog_service_id) {
+          if (!serviceId && !packageId) packageId = item.catalog_service_id
+        }
+        if (!categorySlug) {
+          if (item.categorySlug) categorySlug = item.categorySlug
+          if (item.category_id) categorySlug = item.category_id
+          if (typeof item.category === "string") categorySlug = item.category
+          if (item.category && item.category.slug) categorySlug = item.category.slug
+        }
+      }
+    }
+
+    if (!categorySlug) {
+      const resolvedCat = resolveCategoryFromCart(category, cart)
+      categorySlug = resolvedCat?.slug || resolvedCat?.id || null
+    }
+
+    return {
+      serviceId: serviceId || serviceSlug,
+      packageId,
+      categorySlug
+    }
+  }, [category, cart])
+
+  useEffect(() => {
+    let isCurrent = true
+    const fetchSlots = async () => {
+      const dateToFetch = selectedDate || (availableDates[0] ? availableDates[0].dateStr : "")
+      if (!dateToFetch) return
+
+      setLoadingSlots(true)
+      setSlotFetchError(null)
+
+      try {
+        const queryParams = new URLSearchParams()
+        queryParams.set("date", dateToFetch)
+        if (serviceParams.serviceId) queryParams.set("service_id", serviceParams.serviceId)
+        if (serviceParams.categorySlug) queryParams.set("category", serviceParams.categorySlug)
+        if (serviceParams.packageId) queryParams.set("package_id", serviceParams.packageId)
+
+        const targetServiceParam = serviceParams.serviceId || "resolve"
+        const res = await apiRequest(`/services/${targetServiceParam}/time-slots/?${queryParams.toString()}`)
+
+        if (!isCurrent) return
+
+        if (res && res.success && res.data) {
+          setSlotData(res.data)
+          // If the previously selected time is not among the available slots, clear selection
+          if (selectedTime) {
+            const allAvailable = [
+              ...(res.data.groups?.morning || []),
+              ...(res.data.groups?.afternoon || []),
+              ...(res.data.groups?.evening || []),
+            ].filter(s => s.available).map(s => s.time)
+
+            if (!allAvailable.includes(selectedTime)) {
+              onTimeChange("")
+            }
+          }
+        } else {
+          setSlotData(null)
+          setSlotFetchError(res?.message || "Unable to load time slots for this service.")
+          if (selectedTime) onTimeChange("")
+        }
+      } catch (err) {
+        if (!isCurrent) return
+        setSlotData(null)
+        setSlotFetchError(err?.message || "Failed to load time slots.")
+        if (selectedTime) onTimeChange("")
+      } finally {
+        if (isCurrent) setLoadingSlots(false)
+      }
+    }
+
+    fetchSlots()
+    return () => { isCurrent = false }
+  }, [selectedDate, serviceParams, availableDates])
+
+  const timeSlotGroups = useMemo(() => {
+    if (!slotData?.groups) return []
+    return [
+      {
+        period: "Morning",
+        icon: "🌅",
+        slots: slotData.groups.morning || [],
+      },
+      {
+        period: "Afternoon",
+        icon: "☀️",
+        slots: slotData.groups.afternoon || [],
+      },
+      {
+        period: "Evening",
+        icon: "🌙",
+        slots: slotData.groups.evening || [],
+      },
+    ].filter(g => g.slots.length > 0)
+  }, [slotData])
+
+  const timeSlots = useMemo(() => {
+    if (slotData?.all_slots) {
+      return slotData.all_slots.map(s => s.time)
+    }
+    return timeSlotGroups.flatMap(g => g.slots.map(s => (typeof s === "string" ? s : s.time)))
+  }, [slotData, timeSlotGroups])
 
   const items = cart && cart.length > 0 ? cart : [{
     id: "def-1",
@@ -10853,6 +10696,114 @@ function StepWorkflowCheckout({
     price: (category?.id === "painting" || category?.id === "mason") ? 0 : 1198,
     quantity: 1
   }]
+
+  const estimationCartItem = items.find(
+    i => i.jobType === "ESTIMATION" ||
+         i.id === "serv-hvac-ac-inspection" ||
+         i.id === "ac-inspection" ||
+         i.id === "hvac-ac-inspection" ||
+         (i.ac_brand && i.ac_type)
+  );
+  const isEstimationBooking = Boolean(
+    category?.slug === "ac-inspection" ||
+    category?.id === "ac-inspection" ||
+    estimationCartItem
+  );
+
+  const [acBrand, setAcBrand] = useState(() => estimationCartItem?.ac_brand || "");
+  const [acType, setAcType] = useState(() =>
+    estimationCartItem?.ac_type_label ||
+    (String(estimationCartItem?.ac_type || "").toUpperCase().includes("WINDOW") ? "Window AC" : "Split AC")
+  );
+  const [acUnits, setAcUnits] = useState(() => Number(estimationCartItem?.quantity) || 1);
+  const inspectionUnitPrice = Number(estimationCartItem?.price) || 199;
+  const [acImages, setAcImages] = useState(() => estimationCartItem?.ac_images || []);
+  const [acImageFiles, setAcImageFiles] = useState([]);
+  const [acNotes, setAcNotes] = useState(() =>
+    estimationCartItem?.ac_notes ||
+    (estimationCartItem?.customer_symptom && !["AC Inspection requested", "AC Inspection & Diagnostic requested", "Not cooling"].includes(estimationCartItem.customer_symptom) ? estimationCartItem.customer_symptom : "") ||
+    ""
+  );
+
+  useEffect(() => {
+    if (estimationCartItem) {
+      if (estimationCartItem.ac_brand && estimationCartItem.ac_brand !== acBrand) {
+        setAcBrand(estimationCartItem.ac_brand);
+      }
+      if (estimationCartItem.quantity && Number(estimationCartItem.quantity) !== acUnits) {
+        setAcUnits(Number(estimationCartItem.quantity));
+      }
+      if (estimationCartItem.ac_type_label && estimationCartItem.ac_type_label !== acType) {
+        setAcType(estimationCartItem.ac_type_label);
+      }
+    }
+  }, [estimationCartItem?.ac_brand, estimationCartItem?.ac_type_label, estimationCartItem?.quantity]);
+
+  const updateEstimationInCart = (updatedFields) => {
+    setCart(prev => {
+      const current = prev || [];
+      return current.map(item => {
+        const isEst = item.jobType === "ESTIMATION" || item.id === "serv-hvac-ac-inspection" || item.id === "ac-inspection" || (item.ac_brand && item.ac_type);
+        if (!isEst) return item;
+        const nextQty = updatedFields.quantity !== undefined ? updatedFields.quantity : (item.quantity || 1);
+        const nextBrand = updatedFields.brand !== undefined ? updatedFields.brand : (item.ac_brand || "");
+        const nextType = updatedFields.type !== undefined ? updatedFields.type : (item.ac_type_label || "Split AC");
+        const nextNotes = updatedFields.notes !== undefined ? updatedFields.notes : (item.ac_notes || "");
+        const nextImages = updatedFields.images !== undefined ? updatedFields.images : (item.ac_images || []);
+        const nextFile = updatedFields.primaryFile !== undefined ? updatedFields.primaryFile : item.primaryFile;
+        const nextPreview = updatedFields.primaryPreview !== undefined ? updatedFields.primaryPreview : item.primaryPreview;
+
+        const dynamicDesc = nextBrand
+          ? `${nextType} (${nextBrand}) • ${nextQty} Unit${nextQty > 1 ? 's' : ''}`
+          : `${nextType} • ${nextQty} Unit${nextQty > 1 ? 's' : ''}`;
+
+        return {
+          ...item,
+          quantity: nextQty,
+          ac_brand: nextBrand,
+          ac_type: (nextType || "").toUpperCase().includes("WINDOW") ? "WINDOW" : "SPLIT",
+          ac_type_label: nextType,
+          ac_quantity: nextQty,
+          ac_images: nextImages,
+          ac_notes: nextNotes,
+          customer_symptom: nextNotes || "AC Inspection requested",
+          primaryFile: nextFile,
+          primaryPreview: nextPreview,
+          description: dynamicDesc,
+        };
+      });
+    });
+  };
+
+  const handleInlineImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const previewUrl = uploadEvent.target.result;
+        setAcImages(prev => {
+          const next = [...prev, previewUrl];
+          updateEstimationInCart({ images: next, primaryPreview: next[0], primaryFile: files[0] });
+          return next;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setAcImageFiles(prev => [...prev, ...files]);
+    e.target.value = "";
+  };
+
+  const handleRemoveInlineImage = (idxToRemove) => {
+    setAcImages(prev => {
+      const next = prev.filter((_, idx) => idx !== idxToRemove);
+      updateEstimationInCart({ images: next, primaryPreview: next[0] || null });
+      return next;
+    });
+    setAcImageFiles(prev => prev.filter((_, idx) => idx !== idxToRemove));
+  };
 
   const categoryKey = useMemo(() => {
     const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
@@ -10898,6 +10849,7 @@ function StepWorkflowCheckout({
   const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
   const displayCategoryTitle = useMemo(() => {
+    if (category?.name && category.name !== "General Service") return category.name;
     if (cart && cart.length > 0) {
       if (cart[0].categoryName) return cart[0].categoryName;
       const first = (cart[0].id + " " + cart[0].name + " " + (cart[0].category || "")).toLowerCase();
@@ -11116,6 +11068,208 @@ function StepWorkflowCheckout({
               })()}
             </div>
 
+            {/* Step: AC Inspection Details (Inline on Booking / Time Slot Page) */}
+            {isEstimationBooking && (
+              <div
+                id="inline-ac-inspection-section"
+                className="p-5 bg-gradient-to-br from-emerald-50/50 via-white to-slate-50/60 border-t border-slate-100 transition-all rounded-xl"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200/80 flex items-center justify-center font-black shrink-0 mt-0.5 shadow-2xs">
+                    <Wrench size={18} />
+                  </div>
+
+                  <div className="flex-1 space-y-4">
+                    {/* Header */}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-black text-slate-900 tracking-tight">
+                          AC Inspection Details
+                        </h3>
+                        <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                          ₹{inspectionUnitPrice} / AC Visit
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Provide your AC details for our certified technician's diagnostic visit
+                      </p>
+                    </div>
+
+                    {/* 1. AC Brand */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        1. AC Brand <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={acBrand}
+                          onChange={(e) => {
+                            setAcBrand(e.target.value);
+                            updateEstimationInCart({ brand: e.target.value });
+                          }}
+                          className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 transition-all appearance-none cursor-pointer shadow-2xs"
+                        >
+                          <option value="" disabled>Select AC Brand</option>
+                          {AC_BRANDS_LIST.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={16}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. AC Type */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        2. AC Type <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {["Split AC", "Window AC"].map((t) => {
+                          const isSelected = acType === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                setAcType(t);
+                                updateEstimationInCart({ type: t });
+                              }}
+                              className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all cursor-pointer border flex items-center justify-center gap-2 ${
+                                isSelected
+                                  ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                              }`}
+                            >
+                              {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                              <span>{t}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3. How Many ACs? */}
+                    <div>
+                      <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-1.5">
+                        3. How Many ACs? <span className="text-emerald-600">*</span>
+                      </label>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Inspection Units</span>
+                          <span className="text-[11px] font-semibold text-emerald-700">
+                            ₹{(inspectionUnitPrice * acUnits).toLocaleString("en-IN")} total (₹{inspectionUnitPrice} per AC)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newQty = Math.max(1, acUnits - 1);
+                              setAcUnits(newQty);
+                              updateEstimationInCart({ quantity: newQty });
+                            }}
+                            disabled={acUnits <= 1}
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-extrabold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed active:scale-95"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black text-slate-900 min-w-[16px] text-center">
+                            {acUnits}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newQty = acUnits + 1;
+                              setAcUnits(newQty);
+                              updateEstimationInCart({ quantity: newQty });
+                            }}
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-extrabold cursor-pointer active:scale-95"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Upload AC Images (Optional) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          4. Upload AC Images
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Optional
+                        </span>
+                      </div>
+
+                      <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white transition-all group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleInlineImageUpload}
+                          className="hidden"
+                        />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-emerald-50 text-slate-500 group-hover:text-emerald-600 flex items-center justify-center transition-colors">
+                          <Camera size={16} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">
+                          Click to upload or take AC photos
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Helps technician prepare required diagnostic tools
+                        </span>
+                      </label>
+
+                      {acImages.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {acImages.map((img, idx) => (
+                            <div key={idx} className="relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden group shadow-2xs">
+                              <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveInlineImage(idx)}
+                                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-rose-600 text-white rounded-full flex items-center justify-center transition-all cursor-pointer"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Notes / Reported Issue */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          5. Describe Issue / Notes
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Optional
+                        </span>
+                      </div>
+                      <textarea
+                        value={acNotes}
+                        onChange={(e) => {
+                          setAcNotes(e.target.value);
+                          updateEstimationInCart({ notes: e.target.value });
+                        }}
+                        placeholder="Describe any issue or requirement (e.g. AC not cooling, strange rattling noise, water leaking from indoor unit...)"
+                        rows={3}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 transition-all resize-none shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Step 3: Slot (Time & Date) */}
             <div className="p-5">
               <div className="flex items-start gap-4">
@@ -11123,20 +11277,19 @@ function StepWorkflowCheckout({
                   <Clock size={18} />
                 </div>
                 <div className="flex-1">
-                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
-
-                  {/* Select button or current slot */}
-                  {isSlotSelected && !showSlotPicker ? (
-                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
-                      <div>
-                        <span className="text-xs font-black text-indigo-950 block">
-                          {selectedDate}
+                  {/* Slot Header / Summary Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Slot</span>
+                      {isSlotSelected && (
+                        <span className="text-[9.5px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Selected
                         </span>
-                        <span className="text-xs font-bold text-indigo-700">
-                          {selectedTime}
-                        </span>
-                      </div>
+                      )}
+                    </div>
+                    {isSlotSelected && !showSlotPicker ? (
                       <button
+                        type="button"
                         onClick={() => {
                           const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
                           if (!hasAddr) {
@@ -11146,26 +11299,56 @@ function StepWorkflowCheckout({
                           }
                           setShowSlotPicker(true);
                         }}
-                        className="text-xs font-bold text-indigo-600 hover:underline"
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
                       >
-                        Change slot
+                        Change
+                      </button>
+                    ) : showSlotPicker && isSlotSelected ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowSlotPicker(false)}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Done
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Summary when slot is selected and picker is closed */}
+                  {isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-extrabold text-slate-800">
+                        {availableDates.find(d => d.dateStr === selectedDate)?.label || selectedDate}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">•</span>
+                      <span className="text-xs font-extrabold text-indigo-700">
+                        {selectedTime}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Clean row when slot is not yet selected and picker is closed */}
+                  {!isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs font-medium text-slate-400">
+                        No time slot selected yet
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                          if (!hasAddr) {
+                            setShowAddressDrawer(true);
+                            setSlotRevalidateNotice("Please select your service address first to check availability.");
+                            return;
+                          }
+                          setShowSlotPicker(true);
+                        }}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Choose Slot
                       </button>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
-                        if (!hasAddr) {
-                          setShowAddressDrawer(true);
-                          setSlotRevalidateNotice("Please select your service address first to check availability.");
-                          return;
-                        }
-                        setShowSlotPicker(true);
-                      }}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
-                    >
-                      Select time & date
-                    </button>
                   )}
 
                   {slotRevalidateNotice && (
@@ -11177,7 +11360,7 @@ function StepWorkflowCheckout({
 
                   {/* Inline Slot Picker Panel */}
                   {showSlotPicker && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4">
 
                       {/* Date Pills */}
                       <div>
@@ -11230,8 +11413,8 @@ function StepWorkflowCheckout({
                                 className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
                                   ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
                                   : isSel
-                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
-                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
                                   }`}
                               >
                                 {t}
@@ -11811,7 +11994,7 @@ function StepWorkflowCheckout({
 
               {dbCoupons.length === 0 ? (
                 <div className="text-center py-8 text-xs font-bold text-slate-400">
-                  No active database coupons available at the moment.
+                  No active coupons available at the moment.
                 </div>
               ) : (
                 dbCoupons.map(cpn => {
@@ -12035,6 +12218,14 @@ export function BookingPage() {
   const trackParam = !hasIncomingOrder && (queryTrack || storedTrackingId || (storedBookingData ? (storedBookingData.request_id || storedBookingData.id) : null))
   const isTrackingActive = Boolean(!hasIncomingOrder && (trackParam || storedBookingData || routerLocation.state?.isTracking))
 
+  // Multi-service cart bag (Sept 2026): lets a customer stash this
+  // category's finished cart and go add a DIFFERENT category (e.g. AC
+  // Service, then TV Repair) into the SAME booking -- see
+  // MultiServiceCartProvider.jsx and confirmBooking() below. Empty for the
+  // normal single-category flow, so nothing here changes existing behaviour
+  // unless the customer actually uses "Add Another Service".
+  const multiServiceCart = useMultiServiceCart()
+
   const [cart, setCart] = useState(() => {
     if (incomingCart && incomingCart.length > 0) {
       try { localStorage.setItem("calservices_customer_cart", JSON.stringify(incomingCart)) } catch (e) { }
@@ -12116,6 +12307,9 @@ export function BookingPage() {
         setSuccessData(storedBookingData);
         setStep(0);
       } else if (trackParam) {
+        const storedToken = storedBookingData?.tracking_token || sessionStorage.getItem("active_tracking_token") || sessionStorage.getItem("caltrack_tracking_token") || "";
+        const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : "";
+        apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/${tokenQuery}`)
         apiRequest(`/booking/${encodeURIComponent(trackParam)}/live-location/`)
           .then(res => {
             if (res?.data) {
@@ -12477,6 +12671,10 @@ export function BookingPage() {
   // pause and ask -- the backend's unified checkout never infers this on
   // its own, so neither does this.
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
+    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
+      setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
+      return
+    }
     return performServiceSubmit(paymentMethod, couponCode, tipValue, couponObj, checkoutBothConfirmed)
   }
 
@@ -12511,18 +12709,33 @@ export function BookingPage() {
     }
     setLoading(true); setError(null);
     // Map frontend choices to backend enum values
-    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD";
+    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
 
-    const finalCustomerName = (formData.customer_name && formData.customer_name.trim())
-      ? formData.customer_name.trim()
-      : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer");
-    const finalPhone = rawPhone ? rawPhone.slice(-10) : (user?.phone || "");
+    const effectiveCart = (cart && cart.length > 0) ? cart : [{
+      id: "def-1",
+      name: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
+      price: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? 0 : 1198,
+      quantity: 1,
+      gst_rate: (category?.id === "painting" || category?.id === "mason") ? 0 : 18,
+      platform_fee: (category?.id === "painting" || category?.id === "mason") ? 0 : 29,
+      is_consultation: Boolean(category?.is_consultation || category?.id === "painting" || category?.id === "mason")
+    }];
 
-    const data = new FormData();
-    data.append("customer_name", finalCustomerName);
-    data.append("phone", finalPhone);
-    data.append("email", formData.email || user?.email || "");
-    data.append("service_category", category?.id || "general");
+    const customerName = (formData.customer_name || user?.name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : '') || user?.username || "Customer").trim();
+    const customerPhone = (formData.phone || user?.phone || user?.mobile_number || "").trim();
+    const customerEmail = (formData.email || user?.email || "").trim();
+
+    let savedAddr = null;
+    try { savedAddr = getCustomerSelectedAddress(user?.id); } catch (_) {}
+    const finalAddress = (formData.address || savedAddr?.formatted_address || savedAddr?.address || "Hosur, Tamil Nadu").trim();
+    const finalLat = formData.latitude || (savedAddr?.latitude ? String(savedAddr.latitude) : "12.740916");
+    const finalLng = formData.longitude || (savedAddr?.longitude ? String(savedAddr.longitude) : "77.825292");
+
+    const data = new FormData()
+    data.append("customer_name", customerName)
+    data.append("phone", customerPhone)
+    data.append("email", customerEmail)
+    data.append("service_category", category?.id || "general")
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
@@ -12575,9 +12788,9 @@ export function BookingPage() {
     console.log("CONFIRM BOOKING CLICKED");
     console.log("API URL: /api/booking/");
     console.log("METHOD: POST");
-    console.log("customer_name:", formData.customer_name);
-    console.log("phone:", formData.phone);
-    console.log("email:", formData.email);
+    console.log("customer_name:", customerName);
+    console.log("phone:", customerPhone);
+    console.log("email:", customerEmail);
     console.log("service_category:", category?.id || "general");
     console.log("issue_title:", finalIssueTitle);
     console.log("cart_data item count:", cart?.length || 0);
@@ -12606,16 +12819,23 @@ export function BookingPage() {
     if (formData.saved_address_id) {
       data.append("saved_address_id", formData.saved_address_id)
     }
-    if (formData.latitude) {
-      const parsedLat = parseFloat(formData.latitude);
-      data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : formData.latitude);
-    }
-    if (formData.longitude) {
-      const parsedLon = parseFloat(formData.longitude);
-      data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : formData.longitude);
-    }
+    const parsedLat = parseFloat(finalLat);
+    data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.740916");
+    const parsedLon = parseFloat(finalLng);
+    data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.825292");
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
+    let explicitServiceId = null
+    if (effectiveCart && effectiveCart.length > 0) {
+      for (const item of effectiveCart) {
+        if (item.service_id) explicitServiceId = item.service_id
+        else if (item.serviceId) explicitServiceId = item.serviceId
+        else if (item.service_slug) explicitServiceId = item.service_slug
+      }
+    }
+    if (explicitServiceId) {
+      data.append("service_id", explicitServiceId)
+    }
     data.append("total_amount", calculatedGrandTotal)
     data.append("item_total", itemTotal)
     data.append("gst_amount", totalGst)
@@ -12653,6 +12873,25 @@ export function BookingPage() {
       data.append("coupon_code", couponCode)
     }
     if (photoFile) data.append("photo", photoFile)
+
+    if (isEstimation) {
+      const estItem = (cart && cart.find(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection")))) || (cart && cart[0]) || {};
+      data.append("job_type", "ESTIMATION");
+      data.append("estimation_fee", String(estItem.price || dynamicAcInspectionFee || "199"));
+      const rawAc = String(estItem.ac_type || "SPLIT").toUpperCase();
+      const normalizedAcType = rawAc.includes("WINDOW") ? "WINDOW" : (rawAc.includes("SPLIT") ? "SPLIT" : (rawAc.includes("CASSETTE") ? "CASSETTE" : (rawAc.includes("TOWER") ? "TOWER" : "SPLIT")));
+      data.append("ac_type", normalizedAcType);
+      data.append("ac_brand", estItem.ac_brand || "Other");
+      data.append("ac_quantity", String(estItem.ac_quantity || estItem.quantity || 1));
+      const rawCap = String(estItem.ac_capacity || "1.5_TON").toUpperCase().replace(" ", "_");
+      data.append("ac_capacity", ["1_TON", "1.5_TON", "2_TON", "OTHER"].includes(rawCap) ? rawCap : "1.5_TON");
+      const symptom = estItem.customer_symptom || estItem.ac_notes || "AC Inspection & Diagnostic requested";
+      data.append("customer_symptom", symptom);
+      if (estItem.ac_notes) data.append("customer_notes", estItem.ac_notes);
+      if (estItem.primaryFile && !photoFile) {
+        data.append("photo", estItem.primaryFile);
+      }
+    }
 
     // Phase 3 combined checkout: POST /api/orders/checkout/ instead of
     // /api/booking/, wrapping the same fields as a JSON object under
@@ -12963,6 +13202,19 @@ export function BookingPage() {
                 setShowCustomerEntryModal(true)
               }
             }}
+            onAddAnotherService={() => {
+              // Stash this category's cart into the shared multi-service bag,
+              // then send the customer back to category selection (step 1)
+              // to pick a different service for the SAME booking. The bag
+              // (and whatever the customer adds next) is combined at
+              // confirmBooking() time -- see there for the /booking/multi/
+              // branch.
+              multiServiceCart.addGroup(category?.id, category?.name, cart)
+              setCart([])
+              setCategory(null)
+              setStep(1)
+            }}
+            bagItemCount={multiServiceCart.bagItemCount}
           />
         )}
       </AnimatePresence>
@@ -13425,6 +13677,26 @@ export function BookingPage() {
           }}
         />
       )}
+
+      {/* Combined Services + Daily Essentials checkout confirmation modal */}
+      <CombinedCheckoutConfirmModal
+        isOpen={combinedCheckoutPrompt !== null}
+        onClose={() => setCombinedCheckoutPrompt(null)}
+        onChoose={(choice) => {
+          const args = combinedCheckoutPrompt
+          setCombinedCheckoutPrompt(null)
+          if (!args) return
+          if (choice === "both") {
+            setCheckoutBothConfirmed(true)
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, true)
+          } else {
+            performServiceSubmit(args.paymentMethod, args.couponCode, args.tipValue, args.couponObj, false)
+          }
+        }}
+        thisCartLabel="your service booking"
+        otherCartLabel="a grocery order"
+        disableBothReason={photoFile ? "a photo was attached to your service request" : undefined}
+      />
     </div>
   )
 }
@@ -13581,10 +13853,10 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
               <span>Included Services</span>
             </div>
             <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
-              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
-                <li key={inc} className="flex items-start gap-1.5">
+              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map((inc, i) => (
+                <li key={i} className="flex items-start gap-1.5">
                   <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
-                  <span>{inc}</span>
+                  <span>{typeof inc === 'object' ? (inc?.text || inc?.name || '') : String(inc || '')}</span>
                 </li>
               ))}
             </ul>
@@ -18950,13 +19222,41 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
+    try {
+      const c = localStorage.getItem("calservices_ac_inspection_fee");
+      return c && !isNaN(Number(c)) ? Number(c) : 199;
+    } catch (_) {
+      return 199;
+    }
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicFee() {
+      try {
+        const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
+        if (isMounted && res?.data?.diagnostic_fee != null) {
+          const fee = Number(res.data.diagnostic_fee);
+          setDynamicAcInspectionFee(fee);
+          try {
+            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+          } catch (_) {}
+        }
+      } catch (e) {
+        console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
+      }
+    }
+    loadDynamicFee();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleAcInspectionSubmit = (inspectionData) => {
     setShowAcInspectionModal(false);
     setSelectedPackageDetail(null);
 
     const inspectionCartId = "serv-hvac-ac-inspection";
-    const unitPrice = Number(inspectionData.price) || 199;
+    const unitPrice = Number(inspectionData.price) || dynamicAcInspectionFee || 199;
     const qty = Math.max(1, Number(inspectionData.quantity) || 1);
 
     const remainingCart = cart.filter(c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection");
@@ -20247,10 +20547,11 @@ export function CustomCleaningPackageModal({
 
     // Guarantee that AC Inspection tab always displays ONLY ONE single service card
     if (activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection") {
-      const baseInspection = OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {
+      const baseInspection = {
+        ...(OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {}),
         id: "hvac-ac-inspection",
         name: "AC Inspection",
-        price: 199,
+        price: dynamicAcInspectionFee || 199,
         duration: "45 mins",
         badge: "Certified Inspection",
         badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -20271,7 +20572,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData, dynamicAcInspectionFee]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -22020,6 +22321,13 @@ export function CustomCleaningPackageModal({
                 onClick={() => {
                   const isDetailAcInspection = (selectedPackageDetail.id === "hvac-ac-inspection" || selectedPackageDetail.name === "AC Inspection" || activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection");
                   if (isDetailAcInspection) {
+                    handleAcInspectionSubmit({
+                      brand: "Daikin",
+                      type: "Split AC",
+                      quantity: 1,
+                      price: selectedPackageDetail.price || 199
+                    });
+                    setSelectedPackageDetail(null);
                     setActiveAcInspectionItem(selectedPackageDetail);
                     setShowAcInspectionModal(true);
                     return;
@@ -22058,7 +22366,7 @@ export function CustomCleaningPackageModal({
           quantity: formData?.ac_quantity || 1,
           notes: formData?.ac_notes || ""
         }}
-        basePrice={activeAcInspectionItem?.price || 199}
+        basePrice={activeAcInspectionItem?.price || dynamicAcInspectionFee || 199}
       />
     </div>
   );

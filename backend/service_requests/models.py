@@ -1,10 +1,19 @@
 import uuid
+import datetime
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models, transaction, IntegrityError
 from django.utils import timezone
+import inspect
+
+
+def _make_check_constraint(expr, name):
+    if "condition" in inspect.signature(models.CheckConstraint.__init__).parameters:
+        return models.CheckConstraint(condition=expr, name=name)
+    return models.CheckConstraint(check=expr, name=name)
+
 
 
 # ── Category prefix mapping for unique human-readable Service Request IDs ────
@@ -631,6 +640,11 @@ class ServiceRequest(models.Model):
     last_dispatch_error = models.TextField(blank=True, default="", help_text="Last recorded dispatch error message")
     last_dispatched_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of latest dispatch attempt")
 
+    # Delay tracking
+    is_delayed = models.BooleanField(default=False)
+    delay_reason = models.CharField(max_length=255, blank=True, default="")
+    delay_reported_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -736,6 +750,23 @@ class ServiceRequest(models.Model):
             ]:
                 return False
         return True
+
+    def get_service_category_display(self):
+        cat = str(self.service_category or "").strip()
+        display_map = {
+            "hvac": "AC Inspection & Repair",
+            "plumbing": "Plumbing",
+            "electrical": "Electrical",
+            "cleaning": "Cleaning",
+            "painting": "Painting & Waterproofing",
+            "carpentry": "Carpentry",
+            "appliance_repair": "Appliance Repair",
+            "pest_control": "Pest Control",
+            "packers_movers": "Packers & Movers",
+        }
+        if cat in display_map:
+            return display_map[cat]
+        return cat.replace("_", " ").title()
 
     def __str__(self):
         return f"{self.request_id} — {self.issue_title}"
@@ -3313,6 +3344,111 @@ class TechnicianLocation(models.Model):
     def __str__(self):
         return f"Loc for {self.booking.request_id} ({self.latitude}, {self.longitude}) at {self.created_at}"
 
+
+# ==============================================================================
+# AC INSPECTION RATE CARD & SPARE PARTS MODELS (POSTGRESQL SINGLE SOURCE OF TRUTH)
+# ==============================================================================
+
+class ACInspectionRateCategory(models.Model):
+    """
+    Relational category for AC spare parts and repair services.
+    PostgreSQL is the single source of truth (no hardcoded category list).
+    """
+    name = models.CharField(max_length=150)
+    slug = models.SlugField(max_length=100, unique=True, db_index=True)
+    description = models.TextField(blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        verbose_name = "AC Inspection Rate Category"
+        verbose_name_plural = "AC Inspection Rate Categories"
+
+    def __str__(self):
+        return f"{self.name} ({self.slug})"
+
+
+class ACInspectionRateItem(models.Model):
+    """
+    Individual spare part or repair service item stored in PostgreSQL.
+    Validated DecimalField for money, units, service types, and display ordering.
+    """
+    SERVICE_TYPE_CHOICES = [
+        ("SPARE_PART", "Spare Part"),
+        ("LABOR", "Labor / Service"),
+        ("REPAIR", "Repair"),
+        ("INSTALLATION", "Installation"),
+        ("ADJUSTMENT", "Adjustment / Maintenance"),
+    ]
+
+    category = models.ForeignKey(
+        ACInspectionRateCategory,
+        on_delete=models.PROTECT,
+        related_name="items",
+        help_text="Category this rate item belongs to"
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50, blank=True, default="per piece")
+    service_type = models.CharField(max_length=50, blank=True, default="SPARE_PART", choices=SERVICE_TYPE_CHOICES)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        verbose_name = "AC Inspection Rate Item"
+        verbose_name_plural = "AC Inspection Rate Items"
+        constraints = [
+            _make_check_constraint(
+                models.Q(price__gte=Decimal("0.00")),
+                name="check_ac_rate_item_price_gte_0"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.category.name}] {self.name} (₹{self.price})"
+
+
+class ACInspectionConfiguration(models.Model):
+    """
+    Authoritative configuration for AC Inspection & Diagnostic fees.
+    """
+    diagnostic_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("199.00"),
+        help_text="Authoritative doorstep inspection fee"
+    )
+    currency = models.CharField(max_length=10, default="INR")
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AC Inspection Configuration"
+        verbose_name_plural = "AC Inspection Configurations"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(
+            id=1,
+            defaults={"diagnostic_fee": Decimal("199.00"), "currency": "INR", "is_active": True}
+        )
+        return obj
+
+    def __str__(self):
+        return f"AC Inspection Fee: {self.currency} {self.diagnostic_fee}"
+
+
 # ==============================================================================
 # AC INSPECTION / ESTIMATION SYSTEM MODELS (PHASE 2)
 # ==============================================================================
@@ -3323,19 +3459,27 @@ class Estimation(models.Model):
     Maintains a 1:1 relationship with ServiceRequest (the authoritative job).
     """
     class Status(models.TextChoices):
-        REQUESTED              = "REQUESTED",              "Requested"
-        VENDOR_CONFIRMED       = "VENDOR_CONFIRMED",       "Vendor Confirmed"
-        TECHNICIAN_ASSIGNED    = "TECHNICIAN_ASSIGNED",    "Technician Assigned"
-        TECHNICIAN_ON_THE_WAY  = "TECHNICIAN_ON_THE_WAY",  "Technician On The Way"
-        TECHNICIAN_ARRIVED     = "TECHNICIAN_ARRIVED",     "Technician Arrived"
-        INSPECTION_IN_PROGRESS = "INSPECTION_IN_PROGRESS", "Inspection In Progress"
-        INSPECTION_COMPLETED   = "INSPECTION_COMPLETED",   "Inspection Completed"
-        QUOTATION_SENT         = "QUOTATION_SENT",         "Quotation Sent"
-        CUSTOMER_APPROVED      = "CUSTOMER_APPROVED",      "Customer Approved"
-        CUSTOMER_REJECTED      = "CUSTOMER_REJECTED",      "Customer Rejected"
-        CONVERTED_TO_SERVICE   = "CONVERTED_TO_SERVICE",   "Converted to Service"
-        CLOSED                 = "CLOSED",                 "Closed"
-        CANCELLED              = "CANCELLED",              "Cancelled"
+        REQUESTED               = "REQUESTED",               "Requested"
+        VENDOR_CONFIRMED        = "VENDOR_CONFIRMED",        "Vendor Confirmed"
+        TECHNICIAN_ASSIGNED     = "TECHNICIAN_ASSIGNED",     "Technician Assigned"
+        TECHNICIAN_ON_THE_WAY   = "TECHNICIAN_ON_THE_WAY",   "Technician On The Way"
+        TECHNICIAN_ARRIVED      = "TECHNICIAN_ARRIVED",      "Technician Arrived"
+        INSPECTION_IN_PROGRESS  = "INSPECTION_IN_PROGRESS",  "Inspection In Progress"
+        INSPECTION_COMPLETED    = "INSPECTION_COMPLETED",    "Inspection Completed"
+        ESTIMATION_SUBMITTED    = "ESTIMATION_SUBMITTED",    "Estimation Submitted"
+        ADMIN_APPROVED          = "ADMIN_APPROVED",          "Admin Approved"
+        SENT_BACK_TO_TECHNICIAN = "SENT_BACK_TO_TECHNICIAN", "Sent Back to Technician"
+        CUSTOMER_PENDING        = "CUSTOMER_PENDING",        "Customer Pending"
+        QUOTATION_SENT          = "QUOTATION_SENT",          "Quotation Sent"
+        CUSTOMER_APPROVED       = "CUSTOMER_APPROVED",       "Customer Approved"
+        CUSTOMER_REJECTED       = "CUSTOMER_REJECTED",       "Customer Rejected"
+        REPAIR_AUTHORIZED       = "REPAIR_AUTHORIZED",       "Repair Authorized"
+        TECHNICIAN_REPAIR       = "TECHNICIAN_REPAIR",       "Technician Repair"
+        TESTING                 = "TESTING",                 "Testing"
+        CONVERTED_TO_SERVICE    = "CONVERTED_TO_SERVICE",    "Converted to Service"
+        COMPLETED               = "COMPLETED",               "Completed"
+        CLOSED                  = "CLOSED",                  "Closed"
+        CANCELLED               = "CANCELLED",               "Cancelled"
 
     service_request = models.OneToOneField(
         ServiceRequest,
@@ -3367,8 +3511,8 @@ class Estimation(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(ac_quantity__gte=1),
+            _make_check_constraint(
+                models.Q(ac_quantity__gte=1),
                 name="check_estimation_ac_quantity_gte_1"
             )
         ]
@@ -3431,8 +3575,8 @@ class EstimationFee(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(amount__gte=Decimal("0.00")),
                 name="check_estimation_fee_amount_gte_0"
             )
         ]
@@ -3580,13 +3724,16 @@ class EstimationQuotation(models.Model):
     Supports concurrency-safe versioning (V1, V2, etc.) per Estimation.
     """
     class Status(models.TextChoices):
-        DRAFT      = "DRAFT",      "Draft"
-        SENT       = "SENT",       "Sent to Customer"
-        APPROVED   = "APPROVED",   "Approved"
-        REJECTED   = "REJECTED",   "Rejected"
-        SUPERSEDED = "SUPERSEDED", "Superseded"
-        EXPIRED    = "EXPIRED",    "Expired"
-        CANCELLED  = "CANCELLED",  "Cancelled"
+        DRAFT                   = "DRAFT",                   "Draft"
+        SUBMITTED_FOR_REVIEW    = "SUBMITTED_FOR_REVIEW",    "Submitted for Review"
+        ADMIN_APPROVED          = "ADMIN_APPROVED",          "Admin Approved"
+        SENT_BACK_TO_TECHNICIAN = "SENT_BACK_TO_TECHNICIAN", "Sent Back to Technician"
+        SENT                    = "SENT",                    "Sent to Customer"
+        APPROVED                = "APPROVED",                "Approved"
+        REJECTED                = "REJECTED",                "Rejected"
+        SUPERSEDED              = "SUPERSEDED",              "Superseded"
+        EXPIRED                 = "EXPIRED",                 "Expired"
+        CANCELLED               = "CANCELLED",               "Cancelled"
 
     class RejectionReason(models.TextChoices):
         PRICE_TOO_HIGH    = "PRICE_TOO_HIGH",    "Price Too High"
@@ -3602,7 +3749,7 @@ class EstimationQuotation(models.Model):
     version = models.PositiveSmallIntegerField(default=1)
     quote_ref = models.CharField(max_length=100, unique=True, db_index=True)
     status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=Status.choices,
         default=Status.DRAFT,
         db_index=True
@@ -3616,6 +3763,15 @@ class EstimationQuotation(models.Model):
     currency = models.CharField(max_length=10, default="INR")
     notes = models.TextField(blank=True, default="")
     valid_until = models.DateField(null=True, blank=True)
+    admin_notes = models.TextField(blank=True, default="", help_text="Review comments or send-back instructions from admin")
+    admin_reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_quotations"
+    )
     customer_approved_at = models.DateTimeField(null=True, blank=True)
     customer_rejected_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.CharField(
@@ -3635,24 +3791,24 @@ class EstimationQuotation(models.Model):
                 fields=["estimation", "version"],
                 name="unique_estimation_quotation_version"
             ),
-            models.CheckConstraint(
-                condition=models.Q(subtotal__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(subtotal__gte=Decimal("0.00")),
                 name="check_quotation_subtotal_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quotation_tax_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quotation_discount_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(total_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(total_amount__gte=Decimal("0.00")),
                 name="check_quotation_total_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(version__gte=1),
+            _make_check_constraint(
+                models.Q(version__gte=1),
                 name="check_quotation_version_gte_1"
             ),
         ]
@@ -3683,12 +3839,24 @@ class EstimationQuotationItem(models.Model):
         blank=True,
         related_name="quotation_items"
     )
+    rate_item = models.ForeignKey(
+        "ACInspectionRateItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="quotation_snapshots",
+        help_text="Reference to original AC rate item if quoted from rate card",
+    )
     catalog_service_id = models.CharField(max_length=100, blank=True, default="", help_text="Catalog service or package ID")
     service_name = models.CharField(max_length=255, help_text="Snapshot of service name")
+    category_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of category name at quote creation")
+    item_name_snapshot = models.CharField(max_length=255, blank=True, default="", help_text="Immutable snapshot of part/service name at quote creation")
     description = models.TextField(blank=True, default="")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
     unit = models.CharField(max_length=50, blank=True, default="job")
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_price_snapshot = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Immutable snapshot of unit price")
+    selected_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when technician selected this item")
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -3699,24 +3867,24 @@ class EstimationQuotationItem(models.Model):
     class Meta:
         ordering = ["sort_order", "id"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(quantity__gt=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(quantity__gt=Decimal("0.00")),
                 name="check_quote_item_quantity_gt_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(unit_price__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(unit_price__gte=Decimal("0.00")),
                 name="check_quote_item_unit_price_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(tax_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(tax_amount__gte=Decimal("0.00")),
                 name="check_quote_item_tax_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(discount_amount__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(discount_amount__gte=Decimal("0.00")),
                 name="check_quote_item_discount_gte_0"
             ),
-            models.CheckConstraint(
-                condition=models.Q(line_total__gte=Decimal("0.00")),
+            _make_check_constraint(
+                models.Q(line_total__gte=Decimal("0.00")),
                 name="check_quote_item_line_total_gte_0"
             ),
         ]
@@ -3766,3 +3934,205 @@ class EventOutbox(models.Model):
 
     def __str__(self):
         return f"Event {self.event_type} [{self.status}] on {self.aggregate_type}:{self.aggregate_id}"
+
+
+class CustomerInspection(models.Model):
+    """
+    Booking-specific customer inspection record.
+    1:1 relationship with ServiceRequest (service_request_id).
+    Common/unified model generic across service categories (AC, TV, Electrical, etc.).
+    Holds authoritative immutable snapshot of diagnostic fee and name at booking time.
+    """
+    class Status(models.TextChoices):
+        BOOKED      = "BOOKED",      "Booked"
+        ASSIGNED    = "ASSIGNED",    "Assigned"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
+        COMPLETED   = "COMPLETED",   "Completed"
+        CANCELLED   = "CANCELLED",   "Cancelled"
+
+    service_request = models.OneToOneField(
+        "ServiceRequest",
+        on_delete=models.CASCADE,
+        related_name="customer_inspection",
+        db_index=True,
+        help_text="The parent booking this inspection belongs to",
+    )
+    inspection_configuration = models.ForeignKey(
+        "ACInspectionConfiguration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_inspections",
+        db_index=True,
+        help_text="Reference to the master configuration used at booking time",
+    )
+    inspection_name_snapshot = models.CharField(
+        max_length=200,
+        default="AC Inspection & Diagnostic Visit",
+        help_text="Authoritative immutable snapshot of inspection title at booking time",
+    )
+    diagnostic_fee_snapshot = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("199.00"),
+        help_text="Authoritative diagnostic fee snapshot captured at booking confirmation",
+    )
+    currency = models.CharField(max_length=10, default="INR")
+    quantity = models.PositiveIntegerField(default=1)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.BOOKED,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["service_request"]),
+            models.Index(fields=["inspection_configuration"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"CustomerInspection #{self.id} for SR #{self.service_request_id} ({self.status}) - Fee: ₹{self.diagnostic_fee_snapshot}"
+
+
+class CustomerInspectionRateSnapshot(models.Model):
+    """
+    Relational rate-card item snapshot created at the moment of customer booking confirmation.
+    Contains individual relational rows for all active master rate-card items.
+    Allows vendor and technician applications to query the exact historical rate-card snapshot.
+    """
+    customer_inspection = models.ForeignKey(
+        CustomerInspection,
+        on_delete=models.CASCADE,
+        related_name="rate_snapshots",
+        db_index=True,
+    )
+    rate_item = models.ForeignKey(
+        "ACInspectionRateItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_snapshots",
+        db_index=True,
+    )
+    category_name_snapshot = models.CharField(max_length=150)
+    item_name_snapshot = models.CharField(max_length=200)
+    description_snapshot = models.TextField(blank=True, default="")
+    price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_snapshot = models.CharField(max_length=50, default="fixed")
+    service_type_snapshot = models.CharField(max_length=50, default="SPARE_PART")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(fields=["customer_inspection"]),
+            models.Index(fields=["rate_item"]),
+        ]
+
+    def __str__(self):
+        return f"RateSnapshot #{self.id}: {self.item_name_snapshot} @ ₹{self.price_snapshot} (Inspection #{self.customer_inspection_id})"
+
+
+# ── Service-wise Time Slot Management Models ─────────────────────────────────
+
+class ServiceTimeSlotConfig(models.Model):
+    """
+    Master time slot configuration for a bookable Service.
+    Controls default hours, slot duration, capacity, and active status.
+    """
+    service = models.OneToOneField(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="time_slot_config"
+    )
+    default_start_time = models.TimeField(default=datetime.time(9, 0))
+    default_end_time = models.TimeField(default=datetime.time(18, 0))
+    slot_duration_minutes = models.PositiveIntegerField(default=30)
+    slot_capacity = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_time_slot_config"
+        ordering = ["service_id"]
+
+    def __str__(self):
+        return f"TimeSlotConfig for {self.service.name} ({self.default_start_time.strftime('%H:%M')} - {self.default_end_time.strftime('%H:%M')}, {self.slot_duration_minutes}m)"
+
+
+class ServiceWeeklySchedule(models.Model):
+    """
+    Day-of-week schedule override for a Service (0=Monday ... 6=Sunday).
+    Can mark days open or closed, with custom operating hours and capacity.
+    """
+    DAY_CHOICES = [
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    ]
+
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="weekly_schedules"
+    )
+    day_of_week = models.PositiveSmallIntegerField(choices=DAY_CHOICES)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_open = models.BooleanField(default=True)
+    slot_capacity = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_weekly_schedule"
+        unique_together = [("service", "day_of_week")]
+        ordering = ["service_id", "day_of_week"]
+
+    def __str__(self):
+        day_name = dict(self.DAY_CHOICES).get(self.day_of_week, str(self.day_of_week))
+        status = "Open" if self.is_open else "Closed"
+        return f"{self.service.name} / {day_name}: {status}"
+
+
+class ServiceDateOverride(models.Model):
+    """
+    Calendar date override for a Service (e.g. holiday, festival, special hours).
+    Has highest schedule precedence after is_active.
+    """
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="date_overrides"
+    )
+    date = models.DateField(db_index=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_closed = models.BooleanField(default=False)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    slot_capacity = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "service_date_override"
+        unique_together = [("service", "date")]
+        ordering = ["date", "start_time"]
+
+    def __str__(self):
+        status = "Closed" if self.is_closed else "Open"
+        reason_txt = f" ({self.reason})" if self.reason else ""
+        return f"{self.service.name} on {self.date}: {status}{reason_txt}"
+
