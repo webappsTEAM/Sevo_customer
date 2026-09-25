@@ -6583,29 +6583,11 @@ export function CatalogPackagesPage() {
               }}
             />
 
-            {/* Service Group / Sub-Service picker (Tier 3: Category -> Service -> Service Group -> Package) */}
-            {(() => {
-              const currentSvc = services.find(s => String(s.id) === String(editing.service?.id || editing.service || ""))
-              const availableSubtabs = currentSvc?.customization?.subtabs || []
-              if (availableSubtabs.length === 0) return null
-
-              const subOptions = [
-                { value: "", label: "-- General / Default (No Specific Group) --" },
-                ...availableSubtabs.map(t => ({
-                  value: t.id,
-                  label: `${t.label}${t.description ? ` (${t.description})` : ""}`
-                }))
-              ]
-
-              return (
-                <Select
-                  label="Service Group / Sub-Service Category"
-                  options={subOptions}
-                  value={editing.sub_service_key || ""}
-                  onChange={(e) => setEditing({ ...editing, sub_service_key: e.target.value })}
-                />
-              )
-            })()}
+            {/* Sub-Service picker removed -- packages now always connect directly
+                under their Service (no optional deeper sub-service layer). Any
+                pre-existing sub_service_key on older packages is left untouched
+                (still cleared to "" whenever the Parent Service is changed above),
+                it just can't be set from this form anymore. */}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input

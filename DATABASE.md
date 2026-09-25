@@ -1,8 +1,8 @@
-# sevo Database Architecture Documentation
+# CalTrack Database Architecture Documentation
 
 ## Primary Database: PostgreSQL
 
-sevo utilizes PostgreSQL as its primary production relational database.
+CalTrack utilizes PostgreSQL as its primary production relational database.
 
 ### Schema Architecture & Multi-Company Scoping
 

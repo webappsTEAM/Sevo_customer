@@ -5,7 +5,7 @@ Read-mostly catalog for the two Goods & Transport flows (per TL-confirmed scope)
   - Goods Transport  → categories TRUCK, TWO_WHEELER
   - Packers & Movers → category  PACKERS_MOVERS
 
-Deliberately NOT the full sevo_PHASE_14 entity set (Vehicle fleet, Trip,
+Deliberately NOT the full CALTRACK_PHASE_14 entity set (Vehicle fleet, Trip,
 TripStop, Consignment, ManifestItem, EWayBill, InsurancePolicy...). That set
 is ~255 days of work per the architecture doc's own effort table and several
 of its pieces (e-way bill exemption, GST RCM mechanics) are marked [COUNSEL]
@@ -109,7 +109,7 @@ class ServiceTier(models.Model):
     )
     currency = models.CharField(max_length=3, default="INR")
 
-    # GT-B-01: real distance-based pricing, per sevo_PHASE_14
+    # GT-B-01: real distance-based pricing, per CALTRACK_PHASE_14
     # PART H.1 ("Goods Transport - deterministic"):
     #   fare = base_fare + distance_km x per_km_rate
     #        + loading_unloading + additional_stop_charge x (stops - 2)
@@ -220,7 +220,7 @@ class ServiceTier(models.Model):
         Authoritative vehicle classification string.
         SEVO P0 Rule: No hardcoded fallback to TRUCK. Blank or unset fails closed as empty string.
         """
-        return str(self.vehicle_class) if self.vehicle_class else ""
+        return self.vehicle_class or ""
 
     def get_max_weight_kg(self) -> Decimal:
         """
@@ -229,7 +229,7 @@ class ServiceTier(models.Model):
         Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
         """
         if self.max_weight_kg is not None and self.max_weight_kg > 0:
-            return Decimal(str(self.max_weight_kg))
+            return self.max_weight_kg
         return Decimal("0.00")
 
     def get_max_cft(self) -> Decimal:
@@ -239,7 +239,7 @@ class ServiceTier(models.Model):
         Unconfigured tiers fail closed (return 0.00). No slug, name, or label guessing.
         """
         if self.max_cft is not None and self.max_cft > 0:
-            return Decimal(str(self.max_cft))
+            return self.max_cft
         return Decimal("0.00")
 
     def evaluate_cargo_fit(self, total_weight_kg: Decimal, total_cft: Decimal):
@@ -257,25 +257,10 @@ class ServiceTier(models.Model):
 class Lane(models.Model):
     """
     A fixed-fare route card ('Popular Routes from Hosur').
-
-    destination_latitude / destination_longitude: city-centre coordinates for
-    the destination. Used by Packers & Movers intercity booking to resolve
-    drop_latitude/drop_longitude for the server-side quote without depending
-    on geocoding at runtime. Nullable so existing lanes keep working; admin
-    fills them in progressively. When blank the P&M booking page falls back
-    to geocoding the destination_label string.
     """
     category = models.CharField(max_length=20, choices=LogisticsCategory.choices, db_index=True)
     city = models.CharField(max_length=100, db_index=True)  # origin city, e.g. "Hosur"
     destination_label = models.CharField(max_length=150)     # "Bengaluru", "Whitefield / Bengaluru Hub"
-    destination_latitude = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        help_text="City-centre latitude for P&M intercity drop coordinate resolution. Leave blank to fall back to geocoding.",
-    )
-    destination_longitude = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        help_text="City-centre longitude for P&M intercity drop coordinate resolution. Leave blank to fall back to geocoding.",
-    )
     distance_km = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     eta_label = models.CharField(max_length=50, blank=True, default="")  # "~1.5 hrs", "Same Day", "1-2 Days"
     fare = models.DecimalField(max_digits=10, decimal_places=2)
@@ -304,10 +289,6 @@ class GoodsCategory(models.Model):
     name = models.CharField(max_length=150)
     icon = models.CharField(max_length=50, blank=True, default="package")
     description = models.TextField(blank=True, default="")
-    info_banner = models.CharField(
-        max_length=255, blank=True, default="",
-        help_text="Custom info or tips banner displayed in customer inventory modal (e.g. 'What we pack in Bedrooms')"
-    )
     allows_two_wheeler = models.BooleanField(default=True)
     min_vehicle_class = models.CharField(max_length=30, blank=True, default="any")  # any | truck | pickup
     order = models.PositiveIntegerField(default=0)
@@ -333,10 +314,6 @@ class GoodsItem(models.Model):
     category = models.ForeignKey(GoodsCategory, on_delete=models.CASCADE, related_name="items")
     slug = models.SlugField(max_length=100, unique=True)
     name = models.CharField(max_length=150)
-    subcategory = models.CharField(
-        max_length=100, blank=True, default="",
-        help_text="Optional subcategory for UI grouping (e.g. 'Bed', 'Chair', 'Table', 'Cartons & Packaging', 'Appliances')"
-    )
     unit = models.CharField(max_length=30, default="piece")
     default_weight_kg = models.DecimalField(
         max_digits=7, decimal_places=2,
@@ -422,86 +399,4 @@ class PackersMoversConfig(models.Model):
 
     def __str__(self):
         return f"P&M Pricing Config ({self.city})"
-
-
-class GTFaq(models.Model):
-    """
-    Admin-manageable FAQ entries for Goods Transport and Packers & Movers
-    booking pages.
-
-    category: blank = applies to all GT categories (e.g. platform-wide FAQ).
-    city: blank = applies to all cities.
-    Admin can create category-specific FAQs (e.g. only for 'truck' pages) or
-    city-specific ones (e.g. only for Hosur launch FAQs).
-    """
-    category = models.CharField(
-        max_length=20, choices=LogisticsCategory.choices,
-        blank=True, default="", db_index=True,
-        help_text="Leave blank to show on all GT category pages.",
-    )
-    city = models.CharField(
-        max_length=100, blank=True, default="", db_index=True,
-        help_text="Leave blank to show in all cities.",
-    )
-    question = models.CharField(max_length=500)
-    answer = models.TextField()
-    order = models.PositiveIntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["category", "city", "order"]
-        verbose_name = "GT FAQ"
-        verbose_name_plural = "GT FAQs"
-
-    def __str__(self):
-        cat = self.get_category_display() if self.category else "All"
-        city = self.city or "All cities"
-        return f"[{cat} / {city}] {self.question[:60]}"
-
-
-class LogisticsSlot(models.Model):
-    """
-    Authoritative time-slot configuration for logistics bookings.
-    Allows Admin/Superadmin to configure slots, lead times, capacity limits,
-    and active states per category and city without code changes.
-    """
-    category = models.CharField(
-        max_length=30, blank=True, default="",
-        help_text="Service category (e.g. 'truck', 'two_wheeler', 'packers_movers'), or blank for all."
-    )
-    city = models.CharField(
-        max_length=50, blank=True, default="",
-        help_text="Operating city (e.g. 'hosur'), or blank for all."
-    )
-    group = models.CharField(
-        max_length=50, default="Morning",
-        help_text="Slot group heading (e.g. 'Morning', 'Afternoon', 'Evening')"
-    )
-    slot_label = models.CharField(
-        max_length=50,
-        help_text="Standard slot time representation (e.g. '07:00 AM - 08:00 AM')"
-    )
-    start_time = models.TimeField(null=True, blank=True)
-    end_time = models.TimeField(null=True, blank=True)
-    capacity = models.PositiveIntegerField(
-        default=10,
-        help_text="Max concurrent bookings supported in this window"
-    )
-    is_active = models.BooleanField(default=True)
-    order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["category", "city", "order", "start_time"]
-        verbose_name = "Logistics Slot"
-        verbose_name_plural = "Logistics Slots"
-
-    def __str__(self):
-        cat = self.category or "all"
-        city = self.city or "all"
-        return f"[{cat}/{city}] {self.group} — {self.slot_label}"
 

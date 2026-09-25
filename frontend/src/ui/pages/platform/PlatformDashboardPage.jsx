@@ -35,7 +35,7 @@ export default function PlatformDashboardPage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Super Admin Command Center</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Unified global oversight across all sevo modules, staff permissions, and security.
+            Unified global oversight across all CalTrack modules, staff permissions, and security.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -151,7 +151,7 @@ export default function PlatformDashboardPage() {
             RBAC Permission Matrix
           </h3>
           <p className="text-slate-500 text-xs mt-2 leading-relaxed">
-            Configure granular CRUD and domain action switches across all 35 sevo modules for each staff role.
+            Configure granular CRUD and domain action switches across all 35 CalTrack modules for each staff role.
           </p>
         </Link>
 

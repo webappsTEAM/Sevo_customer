@@ -19,8 +19,8 @@ class PaintingModuleTests(APITestCase):
     def setUp(self):
         # Create test company
         self.company = Company.objects.create(
-            company_name="sevo Logistics",
-            slug="sevo"
+            company_name="CalTrack Logistics",
+            slug="caltrack"
         )
         # Create standard customer and admin users
         self.customer = User.objects.create_user(
@@ -334,8 +334,8 @@ class MasonryModuleTests(APITestCase):
     def setUp(self):
         # Create test company
         self.company = Company.objects.create(
-            company_name="sevo Logistics",
-            slug="sevo"
+            company_name="CalTrack Logistics",
+            slug="caltrack"
         )
         self.customer = User.objects.create_user(
             username="customer_test_mason",

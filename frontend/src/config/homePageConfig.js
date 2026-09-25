@@ -18,19 +18,19 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     priceBadge: "",
     trustBadges: [
       { id: "tb-1", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck", color: "teal" },
-      { id: "tb-2", title: "Service Warranty", subtitle: "Satisfaction Guaranteed", icon: "Award", color: "amber" },
+      { id: "tb-2", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star", color: "amber" },
       { id: "tb-3", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock", color: "emerald" },
       { id: "tb-4", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee", color: "blue" },
       { id: "tb-5", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2", color: "purple" },
-      { id: "tb-6", title: "Customer Support", subtitle: "Direct Assistance", icon: "Headphones", color: "rose" }
+      { id: "tb-6", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones", color: "rose" }
     ],
     quickBadges: [
       { id: "b-1", text: "Verified Experts", title: "Verified Experts", subtitle: "Background Checked", icon: "ShieldCheck" },
-      { id: "b-2", text: "Service Warranty", title: "Service Warranty", subtitle: "Satisfaction Guaranteed", icon: "Award" },
+      { id: "b-2", text: "4.8★ Rated", title: "4.8+ Rated", subtitle: "By 10K+ Customers", icon: "Star" },
       { id: "b-3", text: "On-Time Service", title: "On-Time Service", subtitle: "Punctual & Reliable", icon: "Clock" },
       { id: "b-4", text: "Upfront Pricing", title: "Upfront Pricing", subtitle: "No Hidden Charges", icon: "IndianRupee" },
       { id: "b-5", text: "Easy Booking", title: "Easy Booking", subtitle: "In Just 2 Minutes", icon: "CheckCircle2" },
-      { id: "b-6", text: "Customer Support", title: "Customer Support", subtitle: "Direct Assistance", icon: "Headphones" }
+      { id: "b-6", text: "24/7 Support", title: "24/7 Support", subtitle: "We're Here Anytime", icon: "Headphones" }
     ],
     collageImages: [
       "/mockups/hero_plumber_thumbsup.jpg",
@@ -106,9 +106,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     titleSuffix: "& Vendors",
     subtitle: "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
     ctaText: "Join as a Professional",
-    ctaUrl: "https://vendor.sevo.co.in",
+    ctaUrl: "https://calservices-vendor.vercel.app",
     learnMoreText: "Learn more",
-    learnMoreUrl: "https://vendor.sevo.co.in",
+    learnMoreUrl: "https://calservices-vendor.vercel.app",
     image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
     features: [
       { id: "vf-1", icon: "📅", label: "Flexible Timings" },
@@ -233,11 +233,11 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     ]
   },
   statsBar: [
-    { id: "st-1", number: "100%", label: "Verified Professionals" },
-    { id: "st-2", number: "Upfront", label: "Transparent Pricing" },
-    { id: "st-3", number: "Standard", label: "Service Warranty" },
-    { id: "st-4", number: "Hosur Hub", label: "Doorstep Coverage" },
-    { id: "st-5", number: "Direct", label: "Customer Support" }
+    { id: "st-1", number: "45K+", label: "Happy Customers" },
+    { id: "st-2", number: "1200+", label: "Verified Experts" },
+    { id: "st-3", number: "85K+", label: "Services Completed" },
+    { id: "st-4", number: "30 min", label: "Average Response" },
+    { id: "st-5", number: "4.8/5", label: "Average Rating" }
   ],
   featuredPros: {
     title: "Featured Professionals",
@@ -245,30 +245,34 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     pros: [
       {
         id: "p-1",
-        name: "Electrical Services",
-        title: "Wiring, MCB & Installations",
-        badge: "Verified Expert",
+        name: "Sarah J.",
+        title: "Licensed Electrician",
+        rating: 4.9,
+        jobs: "620+",
         image: "/mockups/service_electrical.png"
       },
       {
         id: "p-2",
-        name: "Plumbing Services",
-        title: "Fixtures, Leakages & Drainage",
-        badge: "Verified Expert",
+        name: "Elite Plumbing",
+        title: "Plumbing Specialist",
+        rating: 4.8,
+        jobs: "540+",
         image: "/mockups/service_plumbing.png"
       },
       {
         id: "p-3",
-        name: "AC & Cooling Services",
-        title: "Jet Clean, Gas & Diagnostics",
-        badge: "Verified Expert",
+        name: "Advanced Climate",
+        title: "AC & Appliance Tech",
+        rating: 4.9,
+        jobs: "410+",
         image: "/mockups/service_hvac.png"
       },
       {
         id: "p-4",
-        name: "Deep Cleaning Services",
-        title: "Full Home & Sanitization",
-        badge: "Verified Expert",
+        name: "Eco Shine",
+        title: "Home Cleaning Pro",
+        rating: 4.7,
+        jobs: "780+",
         image: "/mockups/service_cleaning.png"
       }
     ]

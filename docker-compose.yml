@@ -22,20 +22,20 @@ services:
   # ── PostgreSQL 16 ─────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
-    container_name: sevo_db
+    container_name: caltrack_db
     restart: unless-stopped
     env_file:
       - backend/.env
     environment:
-      POSTGRES_DB: ${DB_NAME:-sevo}
-      POSTGRES_USER: ${DB_USER:-sevo_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-sevo_pass}
+      POSTGRES_DB: ${DB_NAME:-caltrack}
+      POSTGRES_USER: ${DB_USER:-caltrack_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-caltrack_pass}
     ports:
       - "${DB_PORT:-5435}:5432"                  # accessible at host port 5435 (avoids local Postgres port 5432 conflict)
     volumes:
-      - sevo_pgdata:/var/lib/postgresql/data
+      - caltrack_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sevo_user} -d ${DB_NAME:-sevo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-caltrack_user} -d ${DB_NAME:-caltrack}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,12 +44,12 @@ services:
   # ── Redis 7 ───────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: sevo_redis
+    container_name: caltrack_redis
     restart: unless-stopped
     ports:
       - "6379:6379"                  # accessible at localhost:6379
     volumes:
-      - sevo_redis:/data
+      - caltrack_redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -57,7 +57,7 @@ services:
       retries: 5
 
 volumes:
-  sevo_pgdata:
+  caltrack_pgdata:
     driver: local
-  sevo_redis:
+  caltrack_redis:
     driver: local

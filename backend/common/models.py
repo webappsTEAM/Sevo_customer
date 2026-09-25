@@ -1,5 +1,5 @@
 """
-Global Row-Level Visibility and QuerySet Architecture for sevo.
+Global Row-Level Visibility and QuerySet Architecture for CalTrack.
 
 Separates authorization from data visibility:
 - is_super_admin(user) has universal global visibility across all rows.

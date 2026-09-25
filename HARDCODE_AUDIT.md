@@ -1,4 +1,4 @@
-# sevo Comprehensive Hardcode Audit Matrix
+# CalTrack Comprehensive Hardcode Audit Matrix
 
 This audit table classifies every hardcoded value, legacy database array, fallback coordinate, fallback company lookup, and API URL across the entire repository.
 

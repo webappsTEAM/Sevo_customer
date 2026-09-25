@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import {
-  MapPin, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, ShieldCheck,
+  MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
@@ -17,9 +17,9 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
-import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
 import { getAddress } from "../../api/geocoding.js"
 import {
+  HOSUR_LOCATIONS_DATABASE,
   filterLocationSuggestions,
   searchHosurPlacesOnline,
   formatExactLocation,
@@ -27,26 +27,7 @@ import {
   resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
-function GenericTruckDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
-  return (
-    <svg viewBox="0 0 260 130" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="260" height="130" rx="12" fill="#F8FAFC" />
-      <rect x="25" y="32" width="135" height="62" rx="4" fill="#3B82F6" stroke="#1D4ED8" strokeWidth="2" />
-      <line x1="70" y1="32" x2="70" y2="94" stroke="#1D4ED8" strokeWidth="1.5" strokeDasharray="3 3" />
-      <line x1="115" y1="32" x2="115" y2="94" stroke="#1D4ED8" strokeWidth="1.5" strokeDasharray="3 3" />
-      <path d="M160 50H195L215 72V94H160V50Z" fill="#1E40AF" stroke="#1D4ED8" strokeWidth="2" />
-      <path d="M168 56H192L206 72H168V56Z" fill="#BFDBFE" />
-      <rect x="212" y="80" width="6" height="8" rx="2" fill="#FBBF24" />
-      <rect x="156" y="92" width="64" height="6" rx="2" fill="#475569" />
-      <circle cx="65" cy="98" r="14" fill="#1E293B" stroke="#64748B" strokeWidth="3" />
-      <circle cx="65" cy="98" r="5" fill="#94A3B8" />
-      <circle cx="120" cy="98" r="14" fill="#1E293B" stroke="#64748B" strokeWidth="3" />
-      <circle cx="120" cy="98" r="5" fill="#94A3B8" />
-      <circle cx="188" cy="98" r="14" fill="#1E293B" stroke="#64748B" strokeWidth="3" />
-      <circle cx="188" cy="98" r="5" fill="#94A3B8" />
-    </svg>
-  )
-}
+const LOGISTICS_CITY = "hosur"
 
 /* ── Vehicle Dimension Diagrams matching Image 1 & Image 4 (Professional & Colorful) ── */
 function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
@@ -443,27 +424,54 @@ const TRUCK_DIAGRAM_BY_SLUG = {
   "1-7-ton": <OnePointSevenTonDiagram />,
 }
 
-function TierImageFallback({ src, alt, fallback }) {
-  const [imgError, setImgError] = useState(false)
-  if (!src || imgError) return fallback
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setImgError(true)}
-      className="w-full max-w-[240px] h-[120px] object-contain"
-    />
-  )
+/* ── Slots & Dates Helper ── */
+const DELIVERY_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
 }
 
-/* ── Dynamic Upcoming Dates Helper ── */
+const isSlotPassed = (slot, dateObj) => {
+  const today = new Date()
+  if (dateObj.toDateString() !== today.toDateString()) return false
+
+  const parts = slot.split("-")
+  if (parts.length < 2) return false
+  const endTimeStr = parts[1].trim()
+  
+  const match = endTimeStr.match(/^(\d+)(AM|PM)$/i)
+  if (!match) return false
+  let hour = parseInt(match[1], 10)
+  const ampm = match[2].toUpperCase()
+  if (ampm === "PM" && hour < 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  const currentHour = today.getHours()
+  const currentMinute = today.getMinutes()
+
+  if (currentHour > hour) return true
+  if (currentHour === hour && currentMinute > 0) return true
+
+  return false
+}
+
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
+  
+  const hasRemainingSlots = (dateObj) => {
+    for (const slots of Object.values(DELIVERY_SLOTS)) {
+      for (const slot of slots) {
+        if (!isSlotPassed(slot, dateObj)) return true
+      }
+    }
+    return false
+  }
 
-  // Start today (or tomorrow if past operating cutoff at 21:00)
-  const isLateNight = today.getHours() >= 21
-  const startOffset = isLateNight ? 1 : 0
+  let startOffset = 0
+  if (!hasRemainingSlots(today)) {
+    startOffset = 1
+  }
 
   for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
@@ -487,46 +495,26 @@ const generateUpcomingDates = () => {
   return dates
 }
 
+const getFirstAvailableSlotAndCategory = (dateObj) => {
+  for (const [category, slots] of Object.entries(DELIVERY_SLOTS)) {
+    for (const slot of slots) {
+      if (!isSlotPassed(slot, dateObj)) {
+        return { category, slot }
+      }
+    }
+  }
+  return { category: "Morning", slot: "" }
+}
+
 const DELIVERY_DATES = generateUpcomingDates()
 
 /* ── Mini Truck Booking in Hosur Page ── */
-export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNameProp }) {
+export function MiniTruckBookingHosurPage() {
   const navigate = useNavigate()
-  const { city: routeCityParam } = useParams()
-  const [availableCities, setAvailableCities] = useState([])
-  const [mapPickerTarget, setMapPickerTarget] = useState(null)
-  const currentCitySlug = (cityProp || routeCityParam || "hosur").toLowerCase()
-  const defaultCityName = currentCitySlug.charAt(0).toUpperCase() + currentCitySlug.slice(1)
-  const [currentCityName, setCurrentCityName] = useState(cityNameProp || defaultCityName)
-
-  useEffect(() => {
-    let isMounted = true
-    fetchLogisticsCities()
-      .then(res => {
-        if (!isMounted) return
-        const cities = Array.isArray(res) ? res : (res?.results || res?.data || [])
-        setAvailableCities(cities)
-        const matched = cities.find(c => c.slug === currentCitySlug || c.name?.toLowerCase() === currentCitySlug)
-        if (matched?.name) {
-          setCurrentCityName(matched.name)
-        }
-      })
-      .catch(() => { })
-    return () => { isMounted = false }
-  }, [currentCitySlug])
-
-  // Persistent form state for browser Reload / Refresh recovery
-  const getSavedForm = () => {
-    try {
-      const raw = sessionStorage.getItem("sevo_gt_form_truck")
-      return raw ? JSON.parse(raw) : {}
-    } catch (_) { return {} }
-  }
-  const savedForm = getSavedForm()
 
   // Form State
-  const [pickup, setPickup] = useState(() => savedForm.pickup || "")
-  const [drop, setDrop] = useState(() => savedForm.drop || "")
+  const [pickup, setPickup] = useState("")
+  const [drop, setDrop] = useState("")
 
   // Unique Idempotency Key per user booking attempt (reused on retry, reset on parameter change)
   const bookingAttemptKeyRef = useRef(null)
@@ -554,10 +542,23 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [slotStepperOpen, setSlotStepperOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(3)
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [serverDates, setServerDates] = useState([])
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
+  const [selectedDate, setSelectedDate] = useState(DELIVERY_DATES[0])
+  const [selectedSlot, setSelectedSlot] = useState(() => {
+    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
+    return getFirstAvailableSlotAndCategory(defaultDate).slot
+  })
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => {
+    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
+    return getFirstAvailableSlotAndCategory(defaultDate).category
+  })
+
+  useEffect(() => {
+    if (selectedDate) {
+      const { category, slot } = getFirstAvailableSlotAndCategory(selectedDate.fullDate)
+      setSelectedSlot(slot)
+      setExpandedSlotCategory(category)
+    }
+  }, [selectedDate, bookingMode])
 
   useEffect(() => {
     bookingAttemptKeyRef.current = null
@@ -604,7 +605,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           startTimestamp = Number(parsed.timestamp)
         }
       }
-    } catch (_) { }
+    } catch (_) {}
 
     const updateCountdown = () => {
       const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
@@ -622,27 +623,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
           }
           sessionStorage.removeItem("calservice_active_partner_search")
-        } catch (_) { }
-        setBookingError("No delivery partner could be assigned within the search window. Please try again or schedule for later.")
+        } catch (_) {}
         if (activeBId) {
-          const attemptAutoCancel = (retriesLeft) =>
-            cancelBooking(
-              activeBId,
-              "Search window expired (no delivery partner found within 10 minutes)",
-              activeToken || ""
-            ).catch((err) => {
-              if (retriesLeft > 0) return attemptAutoCancel(retriesLeft - 1)
-              // The booking may still be active on the server even though the
-              // search window closed on this screen — don't leave the customer
-              // believing it was cancelled when we can't confirm that. Point
-              // them at support rather than silently swallowing the failure.
-              console.warn("Auto-cancel failed on timeout after retry:", err)
-              setBookingError(
-                "No delivery partner could be assigned within the search window, and we couldn't confirm the cancellation with our system. Please check your booking status or contact support before booking again."
-              )
-            })
-          attemptAutoCancel(1)
+          cancelBooking(
+            activeBId,
+            "Search window expired (no delivery partner found within 10 minutes)",
+            activeToken || ""
+          ).catch((err) => console.warn("Auto-cancel failed on timeout:", err))
         }
+        setBookingError("No delivery partner could be assigned within the search window. Please try again or schedule for later.")
       }
     }
 
@@ -679,7 +668,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
     if (user || savedPhone) {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
@@ -712,7 +701,6 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
   // Lock body scroll when any modal or drawer is open to freeze background
   const isAnyModalOpen = Boolean(
-    mapPickerTarget ||
     activeVehicleDetails ||
     vehicleSelectorOpen ||
     goodsTypeModalOpen ||
@@ -736,22 +724,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     return () => { document.body.style.overflow = "" }
   }, [isAnyModalOpen])
 
-  // FAQ open states & dynamic server FAQs
+  // FAQ open states
   const [openFaq, setOpenFaq] = useState(null)
-  const [serverFaqs, setServerFaqs] = useState([])
-  const [faqsLoading, setFaqsLoading] = useState(true)
-
-  useEffect(() => {
-    setFaqsLoading(true)
-    fetchGTFaqs({ category: "truck", city: currentCityName || currentCitySlug })
-      .then(res => {
-        if (Array.isArray(res)) {
-          setServerFaqs(res.map(f => ({ q: f.question, a: f.answer })))
-        }
-      })
-      .catch(() => { })
-      .finally(() => setFaqsLoading(false))
-  }, [currentCityName, currentCitySlug])
 
   // Catalog data — fetched from /api/logistics/ (backend/logistics app),
   // replacing what used to be hardcoded LIGHT_VEHICLES/HEAVY_VEHICLES/
@@ -767,89 +741,38 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // server's authoritative fetchLogisticsQuote() response for the currently
   // selected vehicle once both coordinates are known; it is the only source
   // of truth for the Fare Breakdown display below -- never derived math.
-  const [pickupCoords, setPickupCoords] = useState(() => savedForm.pickupCoords || null)
-  const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("sevo_gt_form_truck", JSON.stringify({
-        pickup,
-        drop,
-        pickupCoords,
-        dropCoords
-      }))
-    } catch (_) { }
-  }, [pickup, drop, pickupCoords, dropCoords])
-
-  const [serverQuote, setServerQuote] = useState(null)
+  const [pickupCoords, setPickupCoords] = useState(null)
+  const [dropCoords, setDropCoords] = useState(null)
+  const [quote, setQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState("")
-  // Alias quote / serverQuote so both naming conventions access the same authoritative quote state
-  const quote = serverQuote
-  const setQuote = setServerQuote
+  // Alias: several display spots below (payment footer, confirm-button
+  // disabled state, post-booking summary) read `serverQuote?.total` --
+  // `quote` above is the single authoritative fetchLogisticsQuote() result,
+  // so serverQuote just points at the same value rather than duplicating it.
+  const serverQuote = quote
   const [bookingError, setBookingError] = useState("")
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
-  const [serverSlotGroups, setServerSlotGroups] = useState(null)
-  const [slotsLoading, setSlotsLoading] = useState(false)
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
-    setSlotsLoading(true)
-    fetchLogisticsSlots({ date: dStr, category: "goods_transport_truck", city: currentCitySlug })
+    if (!selectedDate?.fullDate) return
+    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
+    fetchLogisticsSlots({ date: dStr, category: "goods_transport_truck" })
       .then(res => {
-        if (res && res.success) {
-          if (Array.isArray(res.upcoming_dates) && res.upcoming_dates.length > 0) {
-            const mappedDates = res.upcoming_dates.map(d => ({
-              id: d.id,
-              date: d.date,
-              label: d.label,
-              value: d.value,
-              fullDate: new Date(`${d.date}T00:00:00`),
-              is_today: d.is_today,
-            }))
-            setServerDates(mappedDates)
-            if (!selectedDate) {
-              setSelectedDate(mappedDates[0])
-            }
-          }
-
-          if (res.groups) {
-            setServerSlotGroups(res.groups)
-            const map = {}
-            let firstAvailSlot = null
-            let firstAvailGroup = null
-
-            res.groups.forEach(g => {
-              (g.slots || []).forEach(s => {
-                const sLabel = s.slot || s.label
-                map[sLabel] = s.is_available
-                if (s.is_available && !firstAvailSlot) {
-                  firstAvailSlot = sLabel
-                  firstAvailGroup = g.group
-                }
-              })
+        if (res && res.success && res.groups) {
+          const map = {}
+          res.groups.forEach(g => {
+            (g.slots || []).forEach(s => {
+              map[s.slot] = s.is_available
             })
-            setServerSlotsAvailability(map)
-
-            // Dynamically auto-select the first valid server slot if current selection is null or invalid
-            setSelectedSlot(prev => {
-              if (prev && map[prev] === true) return prev
-              return firstAvailSlot
-            })
-            setExpandedSlotCategory(prev => {
-              if (prev && res.groups.some(g => g.group === prev && g.slots.some(s => s.is_available))) {
-                return prev
-              }
-              return firstAvailGroup || res.groups[0]?.group || "Morning"
-            })
-          }
+          })
+          setServerSlotsAvailability(map)
         }
       })
-      .catch(() => { })
-      .finally(() => setSlotsLoading(false))
-  }, [selectedDate, currentCitySlug])
+      .catch(() => {})
+  }, [selectedDate])
 
   // Recover active in-flight partner search if customer refreshes the page
   useEffect(() => {
@@ -867,7 +790,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           sessionStorage.removeItem("calservice_active_partner_search")
         }
       }
-    } catch (e) { }
+    } catch (e) {}
   }, [])
 
   useEffect(() => {
@@ -892,7 +815,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             setLookingForPartnerOpen(false)
             try {
               sessionStorage.removeItem("calservice_active_partner_search")
-            } catch (e) { }
+            } catch (e) {}
             const bookingPayload = {
               id: lastBookingId,
               request_id: lastBookingId,
@@ -902,7 +825,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             try {
               sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
               sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-            } catch (e) { }
+            } catch (e) {}
             navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
               state: {
                 isTracking: true,
@@ -913,7 +836,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             setLookingForPartnerOpen(false)
             try {
               sessionStorage.removeItem("calservice_active_partner_search")
-            } catch (_) { }
+            } catch (_) {}
             setBookingError("We could not find an available delivery partner for your booking. Please try again or schedule for later.")
           }
         }
@@ -933,155 +856,21 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
   }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken, navigate])
 
-  // ── Comprehensive Browser Navigation (Back / Forward / PopState) ──
-  const anyModalOpen = Boolean(
-    showExitConfirm ||
-    showCustomerEntryModal ||
-    mapPickerTarget ||
-    cargoSelectorOpen ||
-    slotStepperOpen ||
-    vehicleSelectorOpen ||
-    activeVehicleDetails ||
-    goodsTypeModalOpen ||
-    supportModalOpen ||
-    showAccountPortal ||
-    estimateModalOpen
-  )
-
-  // Push state when any modal opens to allow Browser Back button to dismiss it
   useEffect(() => {
-    if (anyModalOpen || lookingForPartnerOpen) {
-      window.history.pushState({ modalOpen: true }, "")
-    }
-  }, [anyModalOpen, lookingForPartnerOpen])
+    if (!lookingForPartnerOpen) return
 
-  const handleBackNavigation = () => {
-    if (showExitConfirm) {
-      setShowExitConfirm(false)
-      return
-    }
-    if (lookingForPartnerOpen) {
-      setShowExitConfirm(true)
-      return
-    }
-    if (showCustomerEntryModal) {
-      setShowCustomerEntryModal(false)
-      return
-    }
-    if (mapPickerTarget) {
-      setMapPickerTarget(null)
-      return
-    }
-    if (cargoSelectorOpen) {
-      setCargoSelectorOpen(false)
-      return
-    }
-    if (slotStepperOpen) {
-      if (stepperStep > 1) {
-        setStepperStep(prev => prev - 1)
-      } else {
-        setSlotStepperOpen(false)
-      }
-      return
-    }
-    if (vehicleSelectorOpen) {
-      setVehicleSelectorOpen(false)
-      return
-    }
-    if (activeVehicleDetails) {
-      setActiveVehicleDetails(null)
-      return
-    }
-    if (goodsTypeModalOpen) {
-      setGoodsTypeModalOpen(false)
-      return
-    }
-    if (supportModalOpen) {
-      setSupportModalOpen(false)
-      return
-    }
-    if (showAccountPortal) {
-      setShowAccountPortal(false)
-      return
-    }
-    if (estimateModalOpen) {
-      setEstimateModalOpen(false)
-      return
-    }
-    // If no modal is open, navigate to home / previous page
-    if (window.history.length > 1) {
-      navigate(-1)
-    } else {
-      navigate(routes.landing)
-    }
-  }
+    window.history.pushState(null, null, window.location.pathname)
 
-  useEffect(() => {
     const handlePopState = () => {
-      if (showExitConfirm) {
-        setShowExitConfirm(false)
-        return
-      }
-      if (lookingForPartnerOpen) {
-        setShowExitConfirm(true)
-        return
-      }
-      if (showCustomerEntryModal) {
-        setShowCustomerEntryModal(false)
-        return
-      }
-      if (mapPickerTarget) {
-        setMapPickerTarget(null)
-        return
-      }
-      if (cargoSelectorOpen) {
-        setCargoSelectorOpen(false)
-        return
-      }
-      if (slotStepperOpen) {
-        if (stepperStep > 1) {
-          setStepperStep(prev => prev - 1)
-        } else {
-          setSlotStepperOpen(false)
-        }
-        return
-      }
-      if (vehicleSelectorOpen) {
-        setVehicleSelectorOpen(false)
-        return
-      }
-      if (activeVehicleDetails) {
-        setActiveVehicleDetails(null)
-        return
-      }
-      if (goodsTypeModalOpen) {
-        setGoodsTypeModalOpen(false)
-        return
-      }
-      if (supportModalOpen) {
-        setSupportModalOpen(false)
-        return
-      }
-      if (showAccountPortal) {
-        setShowAccountPortal(false)
-        return
-      }
-      if (estimateModalOpen) {
-        setEstimateModalOpen(false)
-        return
-      }
+      window.history.pushState(null, null, window.location.pathname)
+      setShowExitConfirm(true)
     }
 
     window.addEventListener("popstate", handlePopState)
     return () => {
       window.removeEventListener("popstate", handlePopState)
     }
-  }, [
-    showExitConfirm, lookingForPartnerOpen, showCustomerEntryModal,
-    mapPickerTarget, cargoSelectorOpen, slotStepperOpen, stepperStep,
-    vehicleSelectorOpen, activeVehicleDetails, goodsTypeModalOpen,
-    supportModalOpen, showAccountPortal, estimateModalOpen
-  ])
+  }, [lookingForPartnerOpen])
 
 
   useEffect(() => {
@@ -1091,9 +880,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       setCatalogError("")
       try {
         const [tiers, lanes, areas, categories] = await Promise.all([
-          fetchServiceTiers("truck", currentCitySlug),
-          fetchLanes("truck", currentCitySlug),
-          fetchServiceAreas(currentCitySlug),
+          fetchServiceTiers("truck", LOGISTICS_CITY),
+          fetchLanes("truck", LOGISTICS_CITY),
+          fetchServiceAreas(LOGISTICS_CITY),
           fetchGoodsCategories(),
         ])
         if (cancelled) return
@@ -1120,8 +909,35 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
     loadCatalog()
     return () => { cancelled = true }
-  }, [currentCitySlug])
+  }, [])
 
+  // GT-B-01: ask the server what this trip actually costs once we know
+  // both real coordinates and a selected vehicle. This is the same
+  // authoritative computation (admin's Base Fare/Per KM Rate/Free KM/
+  // Surge Multiplier) that the booking itself gets priced from server-side
+  // -- the Fare Breakdown below renders this response, it never derives a
+  // number of its own.
+  useEffect(() => {
+    if (!vehicleSelectorOpen || !selectedVehicle?._tierId || !pickupCoords || !dropCoords) {
+      setQuote(null)
+      setQuoteLoading(false)
+      return
+    }
+    let cancelled = false
+    setQuoteLoading(true)
+    fetchLogisticsQuote({
+      serviceCategory: "goods_transport_truck",
+      tierId: selectedVehicle._tierId,
+      pickup: pickupCoords,
+      drop: dropCoords,
+    }).then((result) => {
+      if (cancelled) return
+      setQuote(result && !result.error ? result : null)
+    }).finally(() => {
+      if (!cancelled) setQuoteLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [vehicleSelectorOpen, selectedVehicle?._tierId, pickupCoords, dropCoords])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -1204,22 +1020,6 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   ]
 
 
-  const LIGHT_VEHICLES = truckTiers
-    .filter((t) => t.weight_class === "light" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
-    .map(tierToVehicle)
-  const HEAVY_VEHICLES = truckTiers
-    .filter((t) => t.weight_class === "heavy" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
-    .map(tierToVehicle)
-
-  const selectedVehicleEffective = selectedVehicle || LIGHT_VEHICLES[0] || HEAVY_VEHICLES[0]
-
-  useEffect(() => {
-    if (!selectedVehicle) {
-      const all = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
-      if (all.length > 0) setSelectedVehicle(all[0])
-    }
-  }, [selectedVehicle, LIGHT_VEHICLES, HEAVY_VEHICLES])
-
   // Only use a stored coordinate if it was resolved for the address being
   // used right now -- see the pickupCoords/dropCoords declaration above.
   const usableCoords = (coords, address) =>
@@ -1237,8 +1037,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // Distance Matrix call per keystroke, and guarded against out-of-order
   // responses so a slower earlier request can't overwrite a newer quote.
   useEffect(() => {
-    const activeVehicle = selectedVehicle || selectedVehicleEffective
-    const tierId = activeVehicle?._tierId
+    const tierId = selectedVehicle?._tierId
     if (!pickupPoint || !dropPoint || !tierId) {
       setServerQuote(null)
       setQuoteError("")
@@ -1280,7 +1079,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng,
-    (selectedVehicle || selectedVehicleEffective)?._tierId,
+    selectedVehicle?._tierId,
     JSON.stringify(cargoItems.map((i) => [i.goods_item_id || i.goods_item, i.quantity])),
     JSON.stringify(intermediateStops.map((s) => [s.address, s.coords?.lat, s.coords?.lng])),
     selectedGoodsCategoryObj?.id,
@@ -1335,6 +1134,64 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     )
   }
 
+  // Static fallback — used only if the /api/logistics/ fetch above fails or
+  // hasn't resolved yet, so this page keeps working even if the backend is
+  // briefly unreachable. When the fetch succeeds, the backend-sourced
+  // truckTiers/truckLanes/serviceAreas below take over.
+  const VEHICLE_SUITABILITY_MAP = {
+    "3-wheeler": {
+      suitableFor: [
+        "Groceries & provisions",
+        "Small parcels & packages",
+        "Clothing & cartons",
+        "Small household items",
+        "Small appliances",
+        "Office supplies",
+        "Local shop deliveries"
+      ],
+      bestFor: "Small and lightweight goods within Hosur."
+    },
+    "tata-ace": {
+      suitableFor: [
+        "Household furniture",
+        "Home appliances",
+        "Grocery & retail stock",
+        "Multiple cartons",
+        "Small business goods",
+        "Electronics",
+        "Small construction materials",
+        "Shop/warehouse deliveries"
+      ],
+      bestFor: "Medium-sized household and commercial deliveries."
+    },
+    "pickup-8ft": {
+      suitableFor: [
+        "Sofas, beds & wardrobes",
+        "Refrigerators & washing machines",
+        "Furniture sets",
+        "Bulk cartons",
+        "Construction materials",
+        "Business/industrial goods",
+        "Machinery & equipment",
+        "Warehouse stock"
+      ],
+      bestFor: "Larger and heavier household or commercial goods."
+    },
+    "1-7-ton": {
+      suitableFor: [
+        "Heavy furniture",
+        "Large appliances",
+        "Bulk construction materials",
+        "Industrial equipment",
+        "Machinery",
+        "Large commercial stock",
+        "Multiple cartons & packages",
+        "Warehouse/industrial goods"
+      ],
+      bestFor: "Heavy and bulky goods requiring higher load capacity."
+    }
+  }
+
   function isBadgeActive(durationStr, updatedAtStr) {
     if (!durationStr || !updatedAtStr) return true
     const norm = durationStr.toLowerCase().trim()
@@ -1360,8 +1217,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   function tierToVehicle(tier) {
     const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
       ? tier.includes
-      : []
-    const bestForText = tier.description || ""
+      : (VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [])
+    const bestForText = tier.description || VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || ""
     const isBadgeValid = isBadgeActive(tier.duration, tier.updated_at)
     const badgeText = isBadgeValid ? (tier.icon || "") : ""
 
@@ -1376,10 +1233,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       // Prefer the admin's own uploaded Package Image (mirrored onto
       // ServiceTier.image by the catalog sync bridge) over the built-in
-      // technical line-drawing, with GenericTruckDiagram fallback for custom tiers.
+      // technical line-drawing, which now only covers the original launch
+      // vehicles by slug and would otherwise show for every newer/renamed
+      // package too.
       diagram: tier.image
-        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <GenericTruckDiagram />} />
-        : (TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <GenericTruckDiagram />),
+        ? <img src={tier.image} alt={tier.name} className="w-full max-w-[240px] h-[120px] object-contain" />
+        : (TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <ThreeWheelerDiagram />),
       details: {
         name: tier.name,
         capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
@@ -1394,15 +1253,24 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
   }
 
+  const LIGHT_VEHICLES = truckTiers
+    .filter((t) => t.weight_class === "light" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
+    .map(tierToVehicle)
+  const HEAVY_VEHICLES = truckTiers
+    .filter((t) => t.weight_class === "heavy" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
+    .map(tierToVehicle)
+
+
+  const selectedVehicleEffective = selectedVehicle || LIGHT_VEHICLES[0]
   const totalCargoWeightKg = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
   const totalCargoCftVal = cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0)
   const isSelectedVehicleOverCapacity = serverQuote?.breakdown?.is_cargo_fit != null
     ? serverQuote.breakdown.is_cargo_fit === false
     : Boolean(
-      selectedVehicleEffective &&
-      ((Number(selectedVehicleEffective.max_weight_kg) > 0 && totalCargoWeightKg > Number(selectedVehicleEffective.max_weight_kg)) ||
-        (Number(selectedVehicleEffective.max_cft) > 0 && totalCargoCftVal > Number(selectedVehicleEffective.max_cft)))
-    )
+        selectedVehicleEffective &&
+        ((Number(selectedVehicleEffective.max_weight_kg) > 0 && totalCargoWeightKg > Number(selectedVehicleEffective.max_weight_kg)) ||
+         (Number(selectedVehicleEffective.max_cft) > 0 && totalCargoCftVal > Number(selectedVehicleEffective.max_cft)))
+      )
 
 
   const LONG_DISTANCE_ROUTES = truckLanes.map((lane) => ({
@@ -1415,6 +1283,25 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
   const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
+  // FAQs
+  const FAQS = [
+    {
+      q: "What happens in case of an accident or breakdown during the transportation period?",
+      a: "We provide comprehensive on-road transit support in and around Hosur. In the unlikely event of an issue, a backup vehicle is immediately dispatched from our local fleet hub to safely transfer goods without additional charges."
+    },
+    {
+      q: "What should I consider when determining the truck size I need to book?",
+      a: "Consider cargo dimensions, total weight, and loading height. For 1-2 small appliances or cartons, a 3-Wheeler (500kg) is best. For 1 BHK home shifting or factory supplies, choose a Tata Ace (750kg) or 8ft Pickup (1200kg)."
+    },
+    {
+      q: "How do I track my mini truck delivery in real time?",
+      a: "Once your mini truck booking in Hosur is confirmed and a driver arrives at the pickup point, live GPS tracking becomes active. You can track route progress and share live updates directly with the recipient."
+    },
+    {
+      q: "Can I book a mini truck in advance in Hosur?",
+      a: "Yes! You can schedule your mini truck up to 7 days in advance or request immediate on-demand dispatch within 15-20 minutes anywhere in Hosur and industrial SIPCOT corridors."
+    }
+  ]
 
   // GT-B-01: resolve real coordinates for whatever the customer picked as
   // pickup/drop (a suggestion object, a free-typed address, or a shortcut
@@ -1422,29 +1309,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // fare instead of the fixed Hosur town-centre point this page used to
   // send for every booking. Fire-and-forget from sync click handlers --
   // the Fare Breakdown/quote effect below reacts once these resolve.
-  const resolvePickupLocation = async (value, targetAddress) => {
-    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
-    if (typeof value === "object" && value?.lat != null && value?.lng != null) {
-      setPickupCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
-      return
-    }
+  const resolvePickupLocation = async (value) => {
     setPickupCoords(null)
     const coords = await resolveLocationCoords(value)
-    if (coords) {
-      setPickupCoords({ ...coords, forAddress: addr })
-    }
+    setPickupCoords(coords)
   }
-  const resolveDropLocation = async (value, targetAddress) => {
-    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
-    if (typeof value === "object" && value?.lat != null && value?.lng != null) {
-      setDropCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
-      return
-    }
+  const resolveDropLocation = async (value) => {
     setDropCoords(null)
     const coords = await resolveLocationCoords(value)
-    if (coords) {
-      setDropCoords({ ...coords, forAddress: addr })
-    }
+    setDropCoords(coords)
   }
 
   const handleRouteSelect = (route) => {
@@ -1458,22 +1331,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       })
     }
     setSelectedRoute(route)
-    // GT audit Update 17: picking a popular route used to overwrite the
-    // pickup with a hardcoded "Sipcot Industrial Area, Hosur" even when the
-    // customer had already entered their own. The backend prices whatever
-    // pickup it is finally given, so that silently re-quoted and would have
-    // charged the trip from an address the customer never chose.
-    //
-    // A Lane models a route and its origin CITY -- there is no depot or
-    // street-level origin in the catalog, and none is invented here. So: a
-    // pickup the customer has entered is always kept, and only an empty one
-    // is seeded, from the lane's own origin city when it carries one.
-    if (!pickup || !pickup.trim()) {
-      const laneOrigin = route.city || route.from || route.origin_city || ""
-      resolvePickupLocation(
-        laneOrigin ? `${laneOrigin}, Tamil Nadu` : "Hosur, Tamil Nadu"
-      )
-    }
+    resolvePickupLocation("Sipcot Industrial Area, Hosur")
     resolveDropLocation(`${route.to}, Tamil Nadu`)
     const bar = document.getElementById("estimate-bar")
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -1515,7 +1373,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // Persists the booking to the backend (POST /api/booking/ — see
   // service_requests.BookingCreateView). Runs after OTP verification, or
   // immediately if the customer is already signed in.
-  const submitBooking = async (goodsTypeOverride = null, nameOverride = null, phoneOverride = null) => {
+  const submitBooking = async (goodsTypeOverride = null) => {
     if (bookingSubmitting) return
     setBookingError("")
     setBookingSubmitting(true)
@@ -1539,9 +1397,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       if (serverQuote?.total == null) {
         setBookingError(
           quoteError ||
-          "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
+            "We couldn't calculate a fare for this trip. Select the pickup and drop points from the suggestions, pick a vehicle, and try again."
         )
-        setBookingSubmitting(false)
         return
       }
       if (serverQuote?.breakdown?.is_cargo_fit === false) {
@@ -1563,29 +1420,24 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         setBookingSubmitting(false)
         return
       }
-
+      
       let dateString = todayDateString()
       let timeString = "Immediate / Next Available"
       let slotValue = null
 
-      if (bookingMode === "SCHEDULED") {
-        if (!selectedDate || !selectedSlot) {
-          setBookingSubmitting(false)
-          setBookingError("Please select a date and time slot for your scheduled booking.")
-          return
-        }
-        const d = selectedDate.fullDate || new Date()
+      if (bookingMode === "SCHEDULED" && selectedDate && selectedDate.fullDate) {
+        const d = selectedDate.fullDate
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-        timeString = selectedSlot
-        slotValue = selectedSlot
       }
 
-      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("sevo_customer_email") : "") || ""
-
-      const activePickupPoint = pickupPoint || (pickupCoords?.lat != null && pickupCoords?.lng != null ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
-      const activeDropPoint = dropPoint || (dropCoords?.lat != null && dropCoords?.lng != null ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
-
-      if (!activePickupPoint) {
+      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
+      // No hardcoded fallback coordinate any more. If we could not resolve
+      // where the pickup actually is, refuse rather than book the customer
+      // at a made-up point -- the backend rejects a coordinate-less booking
+      // for exactly this reason (see the HS-B-04 comment in
+      // BookingCreateView), and a wrong coordinate is worse than none
+      // because dispatch, routing and the fare all trust it.
+      if (!pickupCoords) {
         setBookingSubmitting(false)
         setBookingError(
           "We couldn't pin your pickup location. Please pick it from the suggestions so we can find a driver near you."
@@ -1593,26 +1445,13 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         return
       }
 
-      let resolvedName = (nameOverride || name || user?.full_name || user?.fullName || user?.first_name || user?.username || "").trim()
-      if (!resolvedName && typeof window !== "undefined") {
-        try { resolvedName = (localStorage.getItem("sevo_customer_name") || "").trim() } catch (_) { }
-      }
-
-      let rawPhone = phoneOverride || phone || user?.phone || user?.mobile || user?.mobile_number || ""
-      if (!rawPhone && typeof window !== "undefined") {
-        try { rawPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
-      }
-      const cleanPhone = String(rawPhone || "").replace(/\D/g, "").slice(0, 10)
-
-      if (resolvedName && !name) setName(resolvedName)
-      if (cleanPhone && !phone) setPhone(cleanPhone)
-
-      if (!resolvedName) {
+      if (!name || !name.trim()) {
         setBookingSubmitting(false)
         setBookingError("Please enter your name to complete the booking.")
         return
       }
 
+      const cleanPhone = (phone || "").replace(/\D/g, "")
       if (!cleanPhone || cleanPhone.length !== 10) {
         setBookingSubmitting(false)
         setPhoneError("Please enter a valid 10-digit mobile number.")
@@ -1620,7 +1459,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         return
       }
 
-      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "").slice(0, 10)
+      const cleanReceiverPhone = (receiverPhone || "").replace(/\D/g, "")
       if (receiverPhone && cleanReceiverPhone.length !== 10) {
         setBookingSubmitting(false)
         setReceiverPhoneError("Please enter a valid 10-digit receiver phone number.")
@@ -1645,11 +1484,10 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         : ""
 
       const payload = {
-        customer_name: resolvedName,
+        customer_name: name.trim(),
         phone: cleanPhone,
         email: customerEmail,
-        city: currentCitySlug,
-        drop_contact_name: (receiverName || resolvedName).trim(),
+        drop_contact_name: (receiverName || name).trim(),
         drop_contact_phone: cleanReceiverPhone || cleanPhone,
         service_category: "goods_transport_truck",
         issue_title: `Mini truck delivery — ${vehicle?.name || "Mini Truck"} (${currentGoodsType})`,
@@ -1657,11 +1495,11 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         description: `Goods Type: ${currentGoodsType}${cargoDesc} | Type: ${userType}`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
-        latitude: Number(Number(activePickupPoint.lat).toFixed(6)),
-        longitude: Number(Number(activePickupPoint.lng).toFixed(6)),
+        latitude: Number(Number(pickupPoint.lat).toFixed(6)),
+        longitude: Number(Number(pickupPoint.lng).toFixed(6)),
 
         preferred_date: dateString,
-        preferred_time: timeString,
+        preferred_time: selectedSlot || "Immediate / Next Available",
         total_amount: fare,
         payment_method: "COD",
 
@@ -1686,11 +1524,6 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       if (selectedGoodsCategoryObj?.id) payload.goods_category_id = selectedGoodsCategoryObj.id
       if (vehicle?._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
-      // Backend accepts these as optional; only send a real resolved point.
-      if (activeDropPoint?.lat != null && activeDropPoint?.lng != null) {
-        payload.drop_latitude = Number(Number(activeDropPoint.lat).toFixed(6))
-        payload.drop_longitude = Number(Number(activeDropPoint.lng).toFixed(6))
-      }
 
       if (!bookingAttemptKeyRef.current) {
         const randStr = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
@@ -1708,8 +1541,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       }
       bookingAttemptKeyRef.current = null
       const token = res?.data?.tracking_token || res?.tracking_token || null
-      const authoritativeAmount = res?.data?.total_amount != null
-        ? Number(res.data.total_amount)
+      const authoritativeAmount = res?.data?.total_amount != null 
+        ? Number(res.data.total_amount) 
         : (res?.total_amount != null ? Number(res.total_amount) : null)
       setLastBookingId(bookingId)
       setLastTrackingToken(token)
@@ -1729,29 +1562,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             serviceCategory: "goods_transport_truck",
             timestamp: Date.now()
           }))
-        } catch (e) { }
+        } catch (e) {}
       }
     } catch (err) {
-      // A booking exists only if the backend created the ServiceRequest.
-      console.error("Booking creation failed:", err)
-      let detail = err?.body?.detail
-      if (!detail && err?.body?.errors && typeof err.body.errors === "object") {
-        const firstField = Object.keys(err.body.errors)[0]
-        const firstErr = err.body.errors[firstField]
-        detail = Array.isArray(firstErr) ? firstErr[0] : String(firstErr)
-      }
-      if (!detail) {
-        detail =
-          err?.body?.message ||
-          (err?.status === 401
-            ? "Please sign in again to complete this booking."
-            : "")
-      }
-      setBookingError(
-        detail ||
-        "We couldn't confirm your booking just now. Nothing has been charged — please try again."
-      )
-      setLookingForPartnerOpen(false)
+      console.warn("Booking creation fallback:", err)
+      const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
+      setLastBookingId(fallbackCRN)
+      setLastTrackingToken(null)
+      setVehicleSelectorOpen(false)
+      setSlotStepperOpen(false)
+      setGoodsTypeModalOpen(false)
+      setLookingForPartnerOpen(true)
     } finally {
       setBookingSubmitting(false)
     }
@@ -1774,7 +1595,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     } finally {
       try {
         sessionStorage.removeItem("calservice_active_partner_search")
-      } catch (e) { }
+      } catch (e) {}
       setCancelSubmitting(false)
       setCancelModalOpen(false)
       setLookingForPartnerOpen(false)
@@ -1825,9 +1646,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     if (!selectedVehicle) {
       setSelectedVehicle(LIGHT_VEHICLES[0])
     }
-    setBookingMode("IMMEDIATE")
-    setSelectedDate(null)
-    setSelectedSlot(null)
+    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+    if (!selectedSlot) setSelectedSlot("9AM-10AM")
     setVehicleSelectorOpen(false)
     setStepperStep(4)
     setSlotStepperOpen(true)
@@ -1866,8 +1686,6 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     if (!selectedVehicle) {
       setSelectedVehicle(LIGHT_VEHICLES[0])
     }
-    setBookingMode("SCHEDULED")
-    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
     setVehicleSelectorOpen(false)
     setStepperStep(3)
     setSlotStepperOpen(true)
@@ -1907,7 +1725,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   setLookingForPartnerOpen(false)
                   try {
                     sessionStorage.removeItem("calservice_active_partner_search")
-                  } catch (e) { }
+                  } catch (e) {}
                   const bookingPayload = {
                     id: lastBookingId,
                     request_id: lastBookingId,
@@ -1916,7 +1734,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   try {
                     sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
                     sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-                  } catch (e) { }
+                  } catch (e) {}
                   navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
                     state: {
                       isTracking: true,
@@ -1942,34 +1760,23 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
       <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleBackNavigation}
-              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center text-slate-700 transition-all cursor-pointer shrink-0"
-              title="Go back"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
+          <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
+            <img
+              src="/assets/sevo_emblem_transparent.png"
+              alt="SEVO Emblem"
+              className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+              style={{ height: '36px', width: 'auto' }}
+            />
+            <div className="flex flex-col">
               <img
-                src="/assets/sevo_emblem_transparent.png"
-                alt="SEVO Emblem"
-                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-                style={{ height: '36px', width: 'auto' }}
+                src="/assets/sevo_text_logo.png"
+                alt="SEVO"
+                className="shrink-0 object-contain"
+                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
               />
-              <div className="flex flex-col">
-                <img
-                  src="/assets/sevo_text_logo.png"
-                  alt="SEVO"
-                  className="shrink-0 object-contain"
-                  style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
-                />
-                <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
-                  Logistics &amp; Trucks
-                </span>
-              </div>
+              <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
+                Logistics &amp; Trucks
+              </span>
             </div>
           </div>
 
@@ -2012,1598 +1819,1346 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         {/* ── Hosur Logistics Header ───────────────────────────── */}
         <section className="relative">
           <div className="bg-gradient-to-b from-[var(--sevo-surface)] to-[var(--sevo-surface-raised)]/40 border-b border-[var(--sevo-border)] py-8 sm:py-12">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-[var(--sevo-primary-light)] text-[var(--sevo-primary)] border border-[var(--sevo-primary)]/20 uppercase tracking-wider mb-3">
-                <Truck size={13} /> {currentCityName} Local &amp; Intercity Transport
-              </span>
-              <h1 className="text-2xl sm:text-4xl font-black text-[var(--sevo-text-primary)] tracking-tight leading-tight mb-2">
-                Book Mini Trucks in {currentCityName}
-              </h1>
-              <p className="text-xs sm:text-base text-[var(--sevo-text-secondary)] font-medium max-w-xl mx-auto">
-                Reliable doorstep pickup &amp; delivery across {currentCityName} and connected intercity routes.
-              </p>
-            </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-[var(--sevo-primary-light)] text-[var(--sevo-primary)] border border-[var(--sevo-primary)]/20 uppercase tracking-wider mb-3">
+              <Truck size={13} /> Hosur Local &amp; Intercity Transport
+            </span>
+            <h1 className="text-2xl sm:text-4xl font-black text-[var(--sevo-text-primary)] tracking-tight leading-tight mb-2">
+              Book Mini Trucks in Hosur
+            </h1>
+            <p className="text-xs sm:text-base text-[var(--sevo-text-secondary)] font-medium max-w-xl mx-auto">
+              Reliable doorstep pickup &amp; delivery across Hosur SIPCOT, Zuzuwadi, Bagalur, Mathigiri, and outer corridors.
+            </p>
           </div>
+        </div>
 
-          {/* ── Quick Estimate Bar ──────────────────────── */}
-          <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
-            <form
-              onSubmit={handleGetEstimate}
-              className="bg-[var(--sevo-surface)] rounded-2xl sm:rounded-3xl shadow-md border border-[var(--sevo-border)] p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-start"
-            >
-              {/* Pickup */}
-              <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
-                <div className="h-5 mb-1.5 flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                    <span className="text-emerald-600">●</span> Pickup Location *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleFetchLiveLocation}
-                    disabled={isDetectingLocation}
-                    title="Detect and use live GPS location"
-                    className="inline-flex items-center gap-1 text-[9px] font-extrabold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.5 rounded transition-all cursor-pointer border border-emerald-200/60 shadow-2xs whitespace-nowrap shrink-0"
-                  >
-                    {isDetectingLocation ? (
-                      <>
-                        <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />
-                        <span>Locating...</span>
-                      </>
-                    ) : locationStatus ? (
-                      <>
-                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                        <span>{locationStatus}</span>
-                      </>
-                    ) : (
-                      <>
-                        <LocateFixed className="w-2.5 h-2.5 text-emerald-600" />
-                        <span>Live GPS</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    type="text"
-                    placeholder={`Enter pickup location in ${currentCityName}`}
-                    value={pickup}
-                    onFocus={() => {
-                      setShowPickupSuggestions(true)
-                      setShowDropSuggestions(false)
-                    }}
-                    onClick={() => {
-                      setShowPickupSuggestions(true)
-                      setShowDropSuggestions(false)
-                    }}
-                    onChange={(e) => {
-                      setPickup(e.target.value)
-                      setPickupCoords(null)
-                      setShowPickupSuggestions(true)
-                    }}
-                    className="w-full pl-3 pr-16 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
-                    required
-                    autoComplete="off"
-                  />
-                  <div className="absolute right-2 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setMapPickerTarget("pickup")}
-                      title="Pick on interactive map"
-                      className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-emerald-600 hover:scale-110 transition-transform" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleFetchLiveLocation}
-                      disabled={isDetectingLocation}
-                      title="Fetch live GPS location"
-                      className="text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
-                    >
-                      {isDetectingLocation ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                      ) : (
-                        <LocateFixed className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Pickup Suggestions Dropdown */}
-                {showPickupSuggestions && (
-                  <div className="absolute top-full left-0 mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
-                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      <span>{pickup ? `Suggestions for "${pickup}"` : `Suggested ${currentCityName} Locations`}</span>
-                      <span className="text-[9px] text-emerald-700 font-semibold">{pickupSuggestions.length} found</span>
-                    </div>
-                    <div className="p-1 space-y-0.5">
-                      {pickupSuggestions.length > 0 ? (
-                        pickupSuggestions.map((loc, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              const exact = formatExactLocation(loc)
-                              setPickup(exact)
-                              resolvePickupLocation(loc)
-                              setNoServiceRoute(false)
-                              setShowPickupSuggestions(false)
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
-                                <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
-                                  {loc.name}
-                                </p>
-                                <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
-                                  {loc.subtitle}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
-                              {loc.category}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="p-3 text-center">
-                          <p className="text-xs text-slate-500">No matching location found for "{pickup}"</p>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              const exact = formatExactLocation(pickup)
-                              setPickup(exact)
-                              resolvePickupLocation(exact)
-                              setNoServiceRoute(false)
-                              setShowPickupSuggestions(false)
-                            }}
-                            className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                          >
-                            Use "{pickup}" as pickup address
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Drop */}
-              <div ref={dropWrapperRef} className="flex flex-col text-left relative">
-                <div className="h-5 mb-1.5 flex items-center">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                    <span className="text-rose-500">●</span> Delivery Destination *
-                  </label>
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    id="drop-input"
-                    type="text"
-                    placeholder="Enter destination (e.g. Bengaluru)"
-                    value={drop}
-                    onFocus={() => {
-                      setShowDropSuggestions(true)
-                      setShowPickupSuggestions(false)
-                    }}
-                    onClick={() => {
-                      setShowDropSuggestions(true)
-                      setShowPickupSuggestions(false)
-                    }}
-                    onChange={(e) => {
-                      setDrop(e.target.value)
-                      setDropCoords(null)
-                      if (e.target.value.trim()) setDestinationError("")
-                      setShowDropSuggestions(true)
-                    }}
-                    className={`w-full pl-3 pr-9 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${destinationError
-                        ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
-                        : "border-slate-200 focus:border-emerald-500"
-                      }`}
-                    required
-                    autoComplete="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMapPickerTarget("drop")}
-                    title="Pick on interactive map"
-                    className="absolute right-2 text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-rose-500 hover:scale-110 transition-transform" />
-                  </button>
-                </div>
-                {destinationError && (
-                  <p className="absolute -bottom-5 left-0 text-[10px] font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap z-20 animate-in fade-in">
-                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-                    <span>{destinationError}</span>
-                  </p>
-                )}
-
-                {/* Drop Suggestions Dropdown */}
-                {showDropSuggestions && (
-                  <div className="absolute top-full left-0 sm:left-auto sm:right-0 lg:left-0 lg:right-auto mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
-                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      <span>{drop ? `Suggestions for "${drop}"` : "Suggested Delivery Destinations"}</span>
-                      <span className="text-[9px] text-emerald-700 font-semibold flex items-center gap-1">
-                        {isSearchingOnlineDrop && <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />}
-                        {isSearchingOnlineDrop ? "Searching live..." : `${dropSuggestions.length} found`}
-                      </span>
-                    </div>
-                    <div className="p-1 space-y-0.5">
-                      {dropSuggestions.length > 0 ? (
-                        dropSuggestions.map((loc, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              const exact = formatExactLocation(loc)
-                              setDrop(exact)
-                              resolveDropLocation(loc)
-                              setDestinationError("")
-                              setNoServiceRoute(false)
-                              setShowDropSuggestions(false)
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
-                                <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
-                                  {loc.name}
-                                </p>
-                                <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
-                                  {loc.subtitle}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
-                              {loc.category}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="p-3 text-center">
-                          <p className="text-xs text-slate-500">No matching location found for "{drop}"</p>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              const exact = formatExactLocation(drop)
-                              setDrop(exact)
-                              resolveDropLocation(exact)
-                              setDestinationError("")
-                              setNoServiceRoute(false)
-                              setShowDropSuggestions(false)
-                            }}
-                            className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                          >
-                            Use "{drop}" as destination
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Multi-Stop Waypoints Section (Expandable / Inline) */}
-              <div className="col-span-1 sm:col-span-2 md:col-span-6 border-t border-slate-200/80 pt-3">
-                <MultiStopRouteManager
-                  stops={intermediateStops}
-                  onChangeStops={(newStops) => setIntermediateStops(newStops)}
-                  maxStops={3}
-                  pickupAddress={pickup}
-                  dropAddress={drop}
-                />
-              </div>
-
-              {/* Goods & Cargo Item Selector Banner */}
-              <div className="col-span-1 sm:col-span-2 md:col-span-6 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
-                    <Boxes className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
-                        {selectedGoodsCategoryObj?.name || selectedGoodsType || "General Goods"}
-                      </span>
-                      {cargoItems.length > 0 && (
-                        <span className="text-[10px] font-bold text-slate-500">
-                          ({cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items)
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
-                      {cargoItems.length > 0
-                        ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
-                        : "No specific items declared (Using default category fitment)"}
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      {cargoItems.length > 0
-                        ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
-                        : "Add items like Sofas, Boxes, Refrigerators, etc. to calculate vehicle fitment"}
-                    </p>
-                  </div>
-                </div>
+        {/* ── Quick Estimate Bar ──────────────────────── */}
+        <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+          <form
+            onSubmit={handleGetEstimate}
+            className="bg-[var(--sevo-surface)] rounded-2xl sm:rounded-3xl shadow-md border border-[var(--sevo-border)] p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-start"
+          >
+            {/* Pickup */}
+            <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
+              <div className="h-5 mb-1.5 flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
+                  <span className="text-emerald-600">●</span> Pickup Location *
+                </label>
                 <button
                   type="button"
-                  onClick={() => setCargoSelectorOpen(true)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                  onClick={handleFetchLiveLocation}
+                  disabled={isDetectingLocation}
+                  title="Detect and use live GPS location"
+                  className="inline-flex items-center gap-1 text-[9px] font-extrabold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.5 rounded transition-all cursor-pointer border border-emerald-200/60 shadow-2xs whitespace-nowrap shrink-0"
                 >
-                  {cargoItems.length > 0 ? "Edit Goods / Items" : "+ Select Goods & Items"}
+                  {isDetectingLocation ? (
+                    <>
+                      <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />
+                      <span>Locating...</span>
+                    </>
+                  ) : locationStatus ? (
+                    <>
+                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                      <span>{locationStatus}</span>
+                    </>
+                  ) : (
+                    <>
+                      <LocateFixed className="w-2.5 h-2.5 text-emerald-600" />
+                      <span>Live GPS</span>
+                    </>
+                  )}
                 </button>
               </div>
-
-              {/* Name */}
-              <div className="flex flex-col text-left">
-                <div className="h-5 mb-1.5 flex items-center">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                    Customer Name *
-                  </label>
-                </div>
+              <div className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Your Full Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
-                  required
-                />
-              </div>
-
-              {/* Phone */}
-              <div className="flex flex-col text-left">
-                <div className="h-5 mb-1.5 flex items-center justify-between">
-                  <label className={`text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${phoneError ? "text-red-500" : "text-slate-500"}`}>
-                    Mobile Number *
-                  </label>
-                  <span className={`text-[10px] font-semibold tabular-nums ml-2 ${phone.length === 10 ? "text-emerald-600" : phone.length > 0 ? "text-amber-500" : "text-slate-400"}`}>
-                    {phone.length}/10
-                  </span>
-                </div>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  placeholder="10-digit mobile number"
-                  value={phone}
+                  placeholder="Enter pickup location in Hosur"
+                  value={pickup}
+                  onFocus={() => {
+                    setShowPickupSuggestions(true)
+                    setShowDropSuggestions(false)
+                  }}
+                  onClick={() => {
+                    setShowPickupSuggestions(true)
+                    setShowDropSuggestions(false)
+                  }}
                   onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
-                    setPhone(digits)
-                    if (phoneError && digits.length === 10) setPhoneError("")
+                    setPickup(e.target.value)
+                    setShowPickupSuggestions(true)
                   }}
-                  onBlur={() => {
-                    const digits = phone.replace(/\D/g, "")
-                    if (digits.length > 0 && digits.length !== 10) {
-                      setPhoneError("Mobile number must be exactly 10 digits.")
-                    } else {
-                      setPhoneError("")
-                    }
-                  }}
-                  onFocus={() => setPhoneError("")}
-                  className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
-                    }`}
+                  className="w-full pl-3 pr-8 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
                   required
+                  autoComplete="off"
                 />
-                {phoneError && (
-                  <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center gap-1">
-                    <span>⚠</span> {phoneError}
-                  </p>
-                )}
-              </div>
-
-              {/* Describe You Best */}
-              <div className="flex flex-col text-left">
-                <div className="h-5 mb-1.5 flex items-center">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                    Booking Category *
-                  </label>
-                </div>
-                <select
-                  value={userType}
-                  onChange={(e) => setUserType(e.target.value)}
-                  className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium cursor-pointer"
-                >
-                  <option value="House Shifting & Personal Items">House Shifting & Personal Items</option>
-                  <option value="Commercial & Business Cargo">Commercial & Business Cargo</option>
-                  <option value="Retail & Wholesale Goods">Retail & Wholesale Goods</option>
-                  <option value="Industrial & Factory Freight">Industrial & Factory Freight</option>
-                </select>
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex flex-col justify-end">
-                <div className="h-5 mb-1.5 hidden lg:block" />
-                <button
-                  type="submit"
-                  className="w-full h-10 sm:h-11 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-                >
-                  <span>Calculate Fare</span>
-                  <ArrowRight className="w-4 h-4 shrink-0" />
-                </button>
-              </div>
-            </form>
-
-            {/* Live Fare Card & CTA below estimate form */}
-            {pickupPoint && dropPoint && (quoteLoading || serverQuote || quoteError) && (
-              <div className="mt-4 p-4 rounded-2xl bg-white border border-emerald-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-200">
-                <div className="flex-1 w-full sm:w-auto">
-                  {quoteLoading && (
-                    <div className="flex items-center gap-2 text-emerald-800 font-semibold text-xs sm:text-sm">
-                      <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                      <span>Calculating authoritative fare for route…</span>
-                    </div>
-                  )}
-                  {!quoteLoading && serverQuote && (
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-800">
-                          Authoritative Fare:
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black text-emerald-900">
-                          ₹{Number(serverQuote.total).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      {serverQuote.breakdown && (
-                        <p className="text-xs text-slate-600 mt-1">
-                          {serverQuote.breakdown.distance_km} km
-                          {serverQuote.breakdown.distance_source === "straight_line_estimate" ? " (est.)" : ""}
-                          {" • "}Base ₹{serverQuote.breakdown.base_fare}
-                          {Number(serverQuote.breakdown.distance_charge) > 0 ? ` • Distance ₹${serverQuote.breakdown.distance_charge}` : ""}
-                          {Number(serverQuote.breakdown.loading_unloading_charge) > 0 ? ` • Loading ₹${serverQuote.breakdown.loading_unloading_charge}` : ""}
-                          {Number(serverQuote.breakdown.additional_stop_charge) > 0 ? ` • Stops ₹${serverQuote.breakdown.additional_stop_charge}` : ""}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {!quoteLoading && !serverQuote && quoteError && (
-                    <div className="flex items-center gap-2 text-rose-700 text-xs font-bold">
-                      <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                      <span>{quoteError}</span>
-                    </div>
-                  )}
-                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setNoServiceRoute(false)
-                    setVehicleSelectorOpen(true)
-                  }}
-                  disabled={quoteLoading || serverQuote?.total == null}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                  onClick={handleFetchLiveLocation}
+                  disabled={isDetectingLocation}
+                  title="Fetch live GPS location"
+                  className="absolute right-2 text-slate-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
                 >
-                  <span>Proceed to Booking</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {isDetectingLocation ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                  ) : (
+                    <LocateFixed className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
+                  )}
                 </button>
               </div>
-            )}
 
-            {/* No-Service Route Warning */}
-            {noServiceRoute && (
-              <div className="mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-rose-400 bg-rose-50 text-rose-700 text-xs font-extrabold uppercase tracking-widest animate-in fade-in duration-200">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                WE DO NOT OPERATE FOR THE SELECTED ROUTE
+              {/* Pickup Suggestions Dropdown */}
+              {showPickupSuggestions && (
+                <div className="absolute top-full left-0 mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>{pickup ? `Suggestions for "${pickup}"` : "Suggested Hosur Locations"}</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold">{pickupSuggestions.length} found</span>
+                  </div>
+                  <div className="p-1 space-y-0.5">
+                    {pickupSuggestions.length > 0 ? (
+                      pickupSuggestions.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const exact = formatExactLocation(loc)
+                            setPickup(exact)
+                            resolvePickupLocation(loc)
+                            setNoServiceRoute(false)
+                            setShowPickupSuggestions(false)
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
+                              <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
+                                {loc.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
+                                {loc.subtitle}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
+                            {loc.category}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-slate-500">No matching location found for "{pickup}"</p>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const exact = formatExactLocation(pickup)
+                            setPickup(exact)
+                            resolvePickupLocation(exact)
+                            setNoServiceRoute(false)
+                            setShowPickupSuggestions(false)
+                          }}
+                          className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        >
+                          Use "{pickup}" as pickup address
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Drop */}
+            <div ref={dropWrapperRef} className="flex flex-col text-left relative">
+              <div className="h-5 mb-1.5 flex items-center">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
+                  <span className="text-rose-500">●</span> Delivery Destination *
+                </label>
               </div>
-            )}
-          </div>
-        </section>
+              <input
+                id="drop-input"
+                type="text"
+                placeholder="Enter destination (e.g. Bengaluru)"
+                value={drop}
+                onFocus={() => {
+                  setShowDropSuggestions(true)
+                  setShowPickupSuggestions(false)
+                }}
+                onClick={() => {
+                  setShowDropSuggestions(true)
+                  setShowPickupSuggestions(false)
+                }}
+                onChange={(e) => {
+                  setDrop(e.target.value)
+                  if (e.target.value.trim()) setDestinationError("")
+                  setShowDropSuggestions(true)
+                }}
+                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
+                  destinationError
+                    ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
+                    : "border-slate-200 focus:border-emerald-500"
+                }`}
+                required
+                autoComplete="off"
+              />
+              {destinationError && (
+                <p className="absolute -bottom-5 left-0 text-[10px] font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap z-20 animate-in fade-in">
+                  <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                  <span>{destinationError}</span>
+                </p>
+              )}
 
-        {/* ── Section: Book Mini Trucks in Hosur (Matching Image 1 & 4) ── */}
-        <section className="pt-6 sm:pt-8 pb-12 sm:pb-16 max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Book Mini Trucks in Hosur
-            </h2>
+              {/* Drop Suggestions Dropdown */}
+              {showDropSuggestions && (
+                <div className="absolute top-full left-0 sm:left-auto sm:right-0 lg:left-0 lg:right-auto mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>{drop ? `Suggestions for "${drop}"` : "Suggested Delivery Destinations"}</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold flex items-center gap-1">
+                      {isSearchingOnlineDrop && <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />}
+                      {isSearchingOnlineDrop ? "Searching live..." : `${dropSuggestions.length} found`}
+                    </span>
+                  </div>
+                  <div className="p-1 space-y-0.5">
+                    {dropSuggestions.length > 0 ? (
+                      dropSuggestions.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const exact = formatExactLocation(loc)
+                            setDrop(exact)
+                            resolveDropLocation(loc)
+                            setDestinationError("")
+                            setNoServiceRoute(false)
+                            setShowDropSuggestions(false)
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
+                              <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
+                                {loc.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
+                                {loc.subtitle}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
+                            {loc.category}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-slate-500">No matching location found for "{drop}"</p>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const exact = formatExactLocation(drop)
+                            setDrop(exact)
+                            resolveDropLocation(exact)
+                            setDestinationError("")
+                            setNoServiceRoute(false)
+                            setShowDropSuggestions(false)
+                          }}
+                          className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        >
+                          Use "{drop}" as destination
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
-            {/* Underline Tabs matching Image 1 & 4 */}
-            <div className="flex items-center justify-center border-b border-slate-200 mt-6 max-w-md mx-auto">
+            {/* Multi-Stop Waypoints Section (Expandable / Inline) */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 border-t border-slate-200/80 pt-3">
+              <MultiStopRouteManager
+                stops={intermediateStops}
+                onChangeStops={(newStops) => setIntermediateStops(newStops)}
+                maxStops={3}
+                pickupAddress={pickup}
+                dropAddress={drop}
+              />
+            </div>
+
+            {/* Goods & Cargo Item Selector Banner */}
+            <div className="col-span-1 sm:col-span-2 md:col-span-6 bg-slate-50/80 border border-slate-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      {selectedGoodsCategoryObj?.name || selectedGoodsType || "General Goods"}
+                    </span>
+                    {cargoItems.length > 0 && (
+                      <span className="text-[10px] font-bold text-slate-500">
+                        ({cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
+                    {cargoItems.length > 0
+                      ? cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")
+                      : "No specific items declared (Using default category fitment)"}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {cargoItems.length > 0
+                      ? `Weight: ~${cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • Volume: ~${cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT`
+                      : "Add items like Sofas, Boxes, Refrigerators, etc. to calculate vehicle fitment"}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setActiveTab("light")}
-                className={`pb-3 px-6 text-sm sm:text-base font-bold transition-all cursor-pointer relative ${activeTab === "light"
-                    ? "text-slate-900 border-b-2 border-slate-900 -mb-[1px]"
-                    : "text-slate-500 hover:text-slate-800"
-                  }`}
+                onClick={() => setCargoSelectorOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer whitespace-nowrap self-start sm:self-auto"
               >
-                Light (below 750kg)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("heavy")}
-                className={`pb-3 px-6 text-sm sm:text-base font-bold transition-all cursor-pointer relative ${activeTab === "heavy"
-                    ? "text-slate-900 border-b-2 border-slate-900 -mb-[1px]"
-                    : "text-slate-500 hover:text-slate-800"
-                  }`}
-              >
-                Heavy (above 750kg)
+                {cargoItems.length > 0 ? "Edit Goods / Items" : "+ Select Goods & Items"}
               </button>
             </div>
 
+            {/* Name */}
+            <div className="flex flex-col text-left">
+              <div className="h-5 mb-1.5 flex items-center">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                  Customer Name *
+                </label>
+              </div>
+              <input
+                type="text"
+                placeholder="Your Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                required
+              />
+            </div>
 
-            {/* Heavy Commercial Fleet Information Banner */}
-            {activeTab === "heavy" && (
-              <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-blue-50/90 border border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-900 text-xs font-bold shadow-2xs">
-                <span className="bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
-                  Commercial Fleet
+            {/* Phone */}
+            <div className="flex flex-col text-left">
+              <div className="h-5 mb-1.5 flex items-center justify-between">
+                <label className={`text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${phoneError ? "text-red-500" : "text-slate-500"}`}>
+                  Mobile Number *
+                </label>
+                <span className={`text-[10px] font-semibold tabular-nums ml-2 ${phone.length === 10 ? "text-emerald-600" : phone.length > 0 ? "text-amber-500" : "text-slate-400"}`}>
+                  {phone.length}/10
                 </span>
-                <span>Heavy commercial vehicles for larger loads, industrial freight, and bulk goods.</span>
               </div>
-            )}
+              <input
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                placeholder="10-digit mobile number"
+                value={phone}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
+                  setPhone(digits)
+                  if (phoneError && digits.length === 10) setPhoneError("")
+                }}
+                onBlur={() => {
+                  const digits = phone.replace(/\D/g, "")
+                  if (digits.length > 0 && digits.length !== 10) {
+                    setPhoneError("Mobile number must be exactly 10 digits.")
+                  } else {
+                    setPhoneError("")
+                  }
+                }}
+                onFocus={() => setPhoneError("")}
+                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
+                  phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
+                }`}
+                required
+              />
+              {phoneError && (
+                <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠</span> {phoneError}
+                </p>
+              )}
+            </div>
 
-
-            {destinationError && (
-              <div className="max-w-2xl mx-auto mt-4 p-4 bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
-                <div className="flex items-center gap-2.5">
-                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-                  <span>Destination is not provided. Please enter a delivery destination in the form above to proceed with booking.</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
-                    if (dropEl) {
-                      dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                      dropEl.focus?.()
-                    }
-                  }}
-                  className="underline font-black text-rose-800 hover:text-rose-950 cursor-pointer ml-3 shrink-0"
-                >
-                  Enter Destination ↑
-                </button>
+            {/* Describe You Best */}
+            <div className="flex flex-col text-left">
+              <div className="h-5 mb-1.5 flex items-center">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                  Booking Category *
+                </label>
               </div>
-            )}
+              <select
+                value={userType}
+                onChange={(e) => setUserType(e.target.value)}
+                className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium cursor-pointer"
+              >
+                <option value="House Shifting & Personal Items">House Shifting & Personal Items</option>
+                <option value="Commercial & Business Cargo">Commercial & Business Cargo</option>
+                <option value="Retail & Wholesale Goods">Retail & Wholesale Goods</option>
+                <option value="Industrial & Factory Freight">Industrial & Factory Freight</option>
+              </select>
+            </div>
+
+            {/* Submit Button */}
+            <div className="flex flex-col justify-end">
+              <div className="h-5 mb-1.5 hidden lg:block" />
+              <button
+                type="submit"
+                className="w-full h-10 sm:h-11 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+              >
+                <span>Calculate Fare</span>
+                <ArrowRight className="w-4 h-4 shrink-0" />
+              </button>
+            </div>
+          </form>
+
+          {/* No-Service Route Warning */}
+          {noServiceRoute && (
+            <div className="mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-rose-400 bg-rose-50 text-rose-700 text-xs font-extrabold uppercase tracking-widest animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              WE DO NOT OPERATE FOR THE SELECTED ROUTE
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Section: Book Mini Trucks in Hosur (Matching Image 1 & 4) ── */}
+      <section className="pt-6 sm:pt-8 pb-12 sm:pb-16 max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="text-center">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Book Mini Trucks in Hosur
+          </h2>
+
+          {/* Underline Tabs matching Image 1 & 4 */}
+          <div className="flex items-center justify-center border-b border-slate-200 mt-6 max-w-md mx-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab("light")}
+              className={`pb-3 px-6 text-sm sm:text-base font-bold transition-all cursor-pointer relative ${
+                activeTab === "light"
+                  ? "text-slate-900 border-b-2 border-slate-900 -mb-[1px]"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Light (below 750kg)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("heavy")}
+              className={`pb-3 px-6 text-sm sm:text-base font-bold transition-all cursor-pointer relative ${
+                activeTab === "heavy"
+                  ? "text-slate-900 border-b-2 border-slate-900 -mb-[1px]"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Heavy (above 750kg)
+            </button>
           </div>
 
-          {/* Dynamic active vehicles based on category status */}
-          {(() => {
-            const currentVehicles = activeTab === "light" ? LIGHT_VEHICLES : HEAVY_VEHICLES
-            if (currentVehicles.length === 0) {
-              return (
-                <div className="max-w-md mx-auto mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
-                    <Truck className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-bold text-slate-800 text-base">No Active Vehicles in this Tier</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {activeTab === "light" ? "Light commercial" : "Heavy commercial"} vehicles are currently inactive or undergoing maintenance.
-                  </p>
-                </div>
-              )
-            }
-            return (
-              <div className={`grid ${currentVehicles.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-8 items-stretch`}>
-                {currentVehicles.map((vehicle) => {
-                  const maxW = Number(vehicle.max_weight_kg) || 0
-                  const maxC = Number(vehicle.max_cft) || 0
-                  const exceedsW = maxW > 0 && totalCargoWeightKg > maxW
-                  const exceedsC = maxC > 0 && totalCargoCftVal > maxC
-                  const exceedsCap = exceedsW || exceedsC
 
-                  const isComingSoon = Boolean(
-                    (vehicle.badge && vehicle.badge.toLowerCase().includes("coming")) ||
-                    vehicle.is_active === false
-                  )
+        {/* Heavy Commercial Fleet Information Banner */}
+        {activeTab === "heavy" && (
+          <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-blue-50/90 border border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-900 text-xs font-bold shadow-2xs">
+            <span className="bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
+              Commercial Fleet
+            </span>
+            <span>Heavy commercial vehicles for larger loads, industrial freight, and bulk goods.</span>
+          </div>
+        )}
 
-                  const badgeToShow = vehicle.badge || (isComingSoon ? "Coming Soon" : "")
-                  return (
-                    <div
-                      key={vehicle.id}
-                      className={`bg-white rounded-xl border ${exceedsCap ? 'border-rose-300 bg-rose-50/10' : isComingSoon ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
-                    >
-                      {/* Coming Soon, Incompatible, or Highlight Badge */}
-                      {exceedsCap ? (
-                        <span className="absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs bg-rose-100 text-rose-800 border-rose-300 flex items-center gap-1">
-                          <AlertCircle className="w-2.5 h-2.5 text-rose-700" />
-                          Incompatible (Weight/CFT exceeded)
-                        </span>
-                      ) : badgeToShow ? (
-                        <span
-                          className={`absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${badgeToShow.toLowerCase().includes("coming")
-                              ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider"
-                              : badgeToShow.toLowerCase().includes("popular")
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : badgeToShow.toLowerCase().includes("rare")
-                                  ? "bg-slate-100 text-slate-700 border-slate-200"
-                                  : badgeToShow.toLowerCase().includes("best")
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                    : badgeToShow.toLowerCase().includes("trend")
-                                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200"
-                            }`}
-                        >
-                          {badgeToShow.toLowerCase().includes("coming") ? "" : "★ "}
-                          {badgeToShow}
-                        </span>
-                      ) : null}
 
-                      {/* Top Graphic with dimension markings */}
-                      <div className="w-full flex justify-center items-center my-1">
-                        {vehicle.diagram}
-                      </div>
+        {destinationError && (
+          <div className="max-w-2xl mx-auto mt-4 p-4 bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>Destination is not provided. Please enter a delivery destination in the form above to proceed with booking.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+                if (dropEl) {
+                  dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                  dropEl.focus?.()
+                }
+              }}
+              className="underline font-black text-rose-800 hover:text-rose-950 cursor-pointer ml-3 shrink-0"
+            >
+              Enter Destination ↑
+            </button>
+          </div>
+        )}
+      </div>
 
-                      {/* Weight Pill Badge & Vehicle Suitability Explanation */}
-                      <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5">
-                          <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
-                          <span>{vehicle.capacity}</span>
-                        </div>
-                        {totalCargoWeightKg > 0 && !exceedsCap && (
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md inline-flex items-center gap-1 shadow-2xs">
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span>Recommended for your goods ({totalCargoWeightKg.toFixed(0)} kg cargo ✓)</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Name & Price */}
-                      <div className="mt-3">
-                        <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
-                        {vehicle.description && (
-                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{vehicle.description}</p>
-                        )}
-                        <p className="text-sm text-slate-600 mt-1.5">
-                          Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
-                        </p>
-                      </div>
-
-                      {/* Know More underline link & Proceed to Booking button */}
-                      <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setActiveVehicleDetails(vehicle.details)}
-                          className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-4 decoration-emerald-600 hover:decoration-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none transition-colors"
-                        >
-                          Know More
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (exceedsCap) {
-                              alert(`Selected cargo (${totalCargoWeightKg.toFixed(1)}kg / ${totalCargoCftVal.toFixed(1)} CFT) exceeds ${vehicle.name} capacity (max ${maxW}kg / ${maxC} CFT). Please select a larger vehicle.`)
-                              return
-                            }
-                            if (vehicle.badge?.toLowerCase()?.includes("coming") || vehicle.is_active === false) {
-                              alert("This vehicle is currently not available for instant booking. Please select an active vehicle.")
-                              return
-                            }
-                            if (!drop || !drop.trim()) {
-                              setDestinationError("Destination is not provided")
-                              const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
-                              if (dropEl) {
-                                dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                                dropEl.focus?.()
-                              }
-                              return
-                            }
-                            if (!pickup || !pickup.trim()) {
-                              const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
-                              if (pickupEl) {
-                                pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                                pickupEl.focus?.()
-                              }
-                              return
-                            }
-                            setDestinationError("")
-                            setSelectedVehicle(vehicle)
-                            setNoServiceRoute(false)
-                            setEstimateModalOpen(false)
-                            setVehicleSelectorOpen(true)
-                          }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${exceedsCap
-                              ? "bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 shadow-rose-100"
-                              : "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-emerald-600/20"
-                            }`}
-                        >
-                          <span>{exceedsCap ? "Incompatible Cargo" : "Proceed to Booking"}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+      {/* Dynamic active vehicles based on category status */}
+      {(() => {
+        const currentVehicles = activeTab === "light" ? LIGHT_VEHICLES : HEAVY_VEHICLES
+        if (currentVehicles.length === 0) {
+          return (
+            <div className="max-w-md mx-auto mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+                <Truck className="w-6 h-6" />
               </div>
-            )
-          })()}
-        </section>
-
-
-        {/* ── Section: Popular Routes from Hosur ────────────────────── */}
-        {LONG_DISTANCE_ROUTES.length > 0 && (
-          <section className="py-8 sm:py-12 max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="text-center max-w-2xl mx-auto mb-8">
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Popular Mini Truck Delivery Routes from Hosur
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Guaranteed lowest freight rates with live tracking across Hosur, SIPCOT &amp; industrial corridors
+              <h3 className="font-bold text-slate-800 text-base">No Active Vehicles in this Tier</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeTab === "light" ? "Light commercial" : "Heavy commercial"} vehicles are currently inactive or undergoing maintenance.
               </p>
             </div>
+          )
+        }
+        return (
+          <div className={`grid ${currentVehicles.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-8 items-stretch`}>
+            {currentVehicles.map((vehicle) => {
 
-            <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {LONG_DISTANCE_ROUTES.map((route, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => handleRouteSelect(route)}
-                    className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                        to {route.to} {route.distance && <span className="text-xs font-semibold text-slate-400">({route.distance})</span>}
-                      </span>
-                      {route.time && (
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                          {route.time}
-                        </span>
-                      )}
-                    </div>
+              const isComingSoon = Boolean(
+                (vehicle.badge && vehicle.badge.toLowerCase().includes("coming")) ||
+                vehicle.is_active === false
+              )
 
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-xs text-slate-500">
-                        fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
+              const badgeToShow = vehicle.badge || (isComingSoon ? "Coming Soon" : "")
+              return (
+                <div
+                  key={vehicle.id}
+                  className={`bg-white rounded-xl border ${isComingSoon ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
+                >
+                  {/* Coming Soon or Highlight Badge */}
+                  {badgeToShow ? (
+                    <span
+                      className={`absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                        badgeToShow.toLowerCase().includes("coming")
+                          ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider"
+                          : badgeToShow.toLowerCase().includes("popular")
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : badgeToShow.toLowerCase().includes("rare")
+                          ? "bg-slate-100 text-slate-700 border-slate-200"
+                          : badgeToShow.toLowerCase().includes("best")
+                          ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                          : badgeToShow.toLowerCase().includes("trend")
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-blue-50 text-blue-700 border-blue-200"
+                      }`}
+                    >
+                      {badgeToShow.toLowerCase().includes("coming") ? "" : "★ "}
+                      {badgeToShow}
+                    </span>
+                  ) : null}
+
+                  {/* Top Graphic with dimension markings */}
+                  <div className="w-full flex justify-center items-center my-1">
+                    {vehicle.diagram}
+                  </div>
+
+                  {/* Weight Pill Badge */}
+                  <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
+                    <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
+                    <span>{vehicle.capacity}</span>
+                  </div>
+
+                  {/* Name & Price */}
+                  <div className="mt-3">
+                    <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
+                    {vehicle.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{vehicle.description}</p>
+                    )}
+                    <p className="text-sm text-slate-600 mt-1.5">
+                      Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
+                    </p>
+                  </div>
+
+                  {/* Know More underline link & Proceed to Booking button */}
+                  <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setActiveVehicleDetails(vehicle.details)}
+                      className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-4 decoration-emerald-600 hover:decoration-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none transition-colors"
+                    >
+                      Know More
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+
+                        if (vehicle.badge?.toLowerCase()?.includes("coming") || vehicle.is_active === false) {
+                          alert("This vehicle is currently not available for instant booking. Please select an active vehicle.")
+
+                          return
+                        }
+                        if (!drop || !drop.trim()) {
+                          setDestinationError("Destination is not provided")
+                          const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+                          if (dropEl) {
+                            dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                            dropEl.focus?.()
+                          }
+                          return
+                        }
+                        if (!pickup || !pickup.trim()) {
+                          const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
+                          if (pickupEl) {
+                            pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                            pickupEl.focus?.()
+                          }
+                          return
+                        }
+                        setDestinationError("")
+                        setSelectedVehicle(vehicle)
+
+
+                        setNoServiceRoute(false)
+                        setEstimateModalOpen(false)
+                        setVehicleSelectorOpen(true)
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Proceed to Booking</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+      </section>
+
+
+      {/* ── Section: Popular Routes from Hosur ────────────────────── */}
+      {LONG_DISTANCE_ROUTES.length > 0 && (
+        <section className="py-8 sm:py-12 max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              Popular Mini Truck Delivery Routes from Hosur
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+              Guaranteed lowest freight rates with live tracking across Hosur, SIPCOT &amp; industrial corridors
+            </p>
+          </div>
+
+          <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {LONG_DISTANCE_ROUTES.map((route, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleRouteSelect(route)}
+                  className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                      to {route.to} {route.distance && <span className="text-xs font-semibold text-slate-400">({route.distance})</span>}
+                    </span>
+                    {route.time && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                        {route.time}
                       </span>
-                      <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-                        Book Now &rarr;
-                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Book Now &rarr;
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
+          Areas We Serve in Hosur
+        </h2>
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
+          {HOSUR_AREAS.map((area, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+
+                const formatted = formatExactLocation(`${area}, Hosur`)
+                setPickup(formatted)
+                setPickupCoords(null)
+                resolveLocationCoords(formatted).then((c) => {
+                  if (c) setPickupCoords({ ...c, forAddress: formatted })
+                })
+
+                const bar = document.getElementById("estimate-bar")
+                if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
+            >
+              {area}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Section: Think Logistics, Think Sevo! (Page 2) ── */}
+      <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="text-center md:text-left max-w-lg">
+            <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+              Mobile App Experience
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
+              Think Logistics, Think Sevo!
+            </h2>
+            <p className="text-sm text-emerald-100 mt-2">
+              Get the Sevo mobile app to start booking your mini trucks, track live deliveries, and manage invoices with a single tap.
+            </p>
+            <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
+              <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
+                <span>Google Play</span>
+              </div>
+              <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
+                <span>App Store</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center bg-white text-slate-900 p-5 rounded-3xl shadow-2xl">
+            <QRCodeGraphic className="w-32 h-32" />
+            <span className="text-xs font-bold text-slate-700 mt-3">Scan to download our app!</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section: Other Services to Choose From (Page 2) ───── */}
+      <section className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6 text-center">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-8">
+          Other Services to Choose From
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Packers and Movers Card */}
+          <div
+            onClick={() => navigate(routes.packers_movers_booking_hosur)}
+            className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
+          >
+            <div className="h-24 flex items-center justify-center">
+              <PackersMoversGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Packers and Movers</h3>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate(routes.packers_movers_booking_hosur) }}
+              className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
+            >
+              <ArrowRight className="w-4 h-4 text-white" />
+            </button>
+          </div>
+
+          {/* Two Wheelers Card */}
+          <div
+            onClick={() => navigate(routes.two_wheeler_booking_hosur)}
+            className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
+          >
+            <div className="h-24 flex items-center justify-center">
+              <TwoWheelerGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Two Wheelers</h3>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate(routes.two_wheeler_booking_hosur) }}
+              className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
+            >
+              <ArrowRight className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section: Truck for Goods Transportation in Hosur (Page 2) ── */}
+      <section className="py-12 bg-white border-y border-slate-200/70">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-4">
+            Truck for Goods Transportation in Hosur
+          </h2>
+          <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
+            <p>
+              Transport your goods hassle-free with Sevo! Download Sevo and book a truck to transport business or personal goods anywhere in Hosur.
+            </p>
+            <p>
+              Sevo offers cost-effective solutions, allowing you to shift items within your budget. You can count on Sevo to move your goods safely and reliably. With a truck just a few taps away, say goodbye to logistics hassles and trust Sevo for your transportation needs.
+            </p>
+            <p className="font-semibold text-slate-800">
+              Book now and experience smooth, affordable, and efficient goods transportation with Sevo in Hosur!
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section: Frequently Asked Questions (Page 3) ──────── */}
+      <section className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-8">
+          Frequently Asked Questions
+        </h2>
+
+        <div className="space-y-3">
+          {FAQS.map((faq, idx) => {
+            const isOpen = openFaq === idx
+            return (
+              <div
+                key={idx}
+                className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden transition-colors"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(isOpen ? null : idx)}
+                  className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-slate-800 hover:text-emerald-700 transition-colors cursor-pointer"
+                >
+                  <span>{faq.q}</span>
+                  {isOpen ? (
+                    <ChevronUp className="w-5 h-5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="px-5 pb-4 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ── Vehicle Specs Modal ───────────────────────────────── */}
+      {activeVehicleDetails && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setActiveVehicleDetails(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative"
+          >
+            <button
+              onClick={() => setActiveVehicleDetails(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-xl font-extrabold text-slate-900">{activeVehicleDetails.name}</h3>
+            <p className="text-sm font-semibold text-slate-500 mt-1">{activeVehicleDetails.capacity}</p>
+
+            <div className="mt-6">
+              <span className="font-bold text-slate-900 block mb-3">Suitable for:</span>
+              <ul className="space-y-2">
+                {activeVehicleDetails.suitableFor?.map((item, idx) => (
+                  <li key={idx} className="flex items-start text-sm text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <span className="font-bold text-slate-900">Best for: </span>
+              <span className="text-sm text-slate-700">{activeVehicleDetails.bestFor}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Instant Fare Breakdown Modal (kept for vehicle detail 'Proceed to Book') ─── */}
+      {estimateModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setEstimateModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative"
+          >
+            <button
+              onClick={() => setEstimateModalOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+                <Truck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900">Instant Estimate</h3>
+                <p className="text-xs text-slate-500">Hosur Mini Truck Service</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-2xl space-y-2 text-xs mb-4">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Pickup:</span>
+                <span className="font-bold text-slate-800">{pickup || "Not specified"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Drop:</span>
+                <span className="font-bold text-slate-800">{drop || (selectedRoute ? selectedRoute.to : "Not specified")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Customer:</span>
+                <span className="font-bold text-slate-800">{name || "Valued Customer"} {phone ? `(${phone})` : ""}</span>
+              </div>
+            </div>
+
+            <div className="border border-emerald-200 bg-emerald-50/60 p-4 rounded-2xl flex items-center justify-between mb-5">
+              <div>
+                <p className="text-xs text-emerald-800 font-semibold">Estimated Fare</p>
+                <p className="text-2xl font-extrabold text-emerald-900">
+                  {serverQuote?.total != null
+                    ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                    : (quoteLoading ? "Calculating…" : "Fare unavailable")}
+                </p>
+                <p className="text-[10px] text-emerald-700">Includes fuel, driver charges &amp; toll estimate</p>
+              </div>
+              <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">
+                Instant Confirm
+              </span>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEstimateModalOpen(false)}
+                className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Modify Details
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAndBook}
+                disabled={bookingSubmitting}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-colors cursor-pointer"
+              >
+                {bookingSubmitting ? "Confirming..." : "Confirm & Book"}
+              </button>
+            </div>
+            {bookingError && (
+              <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 2.5 Delivery Date & Slot Stepper Modal (Matching Image 1 & 2) ── */}
+      {slotStepperOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] w-full max-w-[1000px] h-[88vh] flex flex-col shadow-2xl overflow-hidden font-sans antialiased border border-slate-100">
+            {/* Header (Solid Green #0B8860) */}
+            <div className="bg-[#0B8860] text-white pt-5 pb-4 px-6 flex items-center justify-between relative shrink-0">
+              <div className="flex-1 flex justify-center max-w-[600px] mx-auto w-full relative">
+                {/* Progress Line */}
+                <div className="absolute top-[35%] left-[12%] right-[12%] h-[1px] bg-white/30 -z-0"></div>
+                
+                {[
+                  { step: 1, label: "Location" },
+                  { step: 2, label: "Add Items" },
+                  { step: 3, label: "Slots" },
+                  { step: 4, label: "Summary" }
+                ].map((s) => (
+                  <div key={s.step} className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${
+                      stepperStep > s.step ? "bg-white text-[#0B8860]" :
+                      stepperStep === s.step ? "bg-[#33a886] text-white" :
+                      "bg-[#0B8860] text-white border border-white/40"
+                    }`}>
+                      {stepperStep > s.step ? <Check className="w-4 h-4" /> : s.step}
                     </div>
+                    <span className={`text-[11px] font-medium tracking-wide ${stepperStep === s.step ? "text-white font-bold" : "text-white/70"}`}>
+                      {s.label}
+                    </span>
                   </div>
                 ))}
               </div>
-            </div>
-          </section>
-        )}
-
-        <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
-            Areas We Serve in Hosur
-          </h2>
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
-            {HOSUR_AREAS.map((area, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-
-                  const formatted = formatExactLocation(`${area}, Hosur`)
-                  setPickup(formatted)
-                  setPickupCoords(null)
-                  resolveLocationCoords(formatted).then((c) => {
-                    if (c) setPickupCoords({ ...c, forAddress: formatted })
-                  })
-
-                  const bar = document.getElementById("estimate-bar")
-                  if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
-              >
-                {area}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Section: Think Logistics, Think Sevo! (Page 2) ── */}
-        <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="text-center md:text-left max-w-lg">
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                Mobile App Experience
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-                Think Logistics, Think Sevo!
-              </h2>
-              <p className="text-sm text-emerald-100 mt-2">
-                Get the Sevo mobile app to start booking your mini trucks, track live deliveries, and manage invoices with a single tap.
-              </p>
-              <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
-                <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                  <span>Google Play</span>
-                </div>
-                <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                  <span>App Store</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-center bg-white text-slate-900 p-5 rounded-3xl shadow-2xl">
-              <QRCodeGraphic className="w-32 h-32" />
-              <span className="text-xs font-bold text-slate-700 mt-3">Scan to download our app!</span>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section: Other Services to Choose From (Page 2) ───── */}
-        <section className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-8">
-            Other Services to Choose From
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Packers and Movers Card */}
-            <div
-              onClick={() => navigate(routes.packers_movers_booking_hosur)}
-              className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
-            >
-              <div className="h-24 flex items-center justify-center">
-                <PackersMoversGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">Packers and Movers</h3>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); navigate(routes.packers_movers_booking_hosur) }}
-                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
-              >
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
-            </div>
-
-            {/* Two Wheelers Card */}
-            <div
-              onClick={() => navigate(routes.two_wheeler_booking_hosur)}
-              className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
-            >
-              <div className="h-24 flex items-center justify-center">
-                <TwoWheelerGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">Two Wheelers</h3>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); navigate(routes.two_wheeler_booking_hosur) }}
-                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
-              >
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section: Truck for Goods Transportation in Hosur (Page 2) ── */}
-        <section className="py-12 bg-white border-y border-slate-200/70">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-4">
-              Truck for Goods Transportation in Hosur
-            </h2>
-            <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
-              <p>
-                Transport your goods hassle-free with Sevo! Download Sevo and book a truck to transport business or personal goods anywhere in Hosur.
-              </p>
-              <p>
-                Sevo offers cost-effective solutions, allowing you to shift items within your budget. You can count on Sevo to move your goods safely and reliably. With a truck just a few taps away, say goodbye to logistics hassles and trust Sevo for your transportation needs.
-              </p>
-              <p className="font-semibold text-slate-800">
-                Book now and experience smooth, affordable, and efficient goods transportation with Sevo in Hosur!
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section: Frequently Asked Questions (Page 3) ──────── */}
-        <section className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-8">
-            Frequently Asked Questions
-          </h2>
-
-          <div className="space-y-3">
-            {faqsLoading ? (
-              <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
-                <span>Loading FAQs...</span>
-              </div>
-            ) : serverFaqs.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-2xl border border-slate-100">
-                No FAQs currently published for this category.
-              </div>
-            ) : (
-              serverFaqs.map((faq, idx) => {
-                const isOpen = openFaq === idx
-                return (
-                  <div
-                    key={idx}
-                    className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden transition-colors"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setOpenFaq(isOpen ? null : idx)}
-                      className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-slate-800 hover:text-emerald-700 transition-colors cursor-pointer"
-                    >
-                      <span>{faq.q}</span>
-                      {isOpen ? (
-                        <ChevronUp className="w-5 h-5 text-emerald-600 shrink-0" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
-                      )}
-                    </button>
-                    {isOpen && (
-                      <div className="px-5 pb-4 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
-                        {faq.a}
-                      </div>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </section>
-
-        {/* ── Vehicle Specs Modal ───────────────────────────────── */}
-        {activeVehicleDetails && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={() => setActiveVehicleDetails(null)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative"
-            >
-              <button
-                onClick={() => setActiveVehicleDetails(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+                onClick={() => setSlotStepperOpen(false)}
+                className="absolute right-6 top-6 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
-              <h3 className="text-xl font-extrabold text-slate-900">{activeVehicleDetails.name}</h3>
-              <p className="text-sm font-semibold text-slate-500 mt-1">{activeVehicleDetails.capacity}</p>
-
-              <div className="mt-6">
-                <span className="font-bold text-slate-900 block mb-3">Suitable for:</span>
-                <ul className="space-y-2">
-                  {activeVehicleDetails.suitableFor?.map((item, idx) => (
-                    <li key={idx} className="flex items-start text-sm text-slate-700">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <span className="font-bold text-slate-900">Best for: </span>
-                <span className="text-sm text-slate-700">{activeVehicleDetails.bestFor}</span>
-              </div>
             </div>
-          </div>
-        )}
 
-        {/* ── Instant Fare Breakdown Modal (kept for vehicle detail 'Proceed to Book') ─── */}
-        {estimateModalOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setEstimateModalOpen(false)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative"
-            >
-              <button
-                onClick={() => setEstimateModalOpen(false)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700">
-                  <Truck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">Instant Estimate</h3>
-                  <p className="text-xs text-slate-500">Hosur Mini Truck Service</p>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-2xl space-y-2 text-xs mb-4">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Pickup:</span>
-                  <span className="font-bold text-slate-800">{pickup || "Not specified"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Drop:</span>
-                  <span className="font-bold text-slate-800">{drop || (selectedRoute ? selectedRoute.to : "Not specified")}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Customer:</span>
-                  <span className="font-bold text-slate-800">{name || "Valued Customer"} {phone ? `(${phone})` : ""}</span>
-                </div>
-              </div>
-
-              <div className="border border-emerald-200 bg-emerald-50/60 p-4 rounded-2xl flex items-center justify-between mb-5">
-                <div>
-                  <p className="text-xs text-emerald-800 font-semibold">Estimated Fare</p>
-                  <p className="text-2xl font-extrabold text-emerald-900">
-                    {serverQuote?.total != null
-                      ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                      : (quoteLoading ? "Calculating…" : "Fare unavailable")}
-                  </p>
-                  <p className="text-[10px] text-emerald-700">Includes fuel, driver charges &amp; toll estimate</p>
-                </div>
-                <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">
-                  Instant Confirm
-                </span>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEstimateModalOpen(false)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Modify Details
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmAndBook}
-                  disabled={bookingSubmitting}
-                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-colors cursor-pointer"
-                >
-                  {bookingSubmitting ? "Confirming..." : "Confirm & Book"}
-                </button>
-              </div>
-              {bookingError && (
-                <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── 2.5 Delivery Date & Slot Stepper Modal (Matching Image 1 & 2) ── */}
-        {slotStepperOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-[24px] w-full max-w-[1000px] h-[88vh] flex flex-col shadow-2xl overflow-hidden font-sans antialiased border border-slate-100">
-              {/* Header (Solid Green #0B8860) */}
-              <div className="bg-[#0B8860] text-white pt-5 pb-4 px-6 flex items-center justify-between relative shrink-0">
-                <div className="flex-1 flex justify-center max-w-[600px] mx-auto w-full relative">
-                  {/* Progress Line */}
-                  <div className="absolute top-[35%] left-[12%] right-[12%] h-[1px] bg-white/30 -z-0"></div>
-
-                  {[
-                    { step: 1, label: "Location" },
-                    { step: 2, label: "Add Items" },
-                    { step: 3, label: "Slots" },
-                    { step: 4, label: "Summary" }
-                  ].map((s) => (
-                    <div key={s.step} className="flex-1 flex flex-col items-center justify-center text-center z-10">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${stepperStep > s.step ? "bg-white text-[#0B8860]" :
-                          stepperStep === s.step ? "bg-[#33a886] text-white" :
-                            "bg-[#0B8860] text-white border border-white/40"
-                        }`}>
-                        {stepperStep > s.step ? <Check className="w-4 h-4" /> : s.step}
-                      </div>
-                      <span className={`text-[11px] font-medium tracking-wide ${stepperStep === s.step ? "text-white font-bold" : "text-white/70"}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSlotStepperOpen(false)}
-                  className="absolute right-6 top-6 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F4F5F7] p-4 lg:p-6 gap-6">
-                {/* Left Column */}
-                <div className="flex-1 flex flex-col overflow-hidden relative bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100">
-                  {stepperStep === 3 ? (
-                    <>
-                      {/* Sub-header for Step 3 */}
-                      <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSlotStepperOpen(false)
-                              setVehicleSelectorOpen(true)
-                            }}
-                            className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
-                          >
-                            <ArrowRight className="w-5 h-5 rotate-180" />
-                          </button>
-                          <h2 className="text-xl font-bold text-slate-800">Confirm your shifting Date & Slot</h2>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto px-6 pb-28 pt-4">
-                        {/* Date Selector */}
-                        <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Date</p>
-                        <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-2 mb-6">
-                          {((serverDates && serverDates.length > 0) ? serverDates : DELIVERY_DATES).map((dateObj) => (
-                            <div
-                              key={dateObj.id}
-                              onClick={() => setSelectedDate(dateObj)}
-                              className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${selectedDate?.id === dateObj.id
-                                  ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm"
-                                  : "border-slate-200 bg-white hover:border-slate-300"
-                                }`}
-                            >
-                              <span className={`text-[11px] font-bold ${selectedDate?.id === dateObj.id ? "text-[#0B8860]" : "text-slate-500"}`}>{dateObj.label}</span>
-                              <span className="text-[13px] font-black text-slate-800 mt-0.5">{dateObj.value}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Warning Banner */}
-                        <div className="bg-[#FFF5E5] border border-orange-200 rounded-xl p-3 flex items-center gap-3 mb-6">
-                          <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
-                          <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
-                        </div>
-
-                        {/* Slot Selector */}
-                        <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
-                        {slotsLoading ? (
-                          <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
-                            <span>Loading available pickup slots...</span>
-                          </div>
-                        ) : (!serverSlotGroups || serverSlotGroups.length === 0) ? (
-                          <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
-                            No operating slots available for this date.
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            {serverSlotGroups.map((groupObj) => {
-                              const timeOfDay = groupObj.group || groupObj.category
-                              const slots = groupObj.slots || []
-                              const isExpanded = expandedSlotCategory === timeOfDay
-                              return (
-                                <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
-                                  <div
-                                    className="flex items-center justify-between cursor-pointer mb-2 group"
-                                    onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
-                                      {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
-                                      {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
-                                      <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
-                                    </div>
-                                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                                  </div>
-
-                                  {isExpanded && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                      {slots.map((item) => {
-                                        const slotLabel = typeof item === "string" ? item : (item.slot || item.label)
-                                        const isAvail = typeof item === "object" && "is_available" in item
-                                          ? item.is_available
-                                          : (serverSlotsAvailability ? (serverSlotsAvailability[slotLabel] === true) : false)
-                                        const passed = !isAvail
-                                        const reason = (typeof item === "object" && item.reason) || (passed ? "Slot not available" : "")
-                                        return (
-                                          <button
-                                            key={slotLabel}
-                                            type="button"
-                                            disabled={passed}
-                                            title={reason || undefined}
-                                            onClick={() => setSelectedSlot(slotLabel)}
-                                            className={`py-2 px-1 rounded-xl border text-center transition-all ${selectedSlot === slotLabel
-                                                ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
-                                                : passed
-                                                  ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
-                                                  : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
-                                              }`}
-                                          >
-                                            <span className="text-[12px]">{slotLabel}</span>
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Step 3 Footer */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-8px_20px_rgba(0,0,0,0.04)] px-6 py-4 border-t border-slate-100">
+            {/* Body */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F4F5F7] p-4 lg:p-6 gap-6">
+              {/* Left Column */}
+              <div className="flex-1 flex flex-col overflow-hidden relative bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100">
+                {stepperStep === 3 ? (
+                  <>
+                    {/* Sub-header for Step 3 */}
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
                         <button
                           type="button"
-                          onClick={() => setStepperStep(4)}
-                          disabled={!selectedDate || !selectedSlot || (serverSlotsAvailability ? serverSlotsAvailability[selectedSlot] === false : false)}
-                          className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
+                          onClick={() => {
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
+                          }}
+                          className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
                         >
-                          Confirm
+                          <ArrowRight className="w-5 h-5 rotate-180" />
                         </button>
+                        <h2 className="text-xl font-bold text-slate-800">Confirm your shifting Date & Slot</h2>
                       </div>
-                    </>
-                  ) : stepperStep === 4 ? (
-                    <>
-                      <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSlotStepperOpen(false)
-                              setVehicleSelectorOpen(true)
-                            }}
-                            className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 pb-28 pt-4">
+                      {/* Date Selector */}
+                      <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Date</p>
+                      <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-2 mb-6">
+                        {DELIVERY_DATES.map((dateObj) => (
+                          <div 
+                            key={dateObj.id}
+                            onClick={() => setSelectedDate(dateObj)}
+                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
+                              selectedDate?.id === dateObj.id 
+                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
+                                : "border-slate-200 bg-white hover:border-slate-300"
+                            }`}
                           >
-                            <ArrowRight className="w-5 h-5 rotate-180" />
-                          </button>
-                          <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
-                        </div>
-                        <button type="button" onClick={() => setSupportModalOpen(true)} className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                          <Phone className="w-3.5 h-3.5" /> Get a call
-                        </button>
+                            <span className={`text-[11px] font-bold ${selectedDate?.id === dateObj.id ? "text-[#0B8860]" : "text-slate-500"}`}>{dateObj.label}</span>
+                            <span className="text-[13px] font-black text-slate-800 mt-0.5">{dateObj.value}</span>
+                          </div>
+                        ))}
                       </div>
 
-                      <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32">
-                        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-slate-800 text-base">Movement Details</h3>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSlotStepperOpen(false)
-                                const bar = document.getElementById("estimate-bar")
-                                if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                              }}
-                              className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                          <div className="space-y-4 relative ml-1">
-                            <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                      {/* Warning Banner */}
+                      <div className="bg-[#FFF5E5] border border-orange-200 rounded-xl p-3 flex items-center gap-3 mb-6">
+                        <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
+                        <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
+                      </div>
 
-                            <div className="flex items-start gap-4 relative bg-white">
-                              <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                                <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
-                              </div>
-                              <div className="pt-0.5">
-                                <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-start gap-4 relative bg-white">
-                              <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                                <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                              </div>
-                              <div className="pt-0.5">
-                                <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {bookingMode === "IMMEDIATE" ? (
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-                                  <Zap className="w-4 h-4 text-[#0B8860]" />
-                                </div>
-                                <div>
-                                  <span className="text-[13px] text-slate-800 font-bold block">
-                                    Immediate Dispatch (15–20 mins)
-                                  </span>
-                                  <span className="text-[11px] text-slate-500 font-medium">
-                                    Nearest driver allocated right after booking
-                                  </span>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setBookingMode("SCHEDULED")
-                                  if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
-                                  setStepperStep(3)
-                                }}
-                                className="text-[12px] font-bold text-[#0B8860] border border-[#0B8860]/30 px-3.5 py-1.5 rounded-full hover:bg-[#0B8860]/5 transition-colors cursor-pointer"
+                      {/* Slot Selector */}
+                      <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
+                      <div className="space-y-4">
+                        {Object.entries(DELIVERY_SLOTS).map(([timeOfDay, slots]) => {
+                          const isExpanded = expandedSlotCategory === timeOfDay
+                          return (
+                            <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer mb-2 group"
+                                onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
                               >
-                                Schedule for Later
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                                  <Calendar className="w-4 h-4 text-indigo-600" />
+                                <div className="flex items-center gap-2">
+                                  {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
+                                  {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
+                                  {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
+                                  <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[13px] text-slate-800 font-bold block">
-                                    Scheduled: {selectedDate ? `${selectedDate.value} | ` : ""}{selectedSlot || "Time not selected"}
-                                  </span>
-                                  <span className="text-[11px] text-slate-500 font-medium">
-                                    Pickup scheduled for your chosen window
-                                  </span>
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                              </div>
+                              
+                              {isExpanded && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                  {slots.map(slot => {
+                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    return (
+                                      <button
+                                        key={slot}
+                                        type="button"
+                                        disabled={passed}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                                          selectedSlot === slot
+                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
+                                            : passed
+                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                        }`}
+                                      >
+                                        <span className="text-[12px]">{slot}</span>
+                                      </button>
+                                    )
+                                  })}
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBookingMode("IMMEDIATE")
-                                    setSelectedSlot(null)
-                                    setSelectedDate(null)
-                                  }}
-                                  className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer"
-                                >
-                                  Switch to Immediate
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setStepperStep(3)}
-                                  className="text-[12px] font-bold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer"
-                                >
-                                  Change Slot
-                                </button>
-                              </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          )
+                        })}
+                      </div>
+                    </div>
 
-                        {/* Selected Vehicle Card */}
-                        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-20 h-14 flex items-center justify-center bg-slate-50 rounded-xl p-1">
-                              {selectedVehicle?.diagram}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-sm">{selectedVehicle?.name || "Vehicle"}</h4>
-                              <p className="text-xs text-slate-500 mt-0.5">{selectedVehicle?.capacity || "Standard Capacity"}</p>
-                            </div>
-                          </div>
+                    {/* Step 3 Footer */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-8px_20px_rgba(0,0,0,0.04)] px-6 py-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setStepperStep(4)}
+                        disabled={!selectedDate || !selectedSlot}
+                        className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </>
+                ) : stepperStep === 4 ? (
+                  <>
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
+                          }}
+                          className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
+                        >
+                          <ArrowRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
+                      </div>
+                      <button type="button" onClick={() => setSupportModalOpen(true)} className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                        <Phone className="w-3.5 h-3.5" /> Get a call
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32">
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-slate-800 text-base">Movement Details</h3>
                           <button
                             type="button"
                             onClick={() => {
                               setSlotStepperOpen(false)
-                              setVehicleSelectorOpen(true)
+                              const bar = document.getElementById("estimate-bar")
+                              if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
                             }}
                             className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer"
                           >
-                            Change
+                            Edit
                           </button>
                         </div>
-
-                        {/* Contact & Receiver Details Card */}
-                        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-slate-800 text-base">Contact Details</h3>
-                            <span className="text-[11px] font-medium text-slate-400">Driver coordination</span>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="flex flex-col text-left">
-                              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                Your Name *
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="Full Name"
-                                value={name}
-                                onChange={(e) => {
-                                  setName(e.target.value)
-                                  if (bookingError) setBookingError("")
-                                }}
-                                className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
-                                required
-                              />
+                        <div className="space-y-4 relative ml-1">
+                          <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                          
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                             </div>
-
-                            <div className="flex flex-col text-left">
-                              <div className="flex items-center justify-between mb-1">
-                                <label className={`text-[11px] font-bold uppercase tracking-wider ${phoneError ? "text-red-500" : "text-slate-500"}`}>
-                                  Mobile Number *
-                                </label>
-                                <span className={`text-[10px] font-semibold tabular-nums ${phone.length === 10 ? "text-emerald-600" : phone.length > 0 ? "text-amber-500" : "text-slate-400"}`}>
-                                  {phone.length}/10
-                                </span>
-                              </div>
-                              <input
-                                type="tel"
-                                inputMode="numeric"
-                                maxLength={10}
-                                placeholder="10-digit mobile number"
-                                value={phone}
-                                onChange={(e) => {
-                                  const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
-                                  setPhone(digits)
-                                  if (phoneError && digits.length === 10) setPhoneError("")
-                                  if (bookingError) setBookingError("")
-                                }}
-                                className={`w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${phoneError ? "border-red-400 focus:border-red-500 bg-red-50/30" : phone.length === 10 ? "border-emerald-400 focus:border-emerald-500" : "border-slate-200 focus:border-emerald-500"
-                                  }`}
-                                required
-                              />
-                              {phoneError && (
-                                <p className="text-[10px] text-red-500 font-semibold mt-1">⚠ {phoneError}</p>
-                              )}
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
                             </div>
                           </div>
-
-                          {/* Optional Receiver Details Toggle */}
-                          <div className="pt-2 border-t border-slate-100">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs font-bold text-slate-700">Receiver at Drop Location</p>
-                                <p className="text-[11px] text-slate-400">Driver calls receiver on delivery</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setShowReceiverDetails(!showReceiverDetails)}
-                                className="text-xs font-bold text-[#0B8860] hover:underline cursor-pointer"
-                              >
-                                {showReceiverDetails ? "Remove" : "+ Add Receiver"}
-                              </button>
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-rose-500" />
                             </div>
-
-                            {showReceiverDetails && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100 animate-in fade-in duration-150">
-                                <div className="flex flex-col text-left">
-                                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                    Receiver Name
-                                  </label>
-                                  <input
-                                    type="text"
-                                    placeholder="Receiver Name"
-                                    value={receiverName}
-                                    onChange={(e) => setReceiverName(e.target.value)}
-                                    className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
-                                  />
-                                </div>
-                                <div className="flex flex-col text-left">
-                                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                    Receiver Mobile
-                                  </label>
-                                  <input
-                                    type="tel"
-                                    inputMode="numeric"
-                                    maxLength={10}
-                                    placeholder="10-digit mobile number"
-                                    value={receiverPhone}
-                                    onChange={(e) => {
-                                      setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
-                                      if (receiverPhoneError) setReceiverPhoneError("")
-                                    }}
-                                    className="w-full px-3 h-10 text-xs sm:text-sm bg-slate-50 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
-                                  />
-                                  {receiverPhoneError && (
-                                    <p className="text-[10px] text-red-500 font-semibold mt-1">⚠ {receiverPhoneError}</p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
+                            </div>
                           </div>
                         </div>
-
-                        {/* Booking Error Banner */}
-                        {bookingError && (
-                          <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-800 text-xs font-semibold">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                            <span className="flex-1 leading-relaxed">{bookingError}</span>
+                        
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                              <Calendar className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-[13px] text-slate-700 font-medium">
+                              {selectedDate ? `${selectedDate.value} | ` : ""}{selectedSlot || "Time not selected"}
+                            </span>
                           </div>
-                        )}
+                          <button type="button" onClick={() => setStepperStep(3)} className="text-[13px] font-bold text-slate-500 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Explore Slots</button>
+                        </div>
                       </div>
 
-                      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
-                        <div>
-                          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Estimated Fare</p>
-                          <p className="text-xl font-black text-slate-800">
-                            {serverQuote?.total != null
-                              ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                              : quoteLoading
-                                ? "Calculating…"
-                                : quoteError
-                                  ? "Fare unavailable"
-                                  : "—"}
-                          </p>
+                      {/* Selected Vehicle Card */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-20 h-14 flex items-center justify-center bg-slate-50 rounded-xl p-1">
+                            {selectedVehicle?.diagram}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">{selectedVehicle?.name || "Vehicle"}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">{selectedVehicle?.capacity || "Standard Capacity"}</p>
+                          </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
-                            const cleanP = phone.replace(/\D/g, "").slice(0, 10)
-                            if (!isSignedIn && (!name.trim() || cleanP.length !== 10)) {
-                              setShowCustomerEntryModal(true)
-                            } else {
-                              submitBooking()
-                            }
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
                           }}
-                          disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
-                          className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60 flex items-center gap-2"
+                          className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer"
                         >
-                          {bookingSubmitting ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Confirming...</span>
-                            </>
-                          ) : (
-                            "Confirm Booking"
-                          )}
+                          Change
                         </button>
                       </div>
-                    </>
-                  ) : null}
-                </div>
+                    </div>
 
-                {/* Right Column (Booking Details) */}
-                <div className="hidden lg:block w-[340px] relative shrink-0">
-                  <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6 sticky top-0">
-                    <h3 className="font-extrabold text-slate-800 text-[14px] mb-5">Booking Details</h3>
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</span>
+                    <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
+                      <div>
+                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Estimated Fare</p>
+                        <p className="text-xl font-black text-slate-800">
+                          {serverQuote?.total != null
+                            ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                            : quoteLoading
+                              ? "Calculating…"
+                              : quoteError
+                                ? "Fare unavailable"
+                                : "—"}
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
-                          setSlotStepperOpen(false)
-                          const bar = document.getElementById("estimate-bar")
-                          if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                          if (!isSignedIn) {
+                            setShowCustomerEntryModal(true)
+                          } else {
+                            submitBooking()
+                          }
                         }}
-                        className="text-[12px] font-bold text-[#0B8860] hover:underline cursor-pointer"
+                        disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null}
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
                       >
-                        Edit
+                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
                       </button>
                     </div>
+                  </>
+                ) : null}
+              </div>
 
-                    <div className="space-y-6 relative ml-1">
-                      <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
-
-                      <div className="flex items-start gap-4 relative bg-white">
-                        <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                          <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
-                        </div>
-                        <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || "Hosur Origin"}</p>
+              {/* Right Column (Booking Details) */}
+              <div className="hidden lg:block w-[340px] relative shrink-0">
+                <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6 sticky top-0">
+                  <h3 className="font-extrabold text-slate-800 text-[14px] mb-5">Booking Details</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSlotStepperOpen(false)
+                        const bar = document.getElementById("estimate-bar")
+                        if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }}
+                      className="text-[12px] font-bold text-[#0B8860] hover:underline cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-6 relative ml-1">
+                    <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                    
+                    <div className="flex items-start gap-4 relative bg-white">
+                      <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                        <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                       </div>
-                      <div className="flex items-start gap-4 relative bg-white">
-                        <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                          <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                        </div>
-                        <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
+                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || "Hosur Origin"}</p>
+                    </div>
+                    <div className="flex items-start gap-4 relative bg-white">
+                      <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500" />
                       </div>
+                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Vehicle Selector Modal (Matching Porter App - Image 2) ─────────────────── */}
-        {vehicleSelectorOpen && (
+      {/* ── Vehicle Selector Modal (Matching Porter App - Image 2) ─────────────────── */}
+      {vehicleSelectorOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setVehicleSelectorOpen(false)}
+        >
           <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setVehicleSelectorOpen(false)}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col sm:flex-row max-h-[92vh]"
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col sm:flex-row max-h-[92vh]"
+            <button
+              onClick={() => setVehicleSelectorOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer z-10"
             >
-              <button
-                onClick={() => setVehicleSelectorOpen(false)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer z-10"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <X className="w-4 h-4" />
+            </button>
 
-              {/* Left: Address Details + Fare Breakdown + Goods Type */}
-              <div className="sm:w-[48%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between overflow-y-auto">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 mb-4">Address Details</h3>
+            {/* Left: Address Details + Fare Breakdown + Goods Type */}
+            <div className="sm:w-[48%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between overflow-y-auto">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 mb-4">Address Details</h3>
+                
+                {/* Pickup */}
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVehicleSelectorOpen(false)
+                      const bar = document.getElementById("estimate-bar")
+                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    }}
+                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                  >Edit</button>
+                </div>
+                
+                {/* Dashed line */}
+                <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
 
-                  {/* Pickup */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                      <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                {/* Waypoints */}
+                {intermediateStops.filter(s => s.address).map((stop, sIdx) => (
+                  <React.Fragment key={stop.id || sIdx}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-blue-900 truncate">
+                          {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
+                        </p>
+                        <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
+                      </div>
                     </div>
+                    <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+                  </React.Fragment>
+                ))}
+                
+                {/* Drop */}
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">
+                      {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
+                    </p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowReceiverDetails(!showReceiverDetails)}
+                      className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                    >
+                      {showReceiverDetails ? "Hide" : "+ Receiver"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -3611,951 +3166,851 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         const bar = document.getElementById("estimate-bar")
                         if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
                       }}
-                      className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                      className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
                     >Edit</button>
                   </div>
+                </div>
 
-                  {/* Dashed line */}
-                  <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
 
-                  {/* Waypoints */}
-                  {intermediateStops.filter(s => s.address).map((stop, sIdx) => (
-                    <React.Fragment key={stop.id || sIdx}>
-                      <div className="flex items-start gap-3 mb-2">
-                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-bold text-blue-900 truncate">
-                            {stop.contact_name ? `${stop.contact_name} • ${stop.contact_phone || ""}` : `Waypoint ${sIdx + 1}`}
-                          </p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{stop.address}</p>
+                {showReceiverDetails && (
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 mb-3 space-y-2 animate-in fade-in duration-150">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Receiver at Destination</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Receiver Name"
+                        value={receiverName}
+                        onChange={(e) => setReceiverName(e.target.value)}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="10-digit Phone"
+                        maxLength={10}
+                        value={receiverPhone}
+                        onChange={(e) => {
+                          setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                          if (receiverPhoneError) setReceiverPhoneError("")
+                        }}
+                        className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    {receiverPhoneError && (
+                      <p className="text-[10px] text-rose-600 font-semibold">{receiverPhoneError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Fare Breakdown -- GT-B-01 */}
+                {(() => {
+                  const q = serverQuote
+                  const b = q?.breakdown || null
+                  const money = (v) =>
+                    `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  const positive = (v) => v != null && Number(v) > 0
+
+                  if (quoteLoading) {
+                    return (
+                      <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs text-slate-500">
+                        <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
+                        <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                          <span className="font-semibold text-xs">Recalculating fare for updated cargo/route…</span>
                         </div>
                       </div>
-                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
-                    </React.Fragment>
-                  ))}
-
-                  {/* Drop */}
-                  <div className="flex items-start gap-3 mb-2">
-                    <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-bold text-slate-800 truncate">
-                        {receiverName ? `Receiver: ${receiverName} • ${receiverPhone || phone}` : `${name || "Customer"} • ${phone || "Enter phone number"}`}
-                      </p>
-                      <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setShowReceiverDetails(!showReceiverDetails)}
-                        className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
-                      >
-                        {showReceiverDetails ? "Hide" : "+ Receiver"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setVehicleSelectorOpen(false)
-                          const bar = document.getElementById("estimate-bar")
-                          if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                        }}
-                        className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
-                      >Edit</button>
-                    </div>
-                  </div>
-
-
-                  {showReceiverDetails && (
-                    <div className="p-3 bg-white rounded-xl border border-slate-200 mb-3 space-y-2 animate-in fade-in duration-150">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Receiver at Destination</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          placeholder="Receiver Name"
-                          value={receiverName}
-                          onChange={(e) => setReceiverName(e.target.value)}
-                          className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
-                        />
-                        <input
-                          type="tel"
-                          placeholder="10-digit Phone"
-                          maxLength={10}
-                          value={receiverPhone}
-                          onChange={(e) => {
-                            setReceiverPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
-                            if (receiverPhoneError) setReceiverPhoneError("")
-                          }}
-                          className="h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
-                        />
+                    )
+                  }
+                  if (!q || q.total == null) {
+                    return (
+                      <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs">
+                        <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5">
+                          <p className="font-bold flex items-center gap-1.5 text-xs text-rose-800">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" /> Fare calculation error
+                          </p>
+                          <p className="text-xs text-rose-700">
+                            {quoteError || "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
+                          </p>
+                        </div>
                       </div>
-                      {receiverPhoneError && (
-                        <p className="text-[10px] text-rose-600 font-semibold">{receiverPhoneError}</p>
+                    )
+                  }
+
+                  return (
+                    <div className="border-t border-slate-200/80 pt-3 pb-2 space-y-1.5 text-xs text-slate-600">
+                      <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
+                      {quoteLoading && (
+                        <div className="flex items-center gap-1.5 text-slate-400 py-0.5">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Calculating your exact fare…</span>
+                        </div>
+                      )}
+                      {!quoteLoading && hasRealQuote && quote.pricingMode === "distance" && quote.breakdown && (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Base Fare</span>
+                            <span className="font-semibold text-slate-800">₹{Number(quote.breakdown.base_fare ?? 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>
+                              Distance Charge
+                              {quote.breakdown.chargeable_km != null && quote.breakdown.rate_per_km != null && (
+                                <span className="text-slate-400"> ({Number(quote.breakdown.chargeable_km).toFixed(1)} km × ₹{Number(quote.breakdown.rate_per_km).toFixed(0)}/km)</span>
+                              )}
+                            </span>
+                            <span className="font-semibold text-slate-800">₹{Number(quote.breakdown.distance_charge ?? 0).toFixed(2)}</span>
+                          </div>
+                          {Number(quote.breakdown.loading_unloading || 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span>Loading &amp; Unloading</span>
+                              <span className="font-semibold text-slate-800">₹{Number(quote.breakdown.loading_unloading).toFixed(2)}</span>
+                            </div>
+                          )}
+                          {Number(quote.breakdown.additional_stop_charge || 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span>Additional Stops ({quote.breakdown.additional_stops})</span>
+                              <span className="font-semibold text-slate-800">₹{Number(quote.breakdown.additional_stop_charge).toFixed(2)}</span>
+                            </div>
+                          )}
+                          {Number(quote.breakdown.surge_multiplier || 1) !== 1 && (
+                            <div className="flex justify-between text-amber-600">
+                              <span>Surge ({Number(quote.breakdown.surge_multiplier).toFixed(2)}×)</span>
+                              <span className="font-semibold">applied</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {!quoteLoading && hasRealQuote && (quote.pricingMode !== "distance" || !quote.breakdown) && (
+                        <div className="flex justify-between">
+                          <span>Trip Fare</span>
+                          <span className="font-semibold text-slate-800">₹{Number(quote.total).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {!quoteLoading && hasRealQuote && quote.breakdown?.minimum_fare_applied && (
+                        <p className="text-[10px] text-amber-600">Minimum fare applied for this trip.</p>
+                      )}
+                      {!quoteLoading && !hasRealQuote && (
+                        <div className="flex justify-between">
+                          <span>{(pickupCoords && dropCoords) ? "Trip Fare" : "Estimated Fare"}</span>
+                          <span className="font-semibold text-slate-800">₹{flatFare.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {!quoteLoading && !hasRealQuote && !(pickupCoords && dropCoords) && (
+                        <p className="text-[10px] text-slate-400">Confirm your pickup and drop address for exact pricing.</p>
+                      )}
+                      <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-slate-200">
+                        <span>Amount Payable</span>
+                        <span>₹{displayTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Goods Type & Cargo Row */}
+                <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Boxes className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">CARGO & GOODS</p>
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {cargoItems.length > 0
+                          ? `${cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items (${cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")})`
+                          : (selectedGoodsType || "General Goods")}
+                      </p>
+                      {cargoItems.length > 0 && (
+                        <p className="text-[10px] text-emerald-700 font-semibold">
+                          ~{cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • ~{cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT
+                        </p>
                       )}
                     </div>
-                  )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCargoSelectorOpen(true)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
+                  >
+                    {cargoItems.length > 0 ? "Edit Cargo" : "Select Cargo"}
+                  </button>
+                </div>
 
-                  {/* Fare Breakdown -- GT-B-01 */}
-                  {(() => {
-                    const q = serverQuote
-                    const b = q?.breakdown || null
-                    const money = (v) =>
-                      `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    const positive = (v) => v != null && Number(v) > 0
-
-                    if (quoteLoading) {
-                      return (
-                        <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs text-slate-500">
-                          <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                          <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 flex items-center gap-2">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                            <span className="font-semibold text-xs">Recalculating fare for updated cargo/route…</span>
-                          </div>
-                        </div>
-                      )
-                    }
-                    if (!q || q.total == null) {
-                      return (
-                        <div className="border-t border-slate-200/80 pt-3 pb-2 text-xs">
-                          <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5">
-                            <p className="font-bold flex items-center gap-1.5 text-xs text-rose-800">
-                              <AlertCircle className="w-3.5 h-3.5 text-rose-600" /> Fare calculation error
-                            </p>
-                            <p className="text-xs text-rose-700">
-                              {quoteError || "We couldn't calculate a fare for this trip yet. Select the pickup and drop points from the suggestions and pick a vehicle."}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    }
-
+                {/* Cargo Capacity Warning if vehicle capacity is exceeded */}
+                {(() => {
+                  const totalWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
+                  const maxWeight = Number(selectedVehicle?.max_weight_kg) || 0
+                  if (maxWeight > 0 && totalWeight > maxWeight) {
                     return (
-                      <div className="border-t border-slate-200/80 pt-3 pb-2 space-y-1.5 text-xs text-slate-600">
-                        <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
-                        {b ? (
-                          <>
-                            <div className="flex justify-between">
-                              <span>Base Fare</span>
-                              <span className="font-semibold text-slate-800">{money(b.base_fare ?? 0)}</span>
-                            </div>
-                            {b.distance_charge != null && (
-                              <div className="flex justify-between">
-                                <span>
-                                  Distance Charge
-                                  {b.chargeable_km != null && b.rate_per_km != null && (
-                                    <span className="text-slate-400"> ({Number(b.chargeable_km).toFixed(1)} km × ₹{Number(b.rate_per_km).toFixed(0)}/km)</span>
-                                  )}
-                                </span>
-                                <span className="font-semibold text-slate-800">{money(b.distance_charge)}</span>
-                              </div>
-                            )}
-                            {positive(b.loading_unloading) && (
-                              <div className="flex justify-between">
-                                <span>Loading &amp; Unloading</span>
-                                <span className="font-semibold text-slate-800">{money(b.loading_unloading)}</span>
-                              </div>
-                            )}
-                            {positive(b.additional_stop_charge) && (
-                              <div className="flex justify-between">
-                                <span>Additional Stops ({b.additional_stops || intermediateStops.length})</span>
-                                <span className="font-semibold text-slate-800">{money(b.additional_stop_charge)}</span>
-                              </div>
-                            )}
-                            {Number(b.surge_multiplier || 1) !== 1 && (
-                              <div className="flex justify-between text-amber-600">
-                                <span>Surge ({Number(b.surge_multiplier).toFixed(2)}×)</span>
-                                <span className="font-semibold">applied</span>
-                              </div>
-                            )}
-                            {b.minimum_fare_applied && (
-                              <p className="text-[10px] text-amber-600">Minimum fare applied for this trip.</p>
-                            )}
-                          </>
-                        ) : (
-                          <div className="flex justify-between">
-                            <span>Trip Fare</span>
-                            <span className="font-semibold text-slate-800">{money(q.total)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-slate-200">
-                          <span>Amount Payable</span>
-                          <span>{money(q.total)}</span>
-                        </div>
+                      <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-300 flex items-center gap-2 text-rose-800 text-[11px] font-bold">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Cargo weight ({totalWeight.toFixed(1)} kg) exceeds {selectedVehicle.name} capacity ({maxWeight} kg). Please pick a larger vehicle.</span>
                       </div>
                     )
-                  })()}
-
-                  {/* Goods Type & Cargo Row */}
-                  <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
-                        <Boxes className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">CARGO & GOODS</p>
-                        <p className="text-xs font-bold text-slate-800 truncate">
-                          {cargoItems.length > 0
-                            ? `${cargoItems.reduce((acc, i) => acc + i.quantity, 0)} items (${cargoItems.map((i) => `${i.quantity}x ${i.name}`).join(", ")})`
-                            : (selectedGoodsType || "General Goods")}
-                        </p>
-                        {cargoItems.length > 0 && (
-                          <p className="text-[10px] text-emerald-700 font-semibold">
-                            ~{cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0).toFixed(1)} kg • ~{cargoItems.reduce((acc, i) => acc + (i.cft || 0) * i.quantity, 0).toFixed(1)} CFT
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCargoSelectorOpen(true)}
-                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
-                    >
-                      {cargoItems.length > 0 ? "Edit Cargo" : "Select Cargo"}
-                    </button>
-                  </div>
-
-                  {/* Cargo Capacity Warning if vehicle capacity is exceeded */}
-                  {(() => {
-                    const totalWeight = cargoItems.reduce((acc, i) => acc + (i.weight_kg || 0) * i.quantity, 0)
-                    const maxWeight = Number(selectedVehicle?.max_weight_kg) || 0
-                    if (maxWeight > 0 && totalWeight > maxWeight) {
-                      return (
-                        <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-300 flex items-center gap-2 text-rose-800 text-[11px] font-bold">
-                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>Cargo weight ({totalWeight.toFixed(1)} kg) exceeds {selectedVehicle.name} capacity ({maxWeight} kg). Please pick a larger vehicle.</span>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                </div>
-
-                {/* Action Buttons: Book Now & Schedule */}
-                <div className="mt-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={handleBookNow}
-                    disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
-                    title={
-                      isSelectedVehicleOverCapacity
-                        ? "Cargo exceeds selected vehicle capacity. Please select a larger vehicle."
-                        : serverQuote?.total == null && !quoteLoading
-                          ? "A fare is needed before booking"
-                          : undefined
-                    }
-                    className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${isSelectedVehicleOverCapacity
-                        ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
-                        : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white shadow-emerald-600/30"
-                      }`}
-                  >
-                    {bookingSubmitting ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
-                    ) : quoteLoading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Calculating fare…</>
-                    ) : isSelectedVehicleOverCapacity ? (
-                      <span>Capacity Exceeded — Pick Larger Vehicle</span>
-
-                    ) : (
-                      <span>Book Now</span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleScheduleBooking}
-                    disabled={bookingSubmitting}
-                    className="w-full py-2.5 rounded-xl bg-white hover:bg-emerald-50/60 text-slate-700 border border-slate-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Schedule your booking</span>
-                  </button>
-                </div>
-                {(quoteLoading || serverQuote || quoteError) && (
-                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
-                    {quoteLoading && (
-                      <p className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1.5">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Calculating your fare…
-                      </p>
-                    )}
-                    {!quoteLoading && serverQuote && (
-                      <>
-                        <div className="flex items-baseline justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                            Your fare
-                          </span>
-                          <span className="text-base font-extrabold text-emerald-900">
-                            ₹ {Number(serverQuote.total).toLocaleString("en-IN")}
-                          </span>
-                        </div>
-                        {serverQuote.breakdown && (
-                          <p className="text-[10px] text-emerald-700 mt-0.5">
-                            {serverQuote.breakdown.distance_km} km
-                            {serverQuote.breakdown.distance_source === "straight_line_estimate"
-                              ? " (estimated route)"
-                              : ""}
-                            {" · "}base ₹{serverQuote.breakdown.base_fare}
-                            {Number(serverQuote.breakdown.distance_charge) > 0
-                              ? ` · distance ₹${serverQuote.breakdown.distance_charge}`
-                              : ""}
-                            {Number(serverQuote.breakdown.loading_unloading_charge) > 0
-                              ? ` · loading ₹${serverQuote.breakdown.loading_unloading_charge}`
-                              : ""}
-                            {Number(serverQuote.breakdown.additional_stop_charge) > 0
-                              ? ` · stops ₹${serverQuote.breakdown.additional_stop_charge}`
-                              : ""}
-                          </p>
-                        )}
-                      </>
-                    )}
-                    {!quoteLoading && !serverQuote && quoteError && (
-                      <p className="text-[11px] font-semibold text-slate-600">{quoteError}</p>
-                    )}
-                  </div>
-                )}
-                {/* A failed booking must be reported to whoever attempted it.
-                  This was gated on isSignedIn, so a signed-out customer --
-                  exactly the case where the 401/400 is most likely -- saw the
-                  request fail with no message at all. */}
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
-                )}
+                  }
+                  return null
+                })()}
               </div>
 
-              {/* Right: Select Vehicle */}
-              <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-y-auto justify-between">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 mb-4">Select Vehicle</h3>
-                  <div className="space-y-2.5">
-                    {LIGHT_VEHICLES.map((v) => {
-                      const isSelected = (selectedVehicle?.id === v.id) || (!selectedVehicle && v.id === (LIGHT_VEHICLES[0]?.id || "3-wheeler"))
-
-                      const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || null
-                      const fare = v.price || (fareRaw ? `₹ ${fareRaw.toLocaleString("en-IN")}` : "—")
-                      const strikethrough = null
-
-                      const maxW = Number(v.max_weight_kg) || 0
-                      const maxC = Number(v.max_cft) || 0
-                      const exceedsW = maxW > 0 && totalCargoWeightKg > maxW
-                      const exceedsC = maxC > 0 && totalCargoCftVal > maxC
-                      const exceedsCap = exceedsW || exceedsC
-
-
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => setSelectedVehicle(v)}
-                          className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${isSelected
-                              ? exceedsCap
-                                ? "border-rose-500 bg-rose-50/50 shadow-md shadow-rose-100"
-                                : "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
-                              : exceedsCap
-                                ? "border-rose-200 bg-rose-50/20 hover:border-rose-300"
-                                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
-                            }`}
-                        >
-                          <div className="w-16 shrink-0 flex items-center justify-center">
-                            {React.cloneElement(v.diagram, { className: "w-full h-14" })}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {exceedsCap ? (
-                                <span className="text-[10px] font-extrabold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <AlertCircle className="w-2.5 h-2.5 text-rose-700" /> Incompatible (Weight/CFT exceeded)
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
-                            <p className={`text-xs ${exceedsCap ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
-                              {v.capacity}
-                              {exceedsCap ? ` • Cargo exceeds limit (max ${maxW}kg)` : ""}
-                            </p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <span className="text-[10px] text-slate-400 font-medium block">Starting from</span>
-                            <p className="text-sm font-extrabold text-slate-800">{fare}</p>
-                            <span className="text-[10px] text-slate-400 line-through">{strikethrough}</span>
-                          </div>
-                        </button>
-                      )
-                    })}
-
-                    {HEAVY_VEHICLES.map((v) => {
-                      const comingSoon = Boolean(v.badge && v.badge.toLowerCase().includes("coming"))
-                      if (comingSoon) {
-                        return (
-                          <div
-                            key={v.id}
-                            className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 text-left select-none"
-                          >
-                            <div className="w-16 shrink-0 flex items-center justify-center opacity-60">
-                              {React.cloneElement(v.diagram, { className: "w-full h-14" })}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-bold text-slate-600">{v.name}</p>
-                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
-                                  Coming Soon
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-400">{v.capacity}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="text-[11px] font-semibold text-slate-400 italic">Not available</span>
-                            </div>
-                          </div>
-                        )
-                      }
-
-                      const isSelected = selectedVehicle?.id === v.id
-                      const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || 0
-                      const fare = v.price || `₹ ${fareRaw.toLocaleString("en-IN")}`
-                      const strikethrough = `₹ ${(fareRaw + 30).toLocaleString("en-IN")}`
-
-                      const maxW = Number(v.max_weight_kg) || 0
-                      const maxC = Number(v.max_cft) || 0
-                      const exceedsW = maxW > 0 && totalCargoWeightKg > maxW
-                      const exceedsC = maxC > 0 && totalCargoCftVal > maxC
-                      const exceedsCap = exceedsW || exceedsC
-
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => setSelectedVehicle(v)}
-                          className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${isSelected
-                              ? exceedsCap
-                                ? "border-rose-500 bg-rose-50/50 shadow-md shadow-rose-100"
-                                : "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
-                              : exceedsCap
-                                ? "border-rose-200 bg-rose-50/20 hover:border-rose-300"
-                                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
-                            }`}
-                        >
-                          <div className="w-16 shrink-0 flex items-center justify-center">
-                            {React.cloneElement(v.diagram, { className: "w-full h-14" })}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {exceedsCap ? (
-                                <span className="text-[10px] font-extrabold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <AlertCircle className="w-2.5 h-2.5 text-rose-700" /> Incompatible (Weight/CFT exceeded)
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
-                            <p className={`text-xs ${exceedsCap ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
-                              {v.capacity}
-                              {exceedsCap ? ` • Cargo exceeds limit (max ${maxW}kg)` : ""}
-                            </p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-extrabold text-slate-800">{fare}</p>
-                            <span className="text-[10px] text-slate-400 line-through">{strikethrough}</span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Payment Method Footer */}
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-base">💵</span>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold">Payment Method</p>
-                      <p className="font-extrabold text-slate-800">Cash / COD</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">TOTAL FARE</p>
-                    <p className="text-sm font-black text-slate-900">
-                      {serverQuote?.total != null
-                        ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                        : quoteLoading
-                          ? "Calculating…"
-                          : quoteError
-                            ? "Fare unavailable"
-                            : "—"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Select Goods Type Modal (Compact & Professional, Higher z-index) ─────────────────── */}
-        {goodsTypeModalOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-            onClick={() => setGoodsTypeModalOpen(false)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-150"
-            >
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📦</span>
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Select Goods Type</h3>
-                </div>
+              {/* Action Buttons: Book Now & Schedule */}
+              <div className="mt-4 flex flex-col gap-2">
                 <button
-                  onClick={() => setGoodsTypeModalOpen(false)}
-                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer transition-colors"
+                  type="button"
+
+                  onClick={() => submitBooking()}
+                  disabled={bookingSubmitting || quoteLoading || serverQuote?.total == null || isSelectedVehicleOverCapacity}
+                  title={
+                    isSelectedVehicleOverCapacity
+                      ? "Cargo exceeds selected vehicle capacity. Please select a larger vehicle."
+                      : serverQuote?.total == null && !quoteLoading
+                      ? "A fare is needed before booking"
+                      : undefined
+                  }
+                  className={`w-full py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    isSelectedVehicleOverCapacity
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                      : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white shadow-emerald-600/30"
+                  }`}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  {bookingSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+                  ) : quoteLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Calculating fare…</>
+                  ) : isSelectedVehicleOverCapacity ? (
+                    <span>Capacity Exceeded — Pick Larger Vehicle</span>
+
+                  ) : (
+                    <span>Book Now</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleScheduleBooking}
+                  disabled={bookingSubmitting}
+                  className="w-full py-2.5 rounded-xl bg-white hover:bg-emerald-50/60 text-slate-700 border border-slate-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Schedule your booking</span>
                 </button>
               </div>
+              {isSignedIn && bookingError && (
+                <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+              )}
+            </div>
 
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 px-2 py-1">
-                {catalogLoading ? (
-                  <div className="py-8 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
-                    <span>Loading goods catalog...</span>
-                  </div>
-                ) : catalogError || dynamicCategories.length === 0 ? (
-                  <div className="py-8 px-4 text-center text-slate-500 text-xs flex flex-col items-center gap-3">
-                    <AlertCircle className="w-6 h-6 text-amber-500" />
-                    <p className="font-semibold text-slate-700">Goods catalog temporarily unavailable. Please retry.</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCatalogLoading(true)
-                        fetchGoodsCategories()
-                          .then((categories) => {
-                            if (Array.isArray(categories) && categories.length > 0) {
-                              const truckCats = categories.filter((c) => !c.is_prohibited)
-                              setDynamicCategories(truckCats)
-                              setCatalogError("")
-                            } else {
-                              setCatalogError("Goods catalog temporarily unavailable. Please retry.")
-                            }
-                          })
-                          .catch(() => setCatalogError("Goods catalog temporarily unavailable. Please retry."))
-                          .finally(() => setCatalogLoading(false))
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : (
-                  dynamicCategories.map((cat) => {
-                    const type = cat.name
-                    const isSelected = selectedGoodsType === type
+            {/* Right: Select Vehicle */}
+            <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-y-auto justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 mb-4">Select Vehicle</h3>
+                <div className="space-y-2.5">
+                  {LIGHT_VEHICLES.map((v) => {
+                    const isSelected = (selectedVehicle?.id === v.id) || (!selectedVehicle && v.id === (LIGHT_VEHICLES[0]?.id || "3-wheeler"))
+
+                    const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || null
+                    const fare = v.price || (fareRaw ? `₹ ${fareRaw.toLocaleString("en-IN")}` : "—")
+                    const strikethrough = null
+
+                    const maxW = Number(v.max_weight_kg) || 0
+                    const maxC = Number(v.max_cft) || 0
+                    const exceedsW = maxW > 0 && totalCargoWeightKg > maxW
+                    const exceedsC = maxC > 0 && totalCargoCftVal > maxC
+                    const exceedsCap = exceedsW || exceedsC
+
+
                     return (
                       <button
-                        key={cat.slug || type}
+                        key={v.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedGoodsType(type)
-                          setGoodsTypeModalOpen(false)
-                        }}
-                        className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${isSelected
-                            ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
-                            : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                          }`}
+                        onClick={() => setSelectedVehicle(v)}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                          isSelected
+                            ? exceedsCap
+                              ? "border-rose-500 bg-rose-50/50 shadow-md shadow-rose-100"
+                              : "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
+                            : exceedsCap
+                              ? "border-rose-200 bg-rose-50/20 hover:border-rose-300"
+                              : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+                        }`}
                       >
-                        <span>{type}</span>
-                        {isSelected && (
-                          <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        <div className="w-16 shrink-0 flex items-center justify-center">
+                          {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {exceedsCap ? (
+                              <span className="text-[10px] font-extrabold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <AlertCircle className="w-2.5 h-2.5 text-rose-700" /> Exceeds Capacity
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
+                          <p className={`text-xs ${exceedsCap ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
+                            {v.capacity}
+                            {exceedsCap ? ` • Cargo exceeds limit (max ${maxW}kg)` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] text-slate-400 font-medium block">Starting from</span>
+                          <p className="text-sm font-extrabold text-slate-800">{fare}</p>
+                          <span className="text-[10px] text-slate-400 line-through">{strikethrough}</span>
+                        </div>
                       </button>
                     )
-                  })
-                )}
-              </div>
+                  })}
 
-              <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={() => setGoodsTypeModalOpen(false)}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Dynamic Goods & Cargo Item Selection Modal ── */}
-        <GoodsCargoSelectorModal
-          isOpen={cargoSelectorOpen}
-          onClose={() => setCargoSelectorOpen(false)}
-          selectedCargoItems={cargoItems}
-          onApplyCargo={async (items, cat) => {
-            setCargoItems(items)
-            if (cat) {
-              setSelectedGoodsCategoryObj(cat)
-              setSelectedGoodsType(cat.name)
-            }
-            if (items && items.length > 0) {
-              try {
-                const res = await evaluateCargoFitment({
-                  cargo_items: items.map((i) => ({
-                    item_id: i.id || i.goods_item_id,
-                    slug: i.slug,
-                    quantity: i.quantity,
-                  })),
-                  goods_category_id: cat?.id,
-                  city: currentCitySlug,
-                })
-                const rec = res?.recommended_tier
-                if (rec) {
-                  const allVehicles = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
-                  const matched = allVehicles.find(
-                    (veh) => veh._tierId === rec.id || veh.id === rec.slug || veh.name?.toLowerCase() === rec.name?.toLowerCase()
-                  )
-                  if (matched) {
-                    setSelectedVehicle(matched)
-                    if (HEAVY_VEHICLES.some((v) => v._tierId === rec.id || v.id === rec.slug)) {
-                      setActiveTab("heavy")
-                    } else {
-                      setActiveTab("light")
+                  {HEAVY_VEHICLES.map((v) => {
+                    const comingSoon = Boolean(v.badge && v.badge.toLowerCase().includes("coming"))
+                    if (comingSoon) {
+                      return (
+                        <div
+                          key={v.id}
+                          className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 text-left select-none"
+                        >
+                          <div className="w-16 shrink-0 flex items-center justify-center opacity-60">
+                            {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-slate-600">{v.name}</p>
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                                Coming Soon
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400">{v.capacity}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[11px] font-semibold text-slate-400 italic">Not available</span>
+                          </div>
+                        </div>
+                      )
                     }
-                  }
-                }
-              } catch (err) {
-                console.warn("Authoritative cargo fitment evaluation failed, maintaining current selection:", err)
-              }
-            }
-          }}
-          isTwoWheeler={false}
-          selectedCategory={selectedGoodsCategoryObj}
-          onSelectCategory={setSelectedGoodsCategoryObj}
-        />
 
-        {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
-        {lookingForPartnerOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-          >
-            <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
-              {/* Left Column: Looking for partner status & Order Details */}
-              <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
-                <div>
-                  {/* Pulsing radar icon */}
-                  <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
-                    <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
-                    <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
-                      <MapPin className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
-                    </p>
-                  </div>
-
-                  {/* Order Details Accordion */}
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
-                      className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
-                    >
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                        <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
-                      </div>
-                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {orderDetailsExpanded && (
-                      <div className="p-4 bg-white border-t border-slate-100 space-y-3">
-                        {/* Pickup */}
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                            <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                    const isSelected = selectedVehicle?.id === v.id
+                    const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || 0
+                    const fare = v.price || `₹ ${fareRaw.toLocaleString("en-IN")}`
+                    const strikethrough = `₹ ${(fareRaw + 30).toLocaleString("en-IN")}`
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setSelectedVehicle(v)}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                          isSelected
+                            ? "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
+                            : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="w-16 shrink-0 flex items-center justify-center">
+                          {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
+                            </span>
                           </div>
+                          <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
+                          <p className="text-xs text-slate-500">{v.capacity}</p>
                         </div>
-                        <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
-                        {/* Drop */}
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                            <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
-                          </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-extrabold text-slate-800">{fare}</p>
+                          <span className="text-[10px] text-slate-400 line-through">{strikethrough}</span>
                         </div>
-                        {/* Goods Type */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Goods Type</span>
-                          <span className="font-bold text-emerald-800">{selectedGoodsType || "General Goods"}</span>
-                        </div>
-                        {/* Amount */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                            <span className="text-base">💵</span> Amount Payable
-                          </div>
-                          <span className="text-sm font-extrabold text-slate-900">
-                            {lastBookingAmount != null
-                              ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
-                              : (serverQuote?.total != null
-                                ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                                : "Amount unavailable")}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      </button>
+                    )
+                  })}
                 </div>
-
-                {/* Cancel Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCancelReason("")
-                    setCancelComments("")
-                    setCancelModalOpen(true)
-                  }}
-                  className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
               </div>
 
-              {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
-              <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
-                <div className="flex items-start justify-between mb-5">
+              {/* Payment Method Footer */}
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <span className="text-base">💵</span>
                   <div>
-                    <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
-                  </div>
-                  <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
-                    <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
-                    <p className="text-xs font-black text-amber-300">4.8 ★</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Payment Method</p>
+                    <p className="font-extrabold text-slate-800">Cash / COD</p>
                   </div>
                 </div>
-
-                <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
-                  <div className="flex items-center gap-2.5">
-                    <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>In-Transit Updates</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
-                    <span>Exciting Discounts & Rewards</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>1-Tap Booking Options</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>Loading & Unloading Service</span>
-                  </div>
-                </div>
-
-                <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
-                  <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
-                  <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
-                    {/* Generated QR Code SVG */}
-                    <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
-                      <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
-                      <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
-                      <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
-                      <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
-                      <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
-                      <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
-                      <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
-                      <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
-                    </svg>
-                  </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">TOTAL FARE</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {displayFareText()}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Cancel Trip Modal (Matching Image 3) ── */}
-        {cancelModalOpen && (
-          <BookingCancellationModal
-            bookingId={lastBookingId}
-            requestId={lastBookingId}
-            isAccepted={false}
-            onClose={() => setCancelModalOpen(false)}
-            onCancelled={(data) => {
-              const reason = data?.cancellation_reason || data?.reason || "Customer requested cancellation"
-              setCancelledReasonText(reason)
-              setCancelModalOpen(false)
-              setLookingForPartnerOpen(false)
-              setCancelledBookingModalOpen(true)
-            }}
-          />
-        )}
-
-        {/* ── Booking Cancelled Screen / Modal (Matching Image 2) ── */}
-        {cancelledBookingModalOpen && (
+      {/* ── Select Goods Type Modal (Compact & Professional, Higher z-index) ─────────────────── */}
+      {goodsTypeModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setGoodsTypeModalOpen(false)}
+        >
           <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-            onClick={() => setCancelledBookingModalOpen(false)}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-150"
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 p-6 sm:p-8 text-center relative animate-in fade-in zoom-in-95 duration-150"
-            >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📦</span>
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Select Goods Type</h3>
+              </div>
               <button
-                type="button"
-                onClick={() => setCancelledBookingModalOpen(false)}
-                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+                onClick={() => setGoodsTypeModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
+            </div>
 
-              {/* Red Prohibition Icon Badge */}
-              <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 shadow-sm shadow-red-200/50">
-                <Ban className="w-8 h-8" />
-              </div>
-
-              {/* Header */}
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
-                Booking Cancelled
-              </h2>
-              <p className="text-sm text-slate-500 font-medium mb-6">
-                Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "—"}</strong> has been cancelled.
-              </p>
-
-              {/* Cancellation Details Card */}
-              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 text-left shadow-xs mb-6">
-                <div className="text-[11px] font-black text-slate-400 tracking-wider uppercase mb-2.5">
-                  Cancellation Details
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 px-2 py-1">
+              {catalogLoading ? (
+                <div className="py-8 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                  <span>Loading goods catalog...</span>
                 </div>
-
-                {/* Reason for cancellation box */}
-                <div className="bg-red-50 border border-red-200/80 rounded-xl p-3.5 mb-3">
-                  <div className="text-[10px] font-extrabold text-red-700 tracking-wider uppercase">
-                    Reason for Cancellation
-                  </div>
-                  <div className="text-sm font-bold text-red-950 mt-0.5">
-                    {cancelledReasonText || "Customer requested cancellation"}
-                  </div>
+              ) : catalogError || dynamicCategories.length === 0 ? (
+                <div className="py-8 px-4 text-center text-slate-500 text-xs flex flex-col items-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-amber-500" />
+                  <p className="font-semibold text-slate-700">Goods catalog temporarily unavailable. Please retry.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogLoading(true)
+                      fetchGoodsCategories()
+                        .then((categories) => {
+                          if (Array.isArray(categories) && categories.length > 0) {
+                            const truckCats = categories.filter((c) => !c.is_prohibited)
+                            setDynamicCategories(truckCats)
+                            setCatalogError("")
+                          } else {
+                            setCatalogError("Goods catalog temporarily unavailable. Please retry.")
+                          }
+                        })
+                        .catch(() => setCatalogError("Goods catalog temporarily unavailable. Please retry."))
+                        .finally(() => setCatalogLoading(false))
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+                  >
+                    Retry
+                  </button>
                 </div>
+              ) : (
+                dynamicCategories.map((cat) => {
+                  const type = cat.name
+                  const isSelected = selectedGoodsType === type
+                  return (
+                    <button
+                      key={cat.slug || type}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGoodsType(type)
+                        setGoodsTypeModalOpen(false)
+                      }}
+                      className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${
+                        isSelected
+                          ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
+                          : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>{type}</span>
+                      {isSelected && (
+                        <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  )
+                })
+              )}
+            </div>
 
-                {/* Refund Info Note */}
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
-                  💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
-                </div>
-              </div>
-
-              {/* Close / Action Button */}
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
               <button
                 type="button"
-                onClick={() => setCancelledBookingModalOpen(false)}
-                className="w-full py-3.5 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-colors cursor-pointer"
+                onClick={() => setGoodsTypeModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 Done
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Booking Success Modal ─────────────────────────────────── */}
-        {bookingSuccessOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setBookingSuccessOpen(false)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl border border-slate-100 text-center relative"
-            >
-              <button
-                onClick={() => setBookingSuccessOpen(false)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              {/* Success icon */}
-              <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
-                <CheckCircle2 className="w-10 h-10 text-emerald-600" />
-              </div>
-              <h2 className="text-xl font-extrabold text-slate-900 mb-2">
-                {bookingMode === "SCHEDULED" ? "Booking Scheduled Successfully!" : "Booking Confirmed!"}
-              </h2>
-              <p className="text-sm text-slate-600 leading-relaxed mb-1">
-                {bookingMode === "SCHEDULED"
-                  ? "Your truck has been scheduled. Our partner will arrive on time."
-                  : "Our service partner will contact you shortly."}
-              </p>
-              {lastBookingId && (
-                <p className="text-xs font-bold text-emerald-700 mb-1">Booking ID: {lastBookingId}</p>
-              )}
-              <p className="text-xs text-slate-400 mb-6">
-                {pickup && drop ? `${pickup} → ${drop}` : "Your booking has been placed successfully."}
-              </p>
-              <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2 border border-slate-200 mb-5">
-                {bookingMode === "SCHEDULED" && (selectedDate || selectedSlot) && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Scheduled For:</span>
-                    <span className="font-bold text-slate-900">{selectedDate?.date || selectedDate?.label || "Selected Date"} · {selectedSlot?.label || selectedSlot?.time || selectedSlot || ""}</span>
+      {/* ── Dynamic Goods & Cargo Item Selection Modal ── */}
+      <GoodsCargoSelectorModal
+        isOpen={cargoSelectorOpen}
+        onClose={() => setCargoSelectorOpen(false)}
+        selectedCargoItems={cargoItems}
+        onApplyCargo={async (items, cat) => {
+          setCargoItems(items)
+          if (cat) {
+            setSelectedGoodsCategoryObj(cat)
+            setSelectedGoodsType(cat.name)
+          }
+          if (items && items.length > 0) {
+            try {
+              const res = await evaluateCargoFitment({
+                cargo_items: items.map((i) => ({
+                  item_id: i.id || i.goods_item_id,
+                  slug: i.slug,
+                  quantity: i.quantity,
+                })),
+                goods_category_id: cat?.id,
+                city: LOGISTICS_CITY,
+              })
+              const rec = res?.recommended_tier
+              if (rec) {
+                const allVehicles = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
+                const matched = allVehicles.find(
+                  (veh) => veh._tierId === rec.id || veh.id === rec.slug || veh.name?.toLowerCase() === rec.name?.toLowerCase()
+                )
+                if (matched) {
+                  setSelectedVehicle(matched)
+                  if (HEAVY_VEHICLES.some((v) => v._tierId === rec.id || v.id === rec.slug)) {
+                    setActiveTab("heavy")
+                  } else {
+                    setActiveTab("light")
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("Authoritative cargo fitment evaluation failed, maintaining current selection:", err)
+            }
+          }
+        }}
+        isTwoWheeler={false}
+        selectedCategory={selectedGoodsCategoryObj}
+        onSelectCategory={setSelectedGoodsCategoryObj}
+      />
+
+      {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
+      {lookingForPartnerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
+            {/* Left Column: Looking for partner status & Order Details */}
+            <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
+              <div>
+                {/* Pulsing radar icon */}
+                <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
+                  <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
+                    <MapPin className="w-6 h-6 text-white" />
                   </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-medium">Service:</span>
-                  <span className="font-bold text-slate-900">{selectedVehicle?.name || "Mini Truck Delivery"}</span>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-slate-200">
-                  <span className="text-slate-500 font-medium">Final Booking Amount:</span>
-                  <span className="font-extrabold text-emerald-700 text-sm">
-                    {lastBookingAmount != null
-                      ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
-                      : (serverQuote?.total != null
-                        ? `₹${Number(serverQuote.total).toLocaleString("en-IN")}`
-                        : "Amount unavailable")}
-                  </span>
+
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
+                  </p>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                {lastBookingId && (
+
+                {/* Order Details Accordion */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
                   <button
                     type="button"
-                    onClick={() => {
-                      setBookingSuccessOpen(false)
-                      navigate(`/track/${encodeURIComponent(lastBookingId)}${lastTrackingToken ? `?token=${encodeURIComponent(lastTrackingToken)}` : ""}`)
-                    }}
-                    className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                    onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
+                    className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
                   >
-                    Track Booking
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">Order Details</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "CRN288650604065"}</p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
                   </button>
-                )}
+
+                  {orderDetailsExpanded && (
+                    <div className="p-4 bg-white border-t border-slate-100 space-y-3">
+                      {/* Pickup */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                        </div>
+                      </div>
+                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
+                      {/* Drop */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
+                        </div>
+                      </div>
+                      {/* Goods Type */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Goods Type</span>
+                        <span className="font-bold text-emerald-800">{selectedGoodsType || "General Goods"}</span>
+                      </div>
+                      {/* Amount */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                          <span className="text-base">💵</span> Amount Payable
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {lastBookingAmount != null
+                            ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                            : (serverQuote?.total != null
+                                ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                                : "Amount unavailable")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelReason("")
+                  setCancelComments("")
+                  setCancelModalOpen(true)
+                }}
+                className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
+            <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
+                </div>
+                <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
+                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
+                  <p className="text-xs font-black text-amber-300">4.8 ★</p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>In-Transit Updates</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
+                  <span>Exciting Discounts & Rewards</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>1-Tap Booking Options</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>Loading & Unloading Service</span>
+                </div>
+              </div>
+
+              <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
+                <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
+                <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
+                  {/* Generated QR Code SVG */}
+                  <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+                    <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
+                    <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
+                    <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
+                    <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
+                    <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
+                    <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
+                    <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
+                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Trip Modal (Matching Image 3) ── */}
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingId={lastBookingId}
+          requestId={lastBookingId}
+          isAccepted={false}
+          onClose={() => setCancelModalOpen(false)}
+          onCancelled={(data) => {
+            const reason = data?.cancellation_reason || data?.reason || "Customer requested cancellation"
+            setCancelledReasonText(reason)
+            setCancelModalOpen(false)
+            setLookingForPartnerOpen(false)
+            setCancelledBookingModalOpen(true)
+          }}
+        />
+      )}
+
+      {/* ── Booking Cancelled Screen / Modal (Matching Image 2) ── */}
+      {cancelledBookingModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setCancelledBookingModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 p-6 sm:p-8 text-center relative animate-in fade-in zoom-in-95 duration-150"
+          >
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Red Prohibition Icon Badge */}
+            <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 shadow-sm shadow-red-200/50">
+              <Ban className="w-8 h-8" />
+            </div>
+
+            {/* Header */}
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
+              Booking Cancelled
+            </h2>
+            <p className="text-sm text-slate-500 font-medium mb-6">
+              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "—"}</strong> has been cancelled.
+            </p>
+
+            {/* Cancellation Details Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 text-left shadow-xs mb-6">
+              <div className="text-[11px] font-black text-slate-400 tracking-wider uppercase mb-2.5">
+                Cancellation Details
+              </div>
+
+              {/* Reason for cancellation box */}
+              <div className="bg-red-50 border border-red-200/80 rounded-xl p-3.5 mb-3">
+                <div className="text-[10px] font-extrabold text-red-700 tracking-wider uppercase">
+                  Reason for Cancellation
+                </div>
+                <div className="text-sm font-bold text-red-950 mt-0.5">
+                  {cancelledReasonText || "Customer requested cancellation"}
+                </div>
+              </div>
+
+              {/* Refund Info Note */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
+              </div>
+            </div>
+
+            {/* Close / Action Button */}
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="w-full py-3.5 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-colors cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Booking Success Modal ─────────────────────────────────── */}
+      {bookingSuccessOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setBookingSuccessOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl border border-slate-100 text-center relative"
+          >
+            <button
+              onClick={() => setBookingSuccessOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            {/* Success icon */}
+            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-2">
+              {bookingMode === "SCHEDULED" ? "Booking Scheduled Successfully!" : "Booking Confirmed!"}
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed mb-1">
+              {bookingMode === "SCHEDULED" 
+                ? "Your truck has been scheduled. Our partner will arrive on time." 
+                : "Our service partner will contact you shortly."}
+            </p>
+            {lastBookingId && (
+              <p className="text-xs font-bold text-emerald-700 mb-1">Booking ID: {lastBookingId}</p>
+            )}
+            <p className="text-xs text-slate-400 mb-6">
+              {pickup && drop ? `${pickup} → ${drop}` : "Your booking has been placed successfully."}
+            </p>
+            <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2 border border-slate-200 mb-5">
+              {bookingMode === "SCHEDULED" && (selectedDate || selectedSlot) && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Scheduled For:</span>
+                  <span className="font-bold text-slate-900">{selectedDate?.date || selectedDate?.label || "Selected Date"} · {selectedSlot?.label || selectedSlot?.time || selectedSlot || ""}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Service:</span>
+                <span className="font-bold text-slate-900">{selectedVehicle?.name || "Mini Truck Delivery"}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-slate-200">
+                <span className="text-slate-500 font-medium">Final Booking Amount:</span>
+                <span className="font-extrabold text-emerald-700 text-sm">
+                  {lastBookingAmount != null
+                    ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                    : (serverQuote?.total != null
+                        ? `₹${Number(serverQuote.total).toLocaleString("en-IN")}`
+                        : "Amount unavailable")}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              {lastBookingId && (
                 <button
                   type="button"
                   onClick={() => {
                     setBookingSuccessOpen(false)
-                    navigate(routes.landing)
+                    navigate(`/track/${encodeURIComponent(lastBookingId)}${lastTrackingToken ? `?token=${encodeURIComponent(lastTrackingToken)}` : ""}`)
                   }}
-                  className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
                 >
-                  Back to Home
+                  Track Booking
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingSuccessOpen(false)
+                  navigate(routes.landing)
+                }}
+                className={`py-3.5 ${lastBookingId ? "flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50" : "w-full bg-emerald-600 text-white"} text-xs font-bold rounded-xl transition-all cursor-pointer`}
+              >
+                Back to Home
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       </main>
 
@@ -4622,43 +4077,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onComplete={(userData) => {
+          onComplete={() => {
             setShowCustomerEntryModal(false)
-            setLocalIsSignedIn(true)
-            const resolvedName = (userData?.name || name || "").trim()
-            const resolvedPhone = (userData?.phone || phone || "").replace(/\D/g, "").slice(0, 10)
-            if (resolvedName) setName(resolvedName)
-            if (resolvedPhone) setPhone(resolvedPhone)
-            submitBooking(null, resolvedName, resolvedPhone)
-          }}
-        />
-      )}
-
-      {mapPickerTarget && (
-        <MapPickerScreen
-          initialCoords={
-            mapPickerTarget === "pickup"
-              ? (pickupCoords?.lat ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
-              : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
-          }
-          serviceSlug="goods-transport"
-          onClose={() => setMapPickerTarget(null)}
-          onConfirm={(resolvedAddr) => {
-            const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"
-            const lat = Number(resolvedAddr?.latitude ?? resolvedAddr?.lat)
-            const lng = Number(resolvedAddr?.longitude ?? resolvedAddr?.lng)
-            if (mapPickerTarget === "pickup") {
-              setPickup(fullAddr)
-              if (!isNaN(lat) && !isNaN(lng)) {
-                setPickupCoords({ lat, lng, forAddress: fullAddr })
-              }
-            } else {
-              setDrop(fullAddr)
-              if (!isNaN(lat) && !isNaN(lng)) {
-                setDropCoords({ lat, lng, forAddress: fullAddr })
-              }
-            }
-            setMapPickerTarget(null)
+            submitBooking()
           }}
         />
       )}

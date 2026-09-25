@@ -1,5 +1,5 @@
 /**
- * CustomerTrackingMap.jsx — sevo Customer Live Tracking Map
+ * CustomerTrackingMap.jsx — CalTrack Customer Live Tracking Map
  *
  * Production-grade customer live-tracking map:
  *  • Real road map with styled tile layer switcher (Google Streets / Satellite / Dark)
@@ -318,8 +318,8 @@ export function CustomerTrackingMap({
   const techName = rawTechName && rawTechName !== "pest_control" && rawTechName !== "home_cleaning"
     ? rawTechName
     : ["assigned", "accepted", "on_the_way", "arrived", "in_progress"].includes(status)
-      ? "Assigned Service Professional"
-      : ""
+    ? "Assigned Service Professional"
+    : ""
   const techPhone = technician?.phone || technicianLocation?.technician_phone || ""
   const techPhoto = technician?.photo || technicianLocation?.technician_photo || null
   const techRating = technician?.rating ?? technicianLocation?.technician_rating ?? null
@@ -405,32 +405,32 @@ export function CustomerTrackingMap({
     if (!shouldFetch && roadRoute.length > 0) return
 
     let cancelled = false
-      ; (async () => {
-        try {
-          const res = await fetchRoadRoute(
-            rawTechnicianPos[1], rawTechnicianPos[0],
-            destinationPos[1], destinationPos[0]
-          )
-          if (cancelled) return
-          if (res?.coordinates && res.coordinates.length > 1) {
-            setRoadRoute(res.coordinates)
-            setHasRoadGeometry(true)
-            if (res.currentStreetName) {
-              setCurrentStreetName(res.currentStreetName)
-            }
-            lastRouteFetchTimeRef.current = Date.now()
-            lastRouteFetchPosRef.current = rawTechnicianPos
-          } else {
-            setRoadRoute([])
-            setHasRoadGeometry(false)
+    ;(async () => {
+      try {
+        const res = await fetchRoadRoute(
+          rawTechnicianPos[1], rawTechnicianPos[0],
+          destinationPos[1], destinationPos[0]
+        )
+        if (cancelled) return
+        if (res?.coordinates && res.coordinates.length > 1) {
+          setRoadRoute(res.coordinates)
+          setHasRoadGeometry(true)
+          if (res.currentStreetName) {
+            setCurrentStreetName(res.currentStreetName)
           }
-        } catch {
-          if (!cancelled) {
-            setRoadRoute([])
-            setHasRoadGeometry(false)
-          }
+          lastRouteFetchTimeRef.current = Date.now()
+          lastRouteFetchPosRef.current = rawTechnicianPos
+        } else {
+          setRoadRoute([])
+          setHasRoadGeometry(false)
         }
-      })()
+      } catch {
+        if (!cancelled) {
+          setRoadRoute([])
+          setHasRoadGeometry(false)
+        }
+      }
+    })()
 
     return () => { cancelled = true }
   }, [rawTechnicianPos?.[0], rawTechnicianPos?.[1], destinationPos?.[0], destinationPos?.[1], isTerminal])
@@ -647,9 +647,9 @@ export function CustomerTrackingMap({
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-            <circle cx="12" cy="12" r="9" strokeOpacity="0.35" />
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            <circle cx="12" cy="12" r="9" strokeOpacity="0.35"/>
           </svg>
         </button>
 

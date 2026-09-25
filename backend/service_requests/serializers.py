@@ -58,7 +58,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "vegetable_category_name", "vegetable_category_slug", "vegetable_category_parent_name", "vegetable_category_full_path",
             "name", "slug", "description", "price", "base_price", "offer_price", "platform_fee", "gst_rate", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
-            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization", "sub_service_key",
+            "faqs", "sort_order", "tools", "ready", "custom_packs", "customization",
             "service_id", "service_name", "service_slug", "service_description",
             "service_customization", "service_sort_order", "service_image",
             "in_stock", "max_quantity",
@@ -141,7 +141,6 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
 
 class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
 
     class Meta:
         model = Service
@@ -183,8 +182,6 @@ class PackageSerializer(serializers.ModelSerializer):
     max_quantity = serializers.SerializerMethodField()
     vegetable_category = serializers.SerializerMethodField()
     add_ons = AddOnSerializer(many=True, read_only=True)
-    rating = serializers.SerializerMethodField()
-    reviews_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -217,24 +214,6 @@ class PackageSerializer(serializers.ModelSerializer):
                 "image": item.category.image,
             }
         return None
-
-    def get_rating(self, obj):
-        if obj.reviews and isinstance(obj.reviews, list) and len(obj.reviews) > 0:
-            ratings = []
-            for r in obj.reviews:
-                if isinstance(r, dict) and "rating" in r:
-                    try:
-                        ratings.append(float(r["rating"]))
-                    except (ValueError, TypeError):
-                        pass
-            if ratings:
-                return round(sum(ratings) / len(ratings), 2)
-        return None
-
-    def get_reviews_count(self, obj):
-        if obj.reviews and isinstance(obj.reviews, list):
-            return len(obj.reviews)
-        return 0
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):
@@ -797,11 +776,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return []
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query workforce_notification for COD-specific OTP states.
-        # "pending" is the default online-payment status and never has a
-        # PAYMENT_CONFIRMATION_OTP — querying for it caused one raw SQL call
-        # per booking in every listing endpoint (active, my-bookings, admin, etc.).
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -902,8 +877,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return None
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -1212,8 +1186,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_payment_confirmation_otp(self, obj):
-        # N+1 fix: only query for COD OTP states, not the default online-payment "pending".
-        if getattr(obj, "payment_status", None) not in ("cash_pending", "cash_collected"):
+        if getattr(obj, "payment_status", None) not in ("cash_pending", "pending", "cash_collected"):
             return None
         try:
             import re
@@ -2037,7 +2010,7 @@ class EstimationSerializer(serializers.ModelSerializer):
 
 
 class EstimationSummarySerializer(serializers.ModelSerializer):
-    fee_amount = serializers.FloatField(source="fee.amount", read_only=True)
+    fee_amount = serializers.DecimalField(source="fee.amount", max_digits=10, decimal_places=2, read_only=True)
     fee_status = serializers.CharField(source="fee.status", read_only=True)
 
     class Meta:

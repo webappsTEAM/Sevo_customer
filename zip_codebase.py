@@ -16,14 +16,8 @@ import zipfile
 
 # Determine project root directory (directory where this script is located)
 SCRIPT_DIR = Path(__file__).resolve().parent
-CUSTOMER_DIR = (SCRIPT_DIR.parent.parent / "CUS" / "calservices").resolve() if (SCRIPT_DIR.parent.parent / "CUS" / "calservices").exists() else Path(r"C:\Users\user\Desktop\SEVO\CUS\calservices").resolve()
-VENDOR_DIR = (
-    (SCRIPT_DIR.parent.parent / "VEN" / "vendor").resolve()
-    if (SCRIPT_DIR.parent.parent / "VEN" / "vendor").exists()
-    else (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").resolve()
-    if (SCRIPT_DIR.parent.parent / "VEN" / "calservice-vendor").exists()
-    else Path(r"C:\Users\user\Desktop\SEVO\VEN\vendor").resolve()
-)
+CUSTOMER_DIR = SCRIPT_DIR
+VENDOR_DIR = (SCRIPT_DIR.parent / "Ven").resolve()
 
 # Default directory patterns to exclude (installables, bloat, caches, build artifacts)
 DEFAULT_EXCLUDE_DIRS = {
@@ -101,10 +95,11 @@ DEFAULT_EXCLUDE_FILES = {
 
 
 def parse_args():
-    # Dedicated backup folder requested by user: Desktop\sevo backup\calservices_latest.zip
-    BACKUP_DIR = Path(r"C:\Users\user\Desktop\sevo backup")
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    default_output = BACKUP_DIR / "calservices_latest.zip"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Default output: dedicated Desktop\SEVO_Backups\ folder (separate from Cus/Ven)
+    BACKUP_DIR = SCRIPT_DIR.parent / "SEVO_Backups"
+    BACKUP_DIR.mkdir(exist_ok=True)
+    default_output = BACKUP_DIR / f"calservices_archive_{timestamp}.zip"
 
     parser = argparse.ArgumentParser(
         description="Pack the codebase into a clean, lightweight zip archive excluding installables while preserving .env files.",
@@ -114,7 +109,7 @@ def parse_args():
     parser.add_argument(
         "-o", "--output",
         default=str(default_output),
-        help="Name or path of the output zip file (default: calservices_latest.zip)",
+        help="Name or path of the output zip file",
     )
     parser.add_argument(
         "--target",
@@ -167,19 +162,6 @@ def parse_args():
         dest="exclude_assets",
         action="store_false",
         help="Include heavy image/media asset folders in archive.",
-    )
-    parser.add_argument(
-        "--fast",
-        action="store_true",
-        default=True,
-        help="Use fast compression (level 1) for rapid packaging (default: True)",
-    )
-    parser.add_argument(
-        "--level",
-        type=int,
-        default=1,
-        choices=range(0, 10),
-        help="Compression level 0-9 (default: 1 for speed, 9 for maximum compression)",
     )
     parser.add_argument(
         "--dry-run",
@@ -395,12 +377,7 @@ def main():
     print(" [1/2] Compressing into zip archive...")
     start_time = datetime.now()
 
-    compress_level = getattr(args, "level", 1)
-    if getattr(args, "fast", False):
-        compress_level = 1
-    print(f" -> Compression level: {compress_level} (fast mode enabled)")
-
-    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=compress_level) as zipf:
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
         total = len(files_to_zip)
         step = max(1, total // 10)
         for idx, (abs_path, arcname, _) in enumerate(files_to_zip, start=1):
@@ -421,16 +398,14 @@ def main():
     print(f" Saved Location  : {output_path}")
     print(f" Uncompressed    : {format_size(total_uncompressed)}")
     print(f" Compressed Size : {format_size(zip_size)}")
+    print(f" Space Reduction : {saved_pct:.1f}% saved")
     print(f" .env Files      : {total_env_files} included")
     latest_path = output_path.parent / "calservices_latest.zip"
-    if output_path.resolve() != latest_path.resolve():
-        try:
-            shutil.copy2(output_path, latest_path)
-            print(f" Latest Backup   : {latest_path}")
-        except Exception as e:
-            print(f" [Note] Could not update latest alias: {e}")
-    else:
-        print(f" Latest Backup   : {output_path} (Updated directly)")
+    try:
+        shutil.copy2(output_path, latest_path)
+        print(f" Latest Backup   : {latest_path}")
+    except Exception as e:
+        print(f" [Note] Could not update latest alias: {e}")
 
     print(f" Total Duration  : {elapsed:.2f}s")
     print("=" * 65 + "\n")

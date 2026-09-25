@@ -9,20 +9,12 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import ValidationError
 
 from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import to_grams
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_get_product_stock_item(product):
-    try:
-        return getattr(product, "stock_item", None)
-    except ObjectDoesNotExist:
-        return None
 
 
 class InsufficientStockError(Exception):
@@ -47,7 +39,7 @@ def add_stock(product, quantity, unit, company, entered_by_user=None) -> Vegetab
     grams_to_add = to_grams(quantity, unit)
     
     # Resolve linked Vegetable or create one
-    item = _safe_get_product_stock_item(product)
+    item = product.stock_item
     if not item:
         item = Vegetable.objects.create(
             org=company,
@@ -91,11 +83,11 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
     Sets stock_quantity_grams to the exact converted value. Reason is required.
     Logs VegetableStockMovement (ADJUSTMENT) with computed delta and reason.
     """
-    if not reason or not reason.strip():
+    if not reason or not str(reason).strip():
         raise ValueError("Reason is required for manual stock adjustment.")
 
     target_grams = to_grams(quantity, unit, allow_zero=True)
-    item = _safe_get_product_stock_item(product)
+    item = product.stock_item
     if not item:
         item = Vegetable.objects.create(
             org=company,
@@ -124,7 +116,7 @@ def adjust_stock(product, quantity, unit, reason: str, company, entered_by_user=
         movement_type=VegetableStockMovement.MovementType.ADJUSTMENT,
         delta_grams=delta,
         balance_after_grams=target_grams,
-        reason=reason.strip(),
+        reason=str(reason).strip(),
         entered_by=entered_by_user,
     )
 
@@ -142,7 +134,7 @@ def set_default_daily_quantity(product, quantity, unit, company, entered_by_user
     else:
         default_grams = to_grams(quantity, unit, allow_zero=True)
 
-    item = _safe_get_product_stock_item(product)
+    item = product.stock_item
     if not item:
         item = Vegetable.objects.create(
             org=company,
@@ -188,7 +180,7 @@ def reserve_stock_for_booking_items(items: list, company, booking_ref: str) -> N
         prod = entry.get("product")
         if not prod:
             continue
-        stock_item = _safe_get_product_stock_item(prod)
+        stock_item = getattr(prod, "stock_item", None)
         if stock_item is None:
             continue
         qty = entry.get("quantity")

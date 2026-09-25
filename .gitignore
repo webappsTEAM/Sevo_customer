@@ -56,7 +56,7 @@ backend/.env.bak
 frontend/parse_check.cjs
 
 # Runtime data files — should not be version-controlled
-backend/sevo_activation_dossier.json
+backend/caltrack_activation_dossier.json
 *.zip
 *.tar.gz
 *.rar

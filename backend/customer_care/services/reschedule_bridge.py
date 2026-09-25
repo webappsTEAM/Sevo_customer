@@ -10,79 +10,11 @@ from service_requests.models import RescheduleRequest, RescheduleStatus
 from service_requests.services import (
     create_reschedule_request,
     apply_reschedule_transition,
+    is_booking_reschedule_eligible,
+    check_employee_availability,
+    _get_employee_for_booking,
     auto_reassign_technician,
 )
-
-# GENUINE GAP (not resolved here -- see note below): this module previously
-# imported three names from service_requests.services that do not exist
-# anywhere in that module or the rest of the codebase:
-#   - is_booking_reschedule_eligible  -- imported but never referenced in
-#     this file (dead import); removed above. The real eligibility check
-#     already used at call sites below is create_reschedule_request()'s own
-#     built-in status guard plus the 24h/slot-capacity logic already in this
-#     file, matching the established HS-B-08 pattern in
-#     service_requests/services/__init__.py.
-#   - check_employee_availability(employee, date, time_slot) -- genuinely
-#     missing. No per-employee schedule/calendar model exists anywhere in
-#     this codebase to answer "is this specific technician free at this
-#     slot" -- the only established capacity concept is the aggregate
-#     per-slot booking count (_slot_has_capacity in
-#     service_requests/services/__init__.py), which is a different question
-#     (is the slot full) from per-employee availability. Inventing a mapping
-#     between the two, or a new employee-availability data source, would be
-#     a business-rule decision this session cannot make on its own.
-#   - _get_employee_for_booking(booking) -- ALSO genuinely missing, not just
-#     a naming gap. ServiceRequest has no technician/assigned_employee
-#     relation at all (confirmed directly against the model: the only
-#     "assigned_employee" references anywhere in service_requests are code
-#     comments describing a cross-app convention, and a defensive
-#     `getattr(booking, "assigned_employee_id", None)` in
-#     services/__init__.py:1078 that is written specifically to survive the
-#     field's absence, not evidence that it exists). Technician identity for
-#     a GT booking lives outside this app (the vendor/workforce side), not
-#     as a joinable field here. Returns None below (safe no-op: the caller
-#     already treats "no employee" as "proceed without a specific employee
-#     to check"), which is honest about the gap rather than inventing a
-#     lookup this codebase has no data source for.
-#
-# Net effect: create_reschedule_via_ticket() below now imports cleanly and
-# runs (previously this whole module raised ImportError at first use, which
-# is why both ticket_views.py call sites -- reschedule-via-ticket and
-# confirm-reschedule-via-ticket -- were completely broken in production).
-# Both remaining functions below are genuine BLOCKED items: resolving them
-# requires a product/architecture decision (where per-technician
-# availability and assignment data would come from), not a code fix this
-# session can make from the existing codebase alone.
-
-
-def _get_employee_for_booking(booking):
-    """BLOCKED (see module-level note above): no technician/employee
-    relation exists on ServiceRequest to resolve here. Returns None so the
-    caller falls through to its existing "no employee assigned yet" branch
-    (available = True, i.e. nothing to check availability for) rather than
-    crashing or guessing at a field that doesn't exist."""
-    return None
-
-
-def check_employee_availability(employee, new_date, new_time_slot):
-    """BLOCKED (see module-level note above): no per-employee schedule model
-    exists in this codebase to answer this question. Returns False (i.e.
-    "assume unavailable, fall back to auto-reassignment / manual review")
-    rather than True, because silently assuming every technician is always
-    available would skip the auto-reassignment path below and could route a
-    reschedule to a technician who has since been reassigned elsewhere --
-    the fail-safe direction here is to under-trust availability, not
-    over-trust it. This still does not resolve the underlying gap; it only
-    keeps the surrounding auto-approval flow from crashing."""
-    logger.warning(
-        "check_employee_availability() has no real implementation (no "
-        "per-employee schedule data source exists in this codebase) -- "
-        "returning False for employee_id=%s to force the existing "
-        "auto-reassignment/manual-review fallback path instead of a false "
-        "positive.",
-        getattr(employee, "id", employee),
-    )
-    return False
 
 def create_reschedule_via_ticket(ticket, actor, new_date, new_time_slot, reason, notes=""):
     """
@@ -127,19 +59,8 @@ def create_reschedule_via_ticket(ticket, actor, new_date, new_time_slot, reason,
         time_diff = current_schedule_dt - now
         hours_diff = time_diff.total_seconds() / 3600.0
 
-    # Determine availability of assigned employee or auto-reassignment.
-    # GENUINE GAP (see module-level note above): RescheduleRequest has no
-    # proposed_technician field either -- confirmed against the model, it
-    # doesn't exist. getattr(..., None) below keeps this from crashing (a
-    # bare rr.proposed_technician read raises AttributeError on a real
-    # Django model instance, same as any other undefined attribute); the
-    # write on the auto-reassignment branch is left in place since it's
-    # harmless (Django's .save() only persists real model fields, so
-    # setting a non-field attribute here is a silent no-op, not a crash),
-    # but it does mean auto-reassignment can never actually stick until a
-    # real field is added -- another part of the same product decision
-    # flagged above, not something to invent here.
-    employee = getattr(rr, "proposed_technician", None) or _get_employee_for_booking(booking)
+    # Determine availability of assigned employee or auto-reassignment
+    employee = rr.proposed_technician or _get_employee_for_booking(booking)
     available = False
     if employee:
         available = check_employee_availability(employee, rr.new_date, rr.new_time_slot)

@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle, ArrowRight, Check, History, Info, Lock, Pencil,
-  RefreshCw, Search, ShieldCheck, Truck, Layers, Package, Home, Clock,
-  Navigation, HelpCircle
+  RefreshCw, Search, ShieldCheck, Truck,
 } from "lucide-react"
 import { Button, Input, Modal, Select, TextArea, formatDateTime } from "../../components/kit.jsx"
 import { ToastBanner, useToast } from "./useToast.jsx"
@@ -11,13 +10,6 @@ import {
   fetchAdminTiers,
   updateAdminTier,
 } from "../../../api/logisticsAdminService.js"
-import { GTCategoriesTab } from "./gt/GTCategoriesTab.jsx"
-import { GTItemsTab } from "./gt/GTItemsTab.jsx"
-import { GTPackersMoversTab } from "./gt/GTPackersMoversTab.jsx"
-import { GTSlotsTab } from "./gt/GTSlotsTab.jsx"
-import { GTLanesTab } from "./gt/GTLanesTab.jsx"
-import { GTFaqsTab } from "./gt/GTFaqsTab.jsx"
-
 
 /**
  * Goods & Transport rate card.
@@ -190,7 +182,6 @@ function ModePill({ distancePriced }) {
 }
 
 export function GTPricingPage() {
-  const [activeTab, setActiveTab] = useState("tiers")
   const [tiers, setTiers] = useState([])
   const [meta, setMeta] = useState(null)
   const [notice, setNotice] = useState("")
@@ -422,130 +413,23 @@ export function GTPricingPage() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              Goods &amp; Transport Management Hub
+              Goods &amp; Transport Rate Card <span className="font-semibold text-slate-400 dark:text-slate-500">(read-only)</span>
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Unified administration for vehicle tiers, cargo categories, inventory items, relocation pricing, and operating slots.
+              The live rates the fare engine reads for every Goods &amp; Transport quote.
             </p>
           </div>
         </div>
-        {activeTab === "tiers" && (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-              <Lock size={13} /> Reference only -- edit via Packages
-            </span>
-            <Button variant="ghost" onClick={load} disabled={loading}>
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              <span className="ml-1.5">Refresh</span>
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+            <Lock size={13} /> Reference only -- edit via Packages
+          </span>
+          <Button variant="ghost" onClick={load} disabled={loading}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span className="ml-1.5">Refresh</span>
+          </Button>
+        </div>
       </div>
-
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto hide-scrollbar">
-        <button
-          type="button"
-          onClick={() => setActiveTab("tiers")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "tiers"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Truck size={15} />
-          Rate Cards &amp; Tiers
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("categories")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "categories"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Layers size={15} />
-          Goods Categories
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("items")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "items"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Package size={15} />
-          Cargo &amp; Inventory Items
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("pm_config")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "pm_config"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Home size={15} />
-          Packers &amp; Movers Settings
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("slots")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "slots"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Clock size={15} />
-          Operating Slots
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("lanes")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "lanes"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <Navigation size={15} />
-          Lanes &amp; Routes
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("faqs")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "faqs"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          <HelpCircle size={15} />
-          Platform FAQs
-        </button>
-      </div>
-
-      {activeTab === "categories" && <GTCategoriesTab showToast={showToast} />}
-      {activeTab === "items" && <GTItemsTab showToast={showToast} />}
-      {activeTab === "pm_config" && <GTPackersMoversTab showToast={showToast} />}
-      {activeTab === "slots" && <GTSlotsTab showToast={showToast} />}
-      {activeTab === "lanes" && <GTLanesTab showToast={showToast} />}
-      {activeTab === "faqs" && <GTFaqsTab showToast={showToast} />}
-
-      {activeTab === "tiers" && (
-        <div className="space-y-5">
-
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-100 dark:border-indigo-500/25 bg-indigo-50/60 dark:bg-indigo-500/10 px-4 py-3">
         <Info size={16} className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
@@ -626,26 +510,10 @@ export function GTPricingPage() {
               {!loading && tiers.map((tier) => (
                 <tr key={tier.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 align-top">
-                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{tier.name}</span>
-                      {tier.is_dispatchable === false && (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
-                          title={tier.dispatchability_warning || "Un-dispatchable: no compatible vendor fleet registered"}
-                        >
-                          <AlertTriangle size={11} className="text-amber-700" />
-                          Un-dispatchable
-                        </span>
-                      )}
-                    </div>
+                    <div className="font-bold text-slate-900 dark:text-white">{tier.name}</div>
                     <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
                       {tier.slug} · {tier.city} · {tier.category_display}
                     </div>
-                    {tier.is_dispatchable === false && (
-                      <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
-                        {tier.dispatchability_warning || "Commercial fleet for this vehicle class is not currently registered by vendor partners."}
-                      </p>
-                    )}
                   </td>
                   <td className="px-3 py-3 align-top"><ModePill distancePriced={tier.is_distance_priced} /></td>
                   {PRICING_FIELDS.map((field) => (
@@ -983,11 +851,8 @@ export function GTPricingPage() {
           )}
         </Modal>
       )}
-        </div>
-      )}
     </div>
   )
 }
-
 
 export default GTPricingPage

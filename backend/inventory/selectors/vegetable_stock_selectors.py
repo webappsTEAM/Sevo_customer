@@ -7,21 +7,9 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db.models import Sum, Q
-from django.core.exceptions import ObjectDoesNotExist
 
 from inventory.models import Vegetable, VegetableStockMovement
 from inventory.utils.unit_conversion import format_grams_for_display, parse_pack_size_grams
-
-
-def _safe_get_stock_item(product) -> Optional[Any]:
-    """
-    Safely retrieves product.stock_item.
-    Handles ObjectDoesNotExist which getattr does not catch.
-    """
-    try:
-        return getattr(product, "stock_item", None)
-    except ObjectDoesNotExist:
-        return None
 
 
 def get_stock_status(product) -> Dict[str, Any]:
@@ -33,7 +21,7 @@ def get_stock_status(product) -> Dict[str, Any]:
     - If stock_item.stock_quantity_grams > 0 -> in_stock: True, max_quantity: integer packs available
     - If stock_item.stock_quantity_grams <= 0 -> in_stock: False, max_quantity: 0
     """
-    item = _safe_get_stock_item(product)
+    item = getattr(product, "stock_item", None)
     if not item or item.stock_quantity_grams is None:
         return {"in_stock": True, "max_quantity": None}
 
@@ -73,7 +61,7 @@ def get_bulk_admin_stock_status(products: list, for_date: Optional[date] = None)
     items = []
     item_by_prod_id = {}
     for prod in products:
-        item = _safe_get_stock_item(prod)
+        item = getattr(prod, "stock_item", None)
         if item:
             items.append(item)
             item_by_prod_id[prod.id] = item
@@ -229,7 +217,7 @@ def get_daily_stock_history(product, start_date: date, end_date: date) -> List[D
     - sold_grams: sum of SOLD movement deltas (positive amount sold) that day.
     - closing_grams: balance_after of the latest movement that day (or live stock if date is today and no movements).
     """
-    item = _safe_get_stock_item(product)
+    item = getattr(product, "stock_item", None)
     if not item:
         return []
 

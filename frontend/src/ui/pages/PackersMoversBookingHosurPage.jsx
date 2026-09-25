@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import React, { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import {
-  MapPin, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowRight, ArrowLeft, ShieldCheck,
+  MapPin, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Home, Bike, Check,
   ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchPackersMoversQuote, fetchLogisticsSlots, fetchPackersMoversInventory } from "../../api/logisticsService.js"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
@@ -16,8 +16,8 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
-import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
 import {
+  HOSUR_LOCATIONS_DATABASE,
   filterLocationSuggestions as filterHosurLocations,
   searchHosurPlacesOnline,
   formatExactLocation,
@@ -25,35 +25,7 @@ import {
   resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
-function TierImageFallback({ src, alt, fallback }) {
-  const [errored, setErrored] = useState(false)
-  if (!src || errored) return fallback
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setErrored(true)}
-      className="w-full h-full object-contain"
-    />
-  )
-}
-
-function GenericShiftingDiagram({ className = "w-full h-[120px]" }) {
-  return (
-    <svg className={className} viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="120" rx="8" fill="#F8FAFC" />
-      <rect x="25" y="42" width="95" height="52" rx="4" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="2" />
-      <path d="M120 58H145L158 72V94H120V58Z" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="2" />
-      <circle cx="55" cy="95" r="10" fill="#475569" />
-      <circle cx="55" cy="95" r="4" fill="#F8FAFC" />
-      <circle cx="138" cy="95" r="10" fill="#475569" />
-      <circle cx="138" cy="95" r="4" fill="#F8FAFC" />
-      <rect x="50" y="24" width="38" height="34" rx="2" fill="#FDE68A" stroke="#D97706" strokeWidth="1.5" />
-      <line x1="50" y1="41" x2="88" y2="41" stroke="#D97706" strokeWidth="1.5" strokeDasharray="2 2" />
-      <line x1="69" y1="24" x2="69" y2="58" stroke="#D97706" strokeWidth="1.5" strokeDasharray="2 2" />
-    </svg>
-  )
-}
+const LOGISTICS_CITY = "hosur"
 
 /* ── Vector Diagrams for Packers & Movers Packages (NoBroker Style) ── */
 function OneBhkDiagram({ className = "w-full h-[120px]" }) {
@@ -61,7 +33,7 @@ function OneBhkDiagram({ className = "w-full h-[120px]" }) {
     <svg viewBox="0 0 200 120" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Baseline */}
       <line x1="20" y1="100" x2="180" y2="100" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" />
-
+      
       {/* Bed (Blue) */}
       <path d="M30 96H75V76H35C32.2386 76 30 78.2386 30 81V96Z" fill="#2563EB" />
       <rect x="25" y="60" width="5" height="36" fill="#1E3A8A" />
@@ -91,7 +63,7 @@ function TwoBhkDiagram({ className = "w-full h-[120px]" }) {
     <svg viewBox="0 0 200 120" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Baseline */}
       <line x1="20" y1="100" x2="180" y2="100" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" />
-
+      
       {/* Sofa (Green) */}
       <rect x="40" y="75" width="40" height="21" rx="2" fill="#059669" />
       <rect x="35" y="65" width="8" height="31" rx="2" fill="#047857" />
@@ -108,11 +80,11 @@ function TwoBhkDiagram({ className = "w-full h-[120px]" }) {
       <rect x="126" y="60" width="28" height="36" rx="2" fill="#E2E8F0" />
       <circle cx="140" cy="78" r="10" fill="#94A3B8" />
       <circle cx="140" cy="78" r="6" fill="#60A5FA" />
-
+      
       {/* Boxes */}
       <rect x="160" y="60" width="20" height="24" fill="#F59E0B" />
       <rect x="160" y="68" width="20" height="2" fill="#D97706" />
-
+      
       <rect x="164" y="44" width="12" height="16" fill="#FBBF24" />
       <rect x="157" y="84" width="28" height="12" fill="#D97706" />
     </svg>
@@ -124,7 +96,7 @@ function ThreeBhkVillaDiagram({ className = "w-full h-[120px]" }) {
     <svg viewBox="0 0 200 120" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Baseline */}
       <line x1="20" y1="100" x2="180" y2="100" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" />
-
+      
       {/* Truck */}
       <rect x="25" y="50" width="45" height="40" fill="#1E293B" />
       <path d="M70 60H85C88 60 90 62 90 65L93 75C94 77 94 80 94 82V90H70V60Z" fill="#3B82F6" />
@@ -136,12 +108,12 @@ function ThreeBhkVillaDiagram({ className = "w-full h-[120px]" }) {
       {/* Tall Boxes (Orange/Green) */}
       <rect x="100" y="40" width="22" height="56" fill="#D97706" />
       <rect x="100" y="52" width="22" height="2" fill="#B45309" />
-
+      
       <rect x="125" y="55" width="20" height="41" fill="#059669" />
-
+      
       <rect x="148" y="65" width="16" height="31" fill="#F59E0B" />
       <rect x="148" y="75" width="16" height="2" fill="#D97706" />
-
+      
       <rect x="148" y="45" width="16" height="20" fill="#FBBF24" />
       <rect x="148" y="55" width="16" height="2" fill="#F59E0B" />
     </svg>
@@ -238,10 +210,28 @@ const PACKERS_DIAGRAM_BY_SLUG = {
   "villa-office-relocation": <ThreeBhkVillaDiagram />,
 }
 
-function filterIntercitySuggestions(searchText, excludeCityName = "", cityList = null) {
-  const source = (cityList && cityList.length > 0) ? cityList : []
+const INTERCITY_CITIES = [
+  { name: "Bengaluru", state: "Karnataka", subtitle: "Karnataka (~40 Kms from Hosur)" },
+  { name: "Chennai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Coimbatore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Dharmapuri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~90 Kms from Hosur)" },
+  { name: "Madurai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~410 Kms from Hosur)" },
+  { name: "Hosur", state: "Tamil Nadu", subtitle: "Tamil Nadu (Origin Hub)" },
+  { name: "Salem", state: "Tamil Nadu", subtitle: "Tamil Nadu (~150 Kms from Hosur)" },
+  { name: "Krishnagiri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~50 Kms from Hosur)" },
+  { name: "Tiruchirappalli (Trichy)", state: "Tamil Nadu", subtitle: "Tamil Nadu (~290 Kms from Hosur)" },
+  { name: "Tirupur", state: "Tamil Nadu", subtitle: "Tamil Nadu (~265 Kms from Hosur)" },
+  { name: "Erode", state: "Tamil Nadu", subtitle: "Tamil Nadu (~210 Kms from Hosur)" },
+  { name: "Vellore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~180 Kms from Hosur)" },
+  { name: "Mysore", state: "Karnataka", subtitle: "Karnataka (~185 Kms from Hosur)" },
+  { name: "Hyderabad", state: "Telangana", subtitle: "Telangana (~610 Kms from Hosur)" },
+  { name: "Kochi", state: "Kerala", subtitle: "Kerala (~500 Kms from Hosur)" },
+  { name: "Puducherry", state: "Pondicherry", subtitle: "Pondicherry (~260 Kms from Hosur)" },
+]
+
+function filterIntercitySuggestions(searchText, excludeCityName = "") {
   const excludeNormalized = (excludeCityName || "").trim().toLowerCase()
-  const availableCities = source.filter((item) => {
+  const availableCities = INTERCITY_CITIES.filter((item) => {
     if (!excludeNormalized) return true
     const itemNorm = item.name.toLowerCase()
     return itemNorm !== excludeNormalized && !excludeNormalized.includes(itemNorm) && !itemNorm.includes(excludeNormalized)
@@ -318,30 +308,69 @@ function groupItemsIntoSubcategories(items = []) {
   ]
 
   for (const it of items) {
-    let matchedGroup = (it.subcategory || "").trim()
-    if (!matchedGroup) {
-      for (const p of patterns) {
-        if (p.regex.test(it.name)) {
-          matchedGroup = p.name
-          break
-        }
+    let matchedGroup = "General Items"
+    for (const p of patterns) {
+      if (p.regex.test(it.name)) {
+        matchedGroup = p.name
+        break
       }
     }
-    if (!matchedGroup) matchedGroup = "General Items"
     if (!groups[matchedGroup]) groups[matchedGroup] = []
     groups[matchedGroup].push(it)
   }
   return groups
 }
 
-/* ── Dynamic Shifting Dates Helper ── */
+/* ── Slots & Dates Helper ── */
+const SHIFTING_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+}
+
+const isSlotPassed = (slot, dateObj) => {
+  if (!slot || !dateObj) return false
+  const today = new Date()
+  const d = dateObj instanceof Date ? dateObj : new Date(dateObj)
+  if (isNaN(d.getTime())) return false
+  if (d.toDateString() !== today.toDateString()) return false
+
+  const parts = slot.split("-")
+  if (parts.length < 2) return false
+  const startTimeStr = parts[0].trim()
+  
+  const match = startTimeStr.match(/^(\d+)(AM|PM)$/i)
+  if (!match) return false
+  let hour = parseInt(match[1], 10)
+  const ampm = match[2].toUpperCase()
+  if (ampm === "PM" && hour < 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  const slotStart = new Date(d)
+  slotStart.setHours(hour, 0, 0, 0)
+
+  // Backend booking_window.py enforces minimum 60 minutes lead time from now
+  const minLeadTime = new Date(today.getTime() + 60 * 60 * 1000)
+  return slotStart < minLeadTime
+}
+
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
+  
+  const hasRemainingSlots = (dateObj) => {
+    for (const slots of Object.values(SHIFTING_SLOTS)) {
+      for (const slot of slots) {
+        if (!isSlotPassed(slot, dateObj)) return true
+      }
+    }
+    return false
+  }
 
-  // For Packers & Movers, same-day move cutoff is typically 18:00
-  const isLateNight = today.getHours() >= 18
-  const startOffset = isLateNight ? 1 : 0
+  let startOffset = 0
+  if (!hasRemainingSlots(today)) {
+    startOffset = 1
+  }
 
   for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
@@ -363,6 +392,17 @@ const generateUpcomingDates = () => {
     })
   }
   return dates
+}
+
+const getFirstAvailableSlotAndCategory = (dateObj) => {
+  for (const [category, slots] of Object.entries(SHIFTING_SLOTS)) {
+    for (const slot of slots) {
+      if (!isSlotPassed(slot, dateObj)) {
+        return { category, slot }
+      }
+    }
+  }
+  return { category: "Morning", slot: "" }
 }
 
 const SHIFTING_DATES = generateUpcomingDates()
@@ -478,10 +518,11 @@ function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shift
       {/* Trigger Input Card */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-[54px] px-4 rounded-xl border bg-white flex items-center justify-between cursor-pointer transition-all ${isOpen
+        className={`w-full h-[54px] px-4 rounded-xl border bg-white flex items-center justify-between cursor-pointer transition-all ${
+          isOpen
             ? "border-[#0B8860] ring-2 ring-[#0B8860]/20 shadow-sm"
             : "border-[#E0E0E0] hover:border-slate-400"
-          }`}
+        }`}
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#0B8860] flex items-center justify-center shrink-0">
@@ -589,14 +630,15 @@ function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shift
                   type="button"
                   disabled={isPast}
                   onClick={() => handleSelectDay(day)}
-                  className={`w-8 h-8 mx-auto text-xs rounded-xl flex items-center justify-center font-bold transition-all ${isPast
+                  className={`w-8 h-8 mx-auto text-xs rounded-xl flex items-center justify-center font-bold transition-all ${
+                    isPast
                       ? "text-slate-300 cursor-not-allowed"
                       : isSelected
-                        ? "bg-[#0B8860] text-white shadow-md shadow-emerald-700/25 scale-105 cursor-pointer font-extrabold"
-                        : isToday
-                          ? "border border-[#0B8860] text-[#0B8860] hover:bg-emerald-50 cursor-pointer"
-                          : "text-slate-700 hover:bg-slate-100 cursor-pointer"
-                    }`}
+                      ? "bg-[#0B8860] text-white shadow-md shadow-emerald-700/25 scale-105 cursor-pointer font-extrabold"
+                      : isToday
+                      ? "border border-[#0B8860] text-[#0B8860] hover:bg-emerald-50 cursor-pointer"
+                      : "text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  }`}
                 >
                   {day}
                 </button>
@@ -631,44 +673,29 @@ function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shift
 }
 
 /* ── Packers & Movers Booking Hosur Page (Image 2 Uniform UI) ── */
-export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNameProp }) {
+export function PackersMoversBookingHosurPage() {
   const navigate = useNavigate()
-  const { city: routeCityParam } = useParams()
-  const currentCitySlug = (cityProp || routeCityParam || "hosur").toLowerCase()
-  const defaultCityName = currentCitySlug.charAt(0).toUpperCase() + currentCitySlug.slice(1)
-  const [currentCityName, setCurrentCityName] = useState(cityNameProp || defaultCityName)
-
-  const [availableCities, setAvailableCities] = useState([])
-  const [selectedCity, setSelectedCity] = useState(defaultCityName.toUpperCase())
-  const [mapPickerTarget, setMapPickerTarget] = useState(null)
-  const [serverSlotGroups, setServerSlotGroups] = useState(null)
-
-  // Persistent form state for browser Reload / Refresh recovery
-  const getSavedForm = () => {
-    try {
-      const raw = sessionStorage.getItem("sevo_gt_form_packers_movers")
-      return raw ? JSON.parse(raw) : {}
-    } catch (_) { return {} }
-  }
-  const savedForm = getSavedForm()
 
   // Form State
-  const [pickup, setPickup] = useState(() => savedForm.pickup || "")
-  const [drop, setDrop] = useState(() => savedForm.drop || "")
+  const [pickup, setPickup] = useState("")
+  const [drop, setDrop] = useState("")
 
-  const [pickupCoords, setPickupCoords] = useState(() => savedForm.pickupCoords || null) // { lat, lng, forAddress }
-  const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)     // { lat, lng, forAddress }
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("sevo_gt_form_packers_movers", JSON.stringify({
-        pickup,
-        drop,
-        pickupCoords,
-        dropCoords
-      }))
-    } catch (_) { }
-  }, [pickup, drop, pickupCoords, dropCoords])
+  // Real geocoded coordinates for the pickup / drop the customer actually
+  // picked. searchHosurPlacesOnline() already returns lat/lng on every
+  // online suggestion (Google Geocoding, Photon and Nominatim all supply
+  // it) and the live-GPS button already has exact device coordinates --
+  // both were being thrown away, and every booking was submitted with the
+  // same hardcoded Hosur town-centre point regardless of where the
+  // customer said they were. That fake coordinate then drove the
+  // server-side zone gate, technician dispatch and the live-tracking ETA.
+  //
+  // Each entry remembers the exact address string it was resolved FOR, so
+  // any later change to that field (typing, picking a popular route, an
+  // autofilled default) automatically invalidates it -- better to send no
+  // coordinate and let the backend fall back than to attach a stale point
+  // to an address the customer has since changed.
+  const [pickupCoords, setPickupCoords] = useState(null) // { lat, lng, forAddress }
+  const [dropCoords, setDropCoords] = useState(null)     // { lat, lng, forAddress }
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("1 BHK House Shifting")
@@ -684,7 +711,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [pmCategories, setPmCategories] = useState([])
   const [inventoryLoading, setInventoryLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState("Bedrooms")
-
+  
   // Track counts as { [itemId]: quantity }
   const [inventoryItems, setInventoryItems] = useState({})
 
@@ -719,7 +746,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     }
     return map
   }, [pmCategories])
-
+  
   // Track expanded category and subcategory accordions in the UI
   const [expandedSubcategories, setExpandedSubcategories] = useState({})
   const [inventorySearchQuery, setInventorySearchQuery] = useState("")
@@ -727,68 +754,27 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   // Step 3: Date & Slot State
   const [selectedDate, setSelectedDate] = useState(() => SHIFTING_DATES[0] || null)
   const [serverSlotsAvailability, setServerSlotsAvailability] = useState(null)
-  const [serverDates, setServerDates] = useState([])
-  const [slotsLoading, setSlotsLoading] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
   useEffect(() => {
-    const dStr = selectedDate?.fullDate ? selectedDate.fullDate.toISOString().split("T")[0] : ""
-    const activeCityParam = selectedCity ? selectedCity.toLowerCase() : currentCitySlug
-    setSlotsLoading(true)
-    fetchLogisticsSlots({ date: dStr, category: "packers_movers", city: activeCityParam })
+    if (!selectedDate?.fullDate) return
+    const dStr = selectedDate.fullDate.toISOString().split("T")[0]
+    fetchLogisticsSlots({ date: dStr, category: "packers_movers" })
       .then(res => {
-        if (res && res.success) {
-          if (Array.isArray(res.upcoming_dates) && res.upcoming_dates.length > 0) {
-            const mappedDates = res.upcoming_dates.map(d => ({
-              id: d.id,
-              date: d.date,
-              label: d.label,
-              value: d.value,
-              fullDate: new Date(`${d.date}T00:00:00`),
-              is_today: d.is_today,
-            }))
-            setServerDates(mappedDates)
-            if (!selectedDate) {
-              setSelectedDate(mappedDates[0])
-            }
-          }
-
-          if (res.groups) {
-            setServerSlotGroups(res.groups)
-            const map = {}
-            let firstAvailSlot = null
-            let firstAvailGroup = null
-
-            res.groups.forEach(g => {
-              (g.slots || []).forEach(s => {
-                const sLabel = s.slot || s.label
-                map[sLabel] = s.is_available
-                if (s.is_available && !firstAvailSlot) {
-                  firstAvailSlot = sLabel
-                  firstAvailGroup = g.group
-                }
-              })
+        if (res && res.success && res.groups) {
+          const map = {}
+          res.groups.forEach(g => {
+            (g.slots || []).forEach(s => {
+              map[s.slot] = s.is_available
             })
-            setServerSlotsAvailability(map)
-
-            // Dynamically auto-select the first valid server slot if current selection is null or invalid
-            setSelectedSlot(prev => {
-              if (prev && map[prev] === true) return prev
-              return firstAvailSlot
-            })
-            setExpandedSlotCategory(prev => {
-              if (prev && res.groups.some(g => g.group === prev && g.slots.some(s => s.is_available))) {
-                return prev
-              }
-              return firstAvailGroup || res.groups[0]?.group || "Morning"
-            })
-          }
+          })
+          setServerSlotsAvailability(map)
         }
       })
-      .catch(() => { })
-      .finally(() => setSlotsLoading(false))
-  }, [selectedDate, selectedCity, currentCitySlug])
+      .catch(() => {})
+  }, [selectedDate])
+  const initialAvailable = getFirstAvailableSlotAndCategory(SHIFTING_DATES[0]?.fullDate || new Date())
+  const [selectedSlot, setSelectedSlot] = useState(() => initialAvailable.slot || null)
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => initialAvailable.category || "Morning")
 
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -901,7 +887,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         dropFloor,
         dropHasLift,
         relocationType,
-        city: (selectedCity ? selectedCity.toLowerCase() : currentCitySlug),
+        city: LOGISTICS_CITY,
         serviceTierId: selectedPackage?._tierId || selectedPackage?.id || null,
       })
       const quoteData = res?.data || res
@@ -979,7 +965,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             )
             if (isAccepted) {
               setLookingForPartnerOpen(false)
-              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) { }
+              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
               const bookingPayload = {
                 id: parsed.bookingId,
                 request_id: parsed.bookingId,
@@ -991,12 +977,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               })
             } else if (["cancelled", "rejected", "expired", "completed"].includes(status)) {
               setLookingForPartnerOpen(false)
-              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) { }
+              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
               if (["cancelled", "rejected", "expired"].includes(status)) {
                 setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
               }
             }
-          }).catch(() => { })
+          }).catch(() => {})
         } else {
           sessionStorage.removeItem("calservice_active_partner_search")
         }
@@ -1029,7 +1015,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           startTimestamp = Number(parsed.timestamp)
         }
       }
-    } catch (_) { }
+    } catch (_) {}
 
     const updateCountdown = () => {
       const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000)
@@ -1047,7 +1033,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             if (!activeToken && parsed.trackingToken) activeToken = parsed.trackingToken
           }
           sessionStorage.removeItem("calservice_active_partner_search")
-        } catch (_) { }
+        } catch (_) {}
         if (activeBId) {
           cancelBooking(
             activeBId,
@@ -1120,7 +1106,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
-            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) { }
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
             const bookingPayload = {
               id: lastBookingId,
               request_id: lastBookingId,
@@ -1130,7 +1116,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             try {
               sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
               sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-            } catch (e) { }
+            } catch (e) {}
             navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
               state: {
                 isTracking: true,
@@ -1139,7 +1125,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             })
           } else if (["cancelled", "rejected", "expired"].includes(status)) {
             setLookingForPartnerOpen(false)
-            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) {}
             setBookingError("We could not find an available relocation team for your booking. Please try again or schedule for later.")
           }
         }
@@ -1157,143 +1143,28 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     }
   }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken, navigate])
 
-  // ── Comprehensive Browser Navigation (Back / Forward / PopState) ──
-  const anyModalOpen = Boolean(
-    showExitConfirm ||
-    showCustomerEntryModal ||
-    mapPickerTarget ||
-    inventoryBuilderOpen ||
-    vehicleSelectorOpen ||
-    activePackageDetails ||
-    supportModalOpen ||
-    showAccountPortal ||
-    isSurveySubmittedModalOpen ||
-    cancelModalOpen ||
-    cancelledBookingModalOpen
-  )
-
-  // Push state when any modal opens to allow Browser Back button to dismiss it
+  // Handle browser back button during partner search
   useEffect(() => {
-    if (anyModalOpen || lookingForPartnerOpen) {
-      window.history.pushState({ modalOpen: true }, "")
-    }
-  }, [anyModalOpen, lookingForPartnerOpen])
+    if (!lookingForPartnerOpen) return
 
-  const handleBackNavigation = () => {
-    if (showExitConfirm) {
-      setShowExitConfirm(false)
-      return
-    }
-    if (lookingForPartnerOpen) {
+    window.history.pushState(null, null, window.location.pathname)
+
+    const handlePopState = (e) => {
+      e.preventDefault()
+      window.history.pushState(null, null, window.location.pathname)
       setShowExitConfirm(true)
-      return
-    }
-    if (showCustomerEntryModal) {
-      setShowCustomerEntryModal(false)
-      return
-    }
-    if (mapPickerTarget) {
-      setMapPickerTarget(null)
-      return
-    }
-    if (isSurveySubmittedModalOpen) {
-      setIsSurveySubmittedModalOpen(false)
-      return
-    }
-    if (activePackageDetails) {
-      setActivePackageDetails(null)
-      return
-    }
-    if (inventoryBuilderOpen) {
-      if (stepperStep > 2) {
-        setStepperStep(prev => prev - 1)
-      } else {
-        setInventoryBuilderOpen(false)
-      }
-      return
-    }
-    if (vehicleSelectorOpen) {
-      setVehicleSelectorOpen(false)
-      return
-    }
-    if (supportModalOpen) {
-      setSupportModalOpen(false)
-      return
-    }
-    if (showAccountPortal) {
-      setShowAccountPortal(false)
-      return
-    }
-    // If no modal is open, navigate to home / previous page
-    if (window.history.length > 1) {
-      navigate(-1)
-    } else {
-      navigate(routes.landing)
-    }
-  }
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (showExitConfirm) {
-        setShowExitConfirm(false)
-        return
-      }
-      if (lookingForPartnerOpen) {
-        setShowExitConfirm(true)
-        return
-      }
-      if (showCustomerEntryModal) {
-        setShowCustomerEntryModal(false)
-        return
-      }
-      if (mapPickerTarget) {
-        setMapPickerTarget(null)
-        return
-      }
-      if (isSurveySubmittedModalOpen) {
-        setIsSurveySubmittedModalOpen(false)
-        return
-      }
-      if (activePackageDetails) {
-        setActivePackageDetails(null)
-        return
-      }
-      if (inventoryBuilderOpen) {
-        if (stepperStep > 2) {
-          setStepperStep(prev => prev - 1)
-        } else {
-          setInventoryBuilderOpen(false)
-        }
-        return
-      }
-      if (vehicleSelectorOpen) {
-        setVehicleSelectorOpen(false)
-        return
-      }
-      if (supportModalOpen) {
-        setSupportModalOpen(false)
-        return
-      }
-      if (showAccountPortal) {
-        setShowAccountPortal(false)
-        return
-      }
     }
 
     window.addEventListener("popstate", handlePopState)
     return () => {
       window.removeEventListener("popstate", handlePopState)
     }
-  }, [
-    showExitConfirm, lookingForPartnerOpen, showCustomerEntryModal,
-    mapPickerTarget, inventoryBuilderOpen, stepperStep, vehicleSelectorOpen,
-    activePackageDetails, supportModalOpen, showAccountPortal, isSurveySubmittedModalOpen
-  ])
+  }, [lookingForPartnerOpen])
 
   // Prefill user details if signed in — always sanitize to digits-only, max 10
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
     if (user || savedPhone) {
       const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
@@ -1306,23 +1177,10 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
   const [showDropSuggestions, setShowDropSuggestions] = useState(false)
   const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [selectedCity, setSelectedCity] = useState("HOSUR")
   const pickupWrapperRef = useRef(null)
   const dropWrapperRef = useRef(null)
   const cityDropdownWrapperRef = useRef(null)
-
-  // Fetch available cities dynamically from backend settings
-  useEffect(() => {
-    fetchLogisticsCities().then(cities => {
-      if (Array.isArray(cities) && cities.length > 0) {
-        setAvailableCities(cities)
-        const matched = cities.find(c => c.slug === currentCitySlug || (c.name && c.name.toLowerCase() === currentCitySlug))
-        if (matched) {
-          setSelectedCity(matched.name.toUpperCase())
-          setCurrentCityName(matched.name)
-        }
-      }
-    }).catch(() => { })
-  }, [currentCitySlug])
 
   // Live Location Detection State
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
@@ -1337,50 +1195,36 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     return () => { document.body.style.overflow = "" }
   }, [activePackageDetails])
 
-  // FAQ state & dynamic server FAQs
+  // FAQ state
   const [openFaq, setOpenFaq] = useState(null)
-  const [serverFaqs, setServerFaqs] = useState([])
-  const [faqsLoading, setFaqsLoading] = useState(true)
 
-  useEffect(() => {
-    setFaqsLoading(true)
-    const activeCityParam = selectedCity ? selectedCity.toLowerCase() : currentCitySlug
-    fetchGTFaqs({ category: "packers_movers", city: activeCityParam })
-      .then(res => {
-        if (Array.isArray(res)) {
-          setServerFaqs(res.map(f => ({ q: f.question, a: f.answer })))
-        }
-      })
-      .catch(() => { })
-      .finally(() => setFaqsLoading(false))
-  }, [selectedCity, currentCitySlug])
-
-  // Catalog data — fetched dynamically from /api/logistics/ for the selected city
+  // Catalog data — fetched from /api/logistics/ (backend/logistics app),
+  // replacing what used to be hardcoded PACKERS_PACKAGES/POPULAR_ROUTES/
+  // HOSUR_AREAS arrays.
   const [fetchedTiers, setFetchedTiers] = useState([])
   const [fetchedLanes, setFetchedLanes] = useState([])
   const [serviceAreas, setServiceAreas] = useState([])
 
   useEffect(() => {
     let cancelled = false
-    const activeCityParam = selectedCity ? selectedCity.toLowerCase() : currentCitySlug
     async function loadCatalog() {
       try {
         const [tiers, lanes, areas] = await Promise.all([
-          fetchServiceTiers("packers_movers", activeCityParam),
-          fetchLanes("packers_movers", activeCityParam),
-          fetchServiceAreas(activeCityParam),
+          fetchServiceTiers("packers_movers", LOGISTICS_CITY),
+          fetchLanes("packers_movers", LOGISTICS_CITY),
+          fetchServiceAreas(LOGISTICS_CITY),
         ])
         if (cancelled) return
         setFetchedTiers(tiers)
         setFetchedLanes(lanes)
         setServiceAreas(areas)
       } catch (err) {
-        console.warn("Failed to load logistics catalog:", err)
+        console.warn("Failed to load logistics catalog, falling back to static data:", err)
       }
     }
     loadCatalog()
     return () => { cancelled = true }
-  }, [selectedCity, currentCitySlug])
+  }, [])
 
   useEffect(() => {
     if (inventoryBuilderOpen || vehicleSelectorOpen || showCustomerEntryModal || bookingSuccessOpen) {
@@ -1439,61 +1283,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     return () => clearTimeout(timer)
   }, [drop, relocationType])
 
-  const intercityCities = useMemo(() => {
-    const list = []
-    const originCityName = selectedCity || "Hosur"
-    const originKey = originCityName.trim().toLowerCase()
-    list.push({
-      name: originCityName,
-      state: "Tamil Nadu",
-      subtitle: `${originCityName} (Origin Hub)`,
-    })
-    const seen = new Set([originKey])
-    if (Array.isArray(availableCities) && availableCities.length > 0) {
-      availableCities.forEach((c) => {
-        if (!c.name) return
-        const key = c.name.trim().toLowerCase()
-        if (seen.has(key)) return
-        seen.add(key)
-        list.push({
-          name: c.name,
-          state: c.state || "",
-          subtitle: `${c.state ? `${c.state}` : "Destination"}`,
-          lat: c.latitude,
-          lng: c.longitude,
-        })
-      })
-    }
-    if (Array.isArray(fetchedLanes) && fetchedLanes.length > 0) {
-      fetchedLanes.forEach((l) => {
-        if (!l.destination_label) return
-        const key = l.destination_label.trim().toLowerCase()
-        if (seen.has(key)) return
-        seen.add(key)
-        list.push({
-          name: l.destination_label,
-          state: (l.destination_label.includes("Bengaluru") || l.destination_label.includes("Electronic City") || l.destination_label.includes("Whitefield")) ? "Karnataka" : "Tamil Nadu",
-          subtitle: `${l.distance_km ? `~${Number(l.distance_km)} Kms from ${originCityName}` : ""} ${l.eta_label ? `(${l.eta_label})` : ""}`.trim(),
-          distance_km: l.distance_km,
-          eta_label: l.eta_label,
-          fare: l.fare,
-          laneId: l.id,
-          _laneId: l.id,
-          lat: l.destination_latitude ? Number(l.destination_latitude) : null,
-          lng: l.destination_longitude ? Number(l.destination_longitude) : null,
-        })
-      })
-    }
-    return list
-  }, [availableCities, fetchedLanes, selectedCity])
-
   const rawPickupSuggestions = relocationType === "Between Cities"
-    ? filterIntercitySuggestions(pickup, drop, intercityCities)
+    ? filterIntercitySuggestions(pickup, drop)
     : filterLocationSuggestions(pickup, selectedCity)
   const pickupSuggestions = rawPickupSuggestions
 
   const rawDropSuggestions = relocationType === "Between Cities"
-    ? filterIntercitySuggestions(drop, pickup, intercityCities)
+    ? filterIntercitySuggestions(drop, pickup)
     : filterLocationSuggestions(drop, selectedCity)
   const dropSuggestions = [
     ...rawDropSuggestions,
@@ -1559,6 +1355,30 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     )
   }
 
+  const PACKERS_SUITABILITY_MAP = {
+    "1-rk-1-bhk-shifting": [
+      "1 RK / 1 BHK Full Household",
+      "Furniture disassembly & assembly",
+      "Bubble wrap & carton packing",
+      "Loading & unloading by verified crew",
+      "Dedicated transport vehicle"
+    ],
+    "2-bhk-3-bhk-shifting": [
+      "2 BHK / 3 BHK Large Household",
+      "Heavy furniture & appliance packing",
+      "Multi-layer bubble & foam protection",
+      "Professional 4-6 member crew",
+      "Large closed container truck"
+    ],
+    "villa-office-relocation": [
+      "Villas, Bungalows & Corporate Offices",
+      "IT hardware & server safe packing",
+      "Customized crating & insurance support",
+      "Dedicated relocation manager",
+      "End-to-end unpacking & setup"
+    ]
+  }
+
   function isBadgeActive(durationStr, updatedAtStr) {
     if (!durationStr || !updatedAtStr) return true
     const norm = durationStr.toLowerCase().trim()
@@ -1586,7 +1406,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     const badgeText = isBadgeValid ? (tier.icon || "") : ""
     const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
       ? tier.includes
-      : []
+      : (PACKERS_SUITABILITY_MAP[tier.slug] || [])
 
     return {
       id: tier.slug,
@@ -1596,9 +1416,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       badge: badgeText,
       suitableFor: suitableList,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-      diagram: tier.image
-        ? <TierImageFallback src={tier.image} alt={tier.name} fallback={PACKERS_DIAGRAM_BY_SLUG[tier.slug] || <GenericShiftingDiagram />} />
-        : (PACKERS_DIAGRAM_BY_SLUG[tier.slug] || <GenericShiftingDiagram />),
+      diagram: PACKERS_DIAGRAM_BY_SLUG[tier.slug] || <OneBhkDiagram />,
       details: {
         name: tier.name,
         capacity: tier.description || "Complete shifting package with professional crew",
@@ -1620,11 +1438,28 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
     fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
     time: lane.eta_label,
-    destination_latitude: lane.destination_latitude,
-    destination_longitude: lane.destination_longitude,
     _laneId: lane.id,
   }))
 
+  // FAQs
+  const FAQS = [
+    {
+      q: "What packing materials are included with Sevo Packers and Movers?",
+      a: "We provide high-grade multi-layer bubble wrap, waterproof stretch film, heavy-duty 5-ply corrugated cartons, corner protectors, and heavy furniture blankets to ensure zero damage."
+    },
+    {
+      q: "Do you offer disassembly and reassembly of beds and wardrobes?",
+      a: "Yes! Our experienced carpenters and crew handle dismantling of standard cot frames, modular wardrobes, and dining tables, and reassemble them at your new location."
+    },
+    {
+      q: "How early should I book my house shifting in Hosur?",
+      a: "While we can arrange on-demand shifting in as little as 2 hours, we recommend booking 24–48 hours in advance to guarantee your preferred moving slot and packing team."
+    },
+    {
+      q: "Is transit insurance covered for fragile and high-value items?",
+      a: "Transit insurance coverage is available through our pre-move survey / eligible survey flow, where our survey expert verifies item valuations and policy options prior to movement (instant online bookings intentionally exclude direct insurance add-ons)."
+    }
+  ]
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
@@ -1639,32 +1474,32 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
   // Persists the booking to the backend (POST /api/booking/ — see
   // service_requests.BookingCreateView).
-  const submitBooking = async (nameOverride = null, phoneOverride = null) => {
+  const submitBooking = async () => {
     setBookingError("")
     setBookingSubmitting(true)
     try {
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
-      const quoteTotal = pmServerQuote?.total != null
-        ? Number(pmServerQuote.total)
+      const quoteTotal = pmServerQuote?.total != null 
+        ? Number(pmServerQuote.total) 
         : (pmServerQuote?.pricing?.total != null ? Number(pmServerQuote.pricing.total) : null)
       if (!isSurveyRequired && quoteTotal == null) {
         setBookingSubmitting(false)
         setBookingError(
           pmQuoteError ||
-          "We couldn't calculate an authoritative relocation quote for this move. Please ensure pickup, drop, and items are selected."
+            "We couldn't calculate an authoritative relocation quote for this move. Please ensure pickup, drop, and items are selected."
         )
         return
       }
       const fare = quoteTotal || 0
       const quoteId = pmServerQuote?.quote_id || null
-
+      
       let dateString = todayDateString()
       if (selectedDate && selectedDate.fullDate) {
         const d = selectedDate.fullDate
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
 
-      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("sevo_customer_email") : "") || ""
+      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
 
       const pickupAddressValue = pickup || ""
       const dropAddressValue = drop || (selectedRoute ? selectedRoute.to : "")
@@ -1678,41 +1513,25 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       const pickupPoint = usableCoords(pickupCoords, pickupAddressValue)
       const dropPoint = usableCoords(dropCoords, dropAddressValue)
 
-      const activePickupPoint = pickupPoint
-      const activeDropPoint = dropPoint
-
       // No hardcoded fallback coordinate. A relocation whose pickup we
       // could not pin is refused rather than booked at a made-up point --
       // the crew and vehicle are allocated from that location.
-      if (!activePickupPoint) {
+      if (!pickupPoint) {
         setBookingSubmitting(false)
         setBookingError(
-          "We couldn't pin your pickup location. Please pick it from suggestions or the map so we can plan your move."
+          "We couldn't pin your pickup location. Please pick it from the suggestions so we can plan your move."
         )
         return
       }
 
-      let resolvedName = (nameOverride || name || user?.full_name || user?.fullName || user?.first_name || user?.username || "").trim()
-      if (!resolvedName && typeof window !== "undefined") {
-        try { resolvedName = (localStorage.getItem("sevo_customer_name") || "").trim() } catch (_) { }
-      }
-
-      let rawPhone = phoneOverride || phone || user?.phone || user?.mobile || user?.mobile_number || ""
-      if (!rawPhone && typeof window !== "undefined") {
-        try { rawPhone = localStorage.getItem("sevo_customer_phone") || "" } catch (_) { }
-      }
-      const cleanPhone = String(rawPhone || "").replace(/\D/g, "").slice(0, 10)
-
-      if (resolvedName && !name) setName(resolvedName)
-      if (cleanPhone && !phone) setPhone(cleanPhone)
-
-      if (!resolvedName) {
+      if (!name || !name.trim()) {
         setBookingSubmitting(false)
         setShowCustomerEntryModal(true)
         setBookingError("Please sign in or enter your contact name to continue.")
         return
       }
 
+      const cleanPhone = (phone || "").replace(/\D/g, "")
       if (!cleanPhone || cleanPhone.length !== 10) {
         setBookingSubmitting(false)
         setShowCustomerEntryModal(true)
@@ -1721,18 +1540,17 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       }
 
       const payload = {
-        customer_name: resolvedName,
+        customer_name: name.trim(),
         phone: cleanPhone,
         email: customerEmail,
         service_category: "packers_movers",
-        city: (selectedCity ? selectedCity.toLowerCase() : currentCitySlug),
         issue_title: `Packers & Movers — ${pmServerQuote?.vehicle?.name || pkg.name || "House Shifting"} (${relocationType})`,
         description: `Type: ${userType} | Relocation: ${relocationType} | Volume: ${pmServerQuote?.inventory_summary?.total_cft || 0} CFT`,
         address: pickupAddressValue,
         drop_address: dropAddressValue,
         // Only ever the REAL resolved pickup point -- see the guard above.
-        latitude: Number(Number(activePickupPoint.lat).toFixed(6)),
-        longitude: Number(Number(activePickupPoint.lng).toFixed(6)),
+        latitude: Number(Number(pickupPoint.lat).toFixed(6)),
+        longitude: Number(Number(pickupPoint.lng).toFixed(6)),
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
@@ -1771,13 +1589,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       payload.logistics_tier = authoritativeTierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
 
-      if (!activeDropPoint) {
+      if (!dropPoint) {
         setBookingSubmitting(false)
         setBookingError("We couldn't pin your destination location. Please select it from suggestions.")
         return
       }
-      payload.drop_latitude = Number(Number(activeDropPoint.lat).toFixed(6))
-      payload.drop_longitude = Number(Number(activeDropPoint.lng).toFixed(6))
+      payload.drop_latitude = Number(Number(dropPoint.lat).toFixed(6))
+      payload.drop_longitude = Number(Number(dropPoint.lng).toFixed(6))
 
       if (isSurveyRequired) {
         setIsSurveySubmittedModalOpen(true)
@@ -1818,7 +1636,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           serviceCategory: "packers_movers",
           timestamp: Date.now()
         }))
-      } catch (e) { }
+      } catch (e) {}
     } catch (err) {
       if (err?.body?.code === "SURVEY_OR_REVIEW_REQUIRED" || (err?.body?.message && err.body.message.toLowerCase().includes("survey"))) {
         setIsSurveySubmittedModalOpen(true)
@@ -1850,7 +1668,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       }
       setBookingError(
         detail ||
-        "We couldn't confirm your booking just now. Nothing has been charged — please try again."
+          "We couldn't confirm your booking just now. Nothing has been charged — please try again."
       )
       setLookingForPartnerOpen(false)
     } finally {
@@ -1868,7 +1686,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
     } catch (err) {
       console.warn("Error cancelling booking on server:", err)
     } finally {
-      try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) { }
+      try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
       setCancelSubmitting(false)
       setCancelModalOpen(false)
       setLookingForPartnerOpen(false)
@@ -1906,34 +1724,23 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       {/* ── Top Header Navigation ─────────────── */}
       <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleBackNavigation}
-              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center text-slate-700 transition-all cursor-pointer shrink-0"
-              title="Go back"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={() => navigate(routes.landing)}>
+          <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={() => navigate(routes.landing)}>
+            <img
+              src="/assets/sevo_emblem_transparent.png"
+              alt="SEVO Emblem"
+              className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+              style={{ height: '36px', width: 'auto' }}
+            />
+            <div className="flex flex-col">
               <img
-                src="/assets/sevo_emblem_transparent.png"
-                alt="SEVO Emblem"
-                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
-                style={{ height: '36px', width: 'auto' }}
+                src="/assets/sevo_text_logo.png"
+                alt="SEVO"
+                className="shrink-0 object-contain"
+                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
               />
-              <div className="flex flex-col">
-                <img
-                  src="/assets/sevo_text_logo.png"
-                  alt="SEVO"
-                  className="shrink-0 object-contain"
-                  style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
-                />
-                <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
-                  Packers &amp; Movers
-                </span>
-              </div>
+              <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
+                Packers &amp; Movers
+              </span>
             </div>
           </div>
 
@@ -1974,11 +1781,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       </header>
 
       {/* ── Hero Section (Vertical Form Style) ────────────────────── */}
-      <section
+      <section 
         className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 overflow-visible border-b border-slate-200/50 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('/hero_packers_bg.png')` }}
       >
-
+        
         {/* Background Overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950/80"></div>
 
@@ -1987,7 +1794,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-teal-50/10 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-center gap-12 md:gap-8">
-
+          
           {/* Left Column: Text Content */}
           <div className="flex-1 text-center md:text-left pt-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-6 shadow-sm border border-white/25 backdrop-blur-sm">
@@ -1996,7 +1803,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             </div>
 
             <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-bold text-white tracking-tight leading-[1.15] mb-5 drop-shadow-lg">
-              Affordable and Trusted <br className="hidden lg:block" />
+              Affordable and Trusted <br className="hidden lg:block"/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300">Relocation Services</span>
             </h1>
 
@@ -2017,33 +1824,35 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           {/* Right Column: Vertical Form Card */}
           <div className="w-full max-w-[440px] shrink-0 mt-4 md:mt-0 relative z-20 font-sans antialiased">
             <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] overflow-visible flex flex-col border border-slate-100 relative">
-
+              
               {/* Top Area (Soft Emerald) */}
               <div className="bg-[#ecfdf5] pt-8 pb-6 px-6 relative rounded-t-2xl">
                 <div className="relative z-10">
                   <h3 className="text-[24px] font-bold text-[#333333] mb-6 tracking-tight leading-snug">
                     Where are you going to relocate?
                   </h3>
-
+                  
                   {/* Relocation Type Toggle */}
                   <div className="flex items-center bg-[#F4F5F7] p-[5px] rounded-full">
                     <button
                       type="button"
                       onClick={() => setRelocationType("Within City")}
-                      className={`flex-1 py-2.5 px-4 text-[14px] font-semibold rounded-full transition-all cursor-pointer ${relocationType === "Within City"
+                      className={`flex-1 py-2.5 px-4 text-[14px] font-semibold rounded-full transition-all cursor-pointer ${
+                        relocationType === "Within City"
                           ? "bg-[#0B8860] text-white shadow-md"
                           : "text-[#666666] hover:text-[#333333]"
-                        }`}
+                      }`}
                     >
                       Within City
                     </button>
                     <button
                       type="button"
                       onClick={() => setRelocationType("Between Cities")}
-                      className={`flex-1 py-2.5 px-4 text-[14px] font-semibold rounded-full transition-all cursor-pointer ${relocationType === "Between Cities"
+                      className={`flex-1 py-2.5 px-4 text-[14px] font-semibold rounded-full transition-all cursor-pointer ${
+                        relocationType === "Between Cities"
                           ? "bg-[#0B8860] text-white shadow-md"
                           : "text-[#666666] hover:text-[#333333]"
-                        }`}
+                      }`}
                     >
                       Between Cities
                     </button>
@@ -2054,311 +1863,276 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               {/* Form Body */}
               <div className="px-6 py-6 bg-white flex-1 z-10 rounded-b-2xl overflow-visible">
                 <form onSubmit={handleGetEstimate} className="space-y-5">
-
+                  
                   {relocationType === "Within City" && (
                     <>
-                      {/* Select City */}
-                      <div className="relative z-20" ref={cityDropdownWrapperRef}>
-                        <label className="block text-[13px] font-semibold text-[#484848] mb-2">Select City</label>
-                        <div
-                          className={`relative w-full h-[54px] pl-4 pr-10 rounded-xl border ${showCityDropdown ? 'border-[#0B8860] ring-1 ring-[#0B8860]' : 'border-[#E0E0E0] hover:border-[#cccccc]'} bg-white flex items-center justify-between cursor-pointer transition-colors`}
-                          onClick={() => setShowCityDropdown(!showCityDropdown)}
-                        >
-                          <span className="text-[15px] font-medium text-[#333333]">{selectedCity}</span>
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#666666]">
-                            {showCityDropdown ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                          </div>
-                        </div>
-                        {showCityDropdown && (
-                          <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#E0E0E0] rounded-xl shadow-lg z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                            {(availableCities.length > 0
-                              ? availableCities.filter(c => c.is_active !== false && c.is_launched !== false).map(c => c.name.toUpperCase())
-                              : [selectedCity]
-                            ).map((cityName) => (
-                              <div
-                                key={cityName}
-                                className={`px-4 py-3 text-[14px] font-medium cursor-pointer transition-colors ${selectedCity === cityName
-                                    ? "bg-[#ecfdf5] text-[#0B8860]"
-                                    : "text-[#484848] hover:bg-slate-50"
-                                  }`}
-                                onClick={() => {
-                                  setSelectedCity(cityName)
-                                  setCurrentCityName(cityName)
-                                  setShowCityDropdown(false)
-                                }}
-                              >
-                                {cityName}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Pickup and Drop Location */}
-                      <div>
-                        <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select pickup and drop location</label>
-                        <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
-
-                          {/* Pickup Input */}
-                          <div className="relative" ref={pickupWrapperRef}>
-                            <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
-                            <input
-                              type="text"
-                              placeholder={`Enter pickup address or landmark in ${currentCityName || "city"}...`}
-                              value={pickup}
-                              onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMapPickerTarget("pickup")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-[#0B8860] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                              title="Pick on interactive map"
+                          {/* Select City */}
+                          <div className="relative z-20" ref={cityDropdownWrapperRef}>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-2">Select City</label>
+                            <div
+                              className={`relative w-full h-[54px] pl-4 pr-10 rounded-xl border ${showCityDropdown ? 'border-[#0B8860] ring-1 ring-[#0B8860]' : 'border-[#E0E0E0] hover:border-[#cccccc]'} bg-white flex items-center justify-between cursor-pointer transition-colors`}
+                              onClick={() => setShowCityDropdown(!showCityDropdown)}
                             >
-                              <MapPin className="w-5 h-5 text-[#0B8860]" />
-                            </button>
-                            {/* Suggestions */}
-                            {showPickupSuggestions && (
-                              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
-                                {pickupSuggestions.map((loc, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      setPickup(loc.name)
-                                      if (loc.lat != null && loc.lng != null) {
-                                        setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
-                                      } else {
-                                        setPickupCoords(null)
-                                        resolveLocationCoords(loc).then((c) => {
-                                          if (c) setPickupCoords({ ...c, forAddress: loc.name })
-                                        })
-                                      }
-                                      setShowPickupSuggestions(false)
+                              <span className="text-[15px] font-medium text-[#333333]">{selectedCity}</span>
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#666666]">
+                                {showCityDropdown ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                              </div>
+                            </div>
+                            {showCityDropdown && (
+                              <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#E0E0E0] rounded-xl shadow-lg z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                {["HOSUR", "BENGALURU", "CHENNAI"].map((city) => (
+                                  <div
+                                    key={city}
+                                    className={`px-4 py-3 text-[14px] font-medium cursor-pointer transition-colors ${
+                                      selectedCity === city
+                                        ? "bg-[#ecfdf5] text-[#0B8860]"
+                                        : "text-[#484848] hover:bg-slate-50"
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedCity(city)
+                                      setShowCityDropdown(false)
                                     }}
-                                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
                                   >
-                                    {loc.name}
-                                  </button>
+                                    {city}
+                                  </div>
                                 ))}
                               </div>
                             )}
                           </div>
-
-                          {/* Drop Input */}
-                          <div className="relative" ref={dropWrapperRef}>
-                            <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
-                            <input
-                              type="text"
-                              placeholder={`Enter drop address or landmark in ${currentCityName || "city"}...`}
-                              value={drop}
-                              onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMapPickerTarget("drop")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-[#0B8860] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                              title="Pick on interactive map"
-                            >
-                              <MapPin className="w-5 h-5 text-emerald-600" />
-                            </button>
-                            {/* Suggestions */}
-                            {showDropSuggestions && (
-                              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
-                                {dropSuggestions.map((loc, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      const exact = formatExactLocation(loc)
-                                      setDrop(exact)
-                                      if (loc.lat != null && loc.lng != null) {
-                                        setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
-                                      } else {
-                                        setDropCoords(null)
-                                        resolveLocationCoords(loc).then((c) => {
-                                          if (c) setDropCoords({ ...c, forAddress: exact })
-                                        })
-                                      }
-                                      setShowDropSuggestions(false)
-                                    }}
-                                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
-                                  >
-                                    <div className="font-semibold">{loc.name}</div>
-                                    {loc.subtitle && <div className="text-xs text-slate-400">{loc.subtitle}</div>}
-                                  </button>
-                                ))}
+  
+                          {/* Pickup and Drop Location */}
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select pickup and drop location</label>
+                            <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
+                              
+                              {/* Pickup Input */}
+                              <div className="relative" ref={pickupWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Enter pickup address or landmark..."
+                                  value={pickup}
+                                  onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
+                                  onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showPickupSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {pickupSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setPickup(loc.name)
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
+                                          setShowPickupSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                      >
+                                        {loc.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {relocationType === "Between Cities" && (
-                    <>
-                      {/* Pickup and Drop Location */}
-                      <div>
-                        <label className="block text-[13px] font-semibold text-[#484848] mb-3">Search your City</label>
-                        <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
-
-                          {/* Pickup Input */}
-                          <div className="relative" ref={pickupWrapperRef}>
-                            <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
-                            <input
-                              type="text"
-                              placeholder="Search Source City"
-                              value={pickup}
-                              onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMapPickerTarget("pickup")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-[#0B8860] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                              title="Pick on interactive map"
-                            >
-                              <MapPin className="w-5 h-5 text-[#0B8860]" />
-                            </button>
-                            {/* Suggestions */}
-                            {showPickupSuggestions && (
-                              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
-                                {pickupSuggestions.map((loc, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      setPickup(loc.name)
-                                      if (loc.lat != null && loc.lng != null) {
-                                        setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
-                                      } else {
-                                        setPickupCoords(null)
-                                        resolveLocationCoords(loc).then((c) => {
-                                          if (c) setPickupCoords({ ...c, forAddress: loc.name })
-                                        })
-                                      }
-                                      if (relocationType === "Between Cities" && drop && drop.trim().toLowerCase() === loc.name.toLowerCase()) {
-                                        setDrop("")
-                                      }
-                                      setShowPickupSuggestions(false)
-                                    }}
-                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
-                                  >
-                                    <div>
-                                      <div className="font-bold text-slate-800">{loc.name}</div>
-                                      {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
-                                    </div>
-                                    {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
-                                  </button>
-                                ))}
+  
+                              {/* Drop Input */}
+                              <div className="relative" ref={dropWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Enter drop address or landmark..."
+                                  value={drop}
+                                  onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
+                                  onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showDropSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {dropSuggestions.map((loc, idx) => (
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault()
+                                            const exact = formatExactLocation(loc)
+                                            setDrop(exact)
+                                            if (loc.lat != null && loc.lng != null) {
+                                              setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
+                                            } else {
+                                              setDropCoords(null)
+                                              resolveLocationCoords(loc).then((c) => {
+                                                if (c) setDropCoords({ ...c, forAddress: exact })
+                                              })
+                                            }
+                                            setShowDropSuggestions(false)
+                                          }}
+                                          className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                        >
+                                          <div className="font-semibold">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-xs text-slate-400">{loc.subtitle}</div>}
+                                        </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
+                        </>
+                      )}
 
-                          {/* Drop Input */}
-                          <div className="relative" ref={dropWrapperRef}>
-                            <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
-                            <input
-                              type="text"
-                              placeholder="Search Destination City"
-                              value={drop}
-                              onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMapPickerTarget("drop")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-[#0B8860] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                              title="Pick on interactive map"
-                            >
-                              <MapPin className="w-5 h-5 text-emerald-600" />
-                            </button>
-                            {/* Suggestions */}
-                            {showDropSuggestions && (
-                              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
-                                {dropSuggestions.map((loc, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      setDrop(loc.name)
-                                      if (relocationType === "Between Cities" && pickup && pickup.trim().toLowerCase() === loc.name.toLowerCase()) {
-                                        setPickup("")
-                                      }
-                                      setShowDropSuggestions(false)
-                                    }}
-                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
-                                  >
-                                    <div>
-                                      <div className="font-bold text-slate-800">{loc.name}</div>
-                                      {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
-                                    </div>
-                                    {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
-                                  </button>
-                                ))}
+                      {relocationType === "Between Cities" && (
+                        <>
+                          {/* Pickup and Drop Location */}
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Search your City</label>
+                            <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
+                              
+                              {/* Pickup Input */}
+                              <div className="relative" ref={pickupWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Search Source City"
+                                  value={pickup}
+                                  onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
+                                  onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showPickupSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                                    {pickupSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setPickup(loc.name)
+                                          if (loc.lat != null && loc.lng != null) {
+                                            setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
+                                          } else {
+                                            setPickupCoords(null)
+                                            resolveLocationCoords(loc).then((c) => {
+                                              if (c) setPickupCoords({ ...c, forAddress: loc.name })
+                                            })
+                                          }
+                                          if (relocationType === "Between Cities" && drop && drop.trim().toLowerCase() === loc.name.toLowerCase()) {
+                                            setDrop("")
+                                          }
+                                          setShowPickupSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
+                                      >
+                                        <div>
+                                          <div className="font-bold text-slate-800">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
+                                        </div>
+                                        {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            )}
+  
+                              {/* Drop Input */}
+                              <div className="relative" ref={dropWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Search Destination City"
+                                  value={drop}
+                                  onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
+                                  onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showDropSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                                    {dropSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setDrop(loc.name)
+                                          if (relocationType === "Between Cities" && pickup && pickup.trim().toLowerCase() === loc.name.toLowerCase()) {
+                                            setPickup("")
+                                          }
+                                          setShowDropSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
+                                      >
+                                        <div>
+                                          <div className="font-bold text-slate-800">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
+                                        </div>
+                                        {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
 
-                      <div>
-                        <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select Shifting Date</label>
-                        <CustomShiftingDatePicker
-                          value={shiftingDateBetween}
-                          onChange={setShiftingDateBetween}
-                          placeholder="Select Shifting Date"
-                        />
-                        <div className="mt-3 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="flexible-date"
-                            checked={flexibleDateBetween}
-                            onChange={(e) => setFlexibleDateBetween(e.target.checked)}
-                            className="w-4 h-4 rounded text-[#0B8860] border-slate-300 focus:ring-[#0B8860]"
-                          />
-                          <label htmlFor="flexible-date" className="text-[13px] text-[#484848] cursor-pointer">
-                            I'm flexible on my shifting date
-                          </label>
-                        </div>
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select Shifting Date</label>
+                            <CustomShiftingDatePicker
+                              value={shiftingDateBetween}
+                              onChange={setShiftingDateBetween}
+                              placeholder="Select Shifting Date"
+                            />
+                            <div className="mt-3 flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="flexible-date"
+                                checked={flexibleDateBetween}
+                                onChange={(e) => setFlexibleDateBetween(e.target.checked)}
+                                className="w-4 h-4 rounded text-[#0B8860] border-slate-300 focus:ring-[#0B8860]"
+                              />
+                              <label htmlFor="flexible-date" className="text-[13px] text-[#484848] cursor-pointer">
+                                I'm flexible on my shifting date
+                              </label>
+                            </div>
+                          </div>
+                        </>
+                      )}
+  
+                      {/* Checkmarks */}
+                      <div className="pt-2 pb-2 flex flex-wrap items-center justify-center gap-3 text-[12px] font-medium text-[#666666]">
+                        <span className="flex items-center gap-1.5">
+                          <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Professional Handling
+                        </span>
+                        <span className="w-[1px] h-3 bg-[#E0E0E0]"></span>
+                        <span className="flex items-center gap-1.5">
+                          <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Transparent Pricing
+                        </span>
                       </div>
-                    </>
-                  )}
-
-                  {/* Checkmarks */}
-                  <div className="pt-2 pb-2 flex flex-wrap items-center justify-center gap-3 text-[12px] font-medium text-[#666666]">
-                    <span className="flex items-center gap-1.5">
-                      <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Professional Handling
-                    </span>
-                    <span className="w-[1px] h-3 bg-[#E0E0E0]"></span>
-                    <span className="flex items-center gap-1.5">
-                      <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Transparent Pricing
-                    </span>
+  
+                      {/* Button */}
+                      <button
+                        type="submit"
+                        className="w-full h-[54px] bg-[#FF425C] hover:bg-[#E63950] active:scale-[0.99] text-white font-bold text-[16px] rounded-xl transition-all cursor-pointer shadow-sm"
+                      >
+                        Check Prices
+                      </button>
+                    </form>
                   </div>
-
-                  {/* Button */}
-                  <button
-                    type="submit"
-                    className="w-full h-[54px] bg-[#FF425C] hover:bg-[#E63950] active:scale-[0.99] text-white font-bold text-[16px] rounded-xl transition-all cursor-pointer shadow-sm"
-                  >
-                    Check Prices
-                  </button>
-                </form>
-              </div>
             </div>
           </div>
         </div>
@@ -2396,18 +2170,19 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                 {/* Highlight Badge if configured */}
                 {pkg.badge && (
                   <span
-                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${pkg.badge.toLowerCase().includes("coming")
+                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                      pkg.badge.toLowerCase().includes("coming")
                         ? "bg-amber-100 text-amber-900 border-amber-300 uppercase tracking-wider px-3"
                         : pkg.badge.toLowerCase().includes("popular")
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : pkg.badge.toLowerCase().includes("rare")
-                            ? "bg-slate-100 text-slate-700 border-slate-200"
-                            : pkg.badge.toLowerCase().includes("best")
-                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                              : pkg.badge.toLowerCase().includes("trend")
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : "bg-blue-50 text-blue-700 border-blue-200"
-                      }`}
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : pkg.badge.toLowerCase().includes("rare")
+                        ? "bg-slate-100 text-slate-700 border-slate-200"
+                        : pkg.badge.toLowerCase().includes("best")
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        : pkg.badge.toLowerCase().includes("trend")
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                    }`}
                   >
                     {pkg.badge.toLowerCase().includes("coming") ? "" : "★ "}
                     {pkg.badge}
@@ -2487,18 +2262,10 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                     if (destination) {
                       const exactDrop = formatExactLocation(destination)
                       setDrop(exactDrop)
-                      if (route.destination_latitude != null && route.destination_longitude != null) {
-                        setDropCoords({
-                          lat: Number(route.destination_latitude),
-                          lng: Number(route.destination_longitude),
-                          forAddress: exactDrop,
-                        })
-                      } else {
-                        setDropCoords(null)
-                        resolveLocationCoords(exactDrop).then((c) => {
-                          if (c) setDropCoords({ ...c, forAddress: exactDrop })
-                        })
-                      }
+                      setDropCoords(null)
+                      resolveLocationCoords(exactDrop).then((c) => {
+                        if (c) setDropCoords({ ...c, forAddress: exactDrop })
+                      })
                     }
                     setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
@@ -2599,7 +2366,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           <div className="hidden lg:block absolute top-8 left-[12%] right-[12%] h-[2px] bg-slate-200 border-t-2 border-dashed border-slate-300"></div>
-
+          
           <div className="flex flex-col items-center text-center relative z-10">
             <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
               <ClipboardList className="w-8 h-8 text-indigo-500" />
@@ -2607,7 +2374,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-2">Share your Requirement</h3>
             <p className="text-xs text-slate-500">Give your move details and preferred timing to design a streamlined logistics strategy.</p>
           </div>
-
+          
           <div className="flex flex-col items-center text-center relative z-10">
             <div className="w-16 h-16 rounded-2xl bg-rose-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
               <MessageSquare className="w-8 h-8 text-rose-500" />
@@ -2615,7 +2382,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-2">Receive Instant Quote</h3>
             <p className="text-xs text-slate-500">Transparent pricing based on your move details. Larger or complex moves may require a pre-move survey.</p>
           </div>
-
+          
           <div className="flex flex-col items-center text-center relative z-10">
             <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
               <User className="w-8 h-8 text-amber-500" />
@@ -2623,7 +2390,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-2">Assign Quality Expert</h3>
             <p className="text-xs text-slate-500">To ensure safe relocation, a quality service expert will be allotted to your movement.</p>
           </div>
-
+          
           <div className="flex flex-col items-center text-center relative z-10">
             <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
               <Truck className="w-8 h-8 text-emerald-500" />
@@ -2685,7 +2452,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             Experience 100% damage-free shifting. Enhance your house shifting with our Value Added Services.
           </p>
         </div>
-
+        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-indigo-300 transition-all border border-slate-200/80">
             <div className="w-12 h-12 mx-auto bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
@@ -2694,7 +2461,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-1">Rope Pulling Services</h3>
             <p className="text-xs text-slate-500">Assistance from experts in handling heavy goods that need extra care</p>
           </div>
-
+          
           <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-rose-300 transition-all border border-slate-200/80">
             <div className="w-12 h-12 mx-auto bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
               <Settings className="w-6 h-6 text-rose-500" />
@@ -2702,7 +2469,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-1">Appliance Installation</h3>
             <p className="text-xs text-slate-500">Un-installation and installation of electrical appliances by professionals</p>
           </div>
-
+          
           <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-amber-300 transition-all border border-slate-200/80">
             <div className="w-12 h-12 mx-auto bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
               <Zap className="w-6 h-6 text-amber-500" />
@@ -2710,7 +2477,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="font-bold text-slate-900 mb-1">Professional Electrician</h3>
             <p className="text-xs text-slate-500">Expertise at your rescue for complex wiring and setups</p>
           </div>
-
+          
           <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-emerald-300 transition-all border border-slate-200/80">
             <div className="w-12 h-12 mx-auto bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
               <Wrench className="w-6 h-6 text-emerald-500" />
@@ -2786,37 +2553,26 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             Frequently Asked Questions
           </h2>
           <div className="space-y-4">
-            {faqsLoading ? (
-              <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
-                <span>Loading FAQs...</span>
-              </div>
-            ) : serverFaqs.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-2xl border border-slate-100">
-                No FAQs currently published for this category.
-              </div>
-            ) : (
-              serverFaqs.map((faq, idx) => (
-                <div
-                  key={faq.q}
-                  className="border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
+            {FAQS.map((faq, idx) => (
+              <div
+                key={faq.q}
+                className="border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                  className="w-full p-4 sm:p-5 text-left font-bold text-sm text-slate-800 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                    className="w-full p-4 sm:p-5 text-left font-bold text-sm text-slate-800 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <span>{faq.q}</span>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openFaq === idx ? "rotate-180" : ""}`} />
-                  </button>
-                  {openFaq === idx && (
-                    <div className="px-4 sm:px-5 pb-5 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+                  <span>{faq.q}</span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openFaq === idx ? "rotate-180" : ""}`} />
+                </button>
+                {openFaq === idx && (
+                  <div className="px-4 sm:px-5 pb-5 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -2907,10 +2663,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                   <div
                     key={pkg.id}
                     onClick={() => setSelectedPackage(pkg)}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between gap-4 ${isSelected
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between gap-4 ${
+                      isSelected
                         ? "border-emerald-600 bg-emerald-50/40 shadow-sm"
                         : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
+                    }`}
                   >
                     <div className="w-24 h-16 flex items-center justify-center shrink-0">
                       {pkg.diagram}
@@ -2973,7 +2730,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               <div className="flex-1 flex justify-center max-w-[600px] mx-auto w-full relative">
                 {/* Progress Line */}
                 <div className="absolute top-[35%] left-[12%] right-[12%] h-[1px] bg-white/30 -z-0"></div>
-
+                
                 {[
                   { step: 1, label: "Location" },
                   { step: 2, label: "Add Items" },
@@ -2981,10 +2738,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                   { step: 4, label: "Summary" }
                 ].map((s) => (
                   <div key={s.step} className="flex-1 flex flex-col items-center justify-center text-center z-10">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${stepperStep > s.step ? "bg-white text-[#0B8860]" :
-                        stepperStep === s.step ? "bg-[#33a886] text-white" :
-                          "bg-[#0B8860] text-white border border-white/40"
-                      }`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${
+                      stepperStep > s.step ? "bg-white text-[#0B8860]" :
+                      stepperStep === s.step ? "bg-[#33a886] text-white" :
+                      "bg-[#0B8860] text-white border border-white/40"
+                    }`}>
                       {stepperStep > s.step ? <Check className="w-4 h-4" /> : s.step}
                     </div>
                     <span className={`text-[11px] font-medium tracking-wide ${stepperStep === s.step ? "text-white font-bold" : "text-white/70"}`}>
@@ -3008,159 +2766,166 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                 {stepperStep === 2 ? (
                   <>
 
-                    {/* Sub-header: Back button & Title */}
-                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <button onClick={() => setInventoryBuilderOpen(false)} className="text-slate-400 hover:text-[#0B8860] cursor-pointer">
-                          <ArrowRight className="w-5 h-5 rotate-180" />
-                        </button>
-                        <h2 className="text-xl font-bold text-slate-800">Add your Inventory</h2>
-                      </div>
-                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
-                        <Phone className="w-3.5 h-3.5" /> Get a call
-                      </button>
-                    </div>
+                {/* Sub-header: Back button & Title */}
+                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setInventoryBuilderOpen(false)} className="text-slate-400 hover:text-[#0B8860] cursor-pointer">
+                      <ArrowRight className="w-5 h-5 rotate-180" />
+                    </button>
+                    <h2 className="text-xl font-bold text-slate-800">Add your Inventory</h2>
+                  </div>
+                  <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                    <Phone className="w-3.5 h-3.5" /> Get a call
+                  </button>
+                </div>
 
-                    {/* Search Bar */}
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <div className="relative">
-                        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Search for any item"
-                          value={inventorySearchQuery}
-                          onChange={(e) => setInventorySearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] outline-none focus:border-[#0B8860] focus:bg-white transition-colors"
-                        />
-                      </div>
-                    </div>
+                {/* Search Bar */}
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Search for any item" 
+                      value={inventorySearchQuery}
+                      onChange={(e) => setInventorySearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] outline-none focus:border-[#0B8860] focus:bg-white transition-colors"
+                    />
+                  </div>
+                </div>
 
-                    {/* Tabs */}
-                    <div className="flex items-center gap-3 px-6 py-4 overflow-x-auto hide-scrollbar border-b border-slate-100">
-                      {pmCategories.map(cat => (
-                        <button
-                          key={cat.id || cat.name}
-                          onClick={() => setActiveCategory(cat.name)}
-                          className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[13px] font-semibold transition-all border cursor-pointer ${activeCategory === cat.name
-                              ? "bg-[#0B8860] text-white border-[#0B8860]"
-                              : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                            }`}
-                        >
-                          {cat.name}
-                        </button>
-                      ))}
-                    </div>
+                {/* Tabs */}
+                <div className="flex items-center gap-3 px-6 py-4 overflow-x-auto hide-scrollbar border-b border-slate-100">
+                  {pmCategories.map(cat => (
+                    <button
+                      key={cat.id || cat.name}
+                      onClick={() => setActiveCategory(cat.name)}
+                      className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[13px] font-semibold transition-all border cursor-pointer ${
+                        activeCategory === cat.name 
+                          ? "bg-[#0B8860] text-white border-[#0B8860]" 
+                          : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
 
-                    {/* Items List */}
-                    <div className="flex-1 overflow-y-auto px-6 pb-24 bg-slate-50/50 pt-4">
+                {/* Items List */}
+                <div className="flex-1 overflow-y-auto px-6 pb-24 bg-slate-50/50 pt-4">
+                  
+                  {/* Category Accordion Header */}
+                  <div className="bg-white rounded-t-xl border-x border-t border-slate-200 p-4 flex items-center justify-between cursor-pointer">
+                    <h3 className="font-bold text-slate-800 text-[15px]">{activeCategory}</h3>
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  </div>
+                  
+                  {/* Banner */}
+                  <div className="bg-[#0B8860]/5 border-x border-b border-[#0B8860]/20 p-3 flex items-center gap-2 text-[12px] text-[#0B8860] font-medium">
+                    <span className="text-[14px]">📦</span>
+                    What we pack in {activeCategory}
+                  </div>
+                  
+                  {/* Subcategories Accordions */}
+                  <div className="border border-slate-200 rounded-b-xl overflow-hidden bg-white mb-6">
+                    {(() => {
+                      const curCat = pmCategories.find(c => c.name === activeCategory) || pmCategories[0]
+                      const subGroups = groupItemsIntoSubcategories(curCat?.items || [])
+                      return Object.entries(subGroups).map(([subCat, items]) => {
+                        // Filter items by search query if any
+                        const filteredItems = items.filter(it => it.name.toLowerCase().includes(inventorySearchQuery.toLowerCase()))
+                        if (filteredItems.length === 0) return null
+                        const isExpanded = !!expandedSubcategories[subCat]
+                        const addedCount = filteredItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0)
 
-                      {/* Category Accordion Header */}
-                      <div className="bg-white rounded-t-xl border-x border-t border-slate-200 p-4 flex items-center justify-between cursor-pointer">
-                        <h3 className="font-bold text-slate-800 text-[15px]">{activeCategory}</h3>
-                        <ChevronDown className="w-5 h-5 text-slate-400" />
-                      </div>
-
-                      {/* Banner */}
-                      <div className="bg-[#0B8860]/5 border-x border-b border-[#0B8860]/20 p-3 flex items-center gap-2 text-[12px] text-[#0B8860] font-medium">
-                        <span className="text-[14px]">📦</span>
-                        {pmCategories.find(c => c.name === activeCategory)?.info_banner || `What we pack in ${activeCategory}`}
-                      </div>
-
-                      {/* Subcategories Accordions */}
-                      <div className="border border-slate-200 rounded-b-xl overflow-hidden bg-white mb-6">
-                        {(() => {
-                          const curCat = pmCategories.find(c => c.name === activeCategory) || pmCategories[0]
-                          const subGroups = groupItemsIntoSubcategories(curCat?.items || [])
-                          return Object.entries(subGroups).map(([subCat, items]) => {
-                            // Filter items by search query if any
-                            const filteredItems = items.filter(it => it.name.toLowerCase().includes(inventorySearchQuery.toLowerCase()))
-                            if (filteredItems.length === 0) return null
-                            const isExpanded = !!expandedSubcategories[subCat]
-                            const addedCount = filteredItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0)
-
-                            return (
-                              <div key={subCat} className="border-b border-slate-100 last:border-b-0">
-                                {/* Accordion Toggle */}
-                                <div
-                                  onClick={() => setExpandedSubcategories(prev => ({ ...prev, [subCat]: !isExpanded }))}
-                                  className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-[13px] text-slate-700">{subCat}</span>
-                                    {addedCount > 0 && (
-                                      <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 ml-1">
-                                        {addedCount} added
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors">
-                                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                                  </div>
-                                </div>
-
-                                {/* Items */}
-                                {isExpanded && (
-                                  <div className="px-4 pb-4">
-                                    <div className="border-l-2 border-slate-100 ml-2 pl-4 space-y-4 pt-2">
-                                      {filteredItems.map((item) => {
-                                        const count = inventoryItems[item.id] || 0
-                                        return (
-                                          <div key={item.id} className="flex items-center justify-between">
-                                            <div className="flex flex-col">
-                                              <span className="text-[13px] text-slate-600 font-medium">{item.name}</span>
-                                              <span className="text-[10px] text-slate-400 font-normal">
-                                                {item.configured === false || item.cft == null || item.weight_kg == null ? (
-                                                  <span className="text-amber-600 font-medium">Requires Survey / Manual Review</span>
-                                                ) : (
-                                                  `${item.cft} CFT • ${item.weight_kg} kg`
-                                                )}
-                                              </span>
-                                            </div>
-                                            {count > 0 ? (
-                                              <div className="flex items-center border border-[#0B8860] rounded-md overflow-hidden text-[#0B8860] bg-white h-8">
-                                                <button onClick={() => handleItemCount(item.id, -1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">-</button>
-                                                <span className="font-bold text-sm min-w-[20px] text-center">{count}</span>
-                                                <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">+</button>
-                                              </div>
-                                            ) : (
-                                              <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-8 flex items-center justify-center rounded-md border border-[#0B8860] text-[#0B8860] hover:bg-[#0B8860]/10 transition-colors cursor-pointer bg-white">
-                                                <Plus className="w-4 h-4" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
+                        return (
+                          <div key={subCat} className="border-b border-slate-100 last:border-b-0">
+                            {/* Accordion Toggle */}
+                            <div 
+                              onClick={() => setExpandedSubcategories(prev => ({...prev, [subCat]: !isExpanded}))}
+                              className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-[13px] text-slate-700">{subCat}</span>
+                                {addedCount > 0 && (
+                                  <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 ml-1">
+                                    {addedCount} added
+                                  </span>
                                 )}
                               </div>
-                            )
-                          })
-                        })()}
-                      </div>
-                    </div>
+                              <div className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors">
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                              </div>
+                            </div>
+                            
+                            {/* Items */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4">
+                                <div className="border-l-2 border-slate-100 ml-2 pl-4 space-y-4 pt-2">
+                                  {filteredItems.map((item) => {
+                                    const count = inventoryItems[item.id] || 0
+                                    return (
+                                      <div key={item.id} className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                          <span className="text-[13px] text-slate-600 font-medium">{item.name}</span>
+                                          <span className="text-[10px] text-slate-400 font-normal">
+                                            {item.configured === false || item.cft == null || item.weight_kg == null ? (
+                                              <span className="text-amber-600 font-medium">Requires Survey / Manual Review</span>
+                                            ) : (
+                                              `${item.cft} CFT • ${item.weight_kg} kg`
+                                            )}
+                                          </span>
+                                        </div>
+                                        {count > 0 ? (
+                                          <div className="flex items-center border border-[#0B8860] rounded-md overflow-hidden text-[#0B8860] bg-white h-8">
+                                            <button onClick={() => handleItemCount(item.id, -1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">-</button>
+                                            <span className="font-bold text-sm min-w-[20px] text-center">{count}</span>
+                                            <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">+</button>
+                                          </div>
+                                        ) : (
+                                          <button onClick={() => handleItemCount(item.id, 1)} className="w-8 h-8 flex items-center justify-center rounded-md border border-[#0B8860] text-[#0B8860] hover:bg-[#0B8860]/10 transition-colors cursor-pointer bg-white">
+                                            <Plus className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                </div>
 
-                    {/* Footer Bar */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-white p-4 sm:px-6 flex items-center justify-between shadow-[0_-8px_20px_rgba(0,0,0,0.04)] border-t border-slate-100">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Added items</span>
-                        <span className="text-lg font-black text-slate-900">{totalItemsCount}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (!selectedDate) {
-                            setSelectedDate((serverDates && serverDates.length > 0) ? serverDates[0] : SHIFTING_DATES[0])
-                          }
-                          setStepperStep(3)
-                        }}
-                        disabled={totalItemsCount === 0}
-                        className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled={totalItemsCount === 0}"
-                        aria-disabled={totalItemsCount === 0}
-                      >
-                        Continue
-                      </button>
-                    </div>
-
+                {/* Footer Bar */}
+                <div className="absolute bottom-0 left-0 right-0 bg-white p-4 sm:px-6 flex items-center justify-between shadow-[0_-8px_20px_rgba(0,0,0,0.04)] border-t border-slate-100">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Added items</span>
+                    <span className="text-lg font-black text-slate-900">{totalItemsCount}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!selectedDate) {
+                        const defaultDate = SHIFTING_DATES[0]
+                        setSelectedDate(defaultDate)
+                        const { category, slot } = getFirstAvailableSlotAndCategory(defaultDate?.fullDate || new Date())
+                        if (!selectedSlot) {
+                          setSelectedSlot(slot || null)
+                          if (category) setExpandedSlotCategory(category)
+                        }
+                      }
+                      setStepperStep(3)
+                    }}
+                    disabled={totalItemsCount === 0}
+                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled={totalItemsCount === 0}"
+                    aria-disabled={totalItemsCount === 0}
+                  >
+                    Continue
+                  </button>
+                </div>
+              
                   </>
                 ) : stepperStep === 3 ? (
                   <>
@@ -3178,14 +2943,22 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                       {/* Date Selector */}
                       <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Date</p>
                       <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-2 mb-6">
-                        {((serverDates && serverDates.length > 0) ? serverDates : SHIFTING_DATES).map((dateObj) => (
-                          <div
+                        {SHIFTING_DATES.map((dateObj) => (
+                          <div 
                             key={dateObj.id}
-                            onClick={() => setSelectedDate(dateObj)}
-                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${selectedDate?.id === dateObj.id
-                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm"
+                            onClick={() => {
+                              setSelectedDate(dateObj)
+                              if (selectedSlot && isSlotPassed(selectedSlot, dateObj.fullDate)) {
+                                const { category, slot } = getFirstAvailableSlotAndCategory(dateObj.fullDate)
+                                setSelectedSlot(slot || null)
+                                if (category) setExpandedSlotCategory(category)
+                              }
+                            }}
+                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
+                              selectedDate?.id === dateObj.id 
+                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
                                 : "border-slate-200 bg-white hover:border-slate-300"
-                              }`}
+                            }`}
                           >
                             <span className={`text-[11px] font-bold ${selectedDate?.id === dateObj.id ? "text-[#0B8860]" : "text-slate-500"}`}>{dateObj.label}</span>
                             <span className="text-[13px] font-black text-slate-800 mt-0.5">{dateObj.value}</span>
@@ -3198,9 +2971,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
                         <div className="flex flex-col text-left">
                           <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
-                          {((serverDates && serverDates.length > 0) ? serverDates[0] : SHIFTING_DATES[0])?.label !== "Today" && (
+                          {SHIFTING_DATES[0]?.label !== "Today" && (
                             <span className="text-[11px] text-orange-700 font-medium mt-0.5">
-                              Earliest available move date: {((serverDates && serverDates.length > 0) ? serverDates[0] : SHIFTING_DATES[0])?.label} ({((serverDates && serverDates.length > 0) ? serverDates[0] : SHIFTING_DATES[0])?.value}) — Same-day booking is unavailable as moves require crew &amp; packing preparation.
+                              Earliest available move date: {SHIFTING_DATES[0]?.label} ({SHIFTING_DATES[0]?.value}) — Same-day booking is unavailable as moves require crew &amp; packing preparation.
                             </span>
                           )}
                         </div>
@@ -3208,69 +2981,53 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
                       {/* Slot Selector */}
                       <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
-                      {slotsLoading ? (
-                        <div className="py-8 text-center text-slate-400 text-xs sm:text-sm animate-pulse flex items-center justify-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-[#0B8860]" />
-                          <span>Loading available pickup slots...</span>
-                        </div>
-                      ) : (!serverSlotGroups || serverSlotGroups.length === 0) ? (
-                        <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
-                          No operating slots available for this date.
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {serverSlotGroups.map((groupObj) => {
-                            const timeOfDay = groupObj.group || groupObj.category
-                            const slots = groupObj.slots || []
-                            const isExpanded = expandedSlotCategory === timeOfDay
-
-                            return (
-                              <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
-                                <div
-                                  className="flex items-center justify-between cursor-pointer mb-2 group"
-                                  onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
-                                    {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
-                                    {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
-                                    <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
-                                  </div>
-                                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      <div className="space-y-4">
+                        {Object.entries(SHIFTING_SLOTS).map(([timeOfDay, slots]) => {
+                          const isExpanded = expandedSlotCategory === timeOfDay
+                          
+                          return (
+                            <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer mb-2 group"
+                                onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
+                                  {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
+                                  {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
+                                  <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
                                 </div>
-
-                                {isExpanded && (
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                    {slots.map(slotItem => {
-                                      const slot = typeof slotItem === "string" ? slotItem : (slotItem?.slot || slotItem?.label)
-                                      const isAvail = typeof slotItem === "object" && slotItem?.is_available != null
-                                        ? slotItem.is_available
-                                        : (serverSlotsAvailability ? (serverSlotsAvailability[slot] === true) : false)
-                                      const passed = !isAvail
-                                      return (
-                                        <button
-                                          key={slot}
-                                          type="button"
-                                          disabled={passed}
-                                          onClick={() => setSelectedSlot(slot)}
-                                          className={`py-2 px-1 rounded-xl border text-center transition-all ${selectedSlot === slot
-                                              ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
-                                              : passed
-                                                ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
-                                                : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
-                                            }`}
-                                        >
-                                          <span className="text-[12px]">{slot}</span>
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                )}
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                               </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                              
+                              {isExpanded && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                  {slots.map(slot => {
+                                    const passed = serverSlotsAvailability ? (serverSlotsAvailability[slot] === false) : isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    return (
+                                      <button 
+                                        key={slot}
+                                        type="button"
+                                        disabled={passed}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                                          selectedSlot === slot 
+                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
+                                            : passed
+                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                        }`}
+                                      >
+                                        <span className="text-[12px]">{slot}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
 
                     {/* Step 3 Footer */}
@@ -3284,19 +3041,19 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                           const addedCartons = cartonItems.reduce((acc, it) => acc + (inventoryItems[it.id] || 0), 0);
                           return (
                             <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes.
-                              <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => { setStepperStep(2); setActiveCategory("Cartons") }}>Add 3 Cartons</span>
+                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes. 
+                              <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => {setStepperStep(2); setActiveCategory("Cartons")}}>Add 3 Cartons</span>
                             </p>
                           );
                         })()}
                       </div>
-
+                      
                       <div className="px-6 py-4 border-t border-slate-100">
                         <button
                           onClick={() => {
                             setStepperStep(4)
                           }}
-                          disabled={!selectedDate || !selectedSlot || (serverSlotsAvailability ? serverSlotsAvailability[selectedSlot] === false : false)}
+                          disabled={!selectedDate || !selectedSlot || isSlotPassed(selectedSlot, selectedDate?.fullDate || new Date())}
                           className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
                         >
                           Confirm
@@ -3327,7 +3084,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                         </div>
                         <div className="space-y-5 relative ml-1">
                           <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
-
+                          
                           {/* Pickup Floor & Lift */}
                           <div className="flex items-start gap-4 relative bg-white">
                             <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
@@ -3400,14 +3157,14 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                             </div>
                           </div>
                         </div>
-
+                        
                         <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                               <Calendar className="w-4 h-4 text-indigo-600" />
                             </div>
                             <span className="text-[13px] text-slate-700 font-medium">
-                              {selectedDate ? `${selectedDate.fullDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} | ` : ""}{selectedSlot || "Morning Slot"}
+                              {selectedDate ? `${selectedDate.fullDate.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})} | ` : ""}{selectedSlot || "Morning Slot"}
                             </span>
                           </div>
                           <button onClick={() => setStepperStep(3)} className="text-[12px] font-bold text-slate-600 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Change Slot</button>
@@ -3417,7 +3174,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                       {/* Packing & Service Customization */}
                       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
                         <h3 className="font-bold text-slate-800 text-base">Packing &amp; Moving Services</h3>
-
+                        
                         {/* Packing Tier Selector */}
                         <div>
                           <p className="text-xs font-semibold text-slate-600 mb-2">Packing Materials &amp; Standards</p>
@@ -3430,10 +3187,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               <div
                                 key={tier.id}
                                 onClick={() => setPackingTier(tier.id)}
-                                className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${packingTier === tier.id
+                                className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
+                                  packingTier === tier.id
                                     ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] shadow-xs"
                                     : "border-slate-200 hover:border-slate-300 text-slate-700"
-                                  }`}
+                                }`}
                               >
                                 <p className="text-xs font-bold">{tier.label}</p>
                                 <p className="text-[10px] text-slate-500 mt-0.5">{tier.desc}</p>
@@ -3494,48 +3252,18 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                             <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
                               <ClipboardList className="w-5 h-5" />
                             </div>
-                            <div className="space-y-1.5 flex-1">
-                              <h4 className="font-extrabold text-amber-950 text-sm">Pre-Move Survey Required</h4>
+                            <div className="space-y-1">
+                              <h4 className="font-extrabold text-amber-950 text-sm">Survey Required</h4>
                               <p className="text-xs text-amber-900 font-semibold leading-relaxed">
-                                Your move needs a quick assessment because the system needs additional information before confirming the final service and price.
+                                Your move needs a quick survey before the final price can be confirmed.
                               </p>
                               <p className="text-[11px] text-amber-800 leading-normal">
                                 {pmServerQuote?.estimate_notice || "Due to large volume, uncataloged items, or road routing estimation, the price below is an indicative estimate. Our team will contact you to schedule a quick survey before final price confirmation."}
                               </p>
-
-                              {/* Transparent 6-step workflow roadmap */}
-                              <div className="pt-2.5 border-t border-amber-200/80 mt-2">
-                                <p className="text-[11px] font-extrabold text-amber-950 uppercase tracking-wider mb-2">What happens next?</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-amber-900 font-medium">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
-                                    <span>Submit move details</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
-                                    <span>SEVO reviews &amp; arranges survey</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
-                                    <span>Requirements confirmed</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">4</span>
-                                    <span>Final quote provided</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">5</span>
-                                    <span>You review &amp; approve</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-4 h-4 rounded-full bg-amber-200/80 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0">6</span>
-                                    <span>Move is scheduled</span>
-                                  </div>
-                                </div>
-                                <p className="text-[11px] text-emerald-800 font-bold mt-2.5 flex items-center gap-1">
-                                  <Check className="w-3.5 h-3.5 text-emerald-700" />
-                                  <span>Zero upfront charges — pay only after you approve the final quote.</span>
-                                </p>
+                              <div className="pt-2 text-[11px] text-amber-900/90 font-medium space-y-0.5">
+                                <p>• Request was received upon submitting</p>
+                                <p>• Relocation coordinator will call to arrange survey</p>
+                                <p>• No payment required until final survey confirmation</p>
                               </div>
                             </div>
                           </div>
@@ -3624,9 +3352,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                           {isSurveyRequired ? "Estimated Fare (Subject to Survey)" : "Your Quoted Price"}
                         </p>
                         <p className="text-xl font-black text-slate-800">
-                          {pmServerQuote?.pricing?.total
-                            ? `₹ ${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}`
-                            : pmServerQuote?.total
+                          {pmServerQuote?.pricing?.total 
+                            ? `₹ ${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
+                            : pmServerQuote?.total 
                               ? `₹ ${Number(pmServerQuote.total).toLocaleString("en-IN")}`
                               : (pmQuoteLoading ? "Calculating…" : "Fare unavailable")}
                         </p>
@@ -3643,22 +3371,22 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                     </div>
                   </>
                 ) : null}
-              </div>
+</div>
 
               {/* Right Column (Booking Details) */}
               <div className="hidden lg:block w-[340px] relative shrink-0">
-
+                
                 <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6 sticky top-0">
                   <h3 className="font-extrabold text-slate-800 text-[14px] mb-5">Booking Details</h3>
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</span>
                     <button className="text-[12px] font-bold text-[#0B8860] hover:underline cursor-pointer">Edit</button>
                   </div>
-
+                  
                   <div className="space-y-6 relative ml-1">
                     {/* Connecting line */}
                     <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
-
+                    
                     <div className="flex items-start gap-4 relative bg-white">
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                         <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
@@ -3720,9 +3448,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               <div className="flex justify-between pt-2 border-t border-slate-200">
                 <span className="text-slate-500 font-medium">Estimated Fare:</span>
                 <span className="font-bold text-amber-700 text-sm">
-                  {pmServerQuote?.pricing?.total
-                    ? `₹${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}`
-                    : pmServerQuote?.total
+                  {pmServerQuote?.pricing?.total 
+                    ? `₹${Number(pmServerQuote.pricing.total).toLocaleString("en-IN")}` 
+                    : pmServerQuote?.total 
                       ? `₹${Number(pmServerQuote.total).toLocaleString("en-IN")}`
                       : "Pending Survey"} <span className="text-[10px] text-slate-500 font-normal">(Subject to survey)</span>
                 </span>
@@ -4079,7 +3807,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                 onClick={() => {
                   setShowExitConfirm(false)
                   setLookingForPartnerOpen(false)
-                  try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) { }
+                  try { sessionStorage.removeItem("calservice_active_partner_search") } catch (e) {}
                   const bookingPayload = {
                     id: lastBookingId,
                     request_id: lastBookingId,
@@ -4088,7 +3816,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                   try {
                     sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
                     sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
-                  } catch (e) { }
+                  } catch (e) {}
                   navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
                     state: {
                       isTracking: true,
@@ -4130,53 +3858,10 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onSuccess={(userData) => {
+          onSuccess={() => {
             setShowCustomerEntryModal(false)
             setLocalIsSignedIn(true)
-            const resolvedName = (userData?.name || name || "").trim()
-            const resolvedPhone = (userData?.phone || phone || "").replace(/\D/g, "").slice(0, 10)
-            if (resolvedName) setName(resolvedName)
-            if (resolvedPhone) setPhone(resolvedPhone)
-            submitBooking(resolvedName, resolvedPhone)
-          }}
-          onComplete={(userData) => {
-            setShowCustomerEntryModal(false)
-            setLocalIsSignedIn(true)
-            const resolvedName = (userData?.name || name || "").trim()
-            const resolvedPhone = (userData?.phone || phone || "").replace(/\D/g, "").slice(0, 10)
-            if (resolvedName) setName(resolvedName)
-            if (resolvedPhone) setPhone(resolvedPhone)
-            submitBooking(resolvedName, resolvedPhone)
-          }}
-        />
-      )}
-
-      {/* Interactive Map Picker Modal */}
-      {mapPickerTarget && (
-        <MapPickerScreen
-          initialCoords={
-            mapPickerTarget === "pickup"
-              ? (pickupCoords?.lat ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
-              : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
-          }
-          serviceSlug="packers-and-movers"
-          onClose={() => setMapPickerTarget(null)}
-          onConfirm={(resolvedAddr) => {
-            const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"
-            const lat = Number(resolvedAddr?.latitude ?? resolvedAddr?.lat)
-            const lng = Number(resolvedAddr?.longitude ?? resolvedAddr?.lng)
-            if (mapPickerTarget === "pickup") {
-              setPickup(fullAddr)
-              if (!isNaN(lat) && !isNaN(lng)) {
-                setPickupCoords({ lat, lng, forAddress: fullAddr })
-              }
-            } else {
-              setDrop(fullAddr)
-              if (!isNaN(lat) && !isNaN(lng)) {
-                setDropCoords({ lat, lng, forAddress: fullAddr })
-              }
-            }
-            setMapPickerTarget(null)
+            submitBooking()
           }}
         />
       )}

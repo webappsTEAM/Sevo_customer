@@ -1,4 +1,4 @@
-# ─── sevo — VPS Production Docker Compose ────────────────────────────────
+# ─── CALTRACK — VPS Production Docker Compose ────────────────────────────────
 #
 # Runs ONLY the infrastructure services (PostgreSQL + Redis).
 # Django, Celery and the frontend are managed by systemd — not Docker.
@@ -7,7 +7,7 @@
 #   • Postgres exposed on 127.0.0.1:5433 (not 5432) — avoids conflict with any existing DB on VPS
 #   • Redis  exposed on 127.0.0.1:6380 (not 6379) — avoids conflict with any existing Redis on VPS
 #   • Ports bound to 127.0.0.1 only — NOT accessible from the internet
-#   • Volume names prefixed sevo_prod_ (isolated from any local dev volumes)
+#   • Volume names prefixed caltrack_prod_ (isolated from any local dev volumes)
 #
 # USAGE on VPS:
 #   Start:     docker compose -f docker-compose.prod.yml up -d
@@ -21,20 +21,20 @@ services:
   # ── PostgreSQL 16 ─────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
-    container_name: sevo_db
+    container_name: caltrack_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: sevo
-      POSTGRES_USER: sevo_user
+      POSTGRES_DB: caltrack
+      POSTGRES_USER: caltrack_user
       POSTGRES_PASSWORD: ${DB_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
     ports:
       # Bound to localhost only — not exposed to the internet.
       # Port 5433 chosen to avoid conflict with any existing PostgreSQL on VPS.
       - "127.0.0.1:5433:5432"
     volumes:
-      - sevo_prod_pgdata:/var/lib/postgresql/data
+      - caltrack_prod_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sevo_user -d sevo"]
+      test: ["CMD-SHELL", "pg_isready -U caltrack_user -d caltrack"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,14 +43,14 @@ services:
   # ── Redis 7 ───────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: sevo_redis
+    container_name: caltrack_redis
     restart: unless-stopped
     ports:
       # Bound to localhost only — not exposed to the internet.
       # Port 6380 chosen to avoid conflict with any existing Redis on VPS.
       - "127.0.0.1:6380:6379"
     volumes:
-      - sevo_prod_redis:/data
+      - caltrack_prod_redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -58,7 +58,7 @@ services:
       retries: 5
 
 volumes:
-  sevo_prod_pgdata:
+  caltrack_prod_pgdata:
     driver: local
-  sevo_prod_redis:
+  caltrack_prod_redis:
     driver: local

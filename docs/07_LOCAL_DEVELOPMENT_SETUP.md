@@ -1,4 +1,4 @@
-# sevo / QuickTIMS — Local Development & Environment Setup
+# CalTrack / QuickTIMS — Local Development & Environment Setup
 
 ## 1. Prerequisites
 
@@ -17,7 +17,7 @@ From the project root:
 docker compose up -d
 ```
 This starts:
-- **PostgreSQL**: Port `5432` (User: `postgres`, Pass: `postgres`, DB: `sevo`)
+- **PostgreSQL**: Port `5432` (User: `postgres`, Pass: `postgres`, DB: `caltrack`)
 - **Redis**: Port `6379`
 
 ---

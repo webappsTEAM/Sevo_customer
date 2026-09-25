@@ -1,5 +1,5 @@
 """
-Centralized Global Authorization & RBAC Engine for sevo.
+Centralized Global Authorization & RBAC Engine for CalTrack.
 
 Architectural Principles:
 1. is_super_admin(user) is the single canonical global bypass across all modules and records.
@@ -256,7 +256,7 @@ DEFAULT_GLOBAL_RBAC = {
     },
 }
 
-GLOBAL_RBAC_CACHE_KEY = "sevo_global_rbac_matrix"
+GLOBAL_RBAC_CACHE_KEY = "caltrack_global_rbac_matrix"
 
 
 def get_global_rbac_permissions() -> dict:

@@ -201,11 +201,7 @@ const MODAL_STYLES = `
   }
 `
 
-export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess }) {
-  const notifySuccess = (payload) => {
-    if (typeof onComplete === "function") onComplete(payload)
-    if (typeof onSuccess === "function") onSuccess(payload)
-  }
+export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [step, setStep] = useState(1)
   const { refreshMe, loginWithCustomerGoogle } = useAuth()
   const [channel, setChannel] = useState("PHONE") // "PHONE" | "EMAIL"
@@ -385,14 +381,8 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
         if (is_new_customer) {
           setStep(3)
         } else {
-          const userPayload = {
-            customerId: customer_id,
-            phone: mobileNumber.trim(),
-            email: emailInput.trim(),
-            name: fullName.trim() || res?.data?.user?.full_name || res?.user?.full_name || "",
-          }
           if (typeof refreshMe === "function") await refreshMe()
-          notifySuccess(userPayload)
+          if (typeof onComplete === "function") onComplete()
           onClose()
         }
       } else {
@@ -446,14 +436,9 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete, onSuccess 
       const res = await apiCompleteCustomerProfile(customerId, fullName.trim(), profileArgs)
       if (res && res.success) {
         // Profile complete — refresh session and close modal immediately.
-        const userPayload = {
-          customerId,
-          phone: mobileNumber.trim() || (secondChannel === "PHONE" ? secondIdentifierTrimmed : ""),
-          email: emailInput.trim() || (secondChannel === "EMAIL" ? secondIdentifierTrimmed : ""),
-          name: fullName.trim(),
-        }
+        // Location/address is handled by the booking flow, NOT here.
         if (typeof refreshMe === "function") await refreshMe()
-        notifySuccess(userPayload)
+        if (typeof onComplete === "function") onComplete()
         onClose()
       } else {
         setErrorMsg(res?.error?.message || "Failed to complete profile.")

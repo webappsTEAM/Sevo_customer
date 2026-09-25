@@ -120,13 +120,13 @@ def match_catalog_item(item_name: str, goods_item_id: Optional[int] = None) -> D
 
     if goods_item_id is not None:
         try:
-            db_item = GoodsItem.objects.filter(id=goods_item_id, is_active=True).select_related("category").first()
+            db_item = GoodsItem.objects.filter(id=int(goods_item_id), is_active=True).select_related("category").first()
             if db_item:
                 return _format_db_goods_item(db_item)
         except (ValueError, TypeError) as e:
             logger.debug("Invalid goods_item_id '%s': %s", goods_item_id, e)
 
-    key = (item_name or "").strip()
+    key = str(item_name or "").strip()
     if not key:
         return {
             "goods_item_id": None,
@@ -393,7 +393,7 @@ def recommend_vehicle_for_volume(
         from logistics.models import ServiceTier
 
         if service_tier_id:
-            tier = ServiceTier.objects.filter(id=service_tier_id).first()
+            tier = ServiceTier.objects.filter(id=int(service_tier_id)).first()
             if not tier:
                 return None
             if not tier.is_active:
@@ -455,23 +455,16 @@ def compute_packers_movers_quote(
     """
     from .routing import get_route_eta
     route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
-    distance_km: Decimal = Decimal("0.00")
-    is_distance_estimated: bool = True
-    distance_source: str = "straight_line_estimate"
-
     route_dist = route.get("distance_km") if route else None
-    valid_distance: Optional[Decimal] = None
     if route is not None and route_dist is not None:
         try:
-            valid_distance = _money(str(route_dist))
+            distance_km = _money(str(route_dist))
+            is_distance_estimated = bool(route.get("is_estimate", False) or not route.get("is_authoritative", True))
+            distance_source = route.get("source") or route.get("distance_source") or ("google_maps" if not is_distance_estimated else "route_estimate")
         except (ValueError, TypeError):
-            valid_distance = None
+            route_dist = None
 
-    if route is not None and valid_distance is not None:
-        distance_km = valid_distance
-        is_distance_estimated = bool(route.get("is_estimate", False) or not route.get("is_authoritative", True))
-        distance_source = str(route.get("source") or route.get("distance_source") or ("google_maps" if not is_distance_estimated else "route_estimate"))
-    else:
+    if route is None or route_dist is None:
         # P0-3: Compute genuine straight-line Haversine distance from coordinates with 1.25 winding factor.
         # ZERO arbitrary / fake distances (5.0, 8.50, 10, etc.).
         if None in (pickup_lat, pickup_lng, drop_lat, drop_lng):
@@ -534,9 +527,6 @@ def compute_packers_movers_quote(
     city_config_missing = pm_conf is None
     has_unrecognized = bool(metrics.get("requires_review", False))
     has_incomplete_rates = bool(vehicle.get("has_incomplete_rates", False))
-    survey_status: str = "SURVEY_REQUIRED"
-    estimate_notice: Optional[str] = None
-    review_reason: Optional[str] = None
 
     if (no_vehicle_available or is_empty_inventory or has_incomplete_rates) and not has_unrecognized:
         # SEVO: Incomplete rates, no vehicle, or empty inventory must NEVER produce a fake or partially free ₹0 quote.
@@ -692,7 +682,7 @@ def compute_packers_movers_quote(
                 or ("between" in relocation_type.lower() and total_cft > (survey_cft_limit * 0.75))
             )
         )
-        requires_survey = requires_volume_survey or is_distance_estimated
+        requires_survey = bool(requires_volume_survey or is_distance_estimated)
 
         if is_distance_estimated:
             survey_status = "SURVEY_REQUIRED"
@@ -765,10 +755,6 @@ def compute_packers_movers_quote(
                 f"Uncataloged or unconfigured items detected ({', '.join(metrics.get('unrecognized_items', []))}). "
                 "Manual review or survey required before final pricing."
             )
-            review_reason = estimate_notice
-        else:
-            survey_status = "MANUAL_REVIEW_REQUIRED"
-            estimate_notice = "Manual review or pre-move survey required before final pricing."
             review_reason = estimate_notice
 
     # SEVO Part K: Differentiate Instant Bookable Price Lock vs Survey Estimate
@@ -880,8 +866,8 @@ def compute_packers_movers_quote(
         f"{vehicle.get('tier_id')}:{city.lower()}:"
         f"{round(float(pickup_lat), 5)},{round(float(pickup_lng), 5)}->"
         f"{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}:"
-        f"{canonical_inv_str}:{packing_clean}:{dismantling_required}:{unpacking_required}:"
-        f"{pickup_floor}:{pickup_has_lift}:{drop_floor}:{drop_has_lift}:"
+        f"{canonical_inv_str}:{packing_clean}:{bool(dismantling_required)}:{bool(unpacking_required)}:"
+        f"{int(pickup_floor)}:{bool(pickup_has_lift)}:{int(drop_floor)}:{bool(drop_has_lift)}:"
         f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}"
     )
     quote_hash = hashlib.sha256(raw_quote_str.encode("utf-8")).hexdigest()[:24]
@@ -902,13 +888,13 @@ def compute_packers_movers_quote(
         "total_cft": total_cft,
         "total_weight_kg": total_weight,
         "packing_tier": packing_clean,
-        "dismantling_required": dismantling_required,
-        "unpacking_required": unpacking_required,
-        "pickup_floor": pickup_floor,
-        "pickup_has_lift": pickup_has_lift,
-        "drop_floor": drop_floor,
-        "drop_has_lift": drop_has_lift,
-        "relocation_type": relocation_type,
+        "dismantling_required": bool(dismantling_required),
+        "unpacking_required": bool(unpacking_required),
+        "pickup_floor": int(pickup_floor),
+        "pickup_has_lift": bool(pickup_has_lift),
+        "drop_floor": int(drop_floor),
+        "drop_has_lift": bool(drop_has_lift),
+        "relocation_type": str(relocation_type),
         "distance_km": str(distance_km),
         "subtotal": str(subtotal) if subtotal is not None else None,
         "total": str(total) if total is not None else None,
@@ -927,7 +913,7 @@ def compute_packers_movers_quote(
         "tier_id": vehicle.get("tier_id"),
         "capacity_exceeded": capacity_exceeded,
         "requires_survey": requires_survey,
-        "requires_review": has_unrecognized or is_empty_inventory,
+        "requires_review": bool(has_unrecognized or is_empty_inventory),
         "survey_status": survey_status,
         "is_authoritative": is_authoritative,
         "is_estimate": is_estimate,
@@ -987,11 +973,11 @@ def compute_packers_movers_quote(
         },
         # Floors & Access
         "access": {
-            "pickup_floor": pickup_floor,
-            "pickup_has_lift": pickup_has_lift,
+            "pickup_floor": int(pickup_floor),
+            "pickup_has_lift": bool(pickup_has_lift),
             "pickup_floor_charge": str(pickup_floor_charge) if pickup_floor_charge is not None else None,
-            "drop_floor": drop_floor,
-            "drop_has_lift": drop_has_lift,
+            "drop_floor": int(drop_floor),
+            "drop_has_lift": bool(drop_has_lift),
             "drop_floor_charge": str(drop_floor_charge) if drop_floor_charge is not None else None,
             "rate_per_floor_block": str(rate_per_floor_block) if rate_per_floor_block is not None else None,
         },
@@ -1007,9 +993,9 @@ def compute_packers_movers_quote(
             "base_labor_charge": str(base_labor) if base_labor is not None else None,
             "floor_labor_charge": str(floor_labor_total) if floor_labor_total is not None else None,
             "labor_total": str(total_labor) if total_labor is not None else None,
-            "dismantling_required": dismantling_required,
+            "dismantling_required": bool(dismantling_required),
             "dismantling_charge": str(dismantle_total) if dismantle_total is not None else None,
-            "unpacking_required": unpacking_required,
+            "unpacking_required": bool(unpacking_required),
             "unpacking_charge": str(unpacking_charge) if unpacking_charge is not None else None,
             "subtotal": str(subtotal) if subtotal is not None else None,
             "gst_rate": f"{int(gst_percentage * 100)}%" if gst_percentage is not None else None,
@@ -1034,13 +1020,13 @@ def compute_packers_movers_quote(
     cached_data["inventory_str"] = canonical_inv_str
     cached_data["total_weight_kg"] = total_weight
     cached_data["packing_tier"] = packing_clean
-    cached_data["dismantling_required"] = dismantling_required
-    cached_data["unpacking_required"] = unpacking_required
-    cached_data["pickup_floor"] = pickup_floor
-    cached_data["pickup_has_lift"] = pickup_has_lift
-    cached_data["drop_floor"] = drop_floor
-    cached_data["drop_has_lift"] = drop_has_lift
-    cached_data["relocation_type"] = relocation_type
+    cached_data["dismantling_required"] = bool(dismantling_required)
+    cached_data["unpacking_required"] = bool(unpacking_required)
+    cached_data["pickup_floor"] = int(pickup_floor)
+    cached_data["pickup_has_lift"] = bool(pickup_has_lift)
+    cached_data["drop_floor"] = int(drop_floor)
+    cached_data["drop_has_lift"] = bool(drop_has_lift)
+    cached_data["relocation_type"] = str(relocation_type)
     cached_data["total"] = str(total) if total is not None else None
     cached_data["valid_until"] = valid_until.isoformat()
     cached_data["item_snapshots"] = item_snapshots
@@ -1065,14 +1051,6 @@ def verify_packers_movers_quote(
     """
     if not quote_id:
         return False, None, "Missing quote ID."
-
-    if ":" in quote_id and len(quote_id) > 50:
-        try:
-            unpacked = signing.loads(quote_id)
-            if isinstance(unpacked, dict) and unpacked.get("quote_id"):
-                quote_id = unpacked["quote_id"]
-        except Exception:
-            pass
 
     cache_key = f"pm_quote_{quote_id}"
     cached = cache.get(cache_key)

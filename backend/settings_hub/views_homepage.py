@@ -9,9 +9,7 @@ from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from typing import cast, Any
 from utils.supabase_storage import SupabaseStorageService
-from utils.image_optimizer import ImageOptimizer, ImageOptimizationError
 from accounts.permissions import IsAdminRole, RequireModuleAccess
 from .models import HomePageConfig, HomePageMedia
 
@@ -187,9 +185,9 @@ class HomePageConfigAPIView(APIView):
                         "titleSuffix": "& Vendors",
                         "subtitle": "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
                         "ctaText": "Join as a Professional",
-                        "ctaUrl": "https://vendor.sevo.co.in",
+                        "ctaUrl": "https://calservices-vendor.vercel.app",
                         "learnMoreText": "Learn more",
-                        "learnMoreUrl": "https://vendor.sevo.co.in",
+                        "learnMoreUrl": "https://calservices-vendor.vercel.app",
                         "image": "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
                         "features": [
                             {"id": "vf-1", "icon": "📅", "label": "Flexible Timings"},
@@ -355,7 +353,7 @@ class HomePageConfigAPIView(APIView):
 
             old_unreferenced_ids = []
 
-            with cast(Any, transaction.atomic()):
+            with transaction.atomic():
                 cfg, created = HomePageConfig.objects.get_or_create(key="default")
                 cfg.config_data = new_config_data
                 cfg.updated_by = user
@@ -445,6 +443,7 @@ class HomePageImageUploadAPIView(APIView):
 
         # 1. Optimize and WebP compress <= 500KB with under-100KB preservation
         try:
+            from utils.image_optimizer import ImageOptimizer, ImageOptimizationError
             profile = "homepage" if section in ("hero", "categories", "general") else "catalog"
             optimized = ImageOptimizer.optimize(file_obj, profile_name=profile)
         except ImageOptimizationError as opt_err:
@@ -486,7 +485,7 @@ class HomePageImageUploadAPIView(APIView):
 
         # 5. Database Record Creation with transaction rollback safety
         try:
-            with cast(Any, transaction.atomic()):
+            with transaction.atomic():
                 media = HomePageMedia.objects.create(
                     section=section,
                     original_name=file_obj.name,
@@ -578,7 +577,7 @@ class HomePageImageUploadAPIView(APIView):
                 logger.warning(f"Failed to delete old homepage media '{old_image_path}': {del_err}")
 
         try:
-            with cast(Any, transaction.atomic()):
+            with transaction.atomic():
                 media = HomePageMedia.objects.create(
                     section=section,
                     original_name=file_obj.name,

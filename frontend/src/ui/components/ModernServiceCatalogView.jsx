@@ -14,18 +14,12 @@ import { apiRequest } from "../../api/client.js"
 import { useEditMode } from "../../state/editMode/useEditMode.js"
 import { EditableText, EditableImage } from "./SuperAdminEditControls.jsx"
 import { getCustomerSelectedAddress } from "../../utils/customerLocationStorage.js"
-import { CategoryServiceModal } from "./CategoryServiceModal.jsx"
 
 // Feature icons map for dynamic icon resolution
 const SERVICE_ICON_MAP = {
   ac: Wrench,
   hvac: Wrench,
   heating: Wrench,
-  geyser: Wrench,
-  heater: Wrench,
-  purifier: Sparkles,
-  ro: Sparkles,
-  water: Sparkles,
   cleaning: Sparkles,
   fridge: Wrench,
   refrigerator: Wrench,
@@ -38,14 +32,6 @@ const SERVICE_ICON_MAP = {
   wash: Sparkles,
   micro: Wrench,
   tv: Layers,
-  room: Home,
-  sofa: Sparkles,
-  carpet: Sparkles,
-  curtain: Sparkles,
-  bath: Sparkles,
-  kitchen: Sparkles,
-  chimney: Wrench,
-  drain: Wrench,
 }
 
 function resolveServiceIcon(name = "") {
@@ -54,10 +40,6 @@ function resolveServiceIcon(name = "") {
     if (n.includes(k)) return Icon
   }
   return Wrench
-}
-
-function getServiceDefaultVariants() {
-  return []
 }
 
 export function ModernServiceCatalogView({
@@ -80,7 +62,6 @@ export function ModernServiceCatalogView({
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [detailsPackage, setDetailsPackage] = useState(null) // package currently shown in the "See details" modal
-  const [isChangeServiceModalOpen, setIsChangeServiceModalOpen] = useState(false)
 
   // categoryProp (from LandingPage's URL-based lookup against the old static
   // categoriesData.js list) almost never matches a real category for
@@ -174,7 +155,6 @@ export function ModernServiceCatalogView({
     }
   }
 
-
   // Multi-item cart: any number of units of any package, across any service
   // or category, can be queued up before checkout -- replaces the old
   // single "selectedPackage = the one thing being booked" model. Uses the
@@ -230,7 +210,6 @@ export function ModernServiceCatalogView({
         const consultItem = {
           id: `pkg-${pkg.id}`,
           db_id: pkg.id,
-          package_id: pkg.id,
           name: `${pkg.name} (Site Consultation)`,
           price: consultationFeeDetails.fee,
           platform_fee: consultationFeeDetails.convenienceFee,
@@ -255,7 +234,6 @@ export function ModernServiceCatalogView({
       const item = {
         id: `pkg-${pkg.id}`,
         db_id: pkg.id,
-        package_id: pkg.id,
         name: pkg.name,
         price: unitPrice,
         platform_fee: parseFloat(pkg.platform_fee) || 29,
@@ -290,51 +268,6 @@ export function ModernServiceCatalogView({
     })
   }
 
-  // Smart route forwarding for Goods & Transport packages to dedicated booking flows
-  const handleGoodsTransportProceed = (pkg) => {
-    const pkgName = (pkg?.name || "").toLowerCase()
-    const pkgSlug = (pkg?.slug || "").toLowerCase()
-    const subName = (activeSubService?.name || "").toLowerCase()
-    const subSlug = (activeSubService?.slug || "").toLowerCase()
-
-    if (
-      subSlug.includes("2_wheeler") ||
-      subSlug.includes("two_wheeler") ||
-      subName.includes("2-wheeler") ||
-      subName.includes("bike") ||
-      pkgSlug.includes("bike") ||
-      pkgSlug.includes("scooter") ||
-      pkgName.includes("bike") ||
-      pkgName.includes("scooter")
-    ) {
-      navigate("/two-wheelers/hosur")
-      return
-    }
-
-    if (
-      subSlug.includes("packers") ||
-      subName.includes("packers") ||
-      pkgSlug.includes("shifting") ||
-      pkgSlug.includes("packers") ||
-      pkgName.includes("shifting") ||
-      pkgName.includes("packers")
-    ) {
-      navigate("/packers-and-movers/hosur")
-      return
-    }
-
-    // Default to Mini Truck Hosur specialized booking page
-    navigate("/trucks/hosur")
-  }
-
-  const getLogisticsButtonText = (pkg) => {
-    const pkgName = (pkg?.name || "").toLowerCase()
-    const subName = (activeSubService?.name || "").toLowerCase()
-    if (subName.includes("packers") || pkgName.includes("shifting")) return "Book Shifting"
-    if (subName.includes("2-wheeler") || pkgName.includes("bike") || pkgName.includes("scooter")) return "Book Delivery"
-    return "Book Vehicle"
-  }
-
   const cartTotalQty = cartItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
   const cartSubtotal = cartItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
   // For consultation categories, convenience fee and GST apply only when beyond 15 km
@@ -359,10 +292,6 @@ export function ModernServiceCatalogView({
     appliance: "ac_appliance",
     appliance_repair: "ac_appliance",
     ac_appliance: "ac_appliance",
-    geyser: "ac_appliance",
-    water_heater: "ac_appliance",
-    water_purifier: "ac_appliance",
-    ro: "ac_appliance",
     cleaning: "home_pest_control",
     home_cleaning: "home_pest_control",
     pest_control: "home_pest_control",
@@ -372,18 +301,9 @@ export function ModernServiceCatalogView({
     sofa_cleaning: "home_pest_control",
     kitchen_cleaning: "home_pest_control",
     bathroom_cleaning: "home_pest_control",
-    room_care: "home_pest_control",
-    room_care_mini_services: "home_pest_control",
-    mini_services: "home_pest_control",
-    balcony_cleaning: "home_pest_control",
-    window_cleaning: "home_pest_control",
-    plumbing: "electrician_plumbing_carpentry",
-    electrical: "electrician_plumbing_carpentry",
-    carpentry: "electrician_plumbing_carpentry",
-    electrician: "electrician_plumbing_carpentry",
-    plumber: "electrician_plumbing_carpentry",
-    carpenter: "electrician_plumbing_carpentry",
-    electrician_plumbing_carpentry: "electrician_plumbing_carpentry",
+    plumbing: "home_pest_control",
+    electrical: "home_pest_control",
+    carpentry: "home_pest_control",
     painting: "paintings",
     paintings: "paintings",
     paint: "paintings",
@@ -548,8 +468,8 @@ export function ModernServiceCatalogView({
         setServices(matchedSubs)
         setPackages(allPkgs)
 
-        // Set initial active sub-service, respecting url subtab or service if provided
-        const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab") || searchParams.get("service")
+        // Set initial active sub-service, respecting url subtab if provided
+        const urlSubTab = searchParams.get("subtab") || searchParams.get("subTab")
         let initialSub = initialSubFromCatKey || matchedSubs[0]
         if (urlSubTab) {
           const found = matchedSubs.find(s =>
@@ -610,124 +530,17 @@ export function ModernServiceCatalogView({
     )
   }, [activeSubService, packages, category?.id, category?.slug])
 
-  // Available Service Groups / Variants for the active service (Admin DB tabs OR contextual live variants)
-  const serviceGroups = useMemo(() => {
-    const rawTabs = activeSubService?.customization?.subtabs
-    if (Array.isArray(rawTabs) && rawTabs.length > 1) {
-      return rawTabs.filter(t => t && t.enabled !== false)
-    }
-    return getServiceDefaultVariants(activeSubService?.name || "")
-  }, [activeSubService])
-
-  // Active Service Group key
-  const urlGroup = searchParams.get("group") || searchParams.get("serviceGroup")
-  const [activeGroupKey, setActiveGroupKey] = useState(urlGroup || "all")
-
-  // Keep activeGroupKey in sync with active service and url
+  // 3. Keep selectedPackage in sync with active sub-service
   useEffect(() => {
-    if (serviceGroups.length > 0) {
-      if (urlGroup && (urlGroup === "all" || serviceGroups.some(g => g.id === urlGroup))) {
-        setActiveGroupKey(urlGroup)
-      } else {
-        setActiveGroupKey("all")
-      }
-    } else {
-      setActiveGroupKey("all")
-    }
-  }, [serviceGroups, urlGroup, activeSubService?.id])
-
-  // Filtered packages by active service group / variant
-  const displayedPackages = useMemo(() => {
-    if (!serviceGroups || serviceGroups.length === 0 || activeGroupKey === "all") {
-      return currentServicePackages
-    }
-    // 1. Direct match on sub_service_key
-    const keyMatches = currentServicePackages.filter(p => p.sub_service_key === activeGroupKey)
-    if (keyMatches.length > 0) return keyMatches
-
-    // 2. Keyword match against package name, tag or description
-    const activeGroupObj = serviceGroups.find(g => g.id === activeGroupKey)
-    if (activeGroupObj) {
-      const keywords = (activeGroupObj.keywords || [activeGroupObj.label || ""]).map(k => k.toLowerCase())
-      const kwMatches = currentServicePackages.filter(p => {
-        const text = `${p.name} ${p.tag || ""} ${p.description || ""} ${p.short_description || ""}`.toLowerCase()
-        return keywords.some(kw => text.includes(kw))
-      })
-      if (kwMatches.length > 0) return kwMatches
-    }
-
-    return currentServicePackages
-  }, [currentServicePackages, serviceGroups, activeGroupKey])
-
-  const handleSelectServiceGroup = (groupId) => {
-    setActiveGroupKey(groupId)
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (groupId && groupId !== "all") {
-        next.set("group", groupId)
-      } else {
-        next.delete("group")
-      }
-      return next
-    }, { replace: true })
-  }
-
-  // Group packages into scannable sections (e.g. Full Apartment, Bungalow / Duplex, Partial Cleaning)
-  const packageSections = useMemo(() => {
-    if (isGoodsTransportCategory || !serviceGroups || serviceGroups.length <= 1) {
-      return [{ id: "all", label: "", description: "", packages: displayedPackages }]
-    }
-
-    // Always organize all packages into their respective variant section headings!
-    const sections = []
-    const assignedIds = new Set()
-
-    serviceGroups.forEach(grp => {
-      const keywords = (grp.keywords || [grp.label || ""]).map(k => k.toLowerCase())
-      const grpPkgs = currentServicePackages.filter(p => {
-        if (assignedIds.has(p.id)) return false
-        if (p.sub_service_key === grp.id) return true
-        const text = `${p.name} ${p.tag || ""} ${p.description || ""} ${p.short_description || ""}`.toLowerCase()
-        return keywords.some(kw => text.includes(kw))
-      })
-
-      if (grpPkgs.length > 0) {
-        grpPkgs.forEach(p => assignedIds.add(p.id))
-        sections.push({
-          id: grp.id,
-          label: grp.label,
-          description: grp.description,
-          packages: grpPkgs
-        })
-      }
-    })
-
-    const remaining = currentServicePackages.filter(p => !assignedIds.has(p.id))
-    if (remaining.length > 0) {
-      sections.push({
-        id: "other",
-        label: sections.length > 0 ? "Other Options" : "",
-        description: "",
-        packages: remaining
-      })
-    }
-
-    return sections.length > 0 ? sections : [{ id: "all", label: "", description: "", packages: currentServicePackages }]
-  }, [currentServicePackages, displayedPackages, serviceGroups, isGoodsTransportCategory])
-
-  // 3. Keep selectedPackage in sync with displayed packages
-  useEffect(() => {
-    if (displayedPackages.length > 0) {
-      const alreadySelected = displayedPackages.find(p => p.id === selectedPackage?.id)
+    if (currentServicePackages.length > 0) {
+      const alreadySelected = currentServicePackages.find(p => p.id === selectedPackage?.id)
       if (!alreadySelected) {
-        setSelectedPackage(displayedPackages[0])
+        setSelectedPackage(currentServicePackages[0])
       }
-    } else if (currentServicePackages.length > 0) {
-      setSelectedPackage(currentServicePackages[0])
     } else {
       setSelectedPackage(null)
     }
-  }, [displayedPackages, currentServicePackages])
+  }, [currentServicePackages])
 
   // "What's Included" / "What You Need to Keep Ready" moved out of the
   // always-visible page body and into a per-package "See details" modal
@@ -759,34 +572,6 @@ export function ModernServiceCatalogView({
     ]
   }
 
-  const getExcludesChecklist = (pkg) => {
-    if (Array.isArray(pkg?.excludes) && pkg.excludes.length > 0) {
-      return pkg.excludes
-    }
-    return [
-      "Spare parts, replacements & consumable components (billed as per rate card)",
-      "Major piping, external scaffolding or civil masonry modifications",
-      "Refrigerant gas top-up beyond basic diagnostic leak testing",
-      "Repairs for pre-existing external physical casing damage"
-    ]
-  }
-
-  const getPossibleCharges = (pkg) => {
-    return [
-      { item: "Spare parts / hardware replacement", fee: "As per SEVO standard rate card", note: "Approved with customer before installing" },
-      { item: "Refrigerant gas top-up (if required)", fee: "Market transparent unit rate", note: "Only charged if pressure test requires it" },
-      { item: "Height scaffolding above 10ft", fee: "₹150 height safety support", note: "Optional if customer provides ladder" },
-    ]
-  }
-
-  const getWarrantyDetails = (pkg) => {
-    return {
-      duration: "30-Day Doorstep Guarantee",
-      coverage: "Full service warranty covering service workmanship and diagnostic accuracy",
-      revisit: "Free revisit within 30 days if the exact issue recurs"
-    }
-  }
-
   // Handle proceed to schedule -- checks out every item queued in the cart
   // (any quantity, any package, any service/category), not just one.
   const handleProceedToSchedule = () => {
@@ -799,111 +584,300 @@ export function ModernServiceCatalogView({
 
   return (
     <div className="w-full min-h-screen bg-[#F8FAF9] text-slate-800 pb-28 lg:pb-16">
-      {/* ── 1. Clean Category Navigation & Trust Header ── */}
+      {/* ── 1. Top Breadcrumb & Category Hero Banner ── */}
       <div className="bg-white border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Back button + Title + Subservice breadcrumb */}
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer shrink-0"
-                aria-label="Back to home"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>All Services</span>
-              </button>
-              <span className="text-slate-300 font-bold hidden sm:inline">/</span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
-                    {category?.name || "Professional Services"}
-                  </h1>
-                  {activeSubService && (
-                    <>
-                      <span className="text-slate-300 font-bold hidden sm:inline">•</span>
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg truncate hidden sm:inline">
-                        {activeSubService.name}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-6">
+          {/* Breadcrumb - Compact on mobile */}
+          <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium mb-1.5 sm:mb-3 overflow-x-auto scrollbar-none whitespace-nowrap">
+            <button
+              type="button"
+              onClick={onClose}
+              className="hover:text-emerald-700 transition-colors shrink-0"
+            >
+              Home
+            </button>
+            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+            <span className="hover:text-emerald-700 transition-colors shrink-0">Services</span>
+            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-900 font-semibold truncate">{category?.name || "Services"}</span>
+          </nav>
+
+          {/* Hero Banner: Blinkit-style compact, responsive, fit-to-screen */}
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white border border-emerald-100/70 shadow-xs">
+            <div className="relative flex flex-col md:flex-row items-stretch">
+              <div className="flex-1 min-w-0 p-3 sm:p-5 lg:p-7 flex flex-col justify-center gap-1 sm:gap-3">
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                  {category?.name || "Professional Services"}
+                </h1>
+                <p className="text-[11px] sm:text-sm text-slate-600 font-normal leading-snug sm:leading-relaxed max-w-lg line-clamp-1 sm:line-clamp-2">
+                  {category?.desc || category?.description || "Professional care for a cleaner, healthier and more comfortable space."}
+                </p>
+
+                {/* Trust Badge Strip: Blinkit-style sleek horizontal micro-pills on mobile, grid on desktop */}
+                <div className="flex items-center gap-1.5 sm:gap-6 pt-1 sm:pt-2 overflow-x-auto scrollbar-none">
+                  {[
+                    { icon: ShieldCheck, label: "Verified Pros", label1: "Verified", label2: "Technicians" },
+                    { icon: Clock, label: "On-time", label1: "On-time", label2: "Service" },
+                    { icon: Wrench, label: "Genuine Spares", label1: "Genuine", label2: "Spare Parts" },
+                    { icon: Tag, label: "Transparent Price", label1: "Transparent", label2: "Pricing" },
+                  ].map((f, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-1 sm:gap-2 px-2 py-0.5 sm:px-0 sm:py-0 rounded-full sm:rounded-none bg-white/90 sm:bg-transparent border border-emerald-100/80 sm:border-0 shrink-0 shadow-2xs sm:shadow-none"
+                    >
+                      <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-emerald-50 sm:bg-white sm:shadow-xs sm:border sm:border-emerald-100 flex items-center justify-center shrink-0">
+                        <f.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-600" />
+                      </div>
+                      <span className="sm:hidden text-[10px] font-bold text-slate-700 whitespace-nowrap leading-none">
+                        {f.label}
                       </span>
-                    </>
-                  )}
+                      <div className="hidden sm:block leading-tight">
+                        <div className="text-[11px] font-black text-slate-800">{f.label1}</div>
+                        <div className="text-[10px] font-medium text-slate-500">{f.label2}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
 
-            {/* Right: Calm Guarantee & Change Category link */}
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>30-Day Revisit Guarantee</span>
-              </span>
-              <span className="text-slate-200 hidden sm:inline">|</span>
-              <button
-                type="button"
-                onClick={() => setIsChangeServiceModalOpen(true)}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
-              >
-                Change Service
-              </button>
+              {/* Hero Photo + Tagline */}
+              <div className="relative hidden md:block md:w-[42%] shrink-0">
+                {category?.image ? (
+                  <img
+                    src={resolveImageUrl(category.image)}
+                    alt={category?.name || "Service banner"}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = "none" }}
+                  />
+                ) : (
+                  <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-emerald-100/70 to-teal-100/70 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-emerald-600/70" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-emerald-50/90" />
+                <div className="absolute top-6 left-6 max-w-[180px]">
+                  <div className="text-lg font-black text-slate-900 leading-tight drop-shadow-sm">
+                    Trusted Care,
+                  </div>
+                  <div className="text-lg font-black text-emerald-700 leading-tight drop-shadow-sm">
+                    Happier Living
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
-        {/* ── Horizontal Sub-Service Switcher (Clean, intuitive, zero-admin feel) ── */}
-        {services.length > 0 && !isGoodsTransportCategory && (
-          <div className="w-full overflow-x-auto scrollbar-none py-1 flex items-center gap-2 pb-3 mb-5 border-b border-slate-200/80">
-            {services.map(sub => {
-              const isSelected = activeSubService?.id === sub.id
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveSubService(sub)
-                    setSearchParams((prev) => {
-                      const next = new URLSearchParams(prev)
-                      next.set("subtab", sub.name)
-                      next.set("subTab", sub.name)
-                      return next
-                    }, { replace: true })
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold shrink-0 transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-emerald-700 border-emerald-700 text-white shadow-xs font-black ring-2 ring-emerald-700/20"
-                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  {sub.image && (
-                    <img
-                      src={resolveImageUrl(sub.image)}
-                      alt={sub.name}
-                      className="w-4 h-4 object-contain rounded-full bg-white/80"
-                    />
-                  )}
-                  <span>{sub.name}</span>
-                </button>
-              )
-            })}
-            {isAcApplianceCategory && (
-              <button
-                type="button"
-                onClick={() => navigate("/ac-inspection")}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs font-bold shrink-0 shadow-xs cursor-pointer transition-colors"
-              >
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Need Diagnosis? Book Inspection</span>
-              </button>
-            )}
-          </div>
-        )}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-6">
+        {/* ── 2/3. Main Layout: vertical Services sidebar + content + Booking Summary ── */}
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 items-start">
+          {/* ════ SERVICES SUBTABS (Mobile Horizontal Bar + Desktop Vertical Sidebar) ════ */}
+          {services.length > 0 && !isGoodsTransportCategory && (
+            <>
+              {/* Mobile Horizontal Subservice Pill Tab Bar (Sticky on mobile, Blinkit style) */}
+              <div className="lg:hidden w-full overflow-x-auto scrollbar-none py-1.5 sm:py-2 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20">
+                {services.map(sub => {
+                  const isSelected = activeSubService?.id === sub.id
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSubService(sub)
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev)
+                          next.set("subtab", sub.name)
+                          next.set("subTab", sub.name)
+                          return next
+                        }, { replace: true })
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs font-black"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {sub.image && (
+                        <img
+                          src={resolveImageUrl(sub.image)}
+                          alt={sub.name}
+                          className="w-4 h-4 object-contain rounded-full bg-white/80"
+                        />
+                      )}
+                      <span>{sub.name}</span>
+                    </button>
+                  )
+                })}
+                {isAcApplianceCategory && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/ac-inspection")}
+                    className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shrink-0 shadow-xs cursor-pointer"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Book Inspection</span>
+                  </button>
+                )}
+              </div>
 
-        {/* ── Main Layout: Centered Packages or Packages + Cart Summary ── */}
-        <div className={`w-full items-start ${cartItems.length > 0 ? "grid grid-cols-1 lg:grid-cols-12 gap-8" : "max-w-4xl mx-auto"}`}>
-          {/* ════ PACKAGES COLUMN ════ */}
-          <div className={cartItems.length > 0 ? "lg:col-span-8 space-y-4" : "w-full space-y-4"}>
+              {/* Desktop Vertical Services Sidebar */}
+              <div className="hidden lg:flex lg:w-[240px] shrink-0 flex-col gap-1 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 pb-1">
+                  Services
+                </h3>
+                {services.map(sub => {
+                  const isSelected = activeSubService?.id === sub.id
+                  const IconComp = resolveServiceIcon(sub.name)
+
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSubService(sub)
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev)
+                          next.set("subtab", sub.name)
+                          next.set("subTab", sub.name)
+                          return next
+                        }, { replace: true })
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
+                        isSelected
+                          ? "bg-emerald-50/90 border-emerald-600 shadow-xs"
+                          : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? "bg-white text-emerald-700 shadow-xs border border-emerald-200" : "bg-slate-50 text-slate-600"
+                      }`}>
+                        {sub.image ? (
+                          <img
+                            src={resolveImageUrl(sub.image)}
+                            alt={sub.name}
+                            className="w-6 h-6 object-contain"
+                          />
+                        ) : (
+                          <IconComp className="w-5 h-5" />
+                        )}
+                      </div>
+                      <span className={`flex-1 min-w-0 text-xs leading-snug ${
+                        isSelected ? "font-black text-emerald-900" : "font-bold text-slate-700"
+                      }`}>
+                        {sub.name}
+                      </span>
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                    </button>
+                  )
+                })}
+
+                {/* Special, not-from-admin "AC Inspection / Estimation" entry */}
+                {isAcApplianceCategory && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/ac-inspection")}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition-all cursor-pointer text-left"
+                  >
+                    <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white text-amber-600 border border-amber-200 shadow-xs">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-xs font-black text-amber-900 leading-snug">
+                        Not Sure? Book Inspection
+                      </span>
+                      <span className="block text-[10px] font-semibold text-amber-700">
+                        Certified diagnostic visit
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ════ CONTENT + BOOKING SUMMARY ════ */}
+          <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* ════ LEFT COLUMN (~68% width / 8 cols) ════ */}
+          <div className="lg:col-span-8 space-y-3 sm:space-y-6">
+            {/* Active Service Spotlight Card -- Blinkit-style compact, fit-to-screen */}
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs min-h-[110px] sm:min-h-[220px] lg:min-h-[280px] flex items-end">
+              <img
+                key={selectedPackage?.image || activeSubService?.image || category?.image || "spotlight"}
+                src={resolveImageUrl(
+                  selectedPackage?.image || activeSubService?.image || category?.image,
+                  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+                )}
+                alt={selectedPackage?.name || "Service hero"}
+                className="absolute inset-0 w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+                }}
+              />
+              {/* Dark scrim */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
+
+              {/* Floating highlight badge */}
+              <div className="hidden sm:flex absolute top-4 right-4 bg-white/95 backdrop-blur-xs rounded-xl px-3 py-1.5 shadow-md border border-slate-200/80 items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                </div>
+                <div className="text-left">
+                  <div className="text-[10px] font-black text-slate-900 leading-tight">
+                    {selectedPackage?.tag || "Top Rated Care"}
+                  </div>
+                  <div className="text-[9px] font-semibold text-emerald-700 leading-tight">
+                    Guaranteed Quality
+                  </div>
+                </div>
+              </div>
+
+              {/* Text content, overlaid on the image */}
+              <div className="relative z-10 p-3 sm:p-5 lg:p-7 w-full space-y-1 sm:space-y-2.5">
+                {/* Category / Sub-service Tag */}
+                <div className="flex items-center gap-1.5 text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-300">
+                  <span className="w-1 h-2.5 sm:h-3.5 bg-emerald-400 rounded-full" />
+                  <span>{activeSubService?.name || category?.name} PACKAGES</span>
+                </div>
+
+                {/* Spotlight Title */}
+                <h2 className="text-base sm:text-2xl lg:text-3xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
+                  {selectedPackage?.name || activeSubService?.name}
+                </h2>
+
+                {/* Spotlight Description: hidden on mobile to avoid redundant repetition & save screen height */}
+                {selectedPackage?.description && selectedPackage.description.toLowerCase() !== (selectedPackage.name || "").toLowerCase() && (
+                  <p className="hidden sm:block text-xs sm:text-sm text-white/85 leading-relaxed max-w-xl line-clamp-1 sm:line-clamp-2">
+                    {selectedPackage.description}
+                  </p>
+                )}
+
+                {/* 4 Feature Badges: Blinkit-style compact inline micro-pills on mobile, grid on desktop */}
+                <div className="flex sm:grid sm:grid-cols-4 items-center gap-1.5 sm:gap-2 pt-1 sm:pt-2.5 border-t border-white/15 overflow-x-auto scrollbar-none max-w-xl">
+                  {[
+                    { icon: Shield, title: "Certified", sub: "Technicians", short: "Certified Pros" },
+                    { icon: Clock, title: "Quick &", sub: "Hassle-free", short: "Quick & Easy" },
+                    { icon: Wrench, title: "Genuine", sub: "Spares & Tools", short: "Genuine Tools" },
+                    { icon: ShieldCheck, title: "Quality", sub: "Assurance", short: "Quality Assured" },
+                  ].map((b, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center sm:flex-col sm:items-center sm:text-center gap-1 sm:gap-0 px-2 py-0.5 sm:p-2 rounded-full sm:rounded-xl bg-white/10 backdrop-blur-xs border border-white/15 shrink-0"
+                    >
+                      <b.icon className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-300 sm:mb-1 shrink-0" />
+                      <span className="sm:hidden text-[9px] font-bold text-white whitespace-nowrap leading-none">
+                        {b.short}
+                      </span>
+                      <div className="hidden sm:block leading-tight">
+                        <div className="text-[10px] font-black text-white leading-tight">{b.title}</div>
+                        <div className="text-[9px] text-white/70 font-medium">{b.sub}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             {/* Goods & Transport horizontal service pills -- replaces the
                 vertical Services sidebar (hidden above for this category)
@@ -954,7 +928,7 @@ export function ModernServiceCatalogView({
                     </p>
                   )}
                 </div>
-                {displayedPackages.length > 1 && (
+                {currentServicePackages.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setIsCompareModalOpen(true)}
@@ -966,33 +940,6 @@ export function ModernServiceCatalogView({
                 )}
               </div>
 
-              {/* Quick Jump Bar -- only rendered when there are 3 or more distinct sections, acting as smooth anchor jumps without hiding packages */}
-              {!isGoodsTransportCategory && packageSections.length > 2 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
-                  {packageSections.map(section => {
-                    if (!section.label) return null
-                    return (
-                      <button
-                        key={section.id}
-                        type="button"
-                        onClick={() => {
-                          const el = document.getElementById(`section-${section.id}`)
-                          if (el) {
-                            el.scrollIntoView({ behavior: "smooth", block: "start" })
-                          }
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap border bg-white border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-700 shrink-0 shadow-2xs hover:bg-emerald-50/50"
-                      >
-                        <span>{section.label}</span>
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
-                          {section.packages.length}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
               {/* Package List. Goods & Transport gets a "vehicle card" grid
                   (image up top, capacity/spec bullets, Starting-from price,
                   Know More + Proceed to Booking) matching the look of the
@@ -1000,29 +947,11 @@ export function ModernServiceCatalogView({
                   category keeps the horizontal-row layout. Same underlying
                   data/handlers (getCartQty/addToCart/setDetailsPackage/etc)
                   either way, just a different skin. */}
-              {/* Package Sections -- groups packages under meaningful variant sections */}
-              <div className="space-y-6">
-                {packageSections.map(section => (
-                  <div key={section.id} id={`section-${section.id}`} className="space-y-3">
-                    {section.label && (
-                      <div className="pt-2 pb-1 border-b border-slate-100 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                        <h4 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span>{section.label}</span>
-                        </h4>
-                        {section.description && (
-                          <span className="text-xs text-slate-500 font-medium">
-                            {section.description}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className={isGoodsTransportCategory
-                      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                      : "flex flex-col gap-3.5"
-                    }>
-                      {section.packages.map(pkg => {
+              <div className={isGoodsTransportCategory
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                : "flex flex-col gap-3.5"
+              }>
+                {currentServicePackages.map(pkg => {
                   const qty = getCartQty(pkg)
                   const isSelected = qty > 0
 
@@ -1074,7 +1003,7 @@ export function ModernServiceCatalogView({
                               className="w-full h-full object-contain p-2"
                               onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = "/assets/cat_goods_transport.jpg";
+                                e.target.src = "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=400&q=80&fit=crop";
                               }}
                             />
                           ) : (
@@ -1122,21 +1051,6 @@ export function ModernServiceCatalogView({
                           )}
                         </div>
 
-                        {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
-                          <div className="space-y-1 mt-2.5">
-                            {pkg.includes.slice(0, 2).map((inc, i) => {
-                              const text = typeof inc === "object" ? (inc.text || inc.name || "") : String(inc || "")
-                              if (!text) return null
-                              return (
-                                <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-600">
-                                  <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  <span className="truncate">{text}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
                         <div className="mt-3 pt-3 border-t border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                             Starting from
@@ -1175,17 +1089,39 @@ export function ModernServiceCatalogView({
                           >
                             Know More
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleGoodsTransportProceed(pkg)
-                            }}
-                            className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <span>{getLogisticsButtonText(pkg)}</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                          {qty === 0 ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                addToCart(pkg)
+                              }}
+                              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <span>Proceed to Booking</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <div className="flex-1 flex items-center justify-between gap-2 py-1.5 px-2 rounded-xl bg-emerald-600 text-white">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); decrementCartItem(pkg) }}
+                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                aria-label="Decrease quantity"
+                              >
+                                −
+                              </button>
+                              <span className="text-xs font-black">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); incrementCartItem(pkg) }}
+                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                                aria-label="Increase quantity"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -1195,226 +1131,191 @@ export function ModernServiceCatalogView({
                     <div
                       key={pkg.id}
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`relative rounded-3xl border bg-white transition-all p-4 sm:p-5 cursor-pointer ${
+                      className={`relative rounded-2xl border-2 bg-white transition-all flex flex-col sm:flex-row gap-4 p-4 sm:p-5 cursor-pointer ${
                         isSelected
-                          ? "border-emerald-600 shadow-md ring-1 ring-emerald-500/20"
-                          : "border-slate-200/90 hover:border-slate-300 hover:shadow-xs"
+                          ? "border-emerald-600 shadow-xs ring-1 ring-emerald-500/30"
+                          : "border-slate-200/90 hover:border-slate-300 hover:shadow-2xs"
                       }`}
                     >
                       {pkg.popular && (
-                        <div className="absolute top-3 left-4 z-10 px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-2xs">
-                          Most Booked
+                        <div className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black shadow-sm">
+                          Popular
                         </div>
                       )}
 
-                      <div className="flex items-start justify-between gap-3 sm:gap-6">
-                        {/* ── LEFT COLUMN: Title, Metrics, Price, Inclusions, View details ── */}
-                        <div className="flex-1 min-w-0 space-y-1.5 pt-1">
-                          {/* Title */}
-                          <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                            {serviceEditMode && pkg.id ? (
-                              <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
-                            ) : (
-                              pkg.name
-                            )}
-                          </h4>
-
-                          {/* Metrics: Rating & Duration in a single clean line */}
-                          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                            {Boolean(pkg.rating) && (
-                              <>
-                                <span className="inline-flex items-center gap-1 font-bold text-slate-800">
-                                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                                  <span>{pkg.rating}</span>
-                                  {pkg.reviews_count ? (
-                                    <span className="text-slate-400 font-normal">
-                                      ({pkg.reviews_count})
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span>•</span>
-                              </>
-                            )}
-                            <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{pkg.duration || "Standard Service"}</span>
-                            </span>
+                      {/* Package Image */}
+                      <div className="w-full sm:w-32 h-32 sm:h-auto shrink-0 rounded-xl overflow-hidden bg-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                        {serviceEditMode && pkg.id ? (
+                          <EditableImage
+                            active={true}
+                            value={pkg.image}
+                            alt={pkg.name}
+                            assetType="services"
+                            className="w-full h-full"
+                            imgClassName="w-full h-full object-cover"
+                            onSave={(v) => handleSaveServiceField(pkg, "image", v)}
+                          />
+                        ) : pkg.image ? (
+                          <img
+                            src={resolveImageUrl(pkg.image)}
+                            alt={pkg.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop";
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                            <Wrench className="w-8 h-8 text-emerald-700" />
                           </div>
+                        )}
+                      </div>
 
-                          {/* Price Row */}
-                          <div className="flex items-baseline gap-2 pt-0.5" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                            <span className="text-base sm:text-lg font-black text-slate-900">
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <h4 className="text-sm sm:text-base font-black text-slate-900 leading-snug pr-14 sm:pr-0" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                          {serviceEditMode && pkg.id ? (
+                            <EditableText active={true} value={pkg.name} onSave={(v) => handleSaveServiceField(pkg, "name", v)} />
+                          ) : (
+                            pkg.name
+                          )}
+                        </h4>
+                        <p className="text-xs text-slate-500 font-normal line-clamp-2 leading-relaxed" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                          {serviceEditMode && pkg.id ? (
+                            <EditableText active={true} value={pkg.description} multiline onSave={(v) => handleSaveServiceField(pkg, "description", v)} />
+                          ) : (
+                            pkg.short_description || pkg.description || "Comprehensive service with certified pro execution."
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            setDetailsPackage(pkg)
+                          }}
+                          className="relative z-10 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline decoration-indigo-200 underline-offset-2 cursor-pointer"
+                        >
+                          See details
+                        </button>
+                      </div>
+
+                      {/* Price + Action */}
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:w-48 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100" onClick={(e) => serviceEditMode && e.stopPropagation()}>
+                        <div className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0.5">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-lg font-black text-slate-900">
                               {serviceEditMode && pkg.id ? (
                                 <EditableText active={true} type="number" prefix="₹" value={pkg.base_price} onSave={(v) => handleSaveServiceField(pkg, "base_price", v)} />
                               ) : (
                                 `₹${finalPrice.toLocaleString("en-IN")}`
                               )}
                             </span>
-                            {hasOffer && (
-                              <>
-                                <span className="text-xs sm:text-sm font-semibold text-slate-400 line-through">
-                                  ₹{mrp.toLocaleString("en-IN")}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
-                                  {discountPct}% OFF
-                                </span>
-                              </>
-                            )}
                             {isConsultationCategory && (
-                              <span className="text-[11px] font-bold text-slate-500">
+                              <span className="text-xs font-bold text-slate-500">
                                 / sq.ft
                               </span>
                             )}
                           </div>
-
-                          {/* 2-3 Concise Inclusions Bullets */}
-                          {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
-                            <div className="space-y-1 pt-1">
-                              {pkg.includes.slice(0, 3).map((inc, i) => {
-                                const text = typeof inc === "object" ? (inc.text || inc.name || "") : String(inc || "")
-                                if (!text) return null
-                                return (
-                                  <div key={i} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-600">
-                                    <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                                    <span className="truncate">{text}</span>
-                                  </div>
-                                )
-                              })}
+                          {isConsultationCategory ? (
+                            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">
+                              Rate Card Unit
                             </div>
-                          )}
+                          ) : hasOffer ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-slate-400 line-through">
+                                ₹{mrp.toLocaleString("en-IN")}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                                {discountPct}% OFF
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
 
-                          {/* View Details Link */}
-                          <div className="pt-1.5">
+                        {/* Quantity stepper button (unified natural UI) */}
+                        {qty === 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              addToCart(pkg)
+                            }}
+                            className="py-2 px-4 sm:w-full rounded-xl font-bold text-xs transition-colors cursor-pointer whitespace-nowrap border border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                          >
+                            + Add
+                          </button>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 sm:w-full py-1.5 px-2 rounded-xl bg-emerald-600 text-white">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setDetailsPackage(pkg)
+                                decrementCartItem(pkg)
                               }}
-                              className="text-[11px] sm:text-xs font-extrabold text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                              aria-label="Decrease quantity"
                             >
-                              <span>View details &amp; inclusions</span>
-                              <ArrowRight className="w-3 h-3" />
+                              −
+                            </button>
+                            <span className="text-xs font-black min-w-[1.25rem] text-center">
+                              {qty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                incrementCartItem(pkg)
+                              }}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-sm cursor-pointer transition-colors"
+                              aria-label="Increase quantity"
+                            >
+                              +
                             </button>
                           </div>
-                        </div>
-
-                        {/* ── RIGHT COLUMN: Thumbnail + Add Button / Stepper (Stacked) ── */}
-                        <div className="w-24 sm:w-32 shrink-0 flex flex-col items-center gap-2 pt-1" onClick={(e) => serviceEditMode && e.stopPropagation()}>
-                          <div className="w-24 h-24 sm:w-32 sm:h-28 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 shadow-2xs relative">
-                            {serviceEditMode && pkg.id ? (
-                              <EditableImage
-                                active={true}
-                                value={pkg.image}
-                                alt={pkg.name}
-                                assetType="services"
-                                className="w-full h-full"
-                                imgClassName="w-full h-full object-cover"
-                                onSave={(v) => handleSaveServiceField(pkg, "image", v)}
-                              />
-                            ) : pkg.image ? (
-                              <img
-                                src={resolveImageUrl(pkg.image)}
-                                alt={pkg.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src = "/assets/hero_illustration.jpg";
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                                <Wrench className="w-7 h-7 text-emerald-700" />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Stepper / Add Button */}
-                          <div className="w-full">
-                            {qty === 0 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  addToCart(pkg)
-                                }}
-                                className="w-full py-1.5 sm:py-2 px-3 rounded-xl font-black text-xs sm:text-sm border-2 border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer text-center shadow-2xs"
-                              >
-                                {isConsultationCategory ? "Consult" : "+ Add"}
-                              </button>
-                            ) : (
-                              <div className="flex items-center justify-between w-full py-1 sm:py-1.5 px-2 rounded-xl bg-emerald-600 text-white shadow-xs">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    decrementCartItem(pkg)
-                                  }}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-xs cursor-pointer transition-colors"
-                                  aria-label="Decrease quantity"
-                                >
-                                  −
-                                </button>
-                                <span className="text-xs font-black min-w-[1.25rem] text-center">
-                                  {qty}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    incrementCartItem(pkg)
-                                  }}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-xs cursor-pointer transition-colors"
-                                  aria-label="Increase quantity"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   )
                 })}
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
           </div>
 
-          {/* ════ RIGHT COLUMN: Active Cart Summary (Only rendered when items are in cart) ════ */}
-          {cartItems.length > 0 && (
-            <div className="hidden lg:block lg:col-span-4 space-y-4 lg:sticky lg:top-24">
-              <div id="booking-summary-card" className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    <span>Cart Summary</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {cartTotalQty} {cartTotalQty === 1 ? "item" : "items"}
-                    </span>
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      cartItems.forEach(item => setCartLineQty(item.db_id, 0))
-                    }}
-                    className="text-[11px] font-bold text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
-                  >
-                    Clear all
-                  </button>
-                </div>
+          {/* ════ RIGHT COLUMN (~32% width / 4 cols, sticky sidebar) ════ */}
+          <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
+            {/* Booking Summary Card */}
+            <div id="booking-summary-card" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+              <h3 className="text-base font-black text-slate-900">
+                Booking Summary
+                {cartTotalQty > 0 && (
+                  <span className="ml-1.5 text-[11px] font-bold text-emerald-700">
+                    ({cartTotalQty} item{cartTotalQty > 1 ? "s" : ""})
+                  </span>
+                )}
+              </h3>
 
-                {/* Cart Items List */}
-                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+              {/* Cart Items -- every package + quantity queued so far,
+                  across any service/category, not just one selection. */}
+              {cartItems.length === 0 ? (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center">
+                  <p className="text-xs font-semibold text-slate-500">
+                    No packages added yet.
+                  </p>
+                  <p className="text-[10.5px] text-slate-400 mt-0.5">
+                    Tap "+ Add" on a package to start your booking.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
                   {cartItems.map(item => {
                     const isConsult = item.is_consultation || (item.name && item.name.includes("(Site Consultation"))
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50/90 border border-slate-100"
+                        className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 border border-slate-100"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -1429,34 +1330,32 @@ export function ModernServiceCatalogView({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-black text-slate-900 truncate">
+                            <div className="text-[11.5px] font-black text-slate-900 truncate">
                               {item.name}
                             </div>
-                            <div className="text-[11px] text-slate-600 font-bold">
+                            <div className="text-[10px] text-slate-500 font-medium">
                               {isConsult
-                                ? `${item.unit_rate_display || `₹${item.unit_rate || 18}/sq.ft`}`
-                                : `₹${Number(item.price).toLocaleString("en-IN")}`}
+                                ? `${item.unit_rate_display || `₹${item.unit_rate || 18}/sq.ft`} × ${item.quantity}`
+                                : `₹${Number(item.price).toLocaleString("en-IN")} × ${item.quantity}`}
                             </div>
                           </div>
                         </div>
-
-                        {/* Stepper */}
-                        <div className="flex items-center gap-1.5 shrink-0 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-2xs">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => setCartLineQty(item.db_id, item.quantity - 1)}
-                            className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-slate-900 font-black text-xs cursor-pointer transition-colors"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
                             aria-label="Decrease quantity"
                           >
                             −
                           </button>
-                          <span className="text-xs font-black text-slate-900 min-w-[1rem] text-center">
+                          <span className="text-[11px] font-black text-slate-900 min-w-[1rem] text-center">
                             {item.quantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => setCartLineQty(item.db_id, item.quantity + 1)}
-                            className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-slate-900 font-black text-xs cursor-pointer transition-colors"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs cursor-pointer transition-colors"
                             aria-label="Increase quantity"
                           >
                             +
@@ -1466,47 +1365,157 @@ export function ModernServiceCatalogView({
                     )
                   })}
                 </div>
+              )}
 
-                {/* Subtotal */}
-                <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
-                  <span className="text-xs font-bold text-slate-600">Item Total</span>
-                  <span className="text-xl font-black text-slate-900">
-                    ₹{cartSubtotal.toLocaleString("en-IN")}
-                  </span>
+              {/* Selected Address Section */}
+              <div className="flex items-start justify-between gap-2.5 p-3 rounded-2xl bg-slate-50/80 border border-slate-100">
+                <div className="flex items-start gap-2 min-w-0">
+                  <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <span className="text-xs font-medium text-slate-700 line-clamp-2 leading-tight">
+                      {displayLocationText}
+                    </span>
+                    {isConsultationCategory && (
+                      <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
+                        {consultationFeeDetails.distanceKm > 0 ? `Distance: ~${consultationFeeDetails.distanceKm} km` : "Hosur Center"} • {consultationFeeDetails.isOver15km ? "Chargeable Visit (> 15 km)" : "Standard Consultation Zone (≤ 15 km)"}
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                <p className="text-[11px] text-slate-400 font-medium text-center">
-                  Address, scheduling slot & coupons applied at checkout.
-                </p>
-
-                {/* Proceed Button */}
-                <button
-                  type="button"
-                  onClick={handleProceedToSchedule}
-                  className="w-full py-3.5 px-4 rounded-xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-md bg-emerald-600 hover:bg-emerald-700 transition-all cursor-pointer active:scale-98"
-                >
-                  <span>{isConsultationCategory ? "Book Consultation Visit" : "Proceed to Checkout"}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-
-                <div className="flex items-center justify-center gap-1.5 text-[10.5px] text-slate-500 font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Verified pricing • 30-day doorstep warranty</span>
-                </div>
+                {typeof onOpenAddressPicker === "function" && (
+                  <button
+                    type="button"
+                    onClick={onOpenAddressPicker}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer shrink-0"
+                  >
+                    Change
+                  </button>
+                )}
               </div>
 
-              {/* Support Callout */}
-              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                  <Headphones className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-black text-slate-800">Need help booking?</div>
-                  <div className="text-[11px] text-slate-500">Hosur customer care: 080-4824-SEVO</div>
+              {/* Cost Breakdown */}
+              <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
+                {isConsultationCategory ? (
+                  <>
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <div className="flex items-center gap-1">
+                        <span>Site Visit & Inspection</span>
+                        <span className="text-[10px] text-slate-400">
+                          ({consultationFeeDetails.distanceKm > 0 ? `${consultationFeeDetails.distanceKm} km` : "Hosur Area"})
+                        </span>
+                      </div>
+                      <span className="font-bold text-slate-900">
+                        {consultationFeeDetails.fee > 0 ? `₹${consultationFeeDetails.fee}` : "₹0 (≤ 15 km)"}
+                      </span>
+                    </div>
+
+                    {consultationFeeDetails.convenienceFee > 0 && (
+                      <div className="flex items-center justify-between text-slate-600 font-medium">
+                        <div className="flex items-center gap-1">
+                          <span>Convenience Fee</span>
+                          <Info className="w-3.5 h-3.5 text-slate-400" />
+                        </div>
+                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.convenienceFee}</span>
+                      </div>
+                    )}
+
+                    {consultationFeeDetails.gst > 0 && (
+                      <div className="flex items-center justify-between text-slate-600 font-medium">
+                        <div className="flex items-center gap-1">
+                          <span>Taxes & GST (18%)</span>
+                        </div>
+                        <span className="font-bold text-slate-900">₹{consultationFeeDetails.gst}</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-sm font-black text-slate-900">Total Amount</span>
+                      <span className="text-xl font-black text-emerald-700">
+                        ₹{cartTotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[10.5px] text-amber-900 leading-snug">
+                      <span className="font-bold">Inspection Notice: </span>
+                      An expert will visit for precision digital laser measurement and generate an itemized quote based on rate card.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <span>Item Total</span>
+                      <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <div className="flex items-center gap-1">
+                        <span>Convenience Fee</span>
+                        <Info className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                      <span className="font-bold text-slate-900">₹{cartConvenienceFee.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-sm font-black text-slate-900">Total Amount</span>
+                      <span className="text-xl font-black text-emerald-700">₹{cartTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Full-width CTA Button */}
+              <button
+                type="button"
+                onClick={handleProceedToSchedule}
+                disabled={cartItems.length === 0}
+                className={`w-full py-3.5 px-4 rounded-xl text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition-all ${
+                  cartItems.length === 0
+                    ? "bg-slate-300 cursor-not-allowed"
+                    : "bg-[#0A7E6C] hover:bg-[#086a5b] cursor-pointer hover:shadow-md"
+                }`}
+              >
+                <span>{isConsultationCategory ? "Book Consultation" : "Proceed to Schedule"}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              {/* 100% Safe & Secure Booking Guarantee */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0" />
+                <div>
+                  <div className="text-xs font-black text-emerald-950">100% Safe & Secure Booking</div>
+                  <div className="text-[10.5px] text-emerald-800 font-medium leading-tight">
+                    Your information is always protected with us.
+                  </div>
                 </div>
               </div>
             </div>
-          )}
+
+            {/* "Why Choose Brand?" Card */}
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+              <h4 className="text-sm font-black text-slate-900">
+                Why Choose {brandName}?
+              </h4>
+              <div className="space-y-3.5">
+                {[
+                  { icon: Shield, label: "Verified & Trained Professionals", bg: "bg-emerald-50", fg: "text-emerald-700" },
+                  { icon: Clock, label: "On-time Service Guarantee", bg: "bg-teal-50", fg: "text-teal-700" },
+                  { icon: Wrench, label: "Genuine Parts & Tools", bg: "bg-sky-50", fg: "text-sky-700" },
+                  { icon: Headphones, label: "Dedicated Customer Support", bg: "bg-indigo-50", fg: "text-indigo-700" },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
+                      <item.icon className={`w-4 h-4 ${item.fg}`} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+          </div>
         </div>
       </div>
 
@@ -1665,21 +1674,18 @@ export function ModernServiceCatalogView({
           comment above for why AnimatePresence isn't used here either. */}
       {detailsPackage && createPortal(
           <div
-            className="fixed inset-0 z-[10050] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs"
+            className="fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
             onClick={() => setDetailsPackage(null)}
           >
             <motion.div
               key={detailsPackage.id}
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden"
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
             >
-              {/* Mobile bottom sheet drag indicator handle */}
-              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
-
-              <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
                     {serviceEditMode && detailsPackage.id ? (
@@ -1705,21 +1711,21 @@ export function ModernServiceCatalogView({
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                {/* 1. What's Included */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                {/* What's Included */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+                      <Settings className="w-4 h-4 text-sky-600" />
                     </div>
                     <h4 className="text-sm sm:text-base font-black text-slate-900">
                       What's Included
                     </h4>
                   </div>
-                  <ul className="space-y-2 pl-1">
+                  <ul className="space-y-2.5">
                     {getIncludesChecklist(detailsPackage).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                         <span className="text-xs font-medium text-slate-700 leading-relaxed">
                           {typeof item === "string" ? item : (item?.text || "")}
                         </span>
@@ -1728,169 +1734,65 @@ export function ModernServiceCatalogView({
                   </ul>
                 </div>
 
-                {/* 2. What's Not Included */}
-                <div className="space-y-3 pt-3 border-t border-slate-100">
+                {/* What You Need to Keep Ready */}
+                <div className="space-y-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
-                      <X className="w-4 h-4 text-rose-600" />
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <Home className="w-4 h-4 text-emerald-600" />
                     </div>
                     <h4 className="text-sm sm:text-base font-black text-slate-900">
-                      What's Not Included
+                      What You Need to Keep Ready
                     </h4>
                   </div>
-                  <ul className="space-y-2 pl-1">
-                    {getExcludesChecklist(detailsPackage).map((item, idx) => (
+                  <ul className="space-y-2.5">
+                    {getReadyChecklist(detailsPackage).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <span className="w-4 h-4 rounded-full bg-rose-100 text-rose-600 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">✕</span>
-                        <span className="text-xs font-medium text-slate-600 leading-relaxed">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span className="text-xs font-medium text-slate-700 leading-relaxed">
                           {typeof item === "string" ? item : (item?.text || "")}
                         </span>
                       </li>
                     ))}
                   </ul>
                 </div>
-
-                {/* 3. Possible Additional Charges */}
-                <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
-                      <AlertCircle className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm sm:text-base font-black text-slate-900">
-                        Possible Additional Charges
-                      </h4>
-                      <p className="text-[11px] text-slate-500">Transparent policy — always confirmed with you before service</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {getPossibleCharges(detailsPackage).map((c, idx) => (
-                      <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3 text-xs">
-                        <div>
-                          <div className="font-bold text-slate-800">{c.item}</div>
-                          <div className="text-[11px] text-slate-500">{c.note}</div>
-                        </div>
-                        <span className="font-extrabold text-slate-900 shrink-0 text-right">{c.fee}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Warranty & Revisit Guarantee */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200/80 flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white shadow-xs border border-teal-200 flex items-center justify-center text-[#0B8F7A] shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs sm:text-sm font-black text-slate-900">
-                      30-Day Doorstep Guarantee
-                    </h5>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      If the same problem recurs within 30 days of completion, SEVO provides a certified technician revisit completely free of charge.
-                    </p>
-                  </div>
-                </div>
-
-                {/* 5. SEVO Service Standards */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="text-xs font-black text-slate-900">SEVO Certified Service Quality</span>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Delivered by verified, background-checked professionals using standardized tools and transparent pricing.
-                  </p>
-                </div>
               </div>
 
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-4">
+              <div className="p-4 border-t border-slate-100">
                 {(() => {
-                  const dMrp = parseFloat(detailsPackage.base_price)
-                  const dOffer = parseFloat(detailsPackage.offer_price)
-                  const dHasOffer = !isNaN(dOffer) && dOffer > 0 && !isNaN(dMrp) && dOffer < dMrp
-                  const dFinalPrice = dHasOffer ? dOffer : (!isNaN(dMrp) ? dMrp : 0)
-                  const dDiscountPct = dHasOffer ? Math.round((1 - dOffer / dMrp) * 100) : 0
-
+                  const dQty = getCartQty(detailsPackage)
+                  if (dQty === 0) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => addToCart(detailsPackage)}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
+                      >
+                        + Add to Booking
+                      </button>
+                    )
+                  }
                   return (
-                    <>
-                      <div className="flex flex-col min-w-0">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Total Price
-                        </div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-lg sm:text-xl font-black text-slate-900">
-                            ₹{dFinalPrice.toLocaleString("en-IN")}
-                          </span>
-                          {dHasOffer && (
-                            <span className="text-xs text-slate-400 line-through">
-                              ₹{dMrp.toLocaleString("en-IN")}
-                            </span>
-                          )}
-                          {isConsultationCategory && (
-                            <span className="text-xs font-semibold text-slate-500">
-                              / sq.ft
-                            </span>
-                          )}
-                        </div>
-                        {dHasOffer && (
-                          <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded w-fit mt-0.5">
-                            {dDiscountPct}% OFF
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="min-w-[140px] sm:min-w-[180px] shrink-0">
-                        {isGoodsTransportCategory ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDetailsPackage(null)
-                              handleGoodsTransportProceed(detailsPackage)
-                            }}
-                            className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
-                          >
-                            <span>{getLogisticsButtonText(detailsPackage)}</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </button>
-                        ) : (() => {
-                          const dQty = getCartQty(detailsPackage)
-                          if (dQty === 0) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => addToCart(detailsPackage)}
-                                className="w-full py-2.5 px-4 rounded-xl font-extrabold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs active:scale-95 text-center"
-                              >
-                                {isConsultationCategory ? "Book Consultation" : "+ Add to Booking"}
-                              </button>
-                            )
-                          }
-                          return (
-                            <div className="w-full flex items-center justify-between gap-2 py-1.5 px-3 rounded-xl bg-emerald-600 text-white shadow-xs">
-                              <button
-                                type="button"
-                                onClick={() => decrementCartItem(detailsPackage)}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 font-black text-base cursor-pointer transition-colors"
-                                aria-label="Decrease quantity"
-                              >
-                                −
-                              </button>
-                              <span className="text-xs font-black">
-                                {dQty} in cart
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => incrementCartItem(detailsPackage)}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 font-black text-base cursor-pointer transition-colors"
-                                aria-label="Increase quantity"
-                              >
-                                +
-                              </button>
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    </>
+                    <div className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-emerald-600 text-white">
+                      <button
+                        type="button"
+                        onClick={() => decrementCartItem(detailsPackage)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-base cursor-pointer transition-colors"
+                        aria-label="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <span className="text-xs font-black">
+                        {dQty} added to booking
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => incrementCartItem(detailsPackage)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 font-black text-base cursor-pointer transition-colors"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
                   )
                 })()}
               </div>
@@ -1898,43 +1800,6 @@ export function ModernServiceCatalogView({
           </div>,
           document.body
         )}
-
-      {/* ── Category Service Selection Modal (Change Service on Demand) ── */}
-      {isChangeServiceModalOpen && (
-        <CategoryServiceModal
-          isOpen={isChangeServiceModalOpen}
-          onClose={() => setIsChangeServiceModalOpen(false)}
-          category={category}
-          onSelectService={(catSlug, subtabName) => {
-            setIsChangeServiceModalOpen(false)
-            if (services && services.length > 0) {
-              const target = services.find(s =>
-                s.name.toLowerCase() === subtabName.toLowerCase() ||
-                s.name.toLowerCase().includes(subtabName.toLowerCase()) ||
-                subtabName.toLowerCase().includes(s.name.toLowerCase())
-              )
-              if (target) {
-                setActiveSubService(target)
-                setSearchParams(prev => {
-                  const next = new URLSearchParams(prev)
-                  next.set("subtab", target.name)
-                  next.set("subTab", target.name)
-                  return next
-                }, { replace: true })
-                return
-              }
-            }
-            setSearchParams(prev => {
-              const next = new URLSearchParams(prev)
-              next.set("subtab", subtabName)
-              next.set("subTab", subtabName)
-              return next
-            }, { replace: true })
-          }}
-          allBackendServices={services}
-        />
-      )}
-
       {/* ── Mobile Floating Cart Bar (Appears when items are in cart) ── */}
       {cartTotalQty > 0 && (
         <div className="lg:hidden fixed bottom-[calc(4.25rem+var(--safe-area-bottom))] left-3 right-3 z-40 animate-in slide-in-from-bottom-3 duration-300">
@@ -1954,10 +1819,17 @@ export function ModernServiceCatalogView({
             </div>
             <button
               type="button"
-              onClick={handleProceedToSchedule}
+              onClick={() => {
+                const summaryEl = document.getElementById("booking-summary-card");
+                if (summaryEl) {
+                  summaryEl.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  handleProceedToCheckout();
+                }
+              }}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
             >
-              <span>View Cart & Checkout</span>
+              <span>View Summary</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

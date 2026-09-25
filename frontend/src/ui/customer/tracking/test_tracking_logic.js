@@ -19,7 +19,7 @@ function getShortestArcAngle(currentVisualAngle, targetBearing) {
 }
 
 console.log("========================================================")
-console.log("RUNNING sevo CUSTOMER TRACKING UNIT & MATH VALIDATION")
+console.log("RUNNING CALTRACK CUSTOMER TRACKING UNIT & MATH VALIDATION")
 console.log("========================================================")
 
 // 1. Haversine Distance Test
@@ -91,5 +91,5 @@ assert(bDone.text.includes("completed"))
 console.log("✓ Freshness badges map accurately to lifecycle states")
 
 console.log("\n========================================================")
-console.log("ALL sevo CUSTOMER TRACKING CHECKS PASSED SUCCESSFULLY!")
+console.log("ALL CALTRACK CUSTOMER TRACKING CHECKS PASSED SUCCESSFULLY!")
 console.log("========================================================")

@@ -64,11 +64,11 @@ async function _executeRequest(path, init = {}, attemptRefresh = true) {
 
   // Attach stored access token if present and not already specified
   try {
-    const token = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
+    const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`)
     }
-  } catch (_) { }
+  } catch (_) {}
 
   if (init.json !== undefined) {
     body = JSON.stringify(init.json)
@@ -104,7 +104,7 @@ async function _executeRequest(path, init = {}, attemptRefresh = true) {
     if (res.status === 401 && attemptRefresh) {
       const hasStoredToken = (() => {
         try {
-          return !!(localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("sevo_user"))
+          return !!(localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("caltrack_user"))
         } catch (_) {
           return false
         }

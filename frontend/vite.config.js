@@ -4,7 +4,7 @@ import path from "path"
 
 export default defineConfig({
   root: path.resolve(__dirname),
-  // Base path for deployment at sevo.co.in
+  // Base path for subpath deployment at caldimproducts.com/Caltrack
   base: "/",
 
   plugins: [

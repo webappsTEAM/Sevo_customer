@@ -1,6 +1,6 @@
-# sevo — Shared Database Setup Guide
+# CalTrack — Shared Database Setup Guide
 
-This guide explains how two or more developers can connect to and share the same database and Redis containers for the sevo project.
+This guide explains how two or more developers can connect to and share the same database and Redis containers for the CalTrack project.
 
 ---
 
@@ -48,12 +48,12 @@ Windows Defender Firewall blocks incoming traffic by default. Allow incoming tra
 1. Run PowerShell as **Administrator**.
 2. Run the following commands:
 ```powershell
-New-NetFirewallRule -DisplayName "sevo Shared DB" -Direction Inbound -Protocol TCP -LocalPort 5432 -Action Allow
-New-NetFirewallRule -DisplayName "sevo Shared Redis" -Direction Inbound -Protocol TCP -LocalPort 6379 -Action Allow
+New-NetFirewallRule -DisplayName "CalTrack Shared DB" -Direction Inbound -Protocol TCP -LocalPort 5432 -Action Allow
+New-NetFirewallRule -DisplayName "CalTrack Shared Redis" -Direction Inbound -Protocol TCP -LocalPort 6379 -Action Allow
 ```
 
 ### Step 4: Update `.env` Configurations (Both Developers)
-On both Developer A's and Developer B's machines, edit [backend/.env](file:///c:/Users/user/sevok/sevo/backend/.env):
+On both Developer A's and Developer B's machines, edit [backend/.env](file:///c:/Users/user/Caltrackk/Caltrack/backend/.env):
 
 ```ini
 # Replace 'localhost' with Developer A's IPv4 address
@@ -74,7 +74,7 @@ If developers are working remotely (from home/different locations), host the dat
 Install Docker and Docker Compose on a basic Linux VPS.
 
 ### Step 2: Run the Database
-Upload the project's [docker-compose.yml](file:///c:/Users/user/sevok/sevo/docker-compose.yml) to the VPS and run:
+Upload the project's [docker-compose.yml](file:///c:/Users/user/Caltrackk/Caltrack/docker-compose.yml) to the VPS and run:
 ```bash
 docker compose up -d
 ```
@@ -88,7 +88,7 @@ sudo ufw allow from <Developer_B_Public_IP> to any port 5432
 ```
 
 ### Step 4: Update `.env` (Both Developers)
-Update [backend/.env](file:///c:/Users/user/sevok/sevo/backend/.env):
+Update [backend/.env](file:///c:/Users/user/Caltrackk/Caltrack/backend/.env):
 ```ini
 DB_HOST=<VPS_PUBLIC_IP_ADDRESS>
 DB_PORT=5432

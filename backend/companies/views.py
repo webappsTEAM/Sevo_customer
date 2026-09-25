@@ -106,9 +106,9 @@ class CompanyCreateView(views.APIView):
                     email_thread = threading.Thread(
                         target=send_invite_email,
                         args=(
-                            f"Invitation to join {company.company_name} on sevo",
+                            f"Invitation to join {company.company_name} on Caltrack",
                             plain_message,
-                            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@sevo.com'),
+                            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@caltrack.com'),
                             email,
                             html_message
                         )

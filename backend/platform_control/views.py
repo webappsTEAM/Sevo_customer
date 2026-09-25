@@ -1,5 +1,5 @@
 """
-Platform Control APIs for sevo Global Super Admin & RBAC.
+Platform Control APIs for CalTrack Global Super Admin & RBAC.
 Mounted at /api/platform/
 """
 import uuid
@@ -27,7 +27,7 @@ from settings_hub.models import TeamInvite
 
 def _resolve_invite_company(actor):
     """
-    TeamInvite.company is a required FK, but sevo's Super Admin /
+    TeamInvite.company is a required FK, but CalTrack's Super Admin /
     platform staff accounts are not themselves company-scoped (User.company
     is nullable, and the catalog app's own comments note this is "one
     CalServices platform", not a multi-tenant marketplace) — so
@@ -333,9 +333,9 @@ class PlatformUserInviteView(APIView):
         # Send invitation email if email backend configured
         try:
             send_mail(
-                subject="You've been invited to join the sevo Team",
-                message=f"Hello {first_name},\n\nYou have been invited to join sevo as a {role}.\n\nPlease click the link below to set your password and activate your account:\n{invite_link}\n\nBest regards,\nsevo Operations",
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@sevo.io"),
+                subject="You've been invited to join the CalTrack Team",
+                message=f"Hello {first_name},\n\nYou have been invited to join CalTrack as a {role}.\n\nPlease click the link below to set your password and activate your account:\n{invite_link}\n\nBest regards,\nCalTrack Operations",
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@caltrack.io"),
                 recipient_list=[email],
                 fail_silently=True,
             )

@@ -409,11 +409,7 @@ class CityListView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        qs = City.objects.filter(is_active=True)
-        launched_param = (request.query_params.get("launched") or "").strip().lower()
-        if launched_param in ("true", "1", "yes"):
-            qs = qs.filter(is_launched=True)
-        cities = qs.order_by("display_order", "name")
+        cities = City.objects.filter(is_active=True).order_by("display_order", "name")
         data = [
             {
                 "id": c.id,

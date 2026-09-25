@@ -1,6 +1,6 @@
 /**
  * CustomerTrackingPage.jsx
- * Canonical, Rapido-Style Customer Live Tracking Page for sevo.
+ * Canonical, Rapido-Style Customer Live Tracking Page for CalTrack.
  */
 
 import React, { useState, useEffect, useRef } from "react"

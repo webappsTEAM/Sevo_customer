@@ -12,13 +12,9 @@ import os
 import re
 import uuid
 from decimal import Decimal
-from typing import Any
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q, F
-
-# Static analyzer compatibility alias for Django transaction.atomic context manager
-atomic_transaction: Any = transaction.atomic
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
@@ -339,11 +335,7 @@ class BookingCreateView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
                 if not cached.get("in_progress"):
-                    # Replay the ORIGINAL response status (usually 201), not a
-                    # hardcoded 200 -- matches the cache-write side (which always
-                    # stores "status") and the other two replay sites below,
-                    # which already do this correctly.
-                    return Response(cached["body"], status=cached.get("status", status.HTTP_200_OK))
+                    return Response(cached["body"], status=cached["status"])
                 # Wait briefly for in-progress concurrent request
                 for _ in range(20):
                     time.sleep(0.1)
@@ -359,7 +351,7 @@ class BookingCreateView(APIView):
                                 status=status.HTTP_409_CONFLICT,
                             )
                         if not cached.get("in_progress"):
-                            return Response(cached["body"], status=cached.get("status", status.HTTP_200_OK))
+                            return Response(cached["body"], status=cached["status"])
                 return Response(
                     {"success": False, "message": "Booking request is already being processed. Please wait a moment."},
                     status=status.HTTP_409_CONFLICT,
@@ -484,35 +476,83 @@ class BookingCreateView(APIView):
                 code="SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
             )
 
-        # Fixes HS-B-01: Full server-side price authority for Home Services bookings.
-        # Browser-submitted prices in cart_data or total_amount are NEVER trusted.
-        # resolve_home_services_fare looks up authoritative Package/AddOn prices from
-        # the database catalog, computes 18% GST (0% for consultations), applies
-        # platform fee, validates geofenced consultation surcharges (>15km from Hosur),
-        # and recomputes the authoritative booking grand total.
+        # Fixes HS-B-01 (partial): for non-logistics (home-services) bookings,
+        # `corrected_fare` above is just the client-submitted total_amount —
+        # resolve_logistics_fare() only verifies logistics categories. A full
+        # recompute against Package/AddOn catalog prices isn't possible here
+        # because `cart_data` items don't carry a package_id/addon_id back to
+        # the catalog (see HS_B_01_PRICE_VALIDATION_NOTE.md). As a bounded,
+        # safe-to-ship mitigation, we at least check that the submitted total
+        # is internally consistent with the submitted cart line items — this
+        # catches the common tampering/bug pattern of a total_amount that
+        # doesn't match what the cart itself lists, without needing catalog
+        # resolution.
+        #
+        # BUGFIX (same day): the original version of this check compared
+        # total_amount against the raw cart line-item sum with only a
+        # +/-1%/Rs.5 symmetric tolerance. That's wrong -- total_amount
+        # legitimately includes GST/taxes and platform fees on top of the
+        # cart subtotal (the frontend adds these; cart_data only carries the
+        # per-item price), so it is normally *higher* than the raw cart sum,
+        # often by 15-25%+. The tight symmetric tolerance rejected every real
+        # booking with tax/fees, not just tampered ones. The actual security
+        # concern this check exists for is a submitted total *lower* than
+        # what the cart should cost (underpaying), so the bound is now
+        # one-sided: total_amount must not be noticeably below the cart
+        # subtotal, and is capped at a generous multiple to still catch
+        # wildly-wrong/corrupted totals without false-positiving on normal
+        # tax/fee/delivery-charge/tip overhead.
         _cart_for_check = serializer.validated_data.get("cart_data") or []
-        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
+        cart_data = _cart_for_check
+        if (
+            serializer.validated_data.get("service_category", "") not in LOGISTICS_CATEGORIES
+            and isinstance(_cart_for_check, list)
+            and len(_cart_for_check) > 0
+        ):
+            try:
+                _cart_total = sum(
+                    float(item.get("price", 0)) * int(item.get("quantity", 1))
+                    for item in _cart_for_check
+                    if isinstance(item, dict)
+                )
+            except (TypeError, ValueError):
+                _cart_total = None
+            if _cart_total is not None and _cart_total > 0:
+                _submitted = float(corrected_fare)
+                _lower_bound = _cart_total - max(5.0, _cart_total * 0.01)
+                _upper_bound = (_cart_total * 1.75) + 100.0
+                if _submitted < _lower_bound or _submitted > _upper_bound:
+                    return _error(
+                        "The submitted amount doesn't match the selected services. "
+                        "Please refresh and try booking again.",
+                        400,
+                    )
 
-        if _service_category not in LOGISTICS_CATEGORIES:
-            from service_requests.services.home_services_pricing import resolve_home_services_fare
-            _raw_coupon = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
-            _raw_tip = serializer.validated_data.get("tip_amount") or request.data.get("tip_amount") or 0
-            _hs_total, _sanitized_cart, _hs_breakdown = resolve_home_services_fare(
-                cart_data=_cart_for_check,
-                service_category=_service_category,
-                pickup_lat=_lat,
-                pickup_lng=_lng,
-                coupon_code=_raw_coupon,
-                tip_amount=_raw_tip,
-                submitted_total=serializer.validated_data.get("total_amount", 0),
-            )
-            corrected_fare = _hs_total
-            cart_data = _sanitized_cart
-            serializer.validated_data["cart_data"] = _sanitized_cart
-            serializer.validated_data["total_amount"] = _hs_total
-            fare_breakdown = _hs_breakdown
+        _service_category = (serializer.validated_data.get("service_category") or "").strip().lower()
+        is_painting_booking = False
+        if _service_category in ["painting", "paintings", "interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"]:
+            is_painting_booking = True
         else:
-            cart_data = _cart_for_check
+            if any(isinstance(it, dict) and (it.get("categoryName") == "Painting" or "paint" in str(it.get("id")) or "wp-" in str(it.get("id"))) for it in cart_data):
+                is_painting_booking = True
+
+        is_mason_booking = False
+        if is_mason_category(_service_category):
+            is_mason_booking = True
+        else:
+            if any(isinstance(it, dict) and (it.get("categoryName") == "Mason" or "mason" in str(it.get("id"))) for it in cart_data):
+                is_mason_booking = True
+
+        if is_painting_booking or is_mason_booking:
+            dist_km = 0.0
+            if _lat is not None and _lng is not None:
+                dist_m = _haversine_meters(12.7409, 77.8253, _lat, _lng)
+                if dist_m is not None:
+                    dist_km = dist_m / 1000.0
+            if dist_km > 15.0:
+                corrected_fare = Decimal("300.00")
+            else:
+                corrected_fare = Decimal("0.00")
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
             initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
@@ -604,20 +644,12 @@ class BookingCreateView(APIView):
                 or serializer.validated_data.get("idempotency_key")
                 or request.data.get("idempotency_key")
             )
-            ac_qty_val = serializer.validated_data.get("ac_quantity")
-            if ac_qty_val is None:
-                ac_qty_val = request.data.get("ac_quantity")
-            if ac_qty_val is None:
-                ac_qty_val = request.data.get("quantity")
-            if ac_qty_val is None:
-                ac_qty_val = 1
-
             ac_details = {
                 "ac_type": serializer.validated_data.get("ac_type") or request.data.get("ac_type") or request.data.get("type"),
                 "ac_brand": serializer.validated_data.get("ac_brand") or request.data.get("ac_brand") or request.data.get("brand") or "Other",
                 "ac_capacity": serializer.validated_data.get("ac_capacity") or request.data.get("ac_capacity") or request.data.get("capacity"),
-                "ac_quantity": ac_qty_val,
-                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or "",
+                "ac_quantity": serializer.validated_data.get("ac_quantity") or request.data.get("ac_quantity") or request.data.get("quantity") or 1,
+                "customer_symptom": serializer.validated_data.get("customer_symptom") or request.data.get("customer_symptom") or request.data.get("symptom") or serializer.validated_data.get("description"),
                 "customer_notes": serializer.validated_data.get("customer_notes") or request.data.get("customer_notes") or request.data.get("notes") or "",
             }
             booking_data = {
@@ -729,7 +761,7 @@ class BookingCreateView(APIView):
                 save_kwargs["logistics_tier"] = tier_obj
 
         try:
-            with atomic_transaction():
+            with transaction.atomic():
                 sr = serializer.save(**save_kwargs)
 
                 # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
@@ -747,7 +779,7 @@ class BookingCreateView(APIView):
                 veg_items = BookingService.extract_vegetable_items(sr.cart_data)
                 if veg_items:
                     try:
-                        with atomic_transaction():
+                        with transaction.atomic():
                             reserve_stock_for_booking_items(
                                 items=veg_items, company=company, booking_ref=sr.request_id,
                             )
@@ -838,24 +870,19 @@ class BookingCreateView(APIView):
         if coupon_code:
             cpn = Coupon.objects.filter(code__iexact=coupon_code, status="Active").first()
             if cpn:
-                if _service_category not in LOGISTICS_CATEGORIES and isinstance(fare_breakdown, dict) and "discount_amount" in fare_breakdown:
-                    subtotal = float(fare_breakdown.get("item_total", 0) + fare_breakdown.get("gst_amount", 0) + fare_breakdown.get("platform_fee", 0) + fare_breakdown.get("tip_amount", 0))
-                    disc = float(fare_breakdown.get("discount_amount", 0))
-                    final_tot = float(corrected_fare)
+                subtotal = float(corrected_fare)
+                if cpn.discount_type == "flat":
+                    calc_disc = float(cpn.discount_value)
                 else:
-                    subtotal = float(corrected_fare)
-                    if cpn.discount_type == "flat":
-                        calc_disc = float(cpn.discount_value)
-                    else:
-                        calc_disc = subtotal * (float(cpn.discount_value) / 100.0)
+                    calc_disc = subtotal * (float(cpn.discount_value) / 100.0)
 
-                    if cpn.max_discount > 0:
-                        disc = min(calc_disc, float(cpn.max_discount))
-                    else:
-                        disc = calc_disc
+                if cpn.max_discount > 0:
+                    disc = min(calc_disc, float(cpn.max_discount))
+                else:
+                    disc = calc_disc
 
-                    disc = min(subtotal, disc)
-                    final_tot = max(0.0, subtotal - disc)
+                disc = min(subtotal, disc)
+                final_tot = max(0.0, subtotal - disc)
 
                 sr.coupon = cpn
                 sr.coupon_code_snapshot = cpn.code
@@ -882,7 +909,7 @@ class BookingCreateView(APIView):
                 sr.total_amount = final_tot
                 sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount", "total_amount"])
 
-                with atomic_transaction():
+                with transaction.atomic():
                     cpn.current_usage += 1
                     cpn.save(update_fields=["current_usage"])
                     CouponUsage.objects.create(
@@ -908,7 +935,7 @@ class BookingCreateView(APIView):
         try:
             from orders.models import Order, OrderItem
             if not OrderItem.objects.filter(service_request=sr).exists():
-                with atomic_transaction():
+                with transaction.atomic():
                     order = Order.objects.create(
                         customer=sr.customer,
                         status=Order.Status.CONFIRMED,
@@ -927,7 +954,7 @@ class BookingCreateView(APIView):
             logger.warning(
                 "Could not create Order/OrderItem for booking %s (service_request_id=%s, "
                 "customer_id=%s, at=%s): %r",
-                sr.request_id, sr.id, getattr(sr, "customer_id", getattr(sr.customer, "id", None)), timezone.now().isoformat(), order_err,
+                sr.request_id, sr.id, sr.customer_id, timezone.now().isoformat(), order_err,
             )
 
         # Dispatch booking notification to workforce management system.
@@ -1105,7 +1132,7 @@ class CustomerMyBookingsView(APIView):
         )
         for stale_sr in stale_logistics_qs:
             try:
-                with atomic_transaction():
+                with transaction.atomic():
                     locked_sr = ServiceRequest.objects.select_for_update().get(pk=stale_sr.pk)
                     if locked_sr.status in [
                         ServiceRequest.Status.UNASSIGNED,
@@ -1144,57 +1171,12 @@ class CustomerMyBookingsView(APIView):
 
 
 class CustomerBookingRetryPaymentView(APIView):
-    """
-    GT audit Update 17: retrying payment now requires proving the booking
-    is yours.
-
-    This was permission_classes=[AllowAny] with no ownership check of any
-    kind, on a POST that both MUTATES (flips payment_status to PROCESSING)
-    and DISCLOSES (returns request_id and total_amount). A guessable
-    sequential pk was the only thing between an anonymous caller and any
-    booking in the system: walking ids leaked every booking's reference and
-    amount, and pushed live bookings into PROCESSING, which suppresses the
-    retry/reminder paths that key off a pending or failed payment.
-
-    The two legitimate callers are the signed-in customer who owns the
-    booking, and a customer following their own booking link, so the
-    capability token (ServiceRequest.tracking_token) this codebase already
-    uses for exactly that case is accepted as an alternative -- the same
-    pattern CustomerBookingCancelView and CustomerBookingMessagesView use.
-    """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, pk):
         try:
             sr = ServiceRequest.objects.get(pk=pk)
         except ServiceRequest.DoesNotExist:
-            return _error("Booking not found.", 404)
-
-        provided_token = str(
-            request.data.get("token")
-            or request.query_params.get("token")
-            or ""
-        ).strip()
-        token_ok = bool(
-            provided_token
-            and sr.tracking_token
-            and str(sr.tracking_token).strip().lower() == provided_token.lower()
-        )
-        is_owner = bool(
-            getattr(request.user, "is_authenticated", False)
-            and sr.customer_id
-            and sr.customer_id == request.user.id
-        )
-        is_admin = (
-            getattr(request.user, "is_authenticated", False)
-            and (
-                str(getattr(request.user, "role", "")).upper() == "ADMIN"
-                or getattr(request.user, "is_superuser", False)
-            )
-        )
-        if not (token_ok or is_owner or is_admin):
-            # Deliberately the same 404 as "no such booking" above, so ids
-            # cannot be enumerated by comparing responses.
             return _error("Booking not found.", 404)
 
         if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
@@ -1304,7 +1286,7 @@ class CustomerBookingCancelView(APIView):
         else:
             normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
 
-        with atomic_transaction():
+        with transaction.atomic():
             sr = ServiceRequest.objects.select_for_update().get(pk=sr.pk)
             if sr.status == ServiceRequest.Status.CANCELLED:
                 return _success(
@@ -1338,12 +1320,11 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
-            if hasattr(sr, "estimation") and sr.estimation:
-                from service_requests.models import Estimation
-                sr.estimation.status = Estimation.Status.CANCELLED
+            if hasattr(sr, "estimation") and sr.estimation is not None:
+                sr.estimation.status = "CANCELLED"
                 sr.estimation.save(update_fields=["status", "updated_at"])
-            # Cancel job in workforce system after transaction commits to prevent distributed deadlock
-            transaction.on_commit(lambda: WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason))
+            # Cancel job in workforce system
+            WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
             # Fixes HS-C-04: cancelling an already-paid booking used to charge
             # and refund nothing automatically -- the customer or an admin had
@@ -1355,29 +1336,12 @@ class CustomerBookingCancelView(APIView):
             # anything is refunded.
             if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
                 try:
-                    # GT Porter-parity fix (this session, 2026-09-23): consult
-                    # the (currently unconfigured, fee_mode=NONE-by-default)
-                    # GTCancellationPolicy before creating the refund request.
-                    # See models.GTCancellationPolicy's docstring for the
-                    # exact business decision this is gated on -- until an
-                    # admin configures a policy row, get_gt_cancellation_fee
-                    # always returns 0 and this is a no-op: refund amount ==
-                    # sr.total_amount, identical to prior behavior.
-                    from service_requests.models import get_gt_cancellation_fee
-                    cancellation_fee = get_gt_cancellation_fee(sr)
-                    refund_amount = sr.total_amount - cancellation_fee
-                    refund_notes = f"Auto-created on booking cancellation. Cancellation reason: {reason}"
-                    refund_type = RefundType.FULL
-                    if cancellation_fee > 0:
-                        refund_notes += f" A cancellation fee of ₹{cancellation_fee} was deducted per the active GT cancellation policy."
-                        refund_type = RefundType.PARTIAL
                     sr_services.create_refund_request(
                         booking=sr,
                         customer=sr.customer,
-                        amount=refund_amount,
+                        amount=sr.total_amount,
                         reason=RefundReason.OTHER,
-                        additional_notes=refund_notes,
-                        refund_type=refund_type,
+                        additional_notes=f"Auto-created on booking cancellation. Cancellation reason: {reason}",
                     )
                 except Exception as refund_err:
                     logger.warning(f"Could not auto-create refund request for cancelled+paid booking {sr.id}: {refund_err}")
@@ -1652,7 +1616,7 @@ def _build_tracking_payload(sr, has_full_access):
         or (sr.technician_name and sr.status not in ["draft", "new_request", "unassigned", "assigned", "cancelled", "rejected"])
     )
     is_accepted = technician_accepted
-    tracking_available = sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"]
+    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -1681,10 +1645,6 @@ def _build_tracking_payload(sr, has_full_access):
     eta_seconds = None
     eta_minutes = None
     freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
-    tech_name = None
-    tech_phone = None
-    tech_photo = None
-    tech_rating = None
 
     if is_accepted:
         # Workforce backend returns 'assigned_technician'; older integration may use 'technician'.
@@ -1848,12 +1808,8 @@ def _build_tracking_payload(sr, has_full_access):
                 "freshness": freshness,
             }
 
-    # OTP is exposed to customer once partner ACCEPTS, but MUST be hidden once
-    # the booking reaches any terminal state (completed, closed, cancelled,
-    # rejected, feedback_pending, feedback_received).  is_terminal is computed
-    # above at the same scope; reusing it avoids duplicating the status list.
-    # Audit finding: start_otp must not be visible after the booking is complete.
-    start_otp = sr.start_otp if (is_accepted and not is_terminal) else None
+    # OTP is exposed to customer once partner ACCEPTS and booking is not cancelled/rejected
+    start_otp = sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
 
     # Retrieve Cash Payment Confirmation OTP if one was generated for this booking
     payment_confirmation_otp = None
@@ -1969,7 +1925,6 @@ def _build_tracking_payload(sr, has_full_access):
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
         "logistics": _build_logistics_progress(sr),
-        "logistics_leg": getattr(sr, "logistics_leg", "") or "",
         "service_location": {
             "address": dest_address,
             "latitude": dest_lat,
@@ -2131,7 +2086,7 @@ class FeedbackTokenView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "errors": serializer.errors}, status=400)
 
-        with atomic_transaction():
+        with transaction.atomic():
             serializer.save(is_submitted=True, submitted_at=timezone.now())
 
         # Notify Workforce of technician feedback rating
@@ -2324,7 +2279,7 @@ class AdminSRAssignView(APIView):
             return _error("Not found.", 404)
 
         notes = request.data.get("notes", "")
-        with atomic_transaction():
+        with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.ASSIGNED, actor=request.user)
 
             # Persist technician details passed by admin
@@ -2510,7 +2465,7 @@ class AdminSRVerifyView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
 
-        with atomic_transaction():
+        with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.VERIFIED, actor=request.user)
             sr.save(update_fields=["status", "updated_at"])
             fb, _fb_created = ServiceFeedback.objects.get_or_create(service_request=sr)
@@ -2876,19 +2831,6 @@ class CustomerBookingAvailableSlotsView(APIView):
         try:
             booking = ServiceRequest.objects.get(pk=booking_id)
         except ServiceRequest.DoesNotExist:
-            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
-
-        # GT audit Update 17: IsCustomer proves the caller is *a* customer,
-        # not that this booking is theirs. Without this, any signed-in
-        # customer could walk booking ids and read another customer's
-        # booking date and that booking's company's technician-availability
-        # grid. Admins keep full access; everyone else gets the same 404 as
-        # a missing booking so ids stay non-enumerable.
-        _is_admin = (
-            str(getattr(request.user, "role", "")).upper() == "ADMIN"
-            or getattr(request.user, "is_superuser", False)
-        )
-        if not _is_admin and booking.customer_id != request.user.id:
             return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
 
         target_date = request.query_params.get("date") or str(booking.preferred_date or timezone.now().date())
@@ -3856,7 +3798,7 @@ class BookingVerifyStartOTPView(APIView):
         if getattr(sr, "otp_verified", False):
             return _error("Verification code has already been used.", 400)
 
-        if entered_otp == str(sr.start_otp):
+        if str(entered_otp) == str(sr.start_otp):
             sr.otp_verified = True
             sr.otp_verified_at = timezone.now()
             try:
@@ -4304,7 +4246,7 @@ class CustomerQuoteDecideView(APIView):
         if quote.status in [PaintingQuote.Status.APPROVED, PaintingQuote.Status.SUPERSEDED, PaintingQuote.Status.DECLINED]:
             return _error(f"Cannot perform decision. Quotation is already in state: {quote.status}.", 400)
         if decision == "CUSTOMER_ACCEPTED":
-            with atomic_transaction():
+            with transaction.atomic():
                 quote.status = PaintingQuote.Status.APPROVED
                 quote.save(update_fields=["status"])
 
@@ -4396,7 +4338,7 @@ class CustomerQuoteDecideView(APIView):
                     # BookingCreateView.post()'s Phase A implementation.
                     try:
                         from orders.models import Order, OrderItem
-                        with atomic_transaction():
+                        with transaction.atomic():
                             if not OrderItem.objects.filter(service_request=new_sr).exists():
                                 parent_order_item = OrderItem.objects.filter(
                                     service_request=parent_sr
@@ -4443,7 +4385,7 @@ class CustomerQuoteDecideView(APIView):
             return _success(message="Quotation approved and painting booking created successfully.")
 
         elif decision == "DECLINED" or decision == "CUSTOMER_DECLINED":
-            with atomic_transaction():
+            with transaction.atomic():
                 quote.status = PaintingQuote.Status.DECLINED
                 quote.decline_reason = request.data.get("reason_notes") or request.data.get("decline_reason") or "Customer declined"
                 quote.save(update_fields=["status", "decline_reason"])
@@ -4572,7 +4514,7 @@ class AdminQuoteCreateView(APIView):
                 elif is_mason:
                     return _error("Customer-supplied materials are strictly prohibited in the masonry module.", 400)
 
-        with atomic_transaction():
+        with transaction.atomic():
             PaintingQuote.objects.filter(service_request=sr).update(status=PaintingQuote.Status.SUPERSEDED)
 
             prev_quote = PaintingQuote.objects.filter(service_request=sr).order_by("-quote_version").first()
@@ -4701,7 +4643,7 @@ class AdminQuoteActionView(APIView):
             return _success(message="Quotation rejected by Admin.")
         elif action == "ADJUST":
             items_data = request.data.get("items", [])
-            with atomic_transaction():
+            with transaction.atomic():
                 for it_data in items_data:
                     item_id = it_data.get("id")
                     if item_id:
@@ -4750,12 +4692,12 @@ class CustomerQuotePDFView(APIView):
             from django.http import HttpResponse
             return HttpResponse("Quotation identifier required.", status=400)
 
-        from workforce_integration.services import WorkforceIntegrationService
         quote_data = None
         customer_info = {}
 
         # 1. Try to fetch from workforce_quote / WorkforceIntegrationService
         try:
+            from workforce_integration.services import WorkforceIntegrationService
             from django.db import connection
 
             base_qnum = lookup_key.split('-V')[0].split('-v')[0]
@@ -4965,7 +4907,7 @@ class CustomerQuotePDFView(APIView):
         y = y - 110
 
         # ── Scope of Work / Line Items Table ──
-        items: list = list(quote_data.get("items") or [])
+        items = quote_data.get("items") or []
         p.setFillColor(colors.HexColor("#4338CA"))
         p.setFont("Helvetica-Bold", 10)
         p.drawString(45, y, "SCOPE OF WORK & LINE ITEMS")
@@ -5006,7 +4948,7 @@ class CustomerQuotePDFView(APIView):
                 y = height - 50
 
         # ── Measurements Breakdown Table ──
-        measurements: list = list(quote_data.get("measurements") or [])
+        measurements = quote_data.get("measurements") or []
         if measurements:
             y -= 12
             p.setFillColor(colors.HexColor("#4338CA"))

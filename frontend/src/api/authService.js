@@ -22,11 +22,11 @@ async function fetchJSON(path, options = {}) {
   }
 
   try {
-    const token = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
+    const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`)
     }
-  } catch (_) { }
+  } catch (_) {}
 
   const res = await fetch(url, {
     ...options,
@@ -55,13 +55,13 @@ export async function apiLogin(username, password) {
     resetAuthSessionState(true)
     try {
       if (data.access) {
-        localStorage.setItem("sevo_access_token", data.access)
+        localStorage.setItem("caltrack_access_token", data.access)
         localStorage.setItem("qt_access", data.access)
       }
       if (data.user) {
-        localStorage.setItem("sevo_user", JSON.stringify(data.user))
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
       }
-    } catch (_) { }
+    } catch (_) {}
   }
   return data
 }
@@ -100,16 +100,16 @@ export async function apiVerifyCustomerOTP(identifier, channel, otp_code) {
     try {
       const token = data.data.auth_token || data.data.access
       if (token) {
-        localStorage.setItem("sevo_access_token", token)
+        localStorage.setItem("caltrack_access_token", token)
         localStorage.setItem("qt_access", token)
       }
       if (data.data.phone) {
-        localStorage.setItem("sevo_customer_phone", data.data.phone)
+        localStorage.setItem("caltrack_customer_phone", data.data.phone)
       }
       if (data.data.user) {
-        localStorage.setItem("sevo_user", JSON.stringify(data.data.user))
+        localStorage.setItem("caltrack_user", JSON.stringify(data.data.user))
       }
-    } catch (_) { }
+    } catch (_) {}
   }
   return data
 }
@@ -180,7 +180,7 @@ export async function apiFetchMe(customSignal = null) {
   // If already confirmed unauthenticated and no tokens in localStorage, skip network call
   const hasToken = (() => {
     try {
-      return !!(localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("sevo_user"))
+      return !!(localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("caltrack_user"))
     } catch (_) {
       return false
     }
@@ -197,12 +197,12 @@ export async function apiFetchMe(customSignal = null) {
       const headers = new Headers()
       let token = null
       try {
-        token = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
+        token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
         if (token) headers.set("Authorization", `Bearer ${token}`)
-      } catch (_) { }
+      } catch (_) {}
 
       const hasStoredSession = Boolean(token || (() => {
-        try { return !!localStorage.getItem("sevo_user") } catch (_) { return false }
+        try { return !!localStorage.getItem("caltrack_user") } catch (_) { return false }
       })())
 
       // Link caller signal if provided
@@ -227,9 +227,9 @@ export async function apiFetchMe(customSignal = null) {
         if (refreshed) {
           const retryHeaders = new Headers()
           try {
-            const retryToken = localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access")
+            const retryToken = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
             if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`)
-          } catch (_) { }
+          } catch (_) {}
 
           res = await fetch(url, {
             credentials: "include",
@@ -247,10 +247,10 @@ export async function apiFetchMe(customSignal = null) {
         if (res.status === 401 || res.status === 403) {
           _knownUnauthenticated = true
           try {
-            localStorage.removeItem("sevo_user")
-            localStorage.removeItem("sevo_access_token")
+            localStorage.removeItem("caltrack_user")
+            localStorage.removeItem("caltrack_access_token")
             localStorage.removeItem("qt_access")
-          } catch (_) { }
+          } catch (_) {}
         } else {
           console.warn("apiFetchMe failed with status:", res.status, text)
         }
@@ -282,7 +282,7 @@ export async function apiRefreshToken() {
   if (_knownUnauthenticated) return false
   const hasStoredSession = (() => {
     try {
-      return !!(localStorage.getItem("sevo_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("sevo_user"))
+      return !!(localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access") || localStorage.getItem("caltrack_user"))
     } catch (_) {
       return false
     }
@@ -349,12 +349,12 @@ export async function apiGoogleLogin(googleAccessToken, inviteToken = null) {
   })
   if (data?.access) {
     try {
-      localStorage.setItem("sevo_access_token", data.access)
+      localStorage.setItem("caltrack_access_token", data.access)
       localStorage.setItem("qt_access", data.access)
       if (data.user) {
-        localStorage.setItem("sevo_user", JSON.stringify(data.user))
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
       }
-    } catch (_) { }
+    } catch (_) {}
   }
   return data
 }
@@ -369,12 +369,12 @@ export async function apiCustomerGoogleLogin(googleAccessToken) {
   })
   if (data?.access) {
     try {
-      localStorage.setItem("sevo_access_token", data.access)
+      localStorage.setItem("caltrack_access_token", data.access)
       localStorage.setItem("qt_access", data.access)
       if (data.user) {
-        localStorage.setItem("sevo_user", JSON.stringify(data.user))
+        localStorage.setItem("caltrack_user", JSON.stringify(data.user))
       }
-    } catch (_) { }
+    } catch (_) {}
   }
   return data
 }

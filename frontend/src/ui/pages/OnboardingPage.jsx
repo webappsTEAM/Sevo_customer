@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { apiRequest } from "../../api/client"
 import { Check, ArrowRight, Building2, Users2, Workflow, Clock, Banknote, CalendarDays, Sparkles, RefreshCcw } from "lucide-react"
-import { SevoLogo, sevoLogo } from "../components/sevoLogo.jsx"
+import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { routes } from "../routes.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 
@@ -131,7 +131,7 @@ export function OnboardingPage() {
 
         <div style={{ zIndex: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 64 }}>
-            <SevoLogo size="md" showTagline />
+            <CalTrackLogo size="md" showTagline />
             <button
               onClick={async () => {
                 await logout()
@@ -494,8 +494,8 @@ export function OnboardingPage() {
                   ))}
                 </div>
                 {adminEmails.length < 10 && (
-                  <button
-                    className="btn btnGhost"
+                  <button 
+                    className="btn btnGhost" 
                     onClick={() => setAdminEmails([...adminEmails, ""])}
                     style={{ fontSize: 12, fontWeight: 800, color: "#5d5fef", marginTop: 10, padding: 0, border: "none", background: "none", cursor: "pointer" }}
                   >
