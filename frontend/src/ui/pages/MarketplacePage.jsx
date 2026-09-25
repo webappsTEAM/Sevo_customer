@@ -766,20 +766,112 @@ export function MarketplacePage() {
 
         {/* Hero Store Banner */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-linear-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg">
-            <div className="relative z-10 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-xs mb-3">
-                <ShieldCheck className="w-3.5 h-3.5" /> 100% Quality & Freshness Guarantee
+          <div
+            className="rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl"
+            style={{
+              background: "linear-gradient(135deg, #022c22 0%, #064e3b 50%, #022c22 100%)",
+            }}
+          >
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              {/* Left Column */}
+              <div className="max-w-2xl">
+                <div
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-3"
+                  style={{
+                    backgroundColor: "rgba(16, 185, 129, 0.2)",
+                    border: "1px solid rgba(52, 211, 153, 0.3)",
+                    color: "#34d399",
+                  }}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" /> 100% Quality &amp; Freshness Guarantee
+                </div>
+
+                <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight text-white">
+                  Direct from Certified <span style={{ color: "#34d399" }}>Seller Hub</span> Partners
+                </h2>
+
+                <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed max-w-xl">
+                  Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
+                </p>
+
+                {/* Feature Pills */}
+                <div className="flex flex-wrap items-center gap-2.5 mt-5">
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.08)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                    }}
+                  >
+                    <Truck className="w-3.5 h-3.5 text-emerald-400" />
+                    Express Delivery
+                  </div>
+
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.08)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                    }}
+                  >
+                    <PackageCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    Sealed &amp; Tamper-Proof
+                  </div>
+
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-100"
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.08)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                    }}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    Best Price Assured
+                  </div>
+                </div>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-snug">
-                Direct from Certified Seller Hub Partners
-              </h2>
-              <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-                Shop authentic branded groceries, dairy, staples, and packaged goods dispatched directly from verified local suppliers.
-              </p>
+
+              {/* Right Side Stats Card */}
+              <div
+                className="hidden sm:flex flex-col justify-center rounded-2xl p-4 sm:p-5 w-full md:w-72 shrink-0 backdrop-blur-md"
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="text-xs font-bold text-slate-300">Marketplace Hub</span>
+                  <span
+                    className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider"
+                    style={{
+                      backgroundColor: "rgba(16, 185, 129, 0.25)",
+                      color: "#34d399",
+                    }}
+                  >
+                    Live Verified
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 my-1">
+                  <Store className="w-6 h-6 text-emerald-400" />
+                  <span className="text-lg font-black text-white">
+                    {availableSellers.length > 0 ? `${availableSellers.length} Local Stores` : "9 Local Stores"}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 mt-2 leading-normal">
+                  Dispatched straight from local vendor warehouses for quick delivery and freshness.
+                </p>
+              </div>
             </div>
+
             {/* Ambient Background decoration */}
-            <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent pointer-events-none" />
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none"
+              style={{
+                background: "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.15), transparent 70%)",
+              }}
+            />
           </div>
         </section>
 
