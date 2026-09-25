@@ -23,8 +23,10 @@ import { apiRequest } from "../../../api/client.js"
 import { useAuth } from "../../../state/auth/useAuth.js"
 import "./AIChatWidget.css"
 
-const STORAGE_KEY_CONV_ID = "calservices_ai_conversation_id"
-const STORAGE_KEY_MESSAGES = "calservices_ai_messages"
+const STORAGE_KEY_CONV_ID    = "calservices_ai_conversation_id"
+const STORAGE_KEY_MESSAGES   = "calservices_ai_messages"
+// Stamps WHICH user owns the cached session — prevents cross-user data leaks
+const STORAGE_KEY_OWNER_ID   = "calservices_ai_owner_id"
 
 const DEFAULT_WELCOME_MESSAGE = {
   id: "welcome",
@@ -91,26 +93,56 @@ export function AIChatWidget() {
   const [conversationsList, setConversationsList] = useState([])
   const [loadingConversations, setLoadingConversations] = useState(false)
 
-  const [conversationId, setConversationId] = useState(() => {
+  // ── Privacy-safe storage helpers ──────────────────────────────────────────
+  // Each session is stamped with the owner's user-id (or "guest" for anonymous).
+  // On read, if the stamp doesn't match the current identity we discard the
+  // stale data immediately — before it ever enters React state — so no user
+  // can see another user's chat history, even on the same device/tab.
+  const currentOwnerId = user?.id ? String(user.id) : "guest"
+
+  const clearAIChatStorage = () => {
     try {
+      sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
+      sessionStorage.removeItem(STORAGE_KEY_MESSAGES)
+      sessionStorage.removeItem(STORAGE_KEY_OWNER_ID)
+    } catch {}
+  }
+
+  const readStoredConvId = (ownerId) => {
+    try {
+      const storedOwner = sessionStorage.getItem(STORAGE_KEY_OWNER_ID)
+      if (storedOwner !== ownerId) {
+        // Stale data from a different user — wipe immediately
+        clearAIChatStorage()
+        return null
+      }
       return sessionStorage.getItem(STORAGE_KEY_CONV_ID) || null
     } catch {
       return null
     }
-  })
+  }
 
-  const [messages, setMessages] = useState(() => {
+  const readStoredMessages = (ownerId) => {
     try {
+      const storedOwner = sessionStorage.getItem(STORAGE_KEY_OWNER_ID)
+      if (storedOwner !== ownerId) {
+        clearAIChatStorage()
+        return null
+      }
       const cached = sessionStorage.getItem(STORAGE_KEY_MESSAGES)
       if (cached) {
         const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
     } catch {}
-    return [DEFAULT_WELCOME_MESSAGE]
-  })
+    return null
+  }
+
+  const [conversationId, setConversationId] = useState(() => readStoredConvId(currentOwnerId))
+
+  const [messages, setMessages] = useState(
+    () => readStoredMessages(currentOwnerId) ?? [DEFAULT_WELCOME_MESSAGE]
+  )
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -130,27 +162,28 @@ export function AIChatWidget() {
     return name || user.username || "there"
   })()
 
-  // Save conversationId in sessionStorage
+  // Save conversationId in sessionStorage — always stamp the owner ID alongside
   useEffect(() => {
-    if (conversationId) {
-      try {
+    try {
+      if (conversationId) {
         sessionStorage.setItem(STORAGE_KEY_CONV_ID, conversationId)
-      } catch {}
-    } else {
-      try {
+        sessionStorage.setItem(STORAGE_KEY_OWNER_ID, currentOwnerId)
+      } else {
         sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
-      } catch {}
-    }
-  }, [conversationId])
+        // Keep OWNER_ID so the messages key can still be validated
+      }
+    } catch {}
+  }, [conversationId, currentOwnerId])
 
-  // Save messages in sessionStorage on every message change
+  // Save messages in sessionStorage on every message change — stamp owner ID
   useEffect(() => {
     try {
       if (messages.length > 1 || (messages.length === 1 && messages[0].id !== "welcome")) {
         sessionStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages))
+        sessionStorage.setItem(STORAGE_KEY_OWNER_ID, currentOwnerId)
       }
     } catch {}
-  }, [messages])
+  }, [messages, currentOwnerId])
 
   // Function to load conversation messages from server
   const loadConversationDetails = async (convId) => {
@@ -178,6 +211,39 @@ export function AIChatWidget() {
     }
   }
 
+  // ── Privacy guard: wipe chat state whenever the signed-in identity changes.
+  //    This covers same-device / same-tab account switches so User B
+  //    never sees User A’s conversation in memory or sessionStorage.
+  const prevUserIdRef = useRef(user?.id ?? null)
+  useEffect(() => {
+    const currentId = user?.id ?? null
+    if (prevUserIdRef.current !== currentId) {
+      prevUserIdRef.current = currentId
+      // Always reset in-memory chat state on any identity change
+      setConversationId(null)
+      setMessages([DEFAULT_WELCOME_MESSAGE])
+      try {
+        sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
+        sessionStorage.removeItem(STORAGE_KEY_MESSAGES)
+      } catch {}
+
+      // If a NEW user just logged in, load their own latest conversation
+      if (currentId) {
+        apiRequest("/ai/conversations/")
+          .then((res) => {
+            if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
+              const latest = res.data[0]
+              if (latest?.id) {
+                loadConversationDetails(latest.id)
+              }
+            }
+          })
+          .catch(() => {})
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
+
   // Restore history on mount: if conversationId exists, sync with server;
   // if user is logged in with no active session, restore latest conversation
   useEffect(() => {
@@ -200,7 +266,9 @@ export function AIChatWidget() {
     return () => {
       isMounted = false
     }
-  }, [user])
+  // Only run on first mount (empty dep array equivalent via eslint disable)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Fetch past conversations list
   const fetchConversationsList = async () => {
@@ -305,10 +373,7 @@ export function AIChatWidget() {
 
   const handleNewChat = () => {
     setConversationId(null)
-    try {
-      sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
-      sessionStorage.removeItem(STORAGE_KEY_MESSAGES)
-    } catch {}
+    clearAIChatStorage()
     setMessages([
       {
         id: `welcome_${Date.now()}`,
@@ -329,10 +394,7 @@ export function AIChatWidget() {
       }
     }
     setConversationId(null)
-    try {
-      sessionStorage.removeItem(STORAGE_KEY_CONV_ID)
-      sessionStorage.removeItem(STORAGE_KEY_MESSAGES)
-    } catch {}
+    clearAIChatStorage()
     setMessages([
       {
         id: `welcome_${Date.now()}`,

@@ -228,6 +228,14 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("qt_access")
     localStorage.removeItem("caltrack_user")
     localStorage.removeItem("caltrack_customer_phone")
+    // ── AI Chat Privacy: clear conversation session so the next user
+    //    on this device/tab cannot see the previous user's chat history.
+    //    Also removes the owner-ID stamp so stale data is never matched.
+    try {
+      sessionStorage.removeItem("calservices_ai_conversation_id")
+      sessionStorage.removeItem("calservices_ai_messages")
+      sessionStorage.removeItem("calservices_ai_owner_id")
+    } catch (_) {}
     setUser(null)
     window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
     window.dispatchEvent(new Event("calservice_address_changed"))
