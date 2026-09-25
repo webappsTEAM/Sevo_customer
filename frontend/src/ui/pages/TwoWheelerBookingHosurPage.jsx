@@ -516,6 +516,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   // HOSUR_AREAS arrays.
   const [fetchedTiers, setFetchedTiers] = useState([])
   const [fetchedLanes, setFetchedLanes] = useState([])
+  const [serviceAreas, setServiceAreas] = useState([])
   const [pickupError, setPickupError] = useState("")
   const [destinationError, setDestinationError] = useState("")
   const [bookingError, setBookingError] = useState("")
@@ -822,7 +823,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
         if (cancelled) return
         setFetchedTiers(tiers)
         setFetchedLanes(lanes)
-        setServiceAreas(areas)
+        setServiceAreas(Array.isArray(areas) ? areas : [])
         if (Array.isArray(categories) && categories.length > 0) {
           const twCats = categories.filter((c) => c.allows_two_wheeler && !c.is_prohibited)
           setDynamicCategories(twCats)
@@ -1143,7 +1144,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
       (maxAllowed2WWeight > 0 && totalCargoWeightKg > maxAllowed2WWeight) || hasIncompatible2WItems
     )
 
-  const HOSUR_AREAS = serviceAreas.map((a) => a.name)
+  const HOSUR_AREAS = (Array.isArray(serviceAreas) ? serviceAreas : []).map((a) => a?.name).filter(Boolean)
 
   const POPULAR_ROUTES = fetchedLanes.map((lane) => ({
     to: lane.destination_label,
