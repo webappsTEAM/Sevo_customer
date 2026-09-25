@@ -11136,21 +11136,19 @@ function StepWorkflowCheckout({
                   <Clock size={18} />
                 </div>
                 <div className="flex-1">
-                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
-
-                  {/* Select button or current slot */}
-                  {isSlotSelected && !showSlotPicker ? (
-                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
-                      <div>
-                        <span className="text-xs font-black text-indigo-950 block">
-                          {availableDates.find(d => d.dateStr === selectedDate)?.label || selectedDate}
-                          {selectedDate}
+                  {/* Slot Header / Summary Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Slot</span>
+                      {isSlotSelected && (
+                        <span className="text-[9.5px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Selected
                         </span>
-                        <span className="text-xs font-bold text-indigo-700">
-                          {selectedTime}
-                        </span>
-                      </div>
+                      )}
+                    </div>
+                    {isSlotSelected && !showSlotPicker ? (
                       <button
+                        type="button"
                         onClick={() => {
                           const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
                           if (!hasAddr) {
@@ -11160,26 +11158,56 @@ function StepWorkflowCheckout({
                           }
                           setShowSlotPicker(true);
                         }}
-                        className="text-xs font-bold text-indigo-600 hover:underline"
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
                       >
-                        Change slot
+                        Change
+                      </button>
+                    ) : showSlotPicker && isSlotSelected ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowSlotPicker(false)}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Done
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Summary when slot is selected and picker is closed */}
+                  {isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-extrabold text-slate-800">
+                        {availableDates.find(d => d.dateStr === selectedDate)?.label || selectedDate}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">•</span>
+                      <span className="text-xs font-extrabold text-indigo-700">
+                        {selectedTime}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Clean row when slot is not yet selected and picker is closed */}
+                  {!isSlotSelected && !showSlotPicker && (
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs font-medium text-slate-400">
+                        No time slot selected yet
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
+                          if (!hasAddr) {
+                            setShowAddressDrawer(true);
+                            setSlotRevalidateNotice("Please select your service address first to check availability.");
+                            return;
+                          }
+                          setShowSlotPicker(true);
+                        }}
+                        className="border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 rounded-lg px-3 py-1 text-xs font-extrabold transition-all shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                      >
+                        Choose Slot
                       </button>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const hasAddr = Boolean(formData.address && formData.address.trim() && formData.address !== "Set location" && formData.address !== "Hosur, Tamil Nadu");
-                        if (!hasAddr) {
-                          setShowAddressDrawer(true);
-                          setSlotRevalidateNotice("Please select your service address first to check availability.");
-                          return;
-                        }
-                        setShowSlotPicker(true);
-                      }}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
-                    >
-                      Select time & date
-                    </button>
                   )}
 
                   {slotRevalidateNotice && (
@@ -11191,7 +11219,7 @@ function StepWorkflowCheckout({
 
                   {/* Inline Slot Picker Panel */}
                   {showSlotPicker && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-4">
 
                       {/* Date Pills */}
                       <div>
@@ -11283,19 +11311,14 @@ function StepWorkflowCheckout({
                                       if (selectedDate) setShowSlotPicker(false)
                                     }}
                                     title={!isAvail && reason ? reason : t}
-                                    className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${!isAvail
-                                      ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                    className={`py-2.5 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${!isAvail
+                                      ? "bg-slate-100/70 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
                                       : isSel
                                       ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
                                       : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
                                       }`}
                                   >
                                     <div>{t}</div>
-                                    {!isAvail && reason && (
-                                      <div className="text-[9px] font-black text-rose-500 mt-0.5">
-                                        {reason}
-                                      </div>
-                                    )}
                                   </button>
                                 )
                               })}
@@ -11870,7 +11893,7 @@ function StepWorkflowCheckout({
 
               {dbCoupons.length === 0 ? (
                 <div className="text-center py-8 text-xs font-bold text-slate-400">
-                  No active database coupons available at the moment.
+                  No active coupons available at the moment.
                 </div>
               ) : (
                 dbCoupons.map(cpn => {

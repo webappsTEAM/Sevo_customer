@@ -132,13 +132,13 @@ export function ACInspectionRateCardPage() {
       if (res?.success && res.data) {
         setConfig(res.data)
         setDiagnosticFeeInput(String(res.data.diagnostic_fee))
-        showToast(`Diagnostic fee updated to ₹${res.data.diagnostic_fee} in database!`)
+        showToast(`Diagnostic fee updated to ₹${res.data.diagnostic_fee}!`)
       } else {
         throw new Error(res?.error || "Failed to update diagnostic fee")
       }
     } catch (err) {
       console.error("Fee update error:", err)
-      showToast(err?.message || "Failed to update diagnostic fee in database", "error")
+      showToast(err?.message || "Failed to update diagnostic fee", "error")
     } finally {
       setSaving(false)
     }
@@ -147,7 +147,7 @@ export function ACInspectionRateCardPage() {
   // Reset Defaults Handler
   const handleResetDefaults = async () => {
     const confirmed = window.confirm(
-      "Reset all AC inspection rate items to the standard 65 catalog defaults in PostgreSQL?\n\nExisting historical quotation snapshots will remain completely intact and unaltered."
+      "Reset all AC inspection rate items to the standard default catalog?\n\nExisting quotations will not be affected."
     )
     if (!confirmed) return
 
@@ -155,14 +155,14 @@ export function ACInspectionRateCardPage() {
     try {
       const res = await resetACDefaultsDB()
       if (res?.success) {
-        showToast(res.message || "Rate card restored to default 65 catalog items in database!")
+        showToast(res.message || "Rate card restored to default catalog items!")
         await loadDatabaseData()
       } else {
         throw new Error(res?.error || "Failed to reset defaults")
       }
     } catch (err) {
       console.error("Reset defaults error:", err)
-      showToast(err?.message || "Unable to reset defaults in database", "error")
+      showToast(err?.message || "Unable to reset defaults", "error")
     } finally {
       setSaving(false)
     }
@@ -234,17 +234,17 @@ export function ACInspectionRateCardPage() {
       if (res?.success) {
         showToast(
           editingItem
-            ? `Updated "${itemFormName}" in database!`
-            : `Created "${itemFormName}" in database!`
+            ? `Updated "${itemFormName}" successfully!`
+            : `Added "${itemFormName}" successfully!`
         )
         setIsItemModalOpen(false)
         await loadDatabaseData()
       } else {
-        throw new Error(res?.error || "Failed to save item in database")
+        throw new Error(res?.error || "Failed to save item")
       }
     } catch (err) {
       console.error("Item save error:", err)
-      showToast(err?.message || "Error saving item to database", "error")
+      showToast(err?.message || "Error saving item", "error")
     } finally {
       setSaving(false)
     }
@@ -253,7 +253,7 @@ export function ACInspectionRateCardPage() {
   // Delete / Deactivate Item
   const handleDeleteItem = async (item) => {
     const confirmed = window.confirm(
-      `Delete "${item.name}" from database?\n\nIf this item has existing inspection quotes, it will be safely deactivated to protect historical records.`
+      `Delete "${item.name}"?\n\nIf this item has existing inspection quotes, it will be safely deactivated to protect historical records.`
     )
     if (!confirmed) return
 
@@ -262,9 +262,9 @@ export function ACInspectionRateCardPage() {
       const res = await deleteACRateItem(item.id)
       if (res?.success) {
         if (res.data?.deactivated) {
-          showToast(`"${item.name}" has historical records and was safely deactivated in DB.`)
+          showToast(`"${item.name}" is in use and was deactivated.`)
         } else {
-          showToast(`Deleted "${item.name}" from database!`)
+          showToast(`Deleted "${item.name}" successfully!`)
         }
         await loadDatabaseData()
       } else {
@@ -272,7 +272,7 @@ export function ACInspectionRateCardPage() {
       }
     } catch (err) {
       console.error("Delete error:", err)
-      showToast(err?.message || "Error deleting item from database", "error")
+      showToast(err?.message || "Error deleting item", "error")
     } finally {
       setSaving(false)
     }
@@ -328,8 +328,8 @@ export function ACInspectionRateCardPage() {
       if (res?.success) {
         showToast(
           editingCategory
-            ? `Updated category "${catFormName}" in database!`
-            : `Created category "${catFormName}" in database!`
+            ? `Updated category "${catFormName}" successfully!`
+            : `Created category "${catFormName}" successfully!`
         )
         setIsCategoryModalOpen(false)
         await loadDatabaseData()
@@ -338,7 +338,7 @@ export function ACInspectionRateCardPage() {
       }
     } catch (err) {
       console.error("Category save error:", err)
-      showToast(err?.message || "Error saving category to database", "error")
+      showToast(err?.message || "Error saving category", "error")
     } finally {
       setSaving(false)
     }
@@ -347,7 +347,7 @@ export function ACInspectionRateCardPage() {
   // Delete Category
   const handleDeleteCategory = async (cat) => {
     const confirmed = window.confirm(
-      `Delete or deactivate category "${cat.name}" in database?\n\nIf it contains items or historical quotation records, it will be safely deactivated.`
+      `Delete or deactivate category "${cat.name}"?\n\nIf it contains items or historical quotation records, it will be safely deactivated.`
     )
     if (!confirmed) return
 
@@ -355,7 +355,7 @@ export function ACInspectionRateCardPage() {
     try {
       const res = await deleteACRateCategory(cat.id)
       if (res?.success) {
-        showToast(res.message || `Category "${cat.name}" updated in database!`)
+        showToast(res.message || `Category "${cat.name}" updated successfully!`)
         await loadDatabaseData()
       } else {
         throw new Error(res?.error || "Failed to delete category")
@@ -415,7 +415,7 @@ export function ACInspectionRateCardPage() {
             {error}
           </h2>
           <p className="text-xs text-slate-500 max-w-md">
-            The system could not retrieve the rate card from the PostgreSQL database. Please check your network connection and backend server status.
+            The system could not retrieve the rate card. Please check your network connection and server status.
           </p>
         </div>
         <button
@@ -424,7 +424,7 @@ export function ACInspectionRateCardPage() {
           className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black shadow-md transition-colors flex items-center gap-2 cursor-pointer"
         >
           <RotateCcw className="w-4 h-4" />
-          <span>Retry Loading Database</span>
+          <span>Retry</span>
         </button>
       </div>
     )
@@ -435,7 +435,7 @@ export function ACInspectionRateCardPage() {
       <div className="p-8 flex flex-col items-center justify-center min-h-[400px] space-y-3">
         <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
         <p className="text-xs font-bold text-slate-500">
-          Loading rate card from PostgreSQL database...
+          Loading rate card...
         </p>
       </div>
     )
@@ -472,12 +472,12 @@ export function ACInspectionRateCardPage() {
                 SUPER ADMIN
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-black">
-                <Database className="w-3 h-3 text-emerald-600" />
-                <span>DB Synchronized (PostgreSQL: ACInspectionRateItem)</span>
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Live &amp; Synchronized</span>
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Live PostgreSQL single source of truth for diagnostic fees, categories, and spare parts pricing.
+              Manage diagnostic visit fees, service categories, and spare parts pricing.
             </p>
           </div>
         </div>
@@ -507,7 +507,7 @@ export function ACInspectionRateCardPage() {
             className="flex-1 sm:flex-none px-5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            <span>{saving ? "Syncing..." : "Refresh DB"}</span>
+            <span>{saving ? "Refreshing..." : "Refresh"}</span>
           </button>
         </div>
       </div>
@@ -534,11 +534,11 @@ export function ACInspectionRateCardPage() {
               onChange={(e) => setDiagnosticFeeInput(e.target.value)}
               onBlur={handleDiagnosticFeeSave}
               className="text-2xl font-black text-slate-900 w-32 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              title="Click outside or blur to persist to database"
+              title="Click outside to save changes"
             />
           </div>
           <p className="text-[11px] text-slate-400 leading-snug">
-            Charged upfront to book an inspection visit. Saved directly to database and deducted from total repair bill.
+            Charged upfront to book an inspection visit. Deducted from the final repair bill.
           </p>
         </div>
 
@@ -554,7 +554,7 @@ export function ACInspectionRateCardPage() {
             {categories.length} Categories
           </div>
           <p className="text-[11px] text-slate-400 leading-snug truncate" title={categories.map(c => c.name).join(", ")}>
-            {categories.map((c) => c.name).join(", ") || "No categories in database"}
+            {categories.map((c) => c.name).join(", ") || "No categories configured yet"}
           </p>
         </div>
 
@@ -570,7 +570,7 @@ export function ACInspectionRateCardPage() {
             {items.length} Items
           </div>
           <p className="text-[11px] text-slate-400 leading-snug">
-            All prices are stored in PostgreSQL and delivered to customers &amp; technicians.
+            Standard prices displayed to customers and technicians during inspection.
           </p>
         </div>
       </div>
@@ -666,7 +666,7 @@ export function ACInspectionRateCardPage() {
                       )}
                     </div>
                     <span className="text-[11px] font-semibold text-slate-500">
-                      {catItems.length} items configured in database
+                      {catItems.length} {catItems.length === 1 ? "item" : "items"} available
                     </span>
                   </div>
                 </div>
@@ -748,7 +748,7 @@ export function ACInspectionRateCardPage() {
                             type="button"
                             onClick={() => openEditItemModal(item)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                            title="Edit item in database"
+                            title="Edit item"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -756,7 +756,7 @@ export function ACInspectionRateCardPage() {
                             type="button"
                             onClick={() => handleDeleteItem(item)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Delete or deactivate item in database"
+                            title="Delete item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -922,7 +922,7 @@ export function ACInspectionRateCardPage() {
                   className="px-5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{editingItem ? "Update in DB" : "Save to DB"}</span>
+                  <span>{editingItem ? "Save Changes" : "Add Item"}</span>
                 </button>
               </div>
             </form>
@@ -1037,7 +1037,7 @@ export function ACInspectionRateCardPage() {
                     className="px-5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
                     {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>{editingCategory ? "Update in DB" : "Create in DB"}</span>
+                    <span>{editingCategory ? "Save Changes" : "Create Category"}</span>
                   </button>
                 </div>
               </div>
@@ -1051,7 +1051,7 @@ export function ACInspectionRateCardPage() {
         <div className="flex items-center gap-1.5 pr-1">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-xs font-bold text-slate-200">
-            PostgreSQL Single Source of Truth
+            Live Pricing Active
           </span>
         </div>
         <button
@@ -1061,7 +1061,7 @@ export function ACInspectionRateCardPage() {
           className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-          <span>{saving ? "Refreshing..." : "Refresh Live Data"}</span>
+          <span>{saving ? "Refreshing..." : "Refresh"}</span>
         </button>
       </div>
     </div>

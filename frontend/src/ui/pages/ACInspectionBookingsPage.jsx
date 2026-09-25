@@ -235,7 +235,7 @@ export function ACInspectionBookingsPage() {
             AC Inspection Bookings
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1 max-w-2xl">
-            Live PostgreSQL single-source-of-truth monitoring for AC Inspection &amp; Diagnostic visits, technician status tracking, and estimation quotations.
+            Live monitoring for AC Inspection &amp; Diagnostic visits, technician status tracking, and repair quotations.
           </p>
         </div>
 
@@ -340,7 +340,7 @@ export function ACInspectionBookingsPage() {
         {loading && bookings.length === 0 ? (
           <div className="p-12 text-center text-xs font-bold text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw size={16} className="animate-spin text-emerald-600" />
-            Loading AC inspection bookings from PostgreSQL...
+            Loading AC inspection bookings...
           </div>
         ) : error ? (
           <div className="p-8 text-center text-xs font-bold text-rose-600 bg-rose-50/50">
@@ -491,7 +491,7 @@ export function ACInspectionBookingsPage() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    AC Inspection &amp; Diagnostic Visit · Shared PostgreSQL Record
+                    AC Inspection &amp; Diagnostic Visit
                   </p>
                 </div>
               </div>
