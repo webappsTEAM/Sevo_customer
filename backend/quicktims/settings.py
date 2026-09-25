@@ -564,7 +564,8 @@ if IS_TESTING:
             "Tests must run on SQLite only to protect shared/production databases."
         )
 
-
-
-
+# ── Workforce & Marketplace Integration Settings ──────────────────────────────
+WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
+SEVO_INTEGRATION_SECRET = (os.getenv("SEVO_INTEGRATION_SECRET") or "caldim_secure_webhook_token_2026").strip()
+WORKFORCE_WEBHOOK_SECRET = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
 

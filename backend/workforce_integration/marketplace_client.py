@@ -12,7 +12,7 @@ from django.conf import settings
 
 logger = logging.getLogger("workforce_integration.marketplace")
 
-WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce").rstrip("/")
+WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
 
 
 class MarketplaceIntegrationClient:
@@ -25,7 +25,7 @@ class MarketplaceIntegrationClient:
             or os.getenv("WORKFORCE_API_BASE_URL")
             or "http://127.0.0.1:8001/api/workforce"
         )
-        return str(base).rstrip("/")
+        return str(base).replace("localhost", "127.0.0.1").rstrip("/")
 
     @classmethod
     def _get_secret(cls):
@@ -73,7 +73,8 @@ class MarketplaceIntegrationClient:
         endpoint = "/marketplace/categories/"
         url = f"{cls._get_base_url()}{endpoint}"
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=6)
+            url = f"{cls._get_base_url()}{endpoint}"
+            response = requests.get(url, params=params, headers=headers, timeout=20)
             if response.status_code == 200:
                 try:
                     data = response.json()
@@ -138,7 +139,7 @@ class MarketplaceIntegrationClient:
             return {"success": False, "message": "Integration secret not configured", "data": {"count": 0, "results": []}}
         try:
             url = f"{cls._get_base_url()}/marketplace/products/"
-            response = requests.get(url, params=params, headers=headers, timeout=6)
+            response = requests.get(url, params=params, headers=headers, timeout=20)
             if response.status_code == 200:
                 data = response.json()
                 return {"success": True, "data": data}
@@ -171,7 +172,7 @@ class MarketplaceIntegrationClient:
             return {"success": False, "message": "Integration secret not configured"}
         try:
             url = f"{cls._get_base_url()}/marketplace/products/{product_id}/"
-            response = requests.get(url, headers=headers, timeout=5)
+            response = requests.get(url, headers=headers, timeout=20)
             if response.status_code == 200:
                 return {"success": True, "data": response.json()}
             elif response.status_code == 404:
@@ -197,7 +198,7 @@ class MarketplaceIntegrationClient:
         }
         try:
             url = f"{cls._get_base_url()}/marketplace/cart/validate/"
-            response = requests.post(url, json=payload, headers=headers, timeout=6)
+            response = requests.post(url, json=payload, headers=headers, timeout=20)
             if response.status_code == 200:
                 data = response.json()
                 return {"success": True, "validation": data, "is_valid": data.get("is_valid", False)}
@@ -240,7 +241,7 @@ class MarketplaceIntegrationClient:
         }
         try:
             url = f"{cls._get_base_url()}/marketplace/orders/intake/"
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            response = requests.post(url, json=payload, headers=headers, timeout=20)
             if response.status_code in [200, 201]:
                 return {"success": True, "data": response.json(), "status_code": response.status_code}
             elif response.status_code == 409:
@@ -288,7 +289,7 @@ class MarketplaceIntegrationClient:
         }
         try:
             url = f"{cls._get_base_url()}/marketplace/orders/{source_order_id}/cancel/"
-            response = requests.post(url, json=payload, headers=headers, timeout=8)
+            response = requests.post(url, json=payload, headers=headers, timeout=20)
             if response.status_code in [200, 204]:
                 return {"success": True, "data": response.json() if response.text else {}}
             elif response.status_code == 400:

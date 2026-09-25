@@ -26,8 +26,10 @@ import {
   checkoutMarketplaceOrder,
   fetchMarketplaceOrderDetail,
   cancelMarketplaceOrder,
+  fetchMyOrders,
 } from "../../services/marketplaceApi.js"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 
 // Helper to recursively find category by slug or id in a tree
 function findCategoryInTree(nodes, slugOrId) {
@@ -144,7 +146,11 @@ function CategoryTreeItem({ node, selectedSlug, expandedIds, toggleExpand, onSel
 export function MarketplacePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, refreshMe } = useAuth()
+
+  // Customer Entry Modal & Pending Cart Action
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [pendingAddToCart, setPendingAddToCart] = useState(null)
 
   // Product Catalog & Category State
   const [products, setProducts] = useState([])
@@ -333,8 +339,35 @@ export function MarketplacePage() {
     }
   }
 
+  // Load Active Marketplace Order on mount / user change (survives page reload)
+  const reloadActiveOrder = async () => {
+    if (!user) return
+    try {
+      const res = await fetchMyOrders()
+      if (res?.data && Array.isArray(res.data)) {
+        const terminalStatuses = ["DELIVERED", "CANCELLED"]
+        const activeMkt = res.data.find(
+          (o) => o.order_type === "marketplace" && !terminalStatuses.includes(o.status)
+        )
+        if (activeMkt?.order_number) {
+          const detailRes = await fetchMarketplaceOrderDetail(activeMkt.order_number)
+          if (detailRes?.data) {
+            setActiveOrder(detailRes.data)
+          } else {
+            setActiveOrder(activeMkt)
+          }
+        } else {
+          setActiveOrder(null)
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load active marketplace order:", err)
+    }
+  }
+
   useEffect(() => {
     reloadCart()
+    reloadActiveOrder()
   }, [user])
 
   // Sellers list derived from current products
@@ -351,19 +384,20 @@ export function MarketplacePage() {
   // Handle Add To Cart
   const handleAddToCart = async (product, quantityDelta = 1) => {
     if (!user) {
-      navigate(routes.login, { state: { from: location.pathname } })
+      setPendingAddToCart({ product, quantityDelta })
+      setShowCustomerEntryModal(true)
       return
     }
 
-    // Check if item already in cart
-    const existingItem = cart.items.find((i) => i.seller_product_id === product.id)
+    const cartItems = Array.isArray(cart?.items) ? cart.items : []
+    const existingItem = cartItems.find((i) => i.seller_product_id === product.id)
     const newQty = existingItem ? existingItem.quantity + quantityDelta : quantityDelta
 
     if (existingItem && newQty <= 0) {
       // Remove item
       try {
         await removeMarketplaceCartItem(existingItem.id)
-        reloadCart()
+        await reloadCart()
         showToast(`Removed "${product.title}" from cart`)
       } catch (err) {
         showToast("Failed to remove item.", "error")
@@ -371,6 +405,18 @@ export function MarketplacePage() {
       return
     }
 
+    if (existingItem && newQty > 0) {
+      // Update quantity on existing item
+      try {
+        await updateMarketplaceCartItem(existingItem.id, { quantity: newQty })
+        await reloadCart()
+      } catch (err) {
+        showToast(err?.body?.message || "Failed to update item quantity.", "error")
+      }
+      return
+    }
+
+    // Add new item to cart
     setCartLoading(true)
     try {
       const res = await addMarketplaceCartItem({
@@ -379,12 +425,12 @@ export function MarketplacePage() {
         clear_cart: false,
       })
       if (res?.success) {
-        reloadCart()
+        await reloadCart()
         showToast(`Added "${product.title}" to cart`, "success")
       } else if (res?.error === "seller_mismatch" || res?.status_code === 409) {
         // Trigger Single-Seller Conflict Modal
         setSellerConflict({
-          current_seller_name: res.current_seller_name || cart.seller_name || "another seller",
+          current_seller_name: res.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
           pendingQty: quantityDelta,
@@ -395,7 +441,7 @@ export function MarketplacePage() {
     } catch (err) {
       if (err?.body?.error === "seller_mismatch" || err?.status === 409) {
         setSellerConflict({
-          current_seller_name: err.body?.current_seller_name || cart.seller_name || "another seller",
+          current_seller_name: err.body?.current_seller_name || cart?.seller_name || "another seller",
           new_seller_name: product.seller_name || "New Seller",
           pendingProduct: product,
           pendingQty: quantityDelta,
@@ -500,6 +546,29 @@ export function MarketplacePage() {
     }
   }
 
+  // Live polling while Tracking Modal is open for non-terminal orders
+  useEffect(() => {
+    if (!trackingModalOpen || !activeOrder?.order_number) return
+    const terminalStatuses = ["DELIVERED", "CANCELLED"]
+    if (terminalStatuses.includes(activeOrder.status)) return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetchMarketplaceOrderDetail(activeOrder.order_number)
+        if (res?.data) {
+          setActiveOrder(res.data)
+          if (terminalStatuses.includes(res.data.status)) {
+            clearInterval(pollInterval)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to poll marketplace order tracking detail:", err)
+      }
+    }, 5000)
+
+    return () => clearInterval(pollInterval)
+  }, [trackingModalOpen, activeOrder?.order_number, activeOrder?.status])
+
   const totalCartCount = (cart?.items || []).reduce((acc, i) => acc + i.quantity, 0)
 
   return (
@@ -574,6 +643,15 @@ export function MarketplacePage() {
 
             {/* Cart & Account CTA */}
             <div className="flex items-center gap-3">
+              {!user && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerEntryModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Sign In
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setCartDrawerOpen(true)}
@@ -1629,6 +1707,109 @@ export function MarketplacePage() {
                   className="ml-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors cursor-pointer"
                 >
                   Done
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Persistent Active Order Floating Tracker Pill ── */}
+      <AnimatePresence>
+        {!trackingModalOpen && activeOrder && !["DELIVERED", "CANCELLED"].includes(activeOrder.status) && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-md w-[calc(100%-2rem)]"
+          >
+            <button
+              type="button"
+              onClick={() => setTrackingModalOpen(true)}
+              className="w-full bg-slate-900/95 hover:bg-slate-900 text-white backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-700/60 flex items-center justify-between gap-3 transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <div className="text-left truncate">
+                  <div className="text-xs font-black truncate">
+                    Order #{activeOrder.order_number} • <span className="text-emerald-400">{activeOrder.status_label || "Active"}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {activeOrder.seller_name || "Marketplace"} • Tap to view live tracking
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 bg-emerald-600 group-hover:bg-emerald-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl shrink-0 transition-colors shadow-sm">
+                <span>Track</span>
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Customer Entry / OTP Modal ── */}
+      {showCustomerEntryModal && (
+        <CustomerEntryFlowModal
+          isOpen={showCustomerEntryModal}
+          onClose={() => {
+            setShowCustomerEntryModal(false)
+            setPendingAddToCart(null)
+          }}
+          onComplete={async () => {
+            setShowCustomerEntryModal(false)
+            await refreshMe?.()
+            await reloadCart()
+            if (pendingAddToCart) {
+              const { product, quantityDelta } = pendingAddToCart
+              setPendingAddToCart(null)
+              setTimeout(() => {
+                handleAddToCart(product, quantityDelta)
+              }, 300)
+            }
+          }}
+        />
+      )}
+
+      {/* ── Single-Seller Conflict Resolution Modal ── */}
+      <AnimatePresence>
+        {sellerConflict && (
+          <div id="seller-conflict-modal-backdrop" className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
+            <motion.div
+              id="seller-conflict-modal"
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 border border-amber-200/60">
+                <Store className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-2">
+                Replace items in cart?
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed mb-6">
+                Your cart currently contains items from <strong className="text-slate-900 font-bold">{sellerConflict.current_seller_name}</strong>. Adding items from <strong className="text-emerald-700 font-bold">{sellerConflict.new_seller_name}</strong> will replace your existing cart items.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  id="btn-keep-current-seller"
+                  onClick={() => setSellerConflict(null)}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                >
+                  Keep Current Seller
+                </button>
+                <button
+                  type="button"
+                  id="btn-confirm-seller-switch"
+                  onClick={handleConfirmSellerSwitch}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-md shadow-emerald-600/20"
+                >
+                  Clear &amp; Switch
                 </button>
               </div>
             </motion.div>

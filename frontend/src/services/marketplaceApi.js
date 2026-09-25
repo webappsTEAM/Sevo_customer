@@ -154,3 +154,11 @@ export async function cancelMarketplaceOrder(orderNumber, reason = "Customer can
     json: { cancellation_reason: reason },
   })
 }
+
+/**
+ * Fetch unified customer order history (services, grocery, marketplace).
+ */
+export async function fetchMyOrders() {
+  return await apiRequest("/orders/my/", { method: "GET" })
+}
+
