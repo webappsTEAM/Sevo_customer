@@ -871,7 +871,14 @@ class WorkforceIntegrationService:
             "reason_code": reason_val,
             "reason_notes": notes_val,
         }
-        candidate_urls = [
+        # Avoid self-deadlock if WORKFORCE_API_BASE_URL points to the same Django instance
+        is_self_host = bool(
+            not WORKFORCE_API_BASE_URL
+            or "localhost:8000" in WORKFORCE_API_BASE_URL
+            or "127.0.0.1:8000" in WORKFORCE_API_BASE_URL
+        )
+
+        candidate_urls = [] if is_self_host else [
             f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{resolved_token}/decide/",
             f"{WORKFORCE_API_BASE_URL}/customer/quotes/{resolved_token}/decide/",
             f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{resolved_token}/decision/",
@@ -882,15 +889,20 @@ class WorkforceIntegrationService:
         res_json = {}
         for url in candidate_urls:
             try:
-                response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+                response = requests.post(url, json=payload, headers=cls._headers(), timeout=1.5)
                 if response.status_code in [200, 201, 204]:
                     res_json = response.json() if response.content else {}
                     http_success = True
                     break
+            except (requests.ConnectionError, requests.Timeout) as conn_err:
+                logger.debug(f"Workforce endpoint unreachable ({url}): {conn_err}")
+                break
             except Exception as e:
                 logger.warning(f"Workforce quote decision failed for {url}: {e}")
 
         # Sync update in DB directly to ensure zero latency and state consistency
+        qnum_val = None
+        qtotal_val = None
         if quote_id_val:
             try:
                 from django.db import connection
@@ -904,25 +916,90 @@ class WorkforceIntegrationService:
                             customer_decline_reason = CASE WHEN %s != '' THEN %s ELSE customer_decline_reason END,
                             updated_at = NOW()
                         WHERE id = %s
+                        RETURNING quote_number, total_amount
                     """, [
                         norm_status, norm_status,
                         notes_val, notes_val,
                         reason_val, reason_val,
                         quote_id_val
                     ])
+                    row = cursor.fetchone()
+                    if row:
+                        qnum_val, qtotal_val = row[0], row[1]
+
+                    # Supersede any older quotes for this job in SENT_TO_CUSTOMER / DRAFT
+                    if norm_action == "ACCEPT" and job_id_val:
+                        cursor.execute("""
+                            UPDATE workforce_quote
+                            SET status = 'SUPERSEDED', updated_at = NOW()
+                            WHERE job_id = %s AND id != %s AND status IN ('SENT_TO_CUSTOMER', 'DRAFT', 'PENDING_REVIEW')
+                        """, [job_id_val, quote_id_val])
             except Exception as u_err:
                 logger.warning(f"Could not directly update workforce_quote {quote_id_val}: {u_err}")
 
-        # Broadcast tracking event to update live customer screen and booking
+        # Synchronize ServiceRequest, Estimation, and EstimationQuotation
         if job_id_val:
             try:
-                from service_requests.models import ServiceRequest
-                from service_requests.notifications import broadcast_tracking_event
+                import django.utils.timezone as django_timezone
+                from service_requests.models import ServiceRequest, Estimation, EstimationQuotation
                 sr_obj = ServiceRequest.objects.filter(id=job_id_val).first()
                 if sr_obj:
+                    now_dt = django_timezone.now()
+                    est_obj = getattr(sr_obj, "estimation", None) or Estimation.objects.filter(service_request=sr_obj).first()
+
+                    if norm_action == "ACCEPT":
+                        sr_obj.status = ServiceRequest.Status.CUSTOMER_APPROVED if hasattr(ServiceRequest.Status, "CUSTOMER_APPROVED") else "customer_approved"
+                        sr_obj.request_kind = "quoted_work"
+                        sr_obj.job_type = "CHANGE_REQUEST"
+                        if qnum_val:
+                            sr_obj.quote_number = qnum_val
+                        if qtotal_val:
+                            sr_obj.total_amount = qtotal_val
+                        sr_obj.save(update_fields=["status", "request_kind", "job_type", "quote_number", "total_amount", "updated_at"])
+
+                        if est_obj:
+                            est_obj.status = "CUSTOMER_APPROVED"
+                            est_obj.save(update_fields=["status", "updated_at"])
+
+                            # Match target EstimationQuotation
+                            eq = None
+                            if qnum_val:
+                                eq = est_obj.quotations.filter(quote_ref__startswith=str(qnum_val).split('-V')[0]).order_by("-id").first()
+                            if not eq:
+                                eq = est_obj.quotations.order_by("-id").first()
+                            if eq:
+                                eq.status = "APPROVED"
+                                eq.customer_approved_at = now_dt
+                                eq.save(update_fields=["status", "customer_approved_at", "updated_at"])
+                            est_obj.quotations.filter(status="SENT").exclude(id=eq.id if eq else -1).update(status="SUPERSEDED")
+
+                    elif norm_action == "DECLINE":
+                        if est_obj:
+                            est_obj.status = "CUSTOMER_REJECTED"
+                            est_obj.save(update_fields=["status", "updated_at"])
+                            eq = est_obj.quotations.order_by("-id").first()
+                            if eq:
+                                eq.status = "REJECTED"
+                                eq.customer_rejected_at = now_dt
+                                eq.rejection_reason = reason_val
+                                eq.rejection_note = notes_val
+                                eq.save(update_fields=["status", "customer_rejected_at", "rejection_reason", "rejection_note", "updated_at"])
+
+                    elif norm_action == "REQUEST_CHANGES":
+                        if est_obj:
+                            est_obj.status = "CHANGES_REQUESTED"
+                            est_obj.save(update_fields=["status", "updated_at"])
+
+                    # Broadcast tracking event to update live customer screen and booking
+                    from service_requests.notifications import broadcast_tracking_event
                     broadcast_tracking_event(sr_obj, event_type="quote_decision_updated")
+                    broadcast_tracking_event(sr_obj, event_type="quotation.approved" if norm_action == "ACCEPT" else "quotation.rejected")
             except Exception as b_err:
-                logger.debug(f"Broadcast quote decision event failed: {b_err}")
+                logger.warning(f"Error synchronizing booking/estimation on quote decision: {b_err}")
+
+        # Clear quote caches
+        for k in [f"wf_quote_{token}", f"wf_quote_{resolved_token}", f"wf_quote_{job_id_val}"]:
+            cache.delete(k)
 
         if http_success:
             return {"success": True, "message": res_json.get("message", "Quotation decision recorded successfully."), "data": res_json}

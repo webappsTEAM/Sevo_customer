@@ -82,10 +82,12 @@ def run_tests():
     # ==========================================================
     print("\n--- TEST 1: Customer Booking Creation ---")
     client.force_authenticate(user=user_a)
+    from datetime import date, timedelta
+    tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     payload_1 = {
         "job_type": "ESTIMATION",
         "service_category": "hvac",
-        "preferred_date": "2026-09-20",
+        "preferred_date": tomorrow,
         "customer_name": "Customer A",
         "phone": "9876543210",
         "email": "customer_a@example.com",

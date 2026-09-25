@@ -61,6 +61,7 @@ export const routes = {
   marketing_coupons: "/marketing/coupons",
   marketing_offers: "/marketing/offers",
   marketing_referrals: "/marketing/referrals",
+  time_slot_management: "/admin/time-slots",
   homepage_customizer: "/admin/homepage-customizer",
   // Public customer live tracking page — accessible at /track/:bookingId?token=<uuid>
   // The tracking_token query param is the authorization credential (not in the path).
@@ -70,6 +71,7 @@ export const routes = {
   customers_detail: "/customers/:id",
   customers_payments: "/customers/payments",
   customers_merges: "/customers/merges",
+  admin_ac_inspections: "/customers/ac-inspections",
   // Public Legal & Policies
   terms: "/terms",
   terms_and_conditions: "/terms-and-conditions",

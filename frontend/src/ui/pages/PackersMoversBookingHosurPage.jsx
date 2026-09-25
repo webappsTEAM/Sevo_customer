@@ -349,8 +349,8 @@ const isSlotPassed = (slot, dateObj) => {
   const slotStart = new Date(d)
   slotStart.setHours(hour, 0, 0, 0)
 
-  // Backend booking_window.py enforces minimum 60 minutes lead time from now
-  const minLeadTime = new Date(today.getTime() + 60 * 60 * 1000)
+  // Backend booking_window.py enforces minimum 30 minutes lead time from now
+  const minLeadTime = new Date(today.getTime() + 30 * 60 * 1000)
   return slotStart < minLeadTime
 }
 

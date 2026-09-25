@@ -9,7 +9,6 @@ import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield, Home, Send, Truck, Share2
   Wrench, WifiOff, Shield, Home, Send, Truck, Share2, Ban
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"

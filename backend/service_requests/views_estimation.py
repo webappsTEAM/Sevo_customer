@@ -201,7 +201,7 @@ class CustomerQuotationDetailView(APIView):
             )
 
         # Retrieve latest or specific quotation
-        quotations = sr.estimation.quotations.prefetch_related("items").order_by("-version")
+        quotations = sr.estimation.quotations.prefetch_related("items").order_by("-version", "-id")
         quote_id = request.query_params.get("quotation_id")
         if quote_id and quote_id.isdigit():
             quote = quotations.filter(pk=int(quote_id)).first()
@@ -215,7 +215,58 @@ class CustomerQuotationDetailView(APIView):
             )
 
         serializer = EstimationQuotationSerializer(quote, context={"request": request})
-        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+        data = dict(serializer.data)
+
+        # Inspection report & technician findings
+        inspection_data = None
+        if hasattr(sr.estimation, "inspection") and sr.estimation.inspection:
+            inspection_data = InspectionSerializer(sr.estimation.inspection, context={"request": request}).data
+
+        # AC details snapshot
+        est = sr.estimation
+        data["ac_details"] = {
+            "ac_type": est.ac_type or "",
+            "ac_brand": est.ac_brand or "",
+            "ac_capacity": est.ac_capacity or "",
+            "ac_quantity": est.ac_quantity or 1,
+            "customer_symptom": est.customer_symptom or "",
+            "customer_notes": est.customer_notes or "",
+        }
+        data["inspection_report"] = inspection_data
+
+        # Fee & Pricing details
+        fee = getattr(est, "fee", None)
+        fee_amount = float(fee.amount) if fee else 199.0
+        fee_status = fee.status if fee else "PENDING"
+        fee_paid = fee_status in ["PAID", "COLLECTED"] or sr.payment_status in ["paid", "collected"]
+
+        subtotal = float(quote.subtotal)
+        tax = float(quote.tax_amount)
+        discount = float(quote.discount_amount)
+        total = float(quote.total_amount)
+
+        data["inspection_fee"] = {
+            "amount": fee_amount,
+            "status": fee_status,
+            "is_paid": fee_paid,
+            "waived_or_credited": fee_status == "WAIVED",
+        }
+        data["pricing_summary"] = {
+            "subtotal": subtotal,
+            "tax": tax,
+            "discount": discount,
+            "total": total,
+            "inspection_fee": fee_amount,
+            "inspection_fee_credited": fee_amount if (fee_paid or fee_status == "WAIVED") else 0.0,
+            "final_payable_amount": total,
+        }
+        data["can_decide"] = str(quote.status).upper() in ("SENT", "ADMIN_APPROVED", "SENT_TO_CUSTOMER")
+        data["booking_status"] = sr.status
+        data["job_type"] = sr.job_type
+        data["is_approved"] = quote.status in [EstimationQuotation.Status.APPROVED, "CUSTOMER_APPROVED"] or sr.status == ServiceRequest.Status.CUSTOMER_APPROVED
+        data["is_rejected"] = quote.status in [EstimationQuotation.Status.REJECTED, "CUSTOMER_REJECTED"] or sr.status in [ServiceRequest.Status.CUSTOMER_REJECTED, ServiceRequest.Status.ESTIMATION_CLOSED]
+        data["repair_authorized"] = est.status == Estimation.Status.REPAIR_AUTHORIZED or sr.status in [ServiceRequest.Status.CONFIRMED, ServiceRequest.Status.IN_PROGRESS, ServiceRequest.Status.COMPLETED]
+        return Response({"success": True, "data": data}, status=status.HTTP_200_OK)
 
 
 class CustomerQuotationApproveView(APIView):
@@ -239,6 +290,7 @@ class CustomerQuotationApproveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         quotation_id_int = int(quotation_id) if quotation_id else None
+        payment_mode = str(request.data.get("payment_mode") or request.data.get("payment_method") or "").strip().upper()
 
         try:
             updated_sr = QuotationService.approve_quotation(
@@ -246,6 +298,17 @@ class CustomerQuotationApproveView(APIView):
                 quotation_id=quotation_id_int,
                 customer=request.user if request.user.is_authenticated else sr.customer,
             )
+
+            # If payment mode is Cash on Service / COD or explicit authorize_repair requested,
+            # transition estimation to REPAIR_AUTHORIZED so technician can start repair.
+            if payment_mode in ["COD", "CASH", "CASH_ON_SERVICE", "PAY_ON_SERVICE"] or request.data.get("authorize_repair"):
+                est = getattr(updated_sr, "estimation", None)
+                if est:
+                    est.status = Estimation.Status.REPAIR_AUTHORIZED
+                    est.save(update_fields=["status", "updated_at"])
+                updated_sr.payment_method = "cash"
+                updated_sr.status = ServiceRequest.Status.CONFIRMED
+                updated_sr.save(update_fields=["payment_method", "status", "updated_at"])
         except EstimationStateConflictError as conflict_err:
             return Response(
                 {"success": False, "message": str(conflict_err)},

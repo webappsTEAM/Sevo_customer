@@ -490,7 +490,7 @@ const DAYS_LIST = getNextDays(21)
 // convenience filter, and the two deliberately use the same numbers.
 const BOOKING_TIMEZONE = 'Asia/Kolkata'
 const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
-const SAME_DAY_MIN_LEAD_MINUTES = 60
+const SAME_DAY_MIN_LEAD_MINUTES = 30
 
 function businessNowParts() {
   try {
@@ -557,15 +557,10 @@ function isSlotInPast(dateStr, slotStr) {
   }
 
   // Compare in business-timezone minutes, and keep 30 minutes minimum lead time
-  // so slots within 30 minutes (or past) are locked, but slots >= 30 mins away are available.
+  // so slots within 30 minutes are locked, but slots >= 30 mins away are available.
   const slotMinutes = hours * 60 + minutes
   const nowMinutes = business.hour * 60 + business.minute
   return slotMinutes < nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
-  // Compare in business-timezone minutes, and keep the same minimum lead time
-  // the server applies, so a slot starting in a few minutes is not offered.
-  const slotMinutes = hours * 60 + minutes
-  const nowMinutes = business.hour * 60 + business.minute
-  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
@@ -1449,14 +1444,6 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
                 {pkg.excludes.map((item, idx) => (
                   <div key={idx} className="uc-pkg-item uc-pkg-no">
                     <X size={12} /> {typeof item === 'object' ? (item?.text || item?.name || '') : String(item || '')}
-                {pkg.includes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-yes">
-                    <CheckCircle2 size={13} /> {item}
-                  </div>
-                ))}
-                {pkg.excludes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-no">
-                    <X size={12} /> {item}
                   </div>
                 ))}
               </div>
@@ -1513,17 +1500,6 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
     const h12 = h % 12 === 0 ? 12 : h % 12
     const minStr = String(m).padStart(2, '0')
     return `${h12}:${minStr} ${ampm}`
-  // Urban time slots: Morning / Afternoon / Evening
-  const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
-  ]
-  const formatSlot = t => {
-    const [h] = t.split(':').map(Number)
-    const ampm = h < 12 ? 'AM' : 'PM'
-    const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}:00 ${ampm}`
   }
 
   const canContinue = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
@@ -2562,8 +2538,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     searchParams.get("token") || ""
   const tokenQuery = resolvedToken ? `?token=${encodeURIComponent(resolvedToken)}` : ""
 
-  const [liveData, setLiveData] = useState(null)
-  const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
   const [liveData, setLiveData] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -2592,12 +2566,9 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
-  const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
   const [changeNotes, setChangeNotes] = useState("")
-  const [declineReasonCode, setDeclineReasonCode] = useState("")
-  const [declineReasonNotes, setDeclineReasonNotes] = useState("")
-  const [quoteExpanded, setQuoteExpanded] = useState(true)
   const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [wsState, setWsState] = useState("connecting")
@@ -2627,7 +2598,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
-      const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token
       const quoteToken = liveData?.quote?.decision_token || liveData?.quote?.customer_decision_token || liveData?.quote?.quote_number
       if (!quoteToken) return
 
@@ -2638,16 +2608,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         },
         body: JSON.stringify({
           decision,
-          reason_code: reasonCode,
-          reason_notes: reasonNotes
-        })
-      })
-      const result = await response.json()
-      if (result.success) {
-        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
-        window.location.reload()
-      } else {
-        alert("Error saving quote decision: " + (result.message || "Unknown error"))
           action: decision === "CUSTOMER_ACCEPTED" ? "ACCEPT" : decision === "CHANGE_REQUESTED" ? "REQUEST_CHANGES" : "DECLINE",
           reason_code: reasonCode,
           reason_notes: reasonNotes,
@@ -2747,11 +2707,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       if (isFetching) return          // skip cycle if previous request still in-flight
       isFetching = true
       try {
-        const currentToken = successData?.tracking_token || resolvedToken
-        const currentTokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : ""
-        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${currentTokenQuery}`)
-        if (res?.data && isMounted) {
-          setLiveData(res.data)
         const tokenQuery = activeToken ? `?token=${encodeURIComponent(activeToken)}` : ""
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
@@ -2782,42 +2737,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     // 2. High-frequency auto-refresh polling (every 2.5s)
     pollTimer = setInterval(fetchStatus, 2500)
 
-    // 3. Connect real-time WebSocket channel for instant push notifications
-    try {
-      ws = createTrackingWebSocket(
-        rid,
-        successData?.tracking_token,
-        (eventType, eventData) => {
-          if (!isMounted || !eventData) return
-          setLiveData(prev => {
-            const merged = {
-              ...(prev || {}),
-              ...(eventData?.booking || eventData || {}),
-            }
-            if (eventData?.status || eventData?.booking?.status) {
-              merged.status = eventData.status || eventData.booking.status
-            }
-            if (eventData?.technician || eventData?.booking?.technician) {
-              merged.technician = {
-                ...(prev?.technician || {}),
-                ...(eventData.technician || eventData.booking?.technician || {})
-              }
-            }
-            if (eventData?.is_accepted !== undefined || eventData?.technician_accepted !== undefined) {
-              merged.is_accepted = eventData.is_accepted ?? eventData.technician_accepted
-            }
-            try {
-              sessionStorage.setItem("calservice_last_booking", JSON.stringify(merged))
-            } catch (_) { }
-            return merged
-          })
-        },
-        (state) => {
-          if (isMounted) setWsState(state)
-        }
-      )
-    } catch (err) {
-      console.warn("[LiveTrackingPage] WS init error:", err)
     // 3. Connect real-time WebSocket channel (when token is available, else fetchStatus will initiate it)
     if (activeToken) {
       startWebSocket(activeToken)
@@ -2940,13 +2859,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       "feedback_received",
       "proof_submitted",
       "awaiting_verification",
-      "verified"
-      "feedback_received"
+      "verified",
     ].includes(String(liveData.status).toLowerCase())
   )
 
   const isProofSubmitted = Boolean(
-    liveData?.status && ["proof_submitted", "awaiting_verification"].includes(String(liveData.status).toLowerCase())
     liveData?.status && ["proof_submitted", "awaiting_verification", "cash_pending"].includes(String(liveData.status).toLowerCase())
   )
 
@@ -3651,8 +3568,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </motion.div>
       )}
 
-      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
-      {isAccepted && (
       {/* ─────────────────── CASH PAYMENT CONFIRMATION OTP (IF REPORTED/PENDING) ─────────────────── */}
       {((liveData?.payment_status === 'cash_pending' || currentStatus === 'cash_pending' || isProofSubmitted || (liveData?.payment_confirmation_otp && liveData?.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(currentStatus) && liveData?.payment_status !== 'paid') && (
         <div style={{
@@ -3744,231 +3659,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       )}
 
       {/* ─────────────────── ACTIVE QUOTE DECISION CARD (PHASE 3) ─────────────────── */}
-      {liveData?.quote && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: '1.5rem',
-            marginBottom: '1rem',
-            boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
-            border: `2px solid ${liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
-              }`,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Quotation Details
-              </div>
-              <h3 style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
-                Total Estimate: ₹{liveData.quote.total_amount}
-              </h3>
-            </div>
-            <span style={{
-              fontSize: '0.72rem',
-              padding: '4px 10px',
-              borderRadius: 8,
-              fontWeight: 800,
-              background:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              color:
-                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
-                  liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
-            }}>
-              {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" ? "Accepted" :
-                  liveData.quote.status === "CONVERTED" ? "Converted to Work" :
-                    liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
-                      liveData.quote.status.replace(/_/g, " ")}
-            </span>
-          </div>
 
-          <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
-            Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
-          </div>
-
-          {/* Status-specific alert message */}
-          {liveData.quote.status !== "SENT_TO_CUSTOMER" && (
-            <div style={{
-              padding: '10px 14px',
-              borderRadius: 12,
-              marginBottom: 16,
-              textAlign: 'left',
-              background:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
-              border: `1px solid ${liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
-                }`,
-              color:
-                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
-                  liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
-              fontSize: '0.82rem',
-              fontWeight: 700
-            }}>
-              {(liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "APPROVED") && "✓ You have accepted this quotation. Creating your service booking..."}
-              {liveData.quote.status === "CONVERTED" && "✓ Booking confirmed! Your service request has been scheduled."}
-              {liveData.quote.status === "CHANGES_REQUESTED" && `⚠ Changes requested: "${liveData.quote.customer_notes || 'Please adjust the items'}"`}
-              {liveData.quote.status === "DECLINED" && `✗ You declined this quotation: "${liveData.quote.customer_decline_reason || 'Other reason'}"`}
-            </div>
-          )}
-
-          {/* Expandable items section */}
-          <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-            <button
-              onClick={() => setQuoteExpanded(!quoteExpanded)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px 14px',
-                background: '#f8fafc',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                color: '#0f172a'
-              }}
-            >
-              <span>{quoteExpanded ? "Hide Line Items" : "View Line Items"}</span>
-              <span>{quoteExpanded ? "▲" : "▼"}</span>
-            </button>
-            {quoteExpanded && (
-              <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.items && liveData.quote.items.map((item, idx) => (
-                  <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                    <div>
-                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
-                        {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 900, color: '#0f172a' }}>
-                      ₹{item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "0" : (item.total_amount ?? ((item.unit_price ?? item.price ?? 0) * (item.quantity ?? 1)))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* PDF Download link */}
-          <div style={{ marginBottom: 16 }}>
-            <a
-              href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-            >
-              📄 Download PDF Quotation
-            </a>
-          </div>
-
-          {/* Quote Version History */}
-          {liveData.quote.history && liveData.quote.history.length > 0 && (
-            <div style={{ marginTop: 20, borderTop: '1px dashed #e2e8f0', paddingTop: 16, marginBottom: 16 }}>
-              <h4 style={{ fontSize: '0.78rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.5px' }}>
-                Previous Quotations ({liveData.quote.history.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveData.quote.history.map((prevQuote) => {
-                  const isExpanded = expandedPrevQuotes[prevQuote.id];
-                  return (
-                    <div key={prevQuote.id} style={{ background: '#f8fafc', borderRadius: 10, padding: 12, border: '1px solid #f1f5f9' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
-                            {prevQuote.quote_number} (v{prevQuote.quote_version})
-                          </span>
-                          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
-                            {prevQuote.status.replace(/_/g, " ")}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <button
-                            onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [prevQuote.id]: !prev[prevQuote.id] }))}
-                            style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
-                          >
-                            {isExpanded ? "Hide Details" : "View Details"}
-                          </button>
-                          <a
-                            href={`${import.meta.env.VITE_VENDOR_API_URL || (import.meta.env.PROD ? (typeof window !== 'undefined' ? `${window.location.origin}/api/workforce` : '') : 'http://localhost:8001')}/customer/quote-token/${prevQuote.decision_token}/pdf/`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
-                          >
-                            📄 PDF
-                          </a>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', textAlign: 'left' }}>
-                          <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
-                            <strong>Description:</strong> {prevQuote.description || "No description"}
-                          </p>
-                          <p style={{ margin: '0 0 10px 0', color: '#475569' }}>
-                            <strong>Total Estimate:</strong> ₹{prevQuote.total_amount}
-                          </p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'white', padding: 8, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                            {prevQuote.items && prevQuote.items.map((item, idx) => (
-                              <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                                <span>
-                                  {item.name} (x{item.quantity})
-                                </span>
-                                <span style={{ fontWeight: 700 }}>
-                                  ₹{item.total_amount}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Accept / Decline / Request changes buttons */}
-          {liveData.quote.status === "SENT_TO_CUSTOMER" && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
-                style={{
-                  flex: 1.2,
-                  padding: '10px 14px',
-                  background: 'linear-gradient(135deg, #10B981, #059669)',
-                  color: 'white',
-                  fontWeight: 800,
-                  fontSize: '0.82rem',
-                  border: 'none',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
-                }}
-              >
-                Accept Quote
-              </button>
-              <button
-                onClick={() => {
-                  handleQuoteDecision("CHANGE_REQUESTED");
-                }}
-                style={{
-                  flex: 1,
-                  padding: '10px 14px',
       {liveData?.quote && (liveData.quote.id || liveData.quote.quote_id || liveData.quote.quote_number) && liveData.quote.has_quote !== false && (() => {
         const q = liveData.quote
         const qStatus = String(q.status || "").toUpperCase()
@@ -4436,15 +4127,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   cursor: 'pointer'
                 }}
               >
-                Request Changes
-              </button>
-              <button
-                onClick={() => setShowDeclineReasonModal(true)}
-                style={{
-                  flex: 1,
-                  padding: '10px 14px',
-                  background: '#fef2f2',
-                  color: '#dc2626',
                 Cancel
               </button>
               <button
@@ -4464,14 +4146,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                   fontSize: '0.82rem',
                   border: 'none',
                   borderRadius: 10,
-                  cursor: 'pointer'
-                }}
-              >
-                Decline
-              </button>
-            </div>
-          )}
-        </motion.div>
                   cursor: 'pointer',
                   boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
                 }}
@@ -5073,10 +4747,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             requestId={rid || liveData?.request_id || successData?.request_id || sessionSaved?.request_id}
             trackingToken={liveData?.tracking_token || successData?.tracking_token || resolvedToken}
             phone={liveData?.phone || successData?.phone || sessionSaved?.phone || formData?.phone}
-            bookingId={liveData?.booking_id || liveData?.id || successData?.id}
-            requestId={rid || liveData?.request_id || successData?.request_id}
-            trackingToken={liveData?.tracking_token || successData?.tracking_token}
-            phone={liveData?.phone || successData?.phone || formData?.phone}
             isAccepted={isAccepted}
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
@@ -5144,7 +4814,6 @@ function StepBar({ step, total }) {
 
 /* ── Cart Drawer Modal Component ── */
 export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout, onAddAnotherService, bagItemCount = 0 }) {
-export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout }) {
   if (!isOpen) return null;
 
   const itemTotal = (cart || []).reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
@@ -6614,7 +6283,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           if (group.every(t => cancelledLikeStatuses.includes(t.status))) return { label: 'Cancelled', color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' }
           return { label: 'In Progress', color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' }
         }
-      case "My Bookings":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
@@ -6674,8 +6342,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         </span>
                       </div>
                     )}
-                return (
-                  <React.Fragment key={b.id}>
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
@@ -6735,8 +6401,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </button>
                         </div>
 
-                        {/* GT-D-02: multi-stop trip editor, logistics bookings only */}
-                        {LOGISTICS_STOP_CATEGORIES.includes(b.service_category) && (
                       {/* Quotation Ready Action Banner */}
                       {(() => {
                         const activeQuote = b.quote || b.estimation?.current_quotation;
@@ -6884,7 +6548,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                         </div>
 
                         {/* Cash Collection Confirmation OTP Box */}
-                        {(b.payment_status === 'cash_pending' || b.payment_confirmation_otp) && (
                         {((b.payment_status === 'cash_pending' || (b.payment_confirmation_otp && b.payment_status !== 'paid')) && !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) && b.payment_status !== 'paid') && (
                           <div style={{
                             background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
@@ -7348,12 +7011,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             // trust the now-authoritative rawStored (b.total_amount)
                             // directly instead of this discount-blind override heuristic.
                             const finalTot = rawStored > 0 ? rawStored : computedGrand;
-
-                            return (
-                              <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                                <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8 }}>
-                                  📦 Booked Service Modules ({parsedCart.length})
-                            const finalTot = rawStored > 0 ? rawStored : computedGrand;
                             const isEstimationOrConsultation = Boolean(
                               b.job_type === 'ESTIMATION' ||
                               b.request_kind === 'ESTIMATION' ||
@@ -7364,12 +7021,26 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ||
                               (b.quotation_history && b.quotation_history.length > 0)
                             );
+                            const activeQ = (b.quote && (b.quote.id || b.quote.quote_id || b.quote.quote_number) && b.quote.has_quote !== false) ? b.quote : (b.quotation_history && b.quotation_history[b.quotation_history.length - 1]);
+                            const activeQItems = activeQ?.items || [];
+                            const isDuplicateOfQuotation = Boolean(
+                              hasQuotationAbove &&
+                              activeQItems.length > 0 &&
+                              parsedCart.length > 0 &&
+                              parsedCart.some(c => activeQItems.some(it => (it.name || it.service_name || "").toLowerCase() === (c.title || c.name || c.service_name || "").toLowerCase()))
+                            );
+
+                            // When cart_data has been populated from the approved quotation, the quotation card above
+                            // already renders all line items, rates, and taxes. Suppress the duplicate raw table.
+                            if (isDuplicateOfQuotation) {
+                              return null;
+                            }
 
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
                                 <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.04em' }}>
                                   {isEstimationOrConsultation
-                                    ? (hasQuotationAbove ? `📋 Initial Site Consultation Request (${parsedCart.length})` : `📋 Booked Site Consultation & Inspection (${parsedCart.length})`)
+                                    ? (hasQuotationAbove ? `📋 Site Consultation & Inspection Scope (${parsedCart.length})` : `📋 Booked Site Consultation & Inspection (${parsedCart.length})`)
                                     : `📦 Booked Service Modules (${parsedCart.length})`}
                                 </div>
                                 <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
@@ -7403,8 +7074,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   {/* Itemized Taxes, Fees & Total Breakdown */}
                                   <div style={{ background: '#f8fafc', padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.78rem' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                                      <span>Item Total:</span>
-                                      <span style={{ fontWeight: 700, color: '#334155' }}>₹{itemTotal.toLocaleString('en-IN')}</span>
                                       <span>{isEstimationOrConsultation ? 'Consultation Fee:' : 'Item Total:'}</span>
                                       <span style={{ fontWeight: 700, color: '#334155' }}>
                                         {isEstimationOrConsultation && itemTotal === 0 ? 'Free (₹0)' : `₹${itemTotal.toLocaleString('en-IN')}`}
@@ -7435,9 +7104,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                       </div>
                                     )}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: 6, marginTop: 2, fontSize: '0.86rem', fontWeight: 900 }}>
-                                      <span style={{ color: '#0f172a' }}>Total Amount:</span>
-                                      <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
-                                    </div>
                                       <span style={{ color: '#0f172a' }}>{isEstimationOrConsultation ? 'Consultation Booking Total:' : 'Total Amount:'}</span>
                                       <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
                                     </div>
@@ -10501,8 +10167,21 @@ function StepWorkflowCheckout({
   const navigate = useNavigate()
   const routerLocation = useLocation()
   const [slotRevalidateNotice, setSlotRevalidateNotice] = useState("")
-  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || isSlotInPast(selectedDate, selectedTime))
-  const isSlotSelected = Boolean(selectedDate && selectedTime && !isSlotInPast(selectedDate, selectedTime))
+  const [slotData, setSlotData] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [slotFetchError, setSlotFetchError] = useState(null)
+
+  const isServiceOpenOnDate = slotData?.is_open ?? true
+  const closedReason = slotData?.reason || null
+  const slotDurationMinutes = slotData?.slot_duration_minutes || 30
+
+  const isSlotSelected = Boolean(
+    selectedDate &&
+    selectedTime &&
+    isServiceOpenOnDate &&
+    (slotData ? slotData.all_slots?.some(s => s.time === selectedTime && s.available) ?? true : !isSlotInPast(selectedDate, selectedTime))
+  )
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime || !isSlotSelected)
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
@@ -10613,45 +10292,132 @@ function StepWorkflowCheckout({
     return dates
   }, [])
 
-  const timeSlotGroups = [
-    {
-      period: "Morning",
-      icon: "🌅",
-      slots: [
-        "09:00 AM", "09:30 AM",
-        "10:00 AM", "10:30 AM",
-        "11:00 AM", "11:30 AM",
-      ]
-    },
-    {
-      period: "Afternoon",
-      icon: "☀️",
-      slots: [
-        "12:00 PM", "12:30 PM",
-        "01:00 PM", "01:30 PM",
-        "02:00 PM", "02:30 PM",
-        "03:00 PM", "03:30 PM",
-        "04:00 PM", "04:30 PM",
-      ]
-    },
-    {
-      period: "Evening",
-      icon: "🌙",
-      slots: [
-        "05:00 PM", "05:30 PM",
-        "06:00 PM", "06:30 PM",
-        "07:00 PM", "07:30 PM",
-        "08:00 PM",
-      ]
-    },
-  ]
+  const serviceParams = useMemo(() => {
+    let serviceId = null
+    let serviceSlug = null
+    let packageId = null
+    let categorySlug = category?.slug || category?.id || null
 
-  const timeSlots = timeSlotGroups.flatMap(g => g.slots)
+    if (cart && cart.length > 0) {
+      for (const item of cart) {
+        if (item.service_id) serviceId = item.service_id
+        if (item.serviceId) serviceId = item.serviceId
+        if (item.service_slug) serviceSlug = item.service_slug
+        if (item.serviceSlug) serviceSlug = item.serviceSlug
+        if (item.service && typeof item.service === "object") {
+          serviceId = item.service.id || serviceId
+          serviceSlug = item.service.slug || serviceSlug
+        } else if (item.service && (typeof item.service === "string" || typeof item.service === "number")) {
+          serviceId = item.service
+        }
+        if (item.package_id) packageId = item.package_id
+        if (item.packageId) packageId = item.packageId
+        if (item.package) packageId = item.package
+        if (item.catalog_service_id) {
+          if (!serviceId && !packageId) packageId = item.catalog_service_id
+        }
+        if (!categorySlug) {
+          if (item.categorySlug) categorySlug = item.categorySlug
+          if (item.category_id) categorySlug = item.category_id
+          if (typeof item.category === "string") categorySlug = item.category
+          if (item.category && item.category.slug) categorySlug = item.category.slug
+        }
+      }
+    }
 
-  const timeSlots = [
-    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
-    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
-  ]
+    if (!categorySlug) {
+      const resolvedCat = resolveCategoryFromCart(category, cart)
+      categorySlug = resolvedCat?.slug || resolvedCat?.id || null
+    }
+
+    return {
+      serviceId: serviceId || serviceSlug,
+      packageId,
+      categorySlug
+    }
+  }, [category, cart])
+
+  useEffect(() => {
+    let isCurrent = true
+    const fetchSlots = async () => {
+      const dateToFetch = selectedDate || (availableDates[0] ? availableDates[0].dateStr : "")
+      if (!dateToFetch) return
+
+      setLoadingSlots(true)
+      setSlotFetchError(null)
+
+      try {
+        const queryParams = new URLSearchParams()
+        queryParams.set("date", dateToFetch)
+        if (serviceParams.serviceId) queryParams.set("service_id", serviceParams.serviceId)
+        if (serviceParams.categorySlug) queryParams.set("category", serviceParams.categorySlug)
+        if (serviceParams.packageId) queryParams.set("package_id", serviceParams.packageId)
+
+        const targetServiceParam = serviceParams.serviceId || "resolve"
+        const res = await apiRequest(`/services/${targetServiceParam}/time-slots/?${queryParams.toString()}`)
+
+        if (!isCurrent) return
+
+        if (res && res.success && res.data) {
+          setSlotData(res.data)
+          // If the previously selected time is not among the available slots, clear selection
+          if (selectedTime) {
+            const allAvailable = [
+              ...(res.data.groups?.morning || []),
+              ...(res.data.groups?.afternoon || []),
+              ...(res.data.groups?.evening || []),
+            ].filter(s => s.available).map(s => s.time)
+
+            if (!allAvailable.includes(selectedTime)) {
+              onTimeChange("")
+            }
+          }
+        } else {
+          setSlotData(null)
+          setSlotFetchError(res?.message || "Unable to load time slots for this service.")
+          if (selectedTime) onTimeChange("")
+        }
+      } catch (err) {
+        if (!isCurrent) return
+        setSlotData(null)
+        setSlotFetchError(err?.message || "Failed to load time slots.")
+        if (selectedTime) onTimeChange("")
+      } finally {
+        if (isCurrent) setLoadingSlots(false)
+      }
+    }
+
+    fetchSlots()
+    return () => { isCurrent = false }
+  }, [selectedDate, serviceParams, availableDates])
+
+  const timeSlotGroups = useMemo(() => {
+    if (!slotData?.groups) return []
+    return [
+      {
+        period: "Morning",
+        icon: "🌅",
+        slots: slotData.groups.morning || [],
+      },
+      {
+        period: "Afternoon",
+        icon: "☀️",
+        slots: slotData.groups.afternoon || [],
+      },
+      {
+        period: "Evening",
+        icon: "🌙",
+        slots: slotData.groups.evening || [],
+      },
+    ].filter(g => g.slots.length > 0)
+  }, [slotData])
+
+  const timeSlots = useMemo(() => {
+    if (slotData?.all_slots) {
+      return slotData.all_slots.map(s => s.time)
+    }
+    return timeSlotGroups.flatMap(g => g.slots.map(s => (typeof s === "string" ? s : s.time)))
+  }, [slotData, timeSlotGroups])
 
   const items = cart && cart.length > 0 ? cart : [{
     id: "def-1",
@@ -11459,73 +11225,83 @@ function StepWorkflowCheckout({
 
                       {/* Time Slot Sections */}
                       <div className="space-y-3">
-                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block">
-                          Select Time Slot (30 Min)
-                        </label>
-                        {timeSlotGroups.map(group => (
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                            Select Time Slot ({slotDurationMinutes} Min)
+                          </label>
+                          {loadingSlots && (
+                            <span className="text-[10px] text-indigo-600 font-bold animate-pulse">
+                              Loading slots...
+                            </span>
+                          )}
+                        </div>
+
+                        {slotFetchError && (
+                          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                            {slotFetchError}
+                          </div>
+                        )}
+
+                        {!loadingSlots && !slotFetchError && !isServiceOpenOnDate && (
+                          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-center space-y-1">
+                            <span className="text-xs font-extrabold text-rose-800 block">
+                              Service Closed on This Date
+                            </span>
+                            <span className="text-[11px] text-rose-600 block">
+                              {closedReason || "No slots available. Please select another date."}
+                            </span>
+                          </div>
+                        )}
+
+                        {!loadingSlots && isServiceOpenOnDate && timeSlotGroups.length === 0 && !slotFetchError && (
+                          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                            No slots available for the selected date. Please choose another date.
+                          </div>
+                        )}
+
+                        {isServiceOpenOnDate && timeSlotGroups.map(group => (
                           <div key={group.period} className="space-y-1.5">
                             <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                               <span>{group.icon}</span>
                               <span>{group.period}</span>
                             </div>
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                              {group.slots.map(t => {
+                              {group.slots.map(slotObj => {
+                                const t = typeof slotObj === "string" ? slotObj : slotObj.time
+                                const isAvail = typeof slotObj === "object" ? slotObj.available : !isSlotInPast(selectedDate, t)
+                                const reason = typeof slotObj === "object" ? slotObj.reason : null
                                 const isSel = selectedTime === t
-                                const isPast = isSlotInPast(selectedDate, t)
+
                                 return (
                                   <button
                                     key={t}
                                     type="button"
-                                    disabled={isPast}
+                                    disabled={!isAvail}
                                     onClick={() => {
-                                      if (isPast) return
+                                      if (!isAvail) return
                                       onTimeChange(t)
                                       if (selectedDate) setShowSlotPicker(false)
                                     }}
-                                    className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
+                                    title={!isAvail && reason ? reason : t}
+                                    className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${!isAvail
                                       ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
                                       : isSel
                                       ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
                                       : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
                                       }`}
                                   >
-                                    {t}
+                                    <div>{t}</div>
+                                    {!isAvail && reason && (
+                                      <div className="text-[9px] font-black text-rose-500 mt-0.5">
+                                        {reason}
+                                      </div>
+                                    )}
                                   </button>
                                 )
                               })}
                             </div>
                           </div>
                         ))}
-                      {/* Time Slot Grid */}
-                      <div>
-                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
-                          Select Time Slot
-                        </label>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                          {timeSlots.map(t => {
-                            const isSel = selectedTime === t
-                            const isPast = isSlotInPast(selectedDate, t)
-                            return (
-                              <button
-                                key={t}
-                                disabled={isPast}
-                                onClick={() => {
-                                  if (isPast) return
-                                  onTimeChange(t)
-                                  if (selectedDate) setShowSlotPicker(false)
-                                }}
-                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
-                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
-                                  : isSel
-                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
-                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
-                                  }`}
-                              >
-                                {t}
-                              </button>
-                            )
-                          })}
-                        </div>
                       </div>
 
                       {isSlotSelected && (
@@ -11648,44 +11424,6 @@ function StepWorkflowCheckout({
                   </button>
                 </div>
               ) : (
-                items.map(item => {
-                  return (
-                    <div key={item.id} className="flex flex-col gap-1 text-xs">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-bold text-slate-800 flex-1">{item.name}</span>
-
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
-                          <button type="button" onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">-</button>
-                          <span className="text-slate-800 font-black">{item.quantity}</span>
-                          <button type="button" onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">+</button>
-                        </div>
-
-                        {/* Price */}
-                        <div className="text-right">
-                          <span className="font-black text-slate-900 block">
-                            ₹{(item.price * item.quantity).toLocaleString("en-IN")}
-                          </span>
-                          {origTotal > itemTotal && (
-                            <span className="text-[10px] text-slate-400 line-through block">
-                              ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {item.description && (
-                        <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, paddingLeft: '2px', marginTop: '2px', textAlign: 'left' }}>
-                          {item.description}
-                        </div>
-                      )}
-                      {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
-                          Areas: {item.selectedSubOptions.join(", ")}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
                 items.map(item => (
                   <div key={item.id} className="flex flex-col gap-1 text-xs">
                     <div className="flex items-center justify-between gap-3">
@@ -12816,7 +12554,6 @@ export function BookingPage() {
       (cart && cart.some(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection"))))
     );
     if (!isEst && !checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
-    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
       setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
       return
     }
@@ -12971,17 +12708,6 @@ export function BookingPage() {
       (cart && cart.some(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection"))))
     );
 
-    const data = new FormData()
-    const resolvedCustomerName = (formData.customer_name && formData.customer_name.trim() && formData.customer_name.trim().toLowerCase() !== "customer")
-      ? formData.customer_name.trim()
-      : (user?.full_name || user?.fullName || user?.first_name || (user?.username && !user.username.startsWith("cust_") ? user.username : "") || "Valued Customer");
-    data.append("customer_name", resolvedCustomerName)
-    data.append("phone", formData.phone || user?.phone || user?.mobile || user?.mobile_number || "9150632938")
-    data.append("email", formData.email || user?.email || "")
-    data.append("service_category", isEstimation ? "ac_appliance" : (category?.slug || category?.id || "general"))
-
-    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
-    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
     const effectiveCart = (cart && cart.length > 0) ? cart : [{
       id: "def-1",
       name: (category?.id === "painting" || category?.id === "mason" || category?.slug === "painting" || category?.slug === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
@@ -13006,7 +12732,7 @@ export function BookingPage() {
     data.append("customer_name", customerName)
     data.append("phone", customerPhone)
     data.append("email", customerEmail)
-    data.append("service_category", category?.id || "general")
+    data.append("service_category", isEstimation ? "ac_appliance" : (category?.slug || category?.id || "general"))
 
     const firstName = (effectiveCart[0]?.name) || (category?.name || "Service Booking");
     const extraCount = effectiveCart.length > 1 ? effectiveCart.length - 1 : 0;
@@ -13022,16 +12748,6 @@ export function BookingPage() {
         : shortName;
     }
 
-    const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
-    const catSlug = (category?.slug || category?.id || category?.name || "").toString().toLowerCase();
-    const isPaintingOrMason = Boolean(
-      catSlug.includes("paint") ||
-      catSlug.includes("mason") ||
-      (cart && cart.some(c => isConsultationItem(c, category)))
-    );
-    const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
-    const nonConsultCart = cart.filter(i => !isConsultationItem(i, category));
-    const totalGst = isPaintingOrMason ? 0 : cart.reduce((s, i) => {
     const itemTotal = effectiveCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
     const catSlug = (category?.slug || category?.id || "").toLowerCase();
     const isPaintingOrMason = Boolean(
@@ -13096,7 +12812,6 @@ export function BookingPage() {
       finalDesc += `\n[Special Instructions: ${notes}]`;
     }
     data.append("description", finalDesc);
-    data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
     data.append("address", formData.landmark ? finalAddress + " | " + formData.landmark : finalAddress)
     if (formData.flat_house_no) {
       data.append("flat_house_no", formData.flat_house_no)
@@ -13130,12 +12845,19 @@ export function BookingPage() {
     const parsedLon = parseFloat(lonVal);
     data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.7409");
     data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.8253");
-    const parsedLat = parseFloat(finalLat);
-    data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : "12.740916");
-    const parsedLon = parseFloat(finalLng);
-    data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : "77.825292");
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
+    let explicitServiceId = null
+    if (effectiveCart && effectiveCart.length > 0) {
+      for (const item of effectiveCart) {
+        if (item.service_id) explicitServiceId = item.service_id
+        else if (item.serviceId) explicitServiceId = item.serviceId
+        else if (item.service_slug) explicitServiceId = item.service_slug
+      }
+    }
+    if (explicitServiceId) {
+      data.append("service_id", explicitServiceId)
+    }
     data.append("total_amount", calculatedGrandTotal)
     data.append("item_total", itemTotal)
     data.append("gst_amount", totalGst)
@@ -13144,7 +12866,6 @@ export function BookingPage() {
     if (tipAmount > 0) data.append("tip_amount", tipAmount)
 
     // Serialize cart_data with gst_rate and platform_fee as JSON string
-    data.append("cart_data", JSON.stringify(cart.map(c => {
     data.append("cart_data", JSON.stringify(effectiveCart.map(c => {
       const isConsult = isPaintingOrMason || isConsultationItem(c, category);
       return {
@@ -13274,7 +12995,6 @@ export function BookingPage() {
           setError(serviceOutcome?.message || "Your service booking could not be placed. Please try again.")
         }
       } catch (err) {
-        setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
         setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
       } finally {
         setLoading(false)
@@ -13334,8 +13054,6 @@ export function BookingPage() {
     } catch (err) {
       if (err?.body?.errors) {
         const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
-        setError(msgs || err.body.message)
-      } else setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
         setError(msgs || err.body.message || err.body.error)
       } else setError(err?.body?.message || err?.body?.error || err?.body?.detail || err?.message || "Connection error. Try again.")
     } finally { setLoading(false) }
@@ -14176,10 +13894,6 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
                 <li key={i} className="flex items-start gap-1.5">
                   <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
                   <span>{typeof inc === 'object' ? (inc?.text || inc?.name || '') : String(inc || '')}</span>
-              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
-                <li key={inc} className="flex items-start gap-1.5">
-                  <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
-                  <span>{inc}</span>
                 </li>
               ))}
             </ul>

@@ -434,7 +434,6 @@ const DAYS_LIST = getNextDays(21)
 const BOOKING_TIMEZONE = 'Asia/Kolkata'
 const SAME_DAY_CUTOFF_HOUR = 18   // 6 PM: after this, today is closed
 const SAME_DAY_MIN_LEAD_MINUTES = 30
-const SAME_DAY_MIN_LEAD_MINUTES = 60
 
 function businessNowParts() {
   try {
@@ -505,11 +504,6 @@ function isSlotInPast(dateStr, slotStr) {
   const slotMinutes = hours * 60 + minutes
   const nowMinutes = business.hour * 60 + business.minute
   return slotMinutes < nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
-  // Compare in business-timezone minutes, and keep the same minimum lead time
-  // the server applies, so a slot starting in a few minutes is not offered.
-  const slotMinutes = hours * 60 + minutes
-  const nowMinutes = business.hour * 60 + business.minute
-  return slotMinutes <= nowMinutes + SAME_DAY_MIN_LEAD_MINUTES
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•

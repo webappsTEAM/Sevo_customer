@@ -26,7 +26,6 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers
   Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift, Truck, Sprout, Layers,
   Smartphone, Megaphone, LayoutGrid
 } from "lucide-react"
@@ -65,6 +64,7 @@ const ADMIN_NAV_ITEMS = [
       { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
       { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
+      { label: "AC Inspection Bookings", to: "/customers/ac-inspections", icon: <Wrench size={16} />, color: "#0EA5E9" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
@@ -89,7 +89,15 @@ const ADMIN_NAV_ITEMS = [
       { label: "Painting Rate Card", to: routes.catalog_painting_rates, icon: <Palette size={16} />, color: "#3B82F6" },
       { label: "AC Inspection & Rates", to: routes.catalog_ac_inspection_rates, icon: <Wrench size={16} />, color: "#F59E0B" },
       { label: "Goods & Transport Rates", to: routes.catalog_gt_pricing, icon: <Truck size={16} />, color: "#3B82F6", module: "pricing" },
+      { label: "Time Slot Management", to: routes.time_slot_management, icon: <Clock size={16} />, color: "#F59E0B", module: "time_slots" },
     ]
+  },
+  {
+    label: "Time Slot Management",
+    to: routes.time_slot_management,
+    icon: <Clock size={20} />,
+    color: "#F59E0B",
+    module: "time_slots",
   },
   {
     label: "Marketing",

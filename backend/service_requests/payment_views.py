@@ -363,6 +363,38 @@ class PaymentVerifyView(APIView):
         if not sr.invoice_id:
             sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
 
+        # Special handling for AC Estimation bookings
+        has_est = hasattr(sr, "estimation") and sr.estimation is not None
+        if has_est and sr.status in (ServiceRequest.Status.CUSTOMER_REJECTED, ServiceRequest.Status.ESTIMATION_CLOSED):
+            # Inspection fee payment for rejected estimation
+            fee = getattr(sr.estimation, "fee", None)
+            if fee:
+                fee.status = "PAID"
+                fee.collected_at = timezone.now()
+                fee.payment_reference = payment.razorpay_payment_id
+                fee.save(update_fields=["status", "collected_at", "payment_reference", "updated_at"])
+
+            sr.estimation.status = "CLOSED"
+            sr.estimation.save(update_fields=["status", "updated_at"])
+            sr.status = ServiceRequest.Status.ESTIMATION_CLOSED
+            sr.payment_status = ServiceRequest.PaymentStatus.PAID
+            sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
+
+            return _success(
+                data={
+                    "request_id":     sr.request_id,
+                    "booking_status": sr.status,
+                    "payment_status": sr.payment_status,
+                    "transaction_id": sr.transaction_id,
+                    "invoice_id":     sr.invoice_id,
+                },
+                message="Inspection fee payment confirmed. Estimation request closed.",
+            )
+
+        if has_est and (sr.status == ServiceRequest.Status.CUSTOMER_APPROVED or sr.job_type == ServiceRequest.JobType.CHANGE_REQUEST):
+            sr.estimation.status = "REPAIR_AUTHORIZED"
+            sr.estimation.save(update_fields=["status", "updated_at"])
+
         try:
             apply_transition(
                 sr, ServiceRequest.Status.CONFIRMED, ServiceRequest.PaymentStatus.PAID,
@@ -398,6 +430,27 @@ class PaymentVerifyView(APIView):
                 },
                 message="Payment confirmed. Your booking status is being updated — please contact support if it does not update within a few minutes.",
             )
+
+        # Payment verified; booking is now CONFIRMED. Dispatch to Workforce.
+        def _dispatch_after_payment():
+            if sr.status in [ServiceRequest.Status.ESTIMATION_CLOSED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.CUSTOMER_REJECTED]:
+                logger.info(f"Skipping workforce dispatch for closed/rejected estimation {sr.id}")
+                return
+            try:
+                from service_requests.tasks import async_dispatch_service_request
+                async_dispatch_service_request.delay(sr.id)
+            except Exception as dispatch_err:
+                logger.warning(
+                    f"Could not queue workforce dispatch after payment for booking {sr.id}: {dispatch_err}"
+                )
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request(sr.id)
+                except Exception as direct_err:
+                    logger.error(
+                        f"Direct dispatch also failed after payment for booking {sr.id}: {direct_err}"
+                    )
+        transaction.on_commit(_dispatch_after_payment)
 
         return _success(
             data={

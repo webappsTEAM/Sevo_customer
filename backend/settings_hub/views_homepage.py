@@ -604,3 +604,146 @@ class HomePageImageDeleteAPIView(APIView):
             "message": "Media deleted successfully",
             "storage_deleted": storage_deleted
         })
+
+
+class ACInspectionConfigAPIView(APIView):
+    """
+    GET: Serves AC inspection configuration with categories and items loaded from PostgreSQL relational tables.
+    PUT: Allows Super Admin / Catalog Admin to update AC inspection settings and sync rate card items to database.
+    """
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get(self, request):
+        try:
+            from service_requests.models import (
+                ACInspectionRateCategory,
+                ACInspectionRateItem,
+                ACInspectionConfiguration,
+            )
+
+            config = ACInspectionConfiguration.get_solo()
+            categories = ACInspectionRateCategory.objects.filter(is_active=True).prefetch_related("items").order_by("display_order", "id")
+
+            if not categories.exists():
+                try:
+                    from seed_ac_inspection_db import seed_ac_inspection_database
+                    seed_ac_inspection_database(force_reset=True)
+                    categories = ACInspectionRateCategory.objects.filter(is_active=True).prefetch_related("items").order_by("display_order", "id")
+                except Exception as ex:
+                    logger.warning(f"Could not auto-seed AC inspection models: {ex}")
+
+            category_list = []
+            for cat in categories:
+                items_list = []
+                for it in cat.items.filter(is_active=True).order_by("display_order", "id"):
+                    price_str = f"₹{int(it.price):,}" if it.price == int(it.price) else f"₹{it.price:,.2f}"
+                    if it.price == 0:
+                        price_str = "Free"
+                    items_list.append({
+                        "id": it.id,
+                        "name": it.name,
+                        "price": price_str,
+                        "numeric_price": float(it.price),
+                        "unit": it.unit,
+                        "note": it.description,
+                        "service_type": it.service_type,
+                    })
+                category_list.append({
+                    "id": cat.slug,
+                    "db_id": cat.id,
+                    "name": cat.name,
+                    "slug": cat.slug,
+                    "description": cat.description,
+                    "items": items_list,
+                })
+
+            data = {
+                "fee": int(config.diagnostic_fee) if config.diagnostic_fee == int(config.diagnostic_fee) else float(config.diagnostic_fee),
+                "currency": config.currency,
+                "title": "AC Inspection & Diagnostic Visit",
+                "subtitle": "Not sure about the fault? Certified technician visits with diagnostic instruments, inspects cooling, gas pressure & electricals, and provides an itemized quotation before repair.",
+                "badges": [
+                    f"₹{int(config.diagnostic_fee)} Diagnostic Fee",
+                    "Adjustable Against Repair",
+                    "Pay at Doorstep",
+                ],
+                "includes": [
+                    "Comprehensive 21-point system & safety diagnostics",
+                    "Cooling delta temp scan & gas pressure test",
+                    "Compressor load & capacitor electrical scan",
+                    "Itemized quotation before any repair work",
+                ],
+                "rateCardCategories": category_list,
+            }
+            return Response({"success": True, "data": data})
+        except Exception as e:
+            logger.exception("Failed to fetch AC inspection config from database")
+            return Response({"success": False, "error": "Unable to load current rate card."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request):
+        try:
+            from service_requests.models import (
+                ACInspectionRateCategory,
+                ACInspectionRateItem,
+                ACInspectionConfiguration,
+            )
+            from decimal import Decimal
+            import re
+
+            config_data = request.data
+            if not isinstance(config_data, dict):
+                return Response({"success": False, "error": "Invalid payload, must be a JSON object"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update configuration
+            if "fee" in config_data:
+                config = ACInspectionConfiguration.get_solo()
+                config.diagnostic_fee = Decimal(str(config_data["fee"]))
+                config.save(update_fields=["diagnostic_fee", "updated_at"])
+
+            # Sync categories & items if provided
+            categories = config_data.get("rateCardCategories")
+            if isinstance(categories, list):
+                for c_idx, cat in enumerate(categories):
+                    cat_name = cat.get("name") or "Category"
+                    cat_slug = cat.get("slug") or cat.get("id") or re.sub(r"[^a-z0-9]+", "-", cat_name.lower()).strip("-")
+                    cat_obj, _ = ACInspectionRateCategory.objects.update_or_create(
+                        slug=cat_slug,
+                        defaults={
+                            "name": cat_name,
+                            "description": cat.get("description", ""),
+                            "display_order": (c_idx + 1) * 10,
+                            "is_active": True,
+                        }
+                    )
+                    for i_idx, item in enumerate(cat.get("items", [])):
+                        raw_price = str(item.get("price", "0")).replace(",", "")
+                        match = re.search(r"(\d+(?:\.\d+)?)", raw_price)
+                        item_price = Decimal(match.group(1)) if match else Decimal("0.00")
+                        item_id = item.get("id")
+                        if isinstance(item_id, int):
+                            ACInspectionRateItem.objects.filter(id=item_id).update(
+                                name=item.get("name", "").strip(),
+                                price=item_price,
+                                description=item.get("note", item.get("description", "")),
+                                display_order=(i_idx + 1) * 10,
+                            )
+                        elif item.get("name"):
+                            ACInspectionRateItem.objects.update_or_create(
+                                category=cat_obj,
+                                name=item.get("name", "").strip(),
+                                defaults={
+                                    "price": item_price,
+                                    "description": item.get("note", item.get("description", "")),
+                                    "unit": item.get("unit", "per piece"),
+                                    "display_order": (i_idx + 1) * 10,
+                                    "is_active": True,
+                                }
+                            )
+
+            return Response({"success": True, "message": "AC Inspection & Rate Card stored in PostgreSQL database successfully."})
+        except Exception as e:
+            logger.exception("Failed to save AC inspection config to database")
+            return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
