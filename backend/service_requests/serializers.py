@@ -1204,6 +1204,27 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "photo_url", "status", "status_display", "priority", "priority_display",
             "technician", "workforce_job_id", "external_assignment_id",
             "logistics_leg", "logistics_leg_updated_at",
+            # GT Mini Truck audit fix: an admin opening a booking's detail
+            # view could see the CURRENT leg but not the trip's full history
+            # (logistics_leg_history is on the model and already returned to
+            # the customer's own tracking payload, just never to admin), how
+            # many times dispatch was attempted, or where the trip was
+            # actually headed (drop_address/lat/lng) -- all present on the
+            # model, none previously serialized here.
+            "logistics_leg_history", "dispatch_attempts",
+            "drop_address", "drop_latitude", "drop_longitude",
+            # P&M audit fix: these sibling fields were added in the same
+            # GT-A-03/GT-C-03/GT-D-03 pass as drop_address/lat/lng above
+            # (declared-value/insurance for high-value consignments,
+            # delivery-recipient contact info) but were missed from this
+            # serializer -- an admin opening a booking's detail view
+            # (P&M and goods-transport alike) still couldn't see who the
+            # goods were declared to, their stated value, insurance status,
+            # or the drop-off recipient's contact, despite it being
+            # captured and validated at booking time.
+            "drop_contact_name", "drop_contact_phone", "drop_contact_email",
+            "declared_value", "consignee_relationship",
+            "insurance_opted_in", "insurance_premium", "insurance_liability_cap",
             "start_otp", "payment_confirmation_otp", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "job_type", "request_kind", "catalog_service_id", "quote_number", "parent_request", "estimation",

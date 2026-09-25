@@ -451,7 +451,13 @@ class CustomerAnalyticsView(APIView):
         ).order_by("-count")
 
         category_chart = {
-            "labels": [cm["service_category"].title() for cm in category_mix],
+            # Fix (GT audit): str.title() does not strip underscores, so a
+            # category key like "goods_transport_truck" rendered on the
+            # admin dashboard's Category Mix chart as the raw slug
+            # "Goods_Transport_Truck" instead of a readable label. Replace
+            # underscores with spaces first, matching the same fallback
+            # already used by reports/views.py's category breakdown.
+            "labels": [str(cm["service_category"] or "").replace("_", " ").title() for cm in category_mix],
             "data": [cm["count"] for cm in category_mix]
         }
 

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from service_requests.models import (
     Service, Package, AddOn, CatalogCategory, ServiceRequest,
-    GTCancellationPolicy, GTWaitingChargePolicy,
+    GTCancellationPolicy, GTWaitingChargePolicy, GTAdvancePaymentPolicy,
 )
 
 
@@ -56,5 +56,16 @@ class GTCancellationPolicyAdmin(admin.ModelAdmin):
 @admin.register(GTWaitingChargePolicy)
 class GTWaitingChargePolicyAdmin(admin.ModelAdmin):
     list_display = ('service_category', 'is_enabled', 'free_minutes_per_stop', 'rate_per_minute', 'max_charge_per_booking', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
+    search_fields = ('service_category',)
+
+
+# P&M audit fix (advance/deposit before a scheduled move): admin surface for
+# GTAdvancePaymentPolicy (see its docstring in models.py). is_enabled
+# defaults to False -- registering this changes nothing until an admin
+# actually turns it on with a real advance_percent.
+@admin.register(GTAdvancePaymentPolicy)
+class GTAdvancePaymentPolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'advance_percent', 'is_active', 'updated_at')
     list_filter = ('is_enabled', 'is_active')
     search_fields = ('service_category',)

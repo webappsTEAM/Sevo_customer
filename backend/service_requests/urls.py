@@ -10,6 +10,7 @@ from .views import (
     CustomerBookingLiveLocationView,
     CustomerPublicTrackingView,
     CustomerBookingCancelView,
+    CustomerBookingCancellationPreviewView,
     CustomerBookingTripStopsView,
     CustomerBookingMessagesView,
     CustomerBookingSeriesListCreateView,
@@ -161,6 +162,10 @@ urlpatterns = [
     path("booking/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(),       name="sr-booking-cancel-identifier"),
     path("customer/bookings/<int:pk>/cancel/", CustomerBookingCancelView.as_view(),     name="customer-booking-cancel"),
     path("customer/bookings/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(), name="customer-booking-cancel-identifier"),
+    path("booking/<int:pk>/cancel-preview/",         CustomerBookingCancellationPreviewView.as_view(), name="sr-booking-cancel-preview"),
+    path("booking/<str:identifier>/cancel-preview/", CustomerBookingCancellationPreviewView.as_view(), name="sr-booking-cancel-preview-identifier"),
+    path("customer/bookings/<int:pk>/cancel-preview/", CustomerBookingCancellationPreviewView.as_view(), name="customer-booking-cancel-preview"),
+    path("customer/bookings/<str:identifier>/cancel-preview/", CustomerBookingCancellationPreviewView.as_view(), name="customer-booking-cancel-preview-identifier"),
 
     # ── AC Inspection & Estimation (Phase 2) ──────────────────────────────────
     path("booking/<int:pk>/estimation/",      CustomerEstimationDetailView.as_view(),    name="sr-booking-estimation-pk"),

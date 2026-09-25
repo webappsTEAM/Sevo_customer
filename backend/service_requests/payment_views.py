@@ -230,7 +230,22 @@ class PaymentInitiateView(APIView):
             else:
                 due = total - paid
         else:
-            due = total - paid
+            # P&M audit fix: same "advance now, balance later" shape as the
+            # quote branch above, for bookings that never go through the
+            # painting-quote flow (P&M and other flat-fee GT categories).
+            # GTAdvancePaymentPolicy defaults to disabled, so this is a
+            # no-op producing the exact same `due = total - paid` as before
+            # until an admin actually configures and enables a real
+            # advance_percent for a category.
+            from .models import get_gt_advance_due
+            advance = get_gt_advance_due(sr, total)
+            if advance and advance > 0:
+                if paid < advance:
+                    due = advance - paid
+                else:
+                    due = total - paid
+            else:
+                due = total - paid
 
         if due <= 0:
             return None, "This booking is already fully paid."

@@ -3578,6 +3578,20 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
                 Service: <span style={{ color: '#0f172a' }}>{(liveData?.service_category || successData?.service_category || 'Home Service').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
               </div>
+              {/* GT Mini Truck audit fix: the backend now resolves and
+                  returns the driver's actual vehicle registration/type for
+                  goods_transport_truck (previously the customer saw only
+                  the driver's name/photo, never which truck was coming).
+                  Empty for every other category, so this renders nothing
+                  there. */}
+              {(liveData?.vehicle_number || successData?.vehicle_number) && (
+                <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, marginTop: 2 }}>
+                  Vehicle: <span style={{ color: '#0f172a' }}>
+                    {liveData?.vehicle_number || successData?.vehicle_number}
+                    {(liveData?.vehicle_type || successData?.vehicle_type) ? ` (${liveData?.vehicle_type || successData?.vehicle_type})` : ''}
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 {techRating != null ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
@@ -4550,14 +4564,14 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             // (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
             // DELIVERED) and contradicted the leg-aware wording already used
             // on CustomerTrackingPage.jsx for the same booking. Scoped to
-            // goods_transport_truck only -- every other category (including
-            // Two Wheeler and P&M) renders exactly the original three steps
-            // with the original flags, unchanged.
+            // the distance-priced GT categories (Mini Truck, Two Wheeler),
+            // which share the identical leg sequence -- P&M renders exactly
+            // the original three steps with the original flags, unchanged.
             const _cat = String(liveData?.service_category || successData?.service_category || "").toLowerCase()
-            const _isGTTruck = _cat === "goods_transport_truck"
+            const _isGTLegAware = _cat === "goods_transport_truck" || _cat === "goods_transport_two_wheeler"
             const _leg = String(liveData?.logistics?.leg || "").toUpperCase()
 
-            if (!_isGTTruck) {
+            if (!_isGTLegAware) {
               return (
                 <>
                   {/* Step 3: Technician On The Way */}

@@ -663,6 +663,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [pickupCoords, setPickupCoords] = useState(() => savedForm.pickupCoords || null) // { lat, lng, forAddress }
   const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)     // { lat, lng, forAddress }
 
+  // Optional intermediate stops between pickup and drop (e.g. a storage unit
+  // drop-off on the way). Purely additive -- empty by default, capped, and
+  // only sent to the backend when at least one stop has an address filled in.
+  const MAX_EXTRA_STOPS = 5
+  const [extraStops, setExtraStops] = useState([])
+
   useEffect(() => {
     try {
       sessionStorage.setItem("sevo_gt_form_packers_movers", JSON.stringify({
@@ -1822,6 +1828,22 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       payload.drop_latitude = Number(Number(activeDropPoint.lat).toFixed(6))
       payload.drop_longitude = Number(Number(activeDropPoint.lng).toFixed(6))
 
+      // Optional intermediate stops -- only sent when at least one has an
+      // address filled in, so a booking made without touching this UI keeps
+      // producing the exact same payload as before (no `stops` key).
+      const filledStops = (extraStops || [])
+        .filter((s) => s && String(s.address || "").trim())
+        .map((s) => {
+          const stopPayload = { address: String(s.address).trim(), stop_type: "WAYPOINT" }
+          if (s.contact_name && String(s.contact_name).trim()) stopPayload.contact_name = String(s.contact_name).trim()
+          if (s.contact_phone && String(s.contact_phone).trim()) stopPayload.contact_phone = String(s.contact_phone).trim()
+          if (s.notes && String(s.notes).trim()) stopPayload.notes = String(s.notes).trim()
+          return stopPayload
+        })
+      if (filledStops.length > 0) {
+        payload.stops = filledStops
+      }
+
       if (isSurveyRequired) {
         setIsSurveySubmittedModalOpen(true)
         setBookingSubmitting(false)
@@ -2269,6 +2291,66 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                 <AlertCircle className="w-3.5 h-3.5 inline shrink-0" />
                                 <span>{destinationError}</span>
                               </p>
+                            )}
+                          </div>
+
+                          {/* Optional Additional Stops (e.g. storage unit on the way) */}
+                          <div className="pt-1">
+                            {extraStops.map((stop, idx) => (
+                              <div key={idx} className="relative mb-3">
+                                <div className="absolute -left-[30px] top-6 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#999999] bg-white"></div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-xs font-semibold text-[#484848]">Stop {idx + 1} (optional)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExtraStops((prev) => prev.filter((_, i) => i !== idx))}
+                                    className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Stop address or landmark..."
+                                  value={stop.address}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, address: val } : s)))
+                                  }}
+                                  className="w-full h-[54px] pl-4 pr-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] mb-2"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Contact name (optional)"
+                                    value={stop.contact_name}
+                                    onChange={(e) => {
+                                      const val = e.target.value
+                                      setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, contact_name: val } : s)))
+                                    }}
+                                    className="w-full h-[44px] px-3 rounded-lg border border-[#E0E0E0] bg-white text-[13px] outline-none placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Contact phone (optional)"
+                                    value={stop.contact_phone}
+                                    onChange={(e) => {
+                                      const val = e.target.value
+                                      setExtraStops((prev) => prev.map((s, i) => (i === idx ? { ...s, contact_phone: val } : s)))
+                                    }}
+                                    className="w-full h-[44px] px-3 rounded-lg border border-[#E0E0E0] bg-white text-[13px] outline-none placeholder:text-[#999999] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            {extraStops.length < MAX_EXTRA_STOPS && (
+                              <button
+                                type="button"
+                                onClick={() => setExtraStops((prev) => [...prev, { address: "", contact_name: "", contact_phone: "", notes: "" }])}
+                                className="text-[13px] font-semibold text-[#0B8860] hover:text-[#096e4d] cursor-pointer flex items-center gap-1"
+                              >
+                                + Add another stop
+                              </button>
                             )}
                           </div>
                         </div>

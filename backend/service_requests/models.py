@@ -1837,8 +1837,9 @@ class GTWaitingChargePolicy(models.Model):
         computation (services/waiting_charges.py) uses: dwell at pickup is
         the time between entering LOADING and leaving for EN_ROUTE_DROP;
         dwell at drop is the time between entering UNLOADING and reaching
-        DELIVERED. Scoped to goods_transport_truck only -- Two Wheeler and
-        P&M bookings are unaffected (P&M always has TripStop rows for its
+        DELIVERED. Scoped to the distance-priced GT categories
+        (goods_transport_truck, goods_transport_two_wheeler) -- P&M
+        bookings are unaffected (P&M always has TripStop rows for its
         multi-stop moves, so it never reaches this fallback)."""
         from decimal import Decimal
         if not self.is_active or not self.is_enabled:
@@ -1855,7 +1856,15 @@ class GTWaitingChargePolicy(models.Model):
                 dwell_minutes = int(dwell_seconds // 60)
                 billable = max(0, dwell_minutes - self.free_minutes_per_stop)
                 total_minutes_billable += billable
-        elif str(getattr(service_request, "service_category", "") or "").strip().lower() == "goods_transport_truck":
+        elif str(getattr(service_request, "service_category", "") or "").strip().lower() in ("goods_transport_truck", "goods_transport_two_wheeler"):
+            # GT audit fix: this fallback is driven purely by
+            # logistics_leg_history, which both distance-priced GT
+            # categories write via the identical LEG_SEQUENCE
+            # (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+            # DELIVERED) -- Two Wheeler bookings have zero TripStop rows
+            # just like Mini Truck, so without this they silently billed
+            # zero waiting/detention charge. P&M is unaffected: it always
+            # has TripStop rows and never reaches this branch.
             total_minutes_billable = self._gt_leg_history_billable_minutes(service_request)
         charge = Decimal(str(total_minutes_billable)) * Decimal(str(self.rate_per_minute))
         if self.max_charge_per_booking is not None:
@@ -1927,6 +1936,96 @@ def get_gt_waiting_charge(service_request):
     if not policy:
         return Decimal("0")
     return policy.charge_for(service_request)
+
+
+# P&M audit fix (advance/deposit before a scheduled move): Porter's own
+# packers-and-movers flow collects a booking-confirmation payment (a
+# deposit) with the balance due at delivery, rather than the flat
+# pay-on-completion flow GT reuses for P&M today (source: Porter's public
+# packers-and-movers pages -- the exact percentage Porter charges is not
+# invented here). SEVO already has this EXACT shape working today for
+# quoted Home Services work (PaintingQuote.advance_amount, enforced in
+# PaymentOrderCreateView._amount_due()) -- this is the same
+# category-scoped, admin-configurable, defaults-to-no-op policy pattern as
+# GTCancellationPolicy/GTWaitingChargePolicy directly above, not a new
+# architecture. Wiring is in payment_views.py._amount_due().
+#
+# EXACT DECISION REQUIRED FROM THE BUSINESS BEFORE THIS HAS ANY EFFECT:
+#   1. What percentage (or flat amount) should be collected as the advance
+#      for packers_movers (or platform-wide)?
+#   2. Should the advance be non-refundable past a certain point (this
+#      model does not touch refund/cancellation logic at all -- see
+#      GTCancellationPolicy for that, which is intentionally separate)?
+# Until someone with product/business authority sets is_enabled=True and a
+# real advance_percent, this stays a no-op and every booking keeps paying
+# the full amount at once, exactly like today.
+class GTAdvancePaymentPolicy(models.Model):
+    service_category = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Empty/blank applies platform-wide to all GT bookings "
+                   "(goods_transport, packers_movers, etc). Set a specific "
+                   "category to override for just that category.",
+    )
+    is_enabled = models.BooleanField(
+        default=False,
+        help_text="False (default) preserves today's behavior exactly: the "
+                   "full booking amount is due whenever a payment order is "
+                   "first created, with no partial-advance option.",
+    )
+    advance_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Percentage (0-100) of total_amount due upfront when a "
+                   "payment order is first created for this booking; the "
+                   "remainder is due before/at completion, same as the "
+                   "existing PaintingQuote advance/balance pattern. Only "
+                   "used when is_enabled=True.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "GT Advance Payment Policy"
+        verbose_name_plural = "GT Advance Payment Policies"
+
+    def __str__(self):
+        scope = self.service_category or "platform-wide"
+        return f"GTAdvancePaymentPolicy({scope}, {'ON' if self.is_enabled else 'off'} {self.advance_percent}%)"
+
+    def advance_due_for(self, total):
+        """Returns the Decimal advance amount for a booking with this
+        total, or Decimal('0') if this policy doesn't apply (disabled,
+        inactive, or 0%). Never raises."""
+        from decimal import Decimal
+        if not self.is_active or not self.is_enabled:
+            return Decimal("0")
+        pct = Decimal(str(self.advance_percent or 0))
+        if pct <= 0:
+            return Decimal("0")
+        total = Decimal(str(total or 0))
+        return min((total * pct / Decimal("100")), total)
+
+
+def get_gt_advance_due(service_request, total=None):
+    """Looks up the applicable GTAdvancePaymentPolicy for a booking's
+    service category (falling back to the platform-wide, blank-category
+    policy) and returns the Decimal advance amount due, or Decimal('0') if
+    none is configured/enabled. Safe to call unconditionally: no policy
+    rows exist until an admin creates one, and is_enabled defaults to
+    False, so this returns 0 today for every booking -- see the
+    GTAdvancePaymentPolicy docstring above for the exact business decision
+    still required before this changes anything."""
+    from decimal import Decimal
+    category = str(getattr(service_request, "service_category", "") or "").strip().lower()
+    policy = (
+        GTAdvancePaymentPolicy.objects.filter(service_category__iexact=category, is_active=True).first()
+        or GTAdvancePaymentPolicy.objects.filter(service_category="", is_active=True).first()
+    )
+    if not policy:
+        return Decimal("0")
+    if total is None:
+        total = getattr(service_request, "total_amount", None) or Decimal("0")
+    return policy.advance_due_for(total)
 
 
 # ─── Slice 4: Complaint ───────────────────────────────────────────────────────

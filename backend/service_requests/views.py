@@ -523,13 +523,13 @@ class BookingCreateView(APIView):
                 code="SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
             )
 
-        # GT-Mini-Truck audit fix: a pickup and drop that resolve to (near)
-        # the same point produce a real, chargeable, dispatchable booking
-        # with zero road distance -- a trip that goes nowhere. Reject it
-        # before the request reaches dispatch. Scoped to
-        # goods_transport_truck only (Mini Truck); Two Wheeler and P&M are
-        # untouched.
-        if _service_slug == "goods_transport_truck":
+        # GT audit fix: a pickup and drop that resolve to (near) the same
+        # point produce a real, chargeable, dispatchable booking with zero
+        # road distance -- a trip that goes nowhere. Reject it before the
+        # request reaches dispatch. Scoped to the distance-priced GT
+        # categories (Mini Truck, Two Wheeler); other categories (P&M, Home
+        # Services) are untouched.
+        if _service_slug in ("goods_transport_truck", "goods_transport_two_wheeler"):
             _fb = fare_breakdown if isinstance(fare_breakdown, dict) else (dict(fare_breakdown) if fare_breakdown else {})
             try:
                 _route_distance_km = float(_fb.get("distance_km") or 0)
@@ -541,7 +541,7 @@ class BookingCreateView(APIView):
                     cache.delete(idem_cache_key)
                 return _error(
                     "Your pickup and drop locations are the same (or too close together). "
-                    "Please choose a different drop location for your Mini Truck booking.",
+                    "Please choose a different drop location for your booking.",
                     400,
                     error="Pickup and drop resolve to the same location (zero-distance route).",
                     code="ZERO_DISTANCE_ROUTE",
@@ -1268,50 +1268,186 @@ class CustomerBookingRetryPaymentView(APIView):
         return _success(data={"request_id": sr.request_id, "amount": float(sr.total_amount)})
 
 
+def _resolve_cancel_target_sr(sr_id):
+    if str(sr_id).isdigit():
+        return ServiceRequest.objects.get(pk=int(sr_id))
+    return ServiceRequest.objects.get(request_id=sr_id)
+
+
+# P&M audit fix: a Packers & Movers move's real progress lives entirely in
+# logistics_leg (ASSIGNED -> TEAM_EN_ROUTE -> ARRIVED_PICKUP -> PACKING ->
+# DISMANTLING -> LOADING -> IN_TRANSIT -> ...), driven by the vendor-side
+# webhook -- it never flips sr.status to IN_PROGRESS/PROOF_SUBMITTED and
+# there is no OTP step for P&M, so the existing
+# otp_verified-or-status-based cancellation lock never engages for it. A
+# customer could freely self-cancel via the app after the crew had already
+# arrived, packed, dismantled and loaded the truck. Locks once real crew
+# work has begun (PACKING onward) -- TEAM_EN_ROUTE/ARRIVED_PICKUP are still
+# cancellable, matching the "crew hasn't touched your belongings yet"
+# threshold.
+_PM_CANCEL_LOCK_LEGS = {
+    "PACKING", "DISMANTLING", "LOADING", "IN_TRANSIT", "ARRIVED_DROP",
+    "UNLOADING", "REASSEMBLY", "UNPACKING", "DELIVERED", "COMPLETED",
+}
+
+
+def _is_booking_cancellation_locked(sr):
+    """Returns True when this booking's real-world progress means it
+    should no longer be freely self-cancellable by the customer. Covers
+    both the GT/Two-Wheeler OTP-and-status-based lock (unchanged) and the
+    P&M leg-based lock (new -- see _PM_CANCEL_LOCK_LEGS above)."""
+    if getattr(sr, "otp_verified", False) or sr.status in [
+        ServiceRequest.Status.IN_PROGRESS,
+        ServiceRequest.Status.PROOF_SUBMITTED,
+        ServiceRequest.Status.COMPLETED,
+    ]:
+        return True
+    if str(getattr(sr, "service_category", "") or "").strip().lower() == "packers_movers":
+        leg = str(getattr(sr, "logistics_leg", "") or "").strip().upper()
+        if leg in _PM_CANCEL_LOCK_LEGS:
+            return True
+    return False
+
+
+def _amount_actually_collected(sr):
+    """Sum of this booking's PAID/COLLECTED Payment rows -- the amount
+    genuinely in hand, as opposed to sr.total_amount (the full booking
+    value). Audit fix: refund calculations here previously assumed
+    payment_status == PAID meant "the full total_amount was collected",
+    which was true before GTAdvancePaymentPolicy existed (every payment
+    order charged the full amount or nothing). Now that a booking can be
+    marked PAID after only an admin-configured advance percentage was
+    collected (see payment_views.py._amount_due()), refunding
+    total_amount - fee would refund money that was never actually taken.
+    Mirrors the exact same Sum(Payment.amount) query
+    PaymentOrderCreateView._amount_due() already uses, so the two can never
+    disagree about what's been collected."""
+    from decimal import Decimal
+    from django.db.models import Sum
+    from .models import Payment
+    paid = Payment.objects.filter(
+        service_request=sr,
+        status__in=[ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED],
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    return Decimal(str(paid))
+
+
+def _authorize_booking_cancel_action(request, sr):
+    """Shared owner/token/phone authorization check used by both the
+    cancellation-fee preview (GET) and the actual cancel (POST) endpoints.
+    Returns an error Response if unauthorized, else None."""
+    provided_token = request.data.get("token") or request.query_params.get("token") or request.data.get("tracking_token")
+    token_matches = bool(
+        provided_token and
+        sr.tracking_token and
+        str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
+        not _tracking_token_is_expired(sr)  # Fixes EC-08
+    )
+    if request.user and request.user.is_authenticated:
+        from accounts.permissions import is_super_admin, can
+        is_super = is_super_admin(request.user)
+        has_perm = can(request.user, "bookings", "cancel")
+        user_phone = getattr(request.user, "phone", None) or getattr(request.user, "mobile_number", None) or ""
+        if not user_phone and request.user.username and request.user.username.startswith("cust_"):
+            user_phone = request.user.username[5:]
+        user_clean_phone = "".join(c for c in str(user_phone) if c.isdigit())[-10:]
+        sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
+
+        is_owner = bool(
+            (sr.customer_id and sr.customer_id == request.user.id) or
+            (request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower()) or
+            (user_clean_phone and sr_clean_phone and user_clean_phone == sr_clean_phone) or
+            token_matches
+        )
+        if not (is_super or has_perm or is_owner or token_matches):
+            return _error("You are not authorized to cancel this booking.", 403)
+    else:
+        provided_phone = "".join(c for c in str(request.data.get("phone") or request.query_params.get("phone") or "") if c.isdigit())[-10:]
+        sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
+        phone_matches = bool(provided_phone and sr_clean_phone and provided_phone == sr_clean_phone)
+        if not (token_matches or phone_matches):
+            return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
+    return None
+
+
+class CustomerBookingCancellationPreviewView(APIView):
+    """GT Porter-parity fix (this session): lets the customer see the real
+    cancellation fee/refund amount BEFORE confirming cancellation, instead of
+    only finding out after the fact inside CustomerBookingCancelView. Read-only
+    -- never mutates the booking. Uses the exact same get_gt_cancellation_fee()
+    the actual cancel flow uses, so the number shown here always matches what
+    gets charged."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk=None, identifier=None):
+        sr_id = pk or identifier
+        try:
+            sr = _resolve_cancel_target_sr(sr_id)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+
+        auth_error = _authorize_booking_cancel_action(request, sr)
+        if auth_error is not None:
+            return auth_error
+
+        if sr.status == ServiceRequest.Status.CANCELLED:
+            return _success(data={
+                "already_cancelled": True,
+                "cancellation_fee": 0,
+                "refund_amount": 0,
+                "total_amount": float(sr.total_amount or 0),
+            })
+
+        locked = _is_booking_cancellation_locked(sr)
+
+        cancellation_fee = 0
+        try:
+            from service_requests.models import get_gt_cancellation_fee
+            cancellation_fee = get_gt_cancellation_fee(sr) if not locked else 0
+        except Exception as fee_err:
+            logger.warning(f"Could not compute cancellation fee preview for booking {sr.id}: {fee_err}")
+
+        total_amount = float(sr.total_amount or 0)
+        is_paid = sr.payment_status == ServiceRequest.PaymentStatus.PAID
+        # Audit fix: refund off what was actually collected, not the full
+        # booking total -- see _amount_actually_collected()'s docstring.
+        # Byte-identical to before for every booking that paid in full
+        # (the common case today, since GTAdvancePaymentPolicy defaults to
+        # disabled): collected == total_amount whenever nothing was
+        # advance-only.
+        collected = float(_amount_actually_collected(sr)) if is_paid else 0.0
+        refund_amount = max(collected - float(cancellation_fee or 0), 0) if is_paid else 0
+
+        return _success(data={
+            "already_cancelled": False,
+            "cancellation_locked": locked,
+            "is_paid": is_paid,
+            "cancellation_fee": float(cancellation_fee or 0),
+            "total_amount": total_amount,
+            "refund_amount": refund_amount,
+            "message": (
+                "Cancellation is locked because customer OTP has been verified."
+                if locked else (
+                    f"A cancellation fee of ₹{cancellation_fee} will be deducted from your refund per the active cancellation policy."
+                    if cancellation_fee else None
+                )
+            ),
+        })
+
+
 class CustomerBookingCancelView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, pk=None, identifier=None):
         sr_id = pk or identifier
         try:
-            if str(sr_id).isdigit():
-                sr = ServiceRequest.objects.get(pk=int(sr_id))
-            else:
-                sr = ServiceRequest.objects.get(request_id=sr_id)
+            sr = _resolve_cancel_target_sr(sr_id)
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
         # Authorization & Ownership Validation
-        provided_token = request.data.get("token") or request.query_params.get("token") or request.data.get("tracking_token")
-        token_matches = bool(
-            provided_token and
-            sr.tracking_token and
-            str(sr.tracking_token).lower() == str(provided_token).strip().lower() and
-            not _tracking_token_is_expired(sr)  # Fixes EC-08
-        )
-        if request.user and request.user.is_authenticated:
-            from accounts.permissions import is_super_admin, can
-            is_super = is_super_admin(request.user)
-            has_perm = can(request.user, "bookings", "cancel")
-            user_phone = getattr(request.user, "phone", None) or getattr(request.user, "mobile_number", None) or ""
-            if not user_phone and request.user.username and request.user.username.startswith("cust_"):
-                user_phone = request.user.username[5:]
-            user_clean_phone = "".join(c for c in str(user_phone) if c.isdigit())[-10:]
-            sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
-
-            is_owner = bool(
-                (sr.customer_id and sr.customer_id == request.user.id) or
-                (request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower()) or
-                (user_clean_phone and sr_clean_phone and user_clean_phone == sr_clean_phone) or
-                token_matches
-            )
-            if not (is_super or has_perm or is_owner or token_matches):
-                return _error("You are not authorized to cancel this booking.", 403)
-        else:
-            provided_phone = "".join(c for c in str(request.data.get("phone") or request.query_params.get("phone") or "") if c.isdigit())[-10:]
-            sr_clean_phone = "".join(c for c in str(sr.phone or "") if c.isdigit())[-10:]
-            phone_matches = bool(provided_phone and sr_clean_phone and provided_phone == sr_clean_phone)
-            if not (token_matches or phone_matches):
-                return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
+        auth_error = _authorize_booking_cancel_action(request, sr)
+        if auth_error is not None:
+            return auth_error
 
         # Fixes idempotency gap: apply_transition() allows CANCELLED ->
         # CANCELLED as a no-op self-loop rather than rejecting it, and this
@@ -1326,16 +1462,12 @@ class CustomerBookingCancelView(APIView):
                 message="Booking is already cancelled.",
             )
 
-        if getattr(sr, "otp_verified", False) or sr.status in [
-            ServiceRequest.Status.IN_PROGRESS,
-            ServiceRequest.Status.PROOF_SUBMITTED,
-            ServiceRequest.Status.COMPLETED,
-        ]:
+        if _is_booking_cancellation_locked(sr):
             return Response(
                 {
                     "success": False,
                     "code": "CANCELLATION_LOCKED_AFTER_OTP",
-                    "message": "Cancellation is locked because customer OTP has been verified.",
+                    "message": "Cancellation is locked because the job is already in progress.",
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -1374,16 +1506,12 @@ class CustomerBookingCancelView(APIView):
                     data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
                     message="Booking is already cancelled.",
                 )
-            if getattr(sr, "otp_verified", False) or sr.status in [
-                ServiceRequest.Status.IN_PROGRESS,
-                ServiceRequest.Status.PROOF_SUBMITTED,
-                ServiceRequest.Status.COMPLETED,
-            ]:
+            if _is_booking_cancellation_locked(sr):
                 return Response(
                     {
                         "success": False,
                         "code": "CANCELLATION_LOCKED_AFTER_OTP",
-                        "message": "Cancellation is locked because customer OTP has been verified.",
+                        "message": "Cancellation is locked because the job is already in progress.",
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
@@ -1428,7 +1556,16 @@ class CustomerBookingCancelView(APIView):
                     # sr.total_amount, identical to prior behavior.
                     from service_requests.models import get_gt_cancellation_fee
                     cancellation_fee = get_gt_cancellation_fee(sr)
-                    refund_amount = sr.total_amount - cancellation_fee
+                    # Audit fix: refund off what was actually collected
+                    # (Sum of PAID/COLLECTED Payment rows), not
+                    # sr.total_amount -- see _amount_actually_collected()'s
+                    # docstring. Byte-identical to before for every booking
+                    # that paid in full, which is every booking today since
+                    # GTAdvancePaymentPolicy defaults to disabled; only
+                    # diverges once an admin enables a real advance
+                    # percentage and a booking was cancelled after paying
+                    # only the advance.
+                    refund_amount = _amount_actually_collected(sr) - cancellation_fee
                     refund_notes = f"Auto-created on booking cancellation. Cancellation reason: {reason}"
                     refund_type = RefundType.FULL
                     if cancellation_fee > 0:

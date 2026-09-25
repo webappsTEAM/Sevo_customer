@@ -619,11 +619,93 @@ class WorkforceWebhookView(APIView):
                             # estimate becomes the amount actually charged.
                             if leg in ("DELIVERED", "COMPLETED"):
                                 self._reconcile_final_fare(sr, payload)
+
+                            # GT Mini Truck audit fix: these two legs
+                            # previously only broadcast a websocket event --
+                            # the customer who booked the trip got no
+                            # SMS/email for either "your goods are on the way
+                            # to drop" (EN_ROUTE_DROP) or "your goods have
+                            # been delivered" (DELIVERED), despite both
+                            # notification functions already existing
+                            # (notify_delivery_recipient was even already
+                            # imported at the top of this view and never
+                            # called). Scoped to goods_transport_truck only;
+                            # fire-and-forget, never blocks the webhook ack.
+                            if (sr.service_category or "").strip().lower() in ("goods_transport_truck", "goods_transport_two_wheeler"):
+                                _leg_for_notice = leg
+                                _tech_name = payload.get("technician_name") or ""
+
+                                def _send_gt_leg_notice(_sr=sr, _leg=_leg_for_notice, _tech=_tech_name):
+                                    try:
+                                        if _leg == "EN_ROUTE_DROP":
+                                            notify_delivery_recipient(_sr, technician_name=_tech)
+                                        elif _leg in ("DELIVERED", "COMPLETED"):
+                                            from service_requests.notifications import notify_gt_delivery_completed
+                                            notify_gt_delivery_completed(_sr, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send GT leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_gt_leg_notice)
+
+                            # P&M audit fix: Packers & Movers has its own
+                            # 13-stage leg sequence (see PM_LEG_SEQUENCE in
+                            # workforce_api/services/logistics_events.py)
+                            # and previously got zero leg-aware customer
+                            # notifications -- the block above is correctly
+                            # scoped to GT-only and must not fire GT
+                            # delivery-style wording ("goods delivered") for
+                            # a move. notify_pm_move_update() itself no-ops
+                            # for legs it doesn't have P&M-specific copy for
+                            # (PACKING, LOADING, etc.), so this only actually
+                            # sends for the handful of customer-relevant
+                            # legs. Fire-and-forget, never blocks the
+                            # webhook ack.
+                            elif (sr.service_category or "").strip().lower() == "packers_movers":
+                                _pm_leg_for_notice = leg
+                                _pm_tech_name = payload.get("technician_name") or ""
+
+                                def _send_pm_leg_notice(_sr=sr, _leg=_pm_leg_for_notice, _tech=_pm_tech_name):
+                                    try:
+                                        from service_requests.notifications import notify_pm_move_update
+                                        notify_pm_move_update(_sr, _leg, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send P&M leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_pm_leg_notice)
+
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
 
                 # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
                 elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:
                     self._record_stop_progress(sr, event_type, payload)
+
+                # ── 12d. PICKUP CHECKPOINT PHOTO -- "BEFORE" DAMAGE EVIDENCE ─────────
+                # Damage-evidence audit fix: the DROP ("after") checkpoint photo
+                # already becomes a real DeliveryProof.PHOTO row via
+                # job.completion_proof_submitted above. The PICKUP ("before")
+                # photo is captured vendor-side by
+                # logistics_checkpoints.record_checkpoint_photo() and now
+                # carries photo_url in this event's payload (see that
+                # function's comment) -- record it the same way, so a damage
+                # dispute has a real before/after pair to compare, using the
+                # existing DeliveryProof.ProofType.PHOTO the customer app
+                # already knows how to display. Only acts on the PICKUP
+                # photo-submitted event; DROP's checkpoint_verified events
+                # (GPS/OTP) and its own completion_proof_submitted flow are
+                # untouched. _record_delivery_proof() is idempotent per
+                # (booking, stop, proof_type, image), so a retried webhook
+                # cannot create a duplicate row.
+                elif event_type == "logistics.checkpoint_verified":
+                    if str(payload.get("checkpoint") or "").strip().upper() == "PICKUP" \
+                            and str(payload.get("verification") or "").strip().lower() == "photo_submitted" \
+                            and payload.get("photo_url"):
+                        self._record_delivery_proof(sr, payload)
 
                 # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
                 elif event_type in ["job.rescheduled", "appointment.rescheduled"]:
