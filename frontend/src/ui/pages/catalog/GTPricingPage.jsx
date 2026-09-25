@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle, ArrowRight, Check, History, Info, Lock, Pencil,
   RefreshCw, Search, ShieldCheck, Truck, Layers, Package, Home, Clock,
-  Navigation, HelpCircle
+  Navigation, HelpCircle, MapPinned
 } from "lucide-react"
 import { Button, Input, Modal, Select, TextArea, formatDateTime } from "../../components/kit.jsx"
 import { ToastBanner, useToast } from "./useToast.jsx"
@@ -17,6 +17,8 @@ import { GTPackersMoversTab } from "./gt/GTPackersMoversTab.jsx"
 import { GTSlotsTab } from "./gt/GTSlotsTab.jsx"
 import { GTLanesTab } from "./gt/GTLanesTab.jsx"
 import { GTFaqsTab } from "./gt/GTFaqsTab.jsx"
+import { GTCoverageTab } from "./GTCoverageTab.jsx"
+import { GTPackersMoversHelpersPanel } from "./GTPackersMoversHelpersPanel.jsx"
 
 
 /**
@@ -524,6 +526,19 @@ export function GTPricingPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab("coverage")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "coverage"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <MapPinned size={15} />
+          Service Coverage
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("faqs")}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === "faqs"
@@ -538,9 +553,15 @@ export function GTPricingPage() {
 
       {activeTab === "categories" && <GTCategoriesTab showToast={showToast} />}
       {activeTab === "items" && <GTItemsTab showToast={showToast} />}
-      {activeTab === "pm_config" && <GTPackersMoversTab showToast={showToast} />}
+      {activeTab === "pm_config" && (
+        <>
+          <GTPackersMoversTab showToast={showToast} />
+          <GTPackersMoversHelpersPanel showToast={showToast} />
+        </>
+      )}
       {activeTab === "slots" && <GTSlotsTab showToast={showToast} />}
       {activeTab === "lanes" && <GTLanesTab showToast={showToast} />}
+      {activeTab === "coverage" && <GTCoverageTab showToast={showToast} />}
       {activeTab === "faqs" && <GTFaqsTab showToast={showToast} />}
 
       {activeTab === "tiers" && (

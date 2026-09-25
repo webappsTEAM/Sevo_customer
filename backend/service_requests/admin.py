@@ -1,5 +1,8 @@
 from django.contrib import admin
-from service_requests.models import Service, Package, AddOn, CatalogCategory, ServiceRequest, GTCancellationPolicy
+from service_requests.models import (
+    Service, Package, AddOn, CatalogCategory, ServiceRequest,
+    GTCancellationPolicy, GTWaitingChargePolicy,
+)
 
 
 @admin.register(Package)
@@ -39,4 +42,19 @@ class ServiceRequestAdmin(admin.ModelAdmin):
 class GTCancellationPolicyAdmin(admin.ModelAdmin):
     list_display = ('service_category', 'fee_mode', 'flat_fee_amount', 'percent_fee', 'applies_only_after_assignment', 'grace_period_seconds', 'is_active', 'updated_at')
     list_filter = ('fee_mode', 'is_active')
+    search_fields = ('service_category',)
+
+
+# GT Mini Truck audit fix (this session): GTWaitingChargePolicy is the model
+# fare_reconciliation.py's reconcile_booking_fare() actually bills against
+# (see get_gt_waiting_charge() in models.py) -- it was defined and wired into
+# billing but never registered anywhere an admin could reach it, not even
+# here in the Django admin, so there was no way to configure it short of a
+# direct DB write. Every field defaults to disabled/zero (is_enabled=False),
+# so registering this changes nothing until an admin actually sets real
+# values.
+@admin.register(GTWaitingChargePolicy)
+class GTWaitingChargePolicyAdmin(admin.ModelAdmin):
+    list_display = ('service_category', 'is_enabled', 'free_minutes_per_stop', 'rate_per_minute', 'max_charge_per_booking', 'is_active', 'updated_at')
+    list_filter = ('is_enabled', 'is_active')
     search_fields = ('service_category',)

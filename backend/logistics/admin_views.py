@@ -842,6 +842,32 @@ class AdminPackersMoversConfigView(APIView):
             except (ValueError, TypeError):
                 return _fail("Invalid number for survey_cft_threshold.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
 
+        # Helper-count limit: crew-size / operations setting, not money, so
+        # plain "edit" is enough (same as survey_cft_threshold).
+        if "max_helpers" in data:
+            from .models import MAX_HELPERS_CAP
+            raw_h = data["max_helpers"]
+            try:
+                if isinstance(raw_h, bool) or float(raw_h) != int(float(raw_h)):
+                    raise ValueError
+                h_val = int(float(raw_h))
+            except (ValueError, TypeError):
+                return _fail("max_helpers must be a whole number.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+            if h_val < 0 or h_val > MAX_HELPERS_CAP:
+                return _fail(f"max_helpers must be between 0 and {MAX_HELPERS_CAP}.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+            if h_val != config.max_helpers:
+                CatalogChangeLog.objects.create(
+                    entity_type="PackersMoversConfig",
+                    entity_id=config.id,
+                    field_name="max_helpers",
+                    old_value=str(config.max_helpers),
+                    new_value=str(h_val),
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                config.max_helpers = h_val
+                changes.append("max_helpers")
+
         if "is_active" in data:
             b_val = bool(data["is_active"])
             if b_val != config.is_active:

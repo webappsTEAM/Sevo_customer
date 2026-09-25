@@ -144,6 +144,18 @@ class WorkforceIntegrationService:
             "logistics_tier_id": tier.id if tier else None,
         }
 
+        # Packers & Movers: surface the customer's extra-helper request (already
+        # inside cart_data) as a validated top-level field, clamped to the
+        # admin max, so the vendor/technician side can read it directly.
+        if getattr(sr, "service_category", "") == "packers_movers":
+            try:
+                from logistics.models import resolve_helpers_requested
+                helpers = resolve_helpers_requested(sr.cart_data)
+            except Exception:  # never block dispatch on this additive field
+                helpers = None
+            if helpers is not None:
+                payload["helpers_requested"] = helpers
+
         # Guard against unmocked live network requests during test runs (avoids polluting running dev servers)
         if getattr(settings, "TESTING", False):
             is_mocked = hasattr(requests.post, "mock_calls") or hasattr(requests.post, "assert_called")
@@ -363,7 +375,9 @@ class WorkforceIntegrationService:
             ]
             for url in candidate_urls:
                 try:
-                    response = requests.get(url, headers=cls._internal_headers(), timeout=1.5)
+                    # Reduced from 1.5s to 0.8s: two-URL worst case is now ~1.6s
+                    # instead of 3s per cache miss.
+                    response = requests.get(url, headers=cls._internal_headers(), timeout=0.8)
                     if response.status_code == 200:
                         data = response.json()
                         if isinstance(data, dict):
@@ -381,8 +395,10 @@ class WorkforceIntegrationService:
                 except Exception as e:
                     logger.debug(f"Workforce tracking query fallback for {url}: {e}")
 
-            # Cache negative result for 5s to eliminate tight polling loop on missing tracking
-            cache.set(cache_key, False, timeout=5)
+            # Cache negative result for 15s (was 5s) to stop hammering the vendor
+            # on jobs that aren't active/trackable -- the 5s TTL caused a ~3s stall
+            # on every poll cycle for completed or non-trackable bookings.
+            cache.set(cache_key, False, timeout=15)
             return None
 
     @classmethod

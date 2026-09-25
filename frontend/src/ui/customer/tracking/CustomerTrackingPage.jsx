@@ -438,6 +438,9 @@ export function CustomerTrackingPage({
               startOtp={startOtp}
               vendorName={vendorName}
               requestId={data?.request_id || activeIdentifier}
+              routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
+                ? { pickup: data?.pickup_location, drop: data?.drop_location }
+                : null}
             />
 
             {/* Unified Floating Overlay Card */}

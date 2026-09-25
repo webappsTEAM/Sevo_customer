@@ -16,7 +16,9 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { BookingRescheduleModal } from "../components/BookingRescheduleModal.jsx"
 import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
+import { LogisticsFooter } from "../components/LogisticsFooter.jsx"
 import {
   filterLocationSuggestions as filterHosurLocations,
   searchHosurPlacesOnline,
@@ -655,6 +657,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   // Form State
   const [pickup, setPickup] = useState(() => savedForm.pickup || "")
   const [drop, setDrop] = useState(() => savedForm.drop || "")
+  const [pickupError, setPickupError] = useState("")
+  const [destinationError, setDestinationError] = useState("")
 
   const [pickupCoords, setPickupCoords] = useState(() => savedForm.pickupCoords || null) // { lat, lng, forAddress }
   const [dropCoords, setDropCoords] = useState(() => savedForm.dropCoords || null)     // { lat, lng, forAddress }
@@ -682,6 +686,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [inventoryBuilderOpen, setInventoryBuilderOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(2) // 1: Location, 2: Add Items, 3: Slots, 4: Summary
   const [pmCategories, setPmCategories] = useState([])
+  const [maxHelpers, setMaxHelpers] = useState(0)
   const [inventoryLoading, setInventoryLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState("Bedrooms")
 
@@ -696,6 +701,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         if (!isMounted) return
         const cats = res?.categories || res?.data?.categories || []
         setPmCategories(cats)
+        const rawMax = res?.max_helpers ?? res?.data?.max_helpers
+        const parsedMax = Number(rawMax)
+        if (rawMax !== undefined && rawMax !== null && Number.isInteger(parsedMax) && parsedMax >= 0) {
+          setMaxHelpers(parsedMax)
+        }
         if (cats.length > 0) {
           setActiveCategory(prev => (prev && cats.some(c => c.name === prev) ? prev : cats[0].name))
         }
@@ -793,6 +803,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
   const [selectedPackage, setSelectedPackage] = useState(null)
+  const [activePackageDetails, setActivePackageDetails] = useState(null)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
@@ -810,6 +821,9 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [packingTier, setPackingTier] = useState("standard")
   const [dismantlingRequired, setDismantlingRequired] = useState(true)
   const [unpackingRequired, setUnpackingRequired] = useState(false)
+  // Extra helpers: 0..maxHelpers, where maxHelpers is the admin setting
+  // (PackersMoversConfig.max_helpers) returned by the inventory endpoint.
+  const [helpersRequested, setHelpersRequested] = useState(0)
   const [pmServerQuote, setPmServerQuote] = useState(null)
   const [pmQuoteLoading, setPmQuoteLoading] = useState(false)
   const [pmQuoteError, setPmQuoteError] = useState("")
@@ -853,7 +867,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
   useEffect(() => {
     bookingAttemptKeyRef.current = null
-  }, [pickup, drop, inventoryItems, packingTier, pickupFloor, dropFloor, dismantlingRequired, unpackingRequired])
+  }, [pickup, drop, inventoryItems, packingTier, pickupFloor, dropFloor, dismantlingRequired, unpackingRequired, helpersRequested])
+
+  // Keep the selection inside the admin limit if it loads/changes later.
+  useEffect(() => {
+    setHelpersRequested(prev => Math.min(Math.max(0, prev), maxHelpers))
+  }, [maxHelpers])
 
   const refreshPmQuote = async () => {
     const pickupAddressValue = pickup
@@ -940,6 +959,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
   const [partnerCountdown, setPartnerCountdown] = useState(600) // 10:00 mins
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false)
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")
@@ -1328,14 +1348,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
   const [locationStatus, setLocationStatus] = useState("")
 
-  // Details Modal
-  const [activePackageDetails, setActivePackageDetails] = useState(null)
 
-  // Lock body scroll when Know More modal is open
-  useEffect(() => {
-    document.body.style.overflow = activePackageDetails ? "hidden" : ""
-    return () => { document.body.style.overflow = "" }
-  }, [activePackageDetails])
+
 
   // FAQ state & dynamic server FAQs
   const [openFaq, setOpenFaq] = useState(null)
@@ -1433,7 +1447,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       return
     }
     const timer = setTimeout(async () => {
-      const res = await searchHosurPlacesOnline(drop)
+      const res = await searchHosurPlacesOnline(drop, currentCityName)
       setOnlineDropSuggestions(res || [])
     }, 250)
     return () => clearTimeout(timer)
@@ -1441,7 +1455,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
   const intercityCities = useMemo(() => {
     const list = []
-    const originCityName = selectedCity || "Hosur"
+    const originCityName = selectedCity || currentCityName || "Hosur"
     const originKey = originCityName.trim().toLowerCase()
     list.push({
       name: originCityName,
@@ -1533,7 +1547,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             // Exact device GPS -- the most accurate pickup point we can get.
             setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           } else {
-            const resolved = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+            const resolved = `Current Location (${currentCityName || "Hosur"} - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
             setPickup(resolved)
             setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           }
@@ -1541,7 +1555,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
           // Reverse geocoding failed, but the GPS fix itself is still valid.
-          const resolved = `Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          const resolved = `Current Location (${currentCityName || "Hosur"} - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
           setPickup(resolved)
           setPickupCoords({ lat: latitude, lng: longitude, forAddress: resolved })
           setLocationStatus("Detected")
@@ -1628,6 +1642,33 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
+    const hasNoPickup = !pickup || !pickup.trim()
+    const hasNoDrop = !drop || !drop.trim()
+
+    if (hasNoPickup || hasNoDrop) {
+      if (hasNoPickup) {
+        setPickupError("Pickup location is not provided")
+      } else {
+        setPickupError("")
+      }
+      if (hasNoDrop) {
+        setDestinationError("Destination is not provided")
+      } else {
+        setDestinationError("")
+      }
+      const targetId = hasNoPickup
+        ? (relocationType === "Between Cities" ? "pm-pickup-input-between" : "pm-pickup-input")
+        : (relocationType === "Between Cities" ? "pm-drop-input-between" : "pm-drop-input")
+      const el = document.getElementById(targetId)
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+        el.focus()
+      }
+      return
+    }
+    setPickupError("")
+    setDestinationError("")
+
     if (relocationType === "Between Cities" && pickup && drop && pickup.trim().toLowerCase() === drop.trim().toLowerCase()) {
       alert("Source and Destination cities cannot be the same for Between Cities relocation. Please choose different cities.")
       return
@@ -1753,6 +1794,8 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           packing_tier: packingTier,
           dismantling_required: dismantlingRequired,
           unpacking_required: unpackingRequired,
+          helpers_requested: Math.min(Math.max(0, Number(helpersRequested) || 0), maxHelpers),
+          city: selectedCity || "Hosur",
           pickup_floor: pickupFloor,
           pickup_has_lift: pickupHasLift,
           drop_floor: dropFloor,
@@ -1940,7 +1983,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           {/* Location Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/20 text-xs font-bold text-[var(--sevo-primary)]">
             <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
-            <span>Hosur</span>
+            <span>{currentCityName || "Hosur"}</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[var(--sevo-text-secondary)]">
@@ -2001,7 +2044,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             </h1>
 
             <p className="text-sm sm:text-[15px] lg:text-base text-slate-200 leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0 font-medium drop-shadow">
-              Whether you're relocating your 1 BHK, 2 BHK, villa, or office across Hosur and beyond, our verified movers offer safe, hassle-free packing, loading, and on-time delivery.
+              Whether you're relocating your 1 BHK, 2 BHK, villa, or office across {currentCityName || "Hosur"} and beyond, our verified movers offer safe, hassle-free packing, loading, and on-time delivery.
             </p>
 
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 text-[13px] font-bold text-emerald-300">
@@ -2103,13 +2146,21 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                           <div className="relative" ref={pickupWrapperRef}>
                             <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
                             <input
+                              id="pm-pickup-input"
                               type="text"
                               placeholder={`Enter pickup address or landmark in ${currentCityName || "city"}...`}
                               value={pickup}
                               onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
+                              onChange={(e) => {
+                                setPickup(e.target.value)
+                                setPickupCoords(null)
+                                setShowPickupSuggestions(true)
+                                if (pickupError) setPickupError("")
+                              }}
+                              className={`w-full h-[54px] pl-4 pr-12 rounded-xl border bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] ${pickupError
+                                  ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 text-slate-800"
+                                  : "border-[#E0E0E0] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                }`}
                             />
                             <button
                               type="button"
@@ -2129,6 +2180,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                     onMouseDown={(e) => {
                                       e.preventDefault()
                                       setPickup(loc.name)
+                                      if (pickupError) setPickupError("")
                                       if (loc.lat != null && loc.lng != null) {
                                         setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
                                       } else {
@@ -2146,19 +2198,33 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                 ))}
                               </div>
                             )}
+                            {pickupError && (
+                              <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 animate-in fade-in duration-150">
+                                <AlertCircle className="w-3.5 h-3.5 inline shrink-0" />
+                                <span>{pickupError}</span>
+                              </p>
+                            )}
                           </div>
 
                           {/* Drop Input */}
                           <div className="relative" ref={dropWrapperRef}>
                             <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
                             <input
+                              id="pm-drop-input"
                               type="text"
                               placeholder={`Enter drop address or landmark in ${currentCityName || "city"}...`}
                               value={drop}
                               onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
+                              onChange={(e) => {
+                                setDrop(e.target.value)
+                                setDropCoords(null)
+                                setShowDropSuggestions(true)
+                                if (destinationError) setDestinationError("")
+                              }}
+                              className={`w-full h-[54px] pl-4 pr-12 rounded-xl border bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] ${destinationError
+                                  ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 text-slate-800"
+                                  : "border-[#E0E0E0] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                }`}
                             />
                             <button
                               type="button"
@@ -2179,6 +2245,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                       e.preventDefault()
                                       const exact = formatExactLocation(loc)
                                       setDrop(exact)
+                                      if (destinationError) setDestinationError("")
                                       if (loc.lat != null && loc.lng != null) {
                                         setDropCoords({ lat: loc.lat, lng: loc.lng, forAddress: exact })
                                       } else {
@@ -2197,6 +2264,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                 ))}
                               </div>
                             )}
+                            {destinationError && (
+                              <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 animate-in fade-in duration-150">
+                                <AlertCircle className="w-3.5 h-3.5 inline shrink-0" />
+                                <span>{destinationError}</span>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2214,13 +2287,21 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                           <div className="relative" ref={pickupWrapperRef}>
                             <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
                             <input
+                              id="pm-pickup-input-between"
                               type="text"
                               placeholder="Search Source City"
                               value={pickup}
                               onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setShowPickupSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
+                              onChange={(e) => {
+                                setPickup(e.target.value)
+                                setPickupCoords(null)
+                                setShowPickupSuggestions(true)
+                                if (pickupError) setPickupError("")
+                              }}
+                              className={`w-full h-[54px] pl-4 pr-12 rounded-xl border bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] ${pickupError
+                                  ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 text-slate-800"
+                                  : "border-[#E0E0E0] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                }`}
                             />
                             <button
                               type="button"
@@ -2240,6 +2321,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                     onMouseDown={(e) => {
                                       e.preventDefault()
                                       setPickup(loc.name)
+                                      if (pickupError) setPickupError("")
                                       if (loc.lat != null && loc.lng != null) {
                                         setPickupCoords({ lat: loc.lat, lng: loc.lng, forAddress: loc.name })
                                       } else {
@@ -2264,19 +2346,33 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                 ))}
                               </div>
                             )}
+                            {pickupError && (
+                              <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 animate-in fade-in duration-150">
+                                <AlertCircle className="w-3.5 h-3.5 inline shrink-0" />
+                                <span>{pickupError}</span>
+                              </p>
+                            )}
                           </div>
 
                           {/* Drop Input */}
                           <div className="relative" ref={dropWrapperRef}>
                             <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
                             <input
+                              id="pm-drop-input-between"
                               type="text"
                               placeholder="Search Destination City"
                               value={drop}
                               onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setShowDropSuggestions(true); }}
-                              className="w-full h-[54px] pl-4 pr-12 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              required
+                              onChange={(e) => {
+                                setDrop(e.target.value)
+                                setDropCoords(null)
+                                setShowDropSuggestions(true)
+                                if (destinationError) setDestinationError("")
+                              }}
+                              className={`w-full h-[54px] pl-4 pr-12 rounded-xl border bg-white text-[15px] outline-none transition-colors placeholder:text-[#999999] ${destinationError
+                                  ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 text-slate-800"
+                                  : "border-[#E0E0E0] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860]"
+                                }`}
                             />
                             <button
                               type="button"
@@ -2296,6 +2392,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                     onMouseDown={(e) => {
                                       e.preventDefault()
                                       setDrop(loc.name)
+                                      if (destinationError) setDestinationError("")
                                       if (relocationType === "Between Cities" && pickup && pickup.trim().toLowerCase() === loc.name.toLowerCase()) {
                                         setPickup("")
                                       }
@@ -2311,6 +2408,12 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                                   </button>
                                 ))}
                               </div>
+                            )}
+                            {destinationError && (
+                              <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 animate-in fade-in duration-150">
+                                <AlertCircle className="w-3.5 h-3.5 inline shrink-0" />
+                                <span>{destinationError}</span>
+                              </p>
                             )}
                           </div>
                         </div>
@@ -2350,6 +2453,39 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                     </span>
                   </div>
 
+                  {/* Validation Error Banner */}
+                  {(pickupError || destinationError) && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-medium flex items-center justify-between gap-2 animate-in fade-in duration-200 shadow-xs">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>
+                          {pickupError && destinationError
+                            ? "Pickup location and delivery destination are not provided. Please enter both to proceed."
+                            : pickupError
+                              ? "Pickup location is not provided. Please enter a pickup location to proceed."
+                              : "Destination is not provided. Please enter a delivery destination to proceed."}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = document.getElementById(
+                            pickupError
+                              ? (relocationType === "Between Cities" ? "pm-pickup-input-between" : "pm-pickup-input")
+                              : (relocationType === "Between Cities" ? "pm-drop-input-between" : "pm-drop-input")
+                          )
+                          if (target) {
+                            target.scrollIntoView({ behavior: "smooth", block: "center" })
+                            target.focus()
+                          }
+                        }}
+                        className="text-rose-700 underline font-bold text-[11px] shrink-0 hover:text-rose-900 cursor-pointer"
+                      >
+                        {pickupError && destinationError ? "Enter Locations ↑" : pickupError ? "Enter Pickup ↑" : "Enter Destination ↑"}
+                      </button>
+                    </div>
+                  )}
+
                   {/* Button */}
                   <button
                     type="submit"
@@ -2368,7 +2504,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
       <section className="py-12 sm:py-16 max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            House Shifting Services in Hosur
+            House Shifting Services in {currentCityName || "Hosur"}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-2">
             Safe, insured &amp; end-to-end relocation packages handled by certified packing specialists
@@ -2436,22 +2572,15 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                   </p>
                 </div>
 
-                {/* Know More dotted link & Book Button */}
-                <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setActivePackageDetails(pkg)}
-                    className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
-                  >
-                    Know More
-                  </button>
+                {/* Book Button */}
+                <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-end">
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedPackage(pkg)
                       handleGetEstimate()
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <span>Select &amp; Book</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -2465,132 +2594,106 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
 
 
-      {/* ── Section: Popular Relocation Routes from Hosur ─────────── */}
-      <section className="py-12 sm:py-16 bg-slate-50/80 border-y border-slate-200/60">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Popular Relocation Routes from Hosur
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Complete packing, door-to-door transit, and zero-breakage guarantee across Tamil Nadu &amp; Karnataka
-            </p>
-          </div>
+      {/* ── Section: Popular Relocation Routes ─────────── */}
+      {POPULAR_ROUTES.length > 0 && (
+        <section className="py-12 sm:py-16 bg-slate-50/80 border-y border-slate-200/60">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Popular Relocation Routes from {currentCityName || "Hosur"}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Complete packing, door-to-door transit, and zero-breakage guarantee across connected corridors
+              </p>
+            </div>
 
-          <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {POPULAR_ROUTES.map((route, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    const destination = route.to || ""
-                    if (destination) {
-                      const exactDrop = formatExactLocation(destination)
-                      setDrop(exactDrop)
-                      if (route.destination_latitude != null && route.destination_longitude != null) {
-                        setDropCoords({
-                          lat: Number(route.destination_latitude),
-                          lng: Number(route.destination_longitude),
-                          forAddress: exactDrop,
-                        })
-                      } else {
-                        setDropCoords(null)
-                        resolveLocationCoords(exactDrop).then((c) => {
-                          if (c) setDropCoords({ ...c, forAddress: exactDrop })
-                        })
+            <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {POPULAR_ROUTES.map((route, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      const destination = route.to || ""
+                      if (destination) {
+                        const exactDrop = formatExactLocation(destination, currentCityName)
+                        setDrop(exactDrop)
+                        if (route.destination_latitude != null && route.destination_longitude != null) {
+                          setDropCoords({
+                            lat: Number(route.destination_latitude),
+                            lng: Number(route.destination_longitude),
+                            forAddress: exactDrop,
+                          })
+                        } else {
+                          setDropCoords(null)
+                          resolveLocationCoords(exactDrop, currentCityName).then((c) => {
+                            if (c) setDropCoords({ ...c, forAddress: exactDrop })
+                          })
+                        }
                       }
-                    }
-                    setSelectedRoute(route)
-                    const bar = document.getElementById("estimate-bar")
-                    if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                    if (!pickup) {
-                      const pickupEl = document.getElementById("pickup-input")
-                      if (pickupEl) pickupEl.focus?.()
-                    }
-                  }}
-                  className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                      to {route.to} <span className="text-xs font-semibold text-slate-400">({route.distance})</span>
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                      {route.time}
-                    </span>
+                      setSelectedRoute(route)
+                      const bar = document.getElementById("estimate-bar")
+                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                      if (!pickup) {
+                        const pickupEl = document.getElementById("pickup-input")
+                        if (pickupEl) pickupEl.focus?.()
+                      }
+                    }}
+                    className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                        to {route.to} <span className="text-xs font-semibold text-slate-400">({route.distance})</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                        {route.time}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-xs text-slate-500">
+                        fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        Select <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
                   </div>
-
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs text-slate-500">
-                      fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
-                    </span>
-                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                      Select <ArrowRight className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Section: Areas We Serve in Hosur (Uniform Style) ─────── */}
-      <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
-        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
-          Areas We Serve in Hosur
-        </h2>
-        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
-          {HOSUR_AREAS.map((area, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                const formatted = formatExactLocation(`${area}, Hosur`)
-                setPickup(formatted)
-                setPickupCoords(null)
-                resolveLocationCoords(formatted).then((c) => {
-                  if (c) setPickupCoords({ ...c, forAddress: formatted })
-                })
-                const bar = document.getElementById("estimate-bar")
-                if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
-            >
-              {area}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Section: Think Logistics, Think Sevo! (App Banner) ── */}
-      <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="text-center md:text-left max-w-lg">
-            <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-              Mobile App Experience
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-              Think Logistics, Think Sevo!
-            </h2>
-            <p className="text-sm text-emerald-100 mt-2">
-              Get the Sevo mobile app to manage your household shifting, track container trucks in real time, and download invoices easily.
-            </p>
-            <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
-              <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                <span>Google Play</span>
-              </div>
-              <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                <span>App Store</span>
+                ))}
               </div>
             </div>
           </div>
+        </section>
+      )}
 
-          <div className="flex flex-col items-center bg-white text-slate-900 p-5 rounded-3xl shadow-2xl">
-            <QRCodeGraphic className="w-32 h-32" />
-            <span className="text-xs font-bold text-slate-700 mt-3">Scan to download our app!</span>
+      {/* ── Section: Areas We Serve (Uniform Style) ─────── */}
+      {HOSUR_AREAS.length > 0 && (
+        <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
+            Areas We Serve in {currentCityName || "Hosur"}
+          </h2>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
+            {HOSUR_AREAS.map((area, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  const formatted = formatExactLocation(`${area}, ${currentCityName || "Hosur"}`, currentCityName)
+                  setPickup(formatted)
+                  setPickupCoords(null)
+                  resolveLocationCoords(formatted, currentCityName).then((c) => {
+                    if (c) setPickupCoords({ ...c, forAddress: formatted })
+                  })
+                  const bar = document.getElementById("estimate-bar")
+                  if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
+              >
+                {area}
+              </button>
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── Section: How CalServices Packers and Movers Works ── */}
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6">
@@ -2729,7 +2832,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {/* Trucks & Mini Trucks Card */}
           <div
-            onClick={() => navigate(routes.truck_booking_hosur)}
+            onClick={() => navigate(`/trucks/${currentCitySlug || "hosur"}`)}
             className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
           >
             <div className="h-24 flex items-center justify-center">
@@ -2738,7 +2841,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="text-base font-bold text-slate-900">Trucks &amp; Mini Trucks</h3>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); navigate(routes.truck_booking_hosur) }}
+              onClick={(e) => { e.stopPropagation(); navigate(`/trucks/${currentCitySlug || "hosur"}`) }}
               className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
             >
               <ArrowRight className="w-4 h-4 text-white" />
@@ -2747,7 +2850,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
 
           {/* Two Wheelers Card */}
           <div
-            onClick={() => navigate(routes.two_wheeler_booking_hosur)}
+            onClick={() => navigate(`/two-wheelers/${currentCitySlug || "hosur"}`)}
             className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
           >
             <div className="h-24 flex items-center justify-center">
@@ -2756,25 +2859,11 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             <h3 className="text-base font-bold text-slate-900">Two Wheelers</h3>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); navigate(routes.two_wheeler_booking_hosur) }}
+              onClick={(e) => { e.stopPropagation(); navigate(`/two-wheelers/${currentCitySlug || "hosur"}`) }}
               className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
             >
               <ArrowRight className="w-4 h-4 text-white" />
             </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Section: Relocation Details in Hosur ───────────────── */}
-      <section className="py-12 bg-white border-y border-slate-200/70">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-4">
-            Professional Packers and Movers in Hosur
-          </h2>
-          <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
-            <p>
-              Shift your home or corporate office stress-free with Sevo! Our certified packing professionals use premium materials to pack every fragile item, manage heavy lifting, and transport your possessions safely across Hosur, SIPCOT industrial zones, and intercity destinations.
-            </p>
           </div>
         </div>
       </section>
@@ -2821,65 +2910,14 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
         </div>
       </section>
 
-      {/* ── Modals: Package Details, Selector, Login/OTP, Success ── */}
-      {/* 1. Package Details Modal */}
-      {activePackageDetails && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-extrabold text-slate-900">{activePackageDetails.name || activePackageDetails.details?.name}</h3>
-              <button
-                onClick={() => setActivePackageDetails(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* ── Dynamic Logistics Footer ── */}
+      <LogisticsFooter
+        currentCitySlug={currentCitySlug}
+        currentCityName={currentCityName}
+        onOpenSupport={() => setSupportModalOpen(true)}
+      />
 
-            <div className="flex items-center justify-center py-4 bg-slate-50 rounded-2xl mb-4">
-              {activePackageDetails.diagram}
-            </div>
-
-            {/* Checkbox Ticked Inclusions Checklist */}
-            <div className="mt-4">
-              <span className="font-bold text-slate-900 block mb-3 text-sm">Suitable for / Inclusions:</span>
-              <ul className="space-y-2.5">
-                {(activePackageDetails.suitableFor || activePackageDetails.details?.suitableFor || []).map((item, idx) => (
-                  <li key={idx} className="flex items-start text-xs sm:text-sm text-slate-700">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Description / Summary if set */}
-            {activePackageDetails.description && (
-              <div className="mt-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs text-slate-600">
-                <span className="font-bold text-slate-800">Package Details: </span>
-                <span>{activePackageDetails.description}</span>
-              </div>
-            )}
-
-            {/* Base Fare */}
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Starts at:</span>
-              <span className="text-base font-extrabold text-emerald-700">{activePackageDetails.price}</span>
-            </div>
-
-            <button
-              onClick={() => {
-                setSelectedPackage(activePackageDetails)
-                setActivePackageDetails(null)
-                handleGetEstimate()
-              }}
-              className="w-full mt-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
-            >
-              Proceed to Booking
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ── Modals: Package Selector, Login/OTP, Success ── */}
 
       {/* 2. Package Selector Modal */}
       {vehicleSelectorOpen && (
@@ -2889,7 +2927,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               <div>
                 <h3 className="text-lg font-extrabold text-slate-900">Choose Shifting Package</h3>
                 <p className="text-xs text-slate-500">
-                  {pickup || "Hosur Pickup"} &rarr; {drop || "Hosur Drop"}
+                  {pickup || `${currentCityName || "Hosur"} Pickup`} &rarr; {drop || `${currentCityName || "Hosur"} Drop`}
                 </p>
               </div>
               <button
@@ -3334,7 +3372,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                             </div>
                             <div className="pt-0.5 flex-1">
-                              <p className="text-[14px] text-slate-800 font-semibold leading-relaxed">{pickup || "Hosur Origin"}</p>
+                              <p className="text-[14px] text-slate-800 font-semibold leading-relaxed">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                               <div className="flex flex-wrap items-center gap-4 mt-2.5">
                                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                                   <span>Pickup Floor:</span>
@@ -3469,6 +3507,36 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                               className="w-4 h-4 accent-[#0B8860] rounded cursor-pointer"
                             />
                           </label>
+
+                          {maxHelpers > 0 && (
+                            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50">
+                              <div>
+                                <p className="text-xs font-bold text-slate-800">Extra Helpers</p>
+                                <p className="text-[11px] text-slate-500">Additional hands for loading &amp; shifting (up to {maxHelpers})</p>
+                              </div>
+                              <div className="flex items-center gap-2" role="group" aria-label="Extra helpers">
+                                <button
+                                  type="button"
+                                  onClick={() => setHelpersRequested(h => Math.max(0, h - 1))}
+                                  disabled={helpersRequested <= 0}
+                                  aria-label="Fewer helpers"
+                                  className="w-7 h-7 rounded-lg border border-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#0B8860]"
+                                >
+                                  −
+                                </button>
+                                <span className="w-5 text-center text-sm font-bold text-slate-800" aria-live="polite">{helpersRequested}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setHelpersRequested(h => Math.min(maxHelpers, h + 1))}
+                                  disabled={helpersRequested >= maxHelpers}
+                                  aria-label="More helpers"
+                                  className="w-7 h-7 rounded-lg border border-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#0B8860]"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -3663,7 +3731,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                         <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                       </div>
-                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || "Hosur Origin"}</p>
+                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                     </div>
                     <div className="flex items-start gap-4 relative bg-white">
                       <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
@@ -3707,7 +3775,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Pickup Address:</span>
-                <span className="font-bold text-slate-900 text-right line-clamp-1">{pickup || "Hosur Area"}</span>
+                <span className="font-bold text-slate-900 text-right line-clamp-1">{pickup || `${currentCityName || "Hosur"} Area`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Drop Address:</span>
@@ -3778,7 +3846,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Pickup Address:</span>
-                <span className="font-bold text-slate-900 text-right line-clamp-1">{pickup || "Hosur Area"}</span>
+                <span className="font-bold text-slate-900 text-right line-clamp-1">{pickup || `${currentCityName || "Hosur"} Area`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Drop Address:</span>
@@ -3832,83 +3900,120 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => {
+            setLookingForPartnerOpen(false)
+            try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+          }}
         >
-          <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
-            {/* Left Column: Looking for partner status & Order Details */}
-            <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
-              <div>
-                {/* Pulsing radar icon */}
-                <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
-                  <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
-                  <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
-                    <MapPin className="w-6 h-6 text-white" />
-                  </div>
-                </div>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col p-6 md:p-8"
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setLookingForPartnerOpen(false)
+                try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+              }}
+              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer transition-colors z-20"
+              title="Close and return to page"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-                <div className="text-center mb-6">
-                  <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
-                  <p className="text-xs text-slate-500 font-medium">
-                    We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
-                  </p>
-                </div>
-
-                {/* Order Details Accordion */}
-                <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
-                    className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
-                  >
-                    <div>
-                      <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
-                  </button>
-
-                  {orderDetailsExpanded && (
-                    <div className="p-4 bg-white border-t border-slate-100 space-y-3">
-                      {/* Pickup */}
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
-                        </div>
-                      </div>
-                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
-                      {/* Drop */}
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
-                        </div>
-                      </div>
-                      {/* Service / Relocation Type */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Service</span>
-                        <span className="font-bold text-emerald-800">{selectedPackage?.name || "Packers & Movers"} ({relocationType})</span>
-                      </div>
-                      {/* Amount */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                          <span className="text-base">💵</span> Amount Payable
-                        </div>
-                        <span className="text-sm font-extrabold text-slate-900">
-                          {lastBookingAmount != null
-                            ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
-                            : (pmServerQuote?.total != null
-                              ? `₹${Number(pmServerQuote.total).toLocaleString("en-IN")}`
-                              : "Amount unavailable")}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+            <div>
+              {/* Pulsing radar icon */}
+              <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
+                <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
+                <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
+                  <MapPin className="w-6 h-6 text-white" />
                 </div>
               </div>
 
-              {/* Cancel Button */}
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
+                </p>
+              </div>
+
+              {/* Order Details Accordion */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden mb-6 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
+                  className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
+                >
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900">Order Details</p>
+                    <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
+                </button>
+
+                {orderDetailsExpanded && (
+                  <div className="p-4 bg-white border-t border-slate-100 space-y-3">
+                    {/* Pickup */}
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                        <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                      </div>
+                    </div>
+                    <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
+                    {/* Drop */}
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                        <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
+                      </div>
+                    </div>
+                    {/* Service / Relocation Type */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Service</span>
+                      <span className="font-bold text-emerald-800">{selectedPackage?.name || "Packers & Movers"} ({relocationType})</span>
+                    </div>
+                    {/* Amount */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <span className="text-base">💵</span> Amount Payable
+                      </div>
+                      <span className="text-sm font-extrabold text-slate-900">
+                        {lastBookingAmount != null
+                          ? `₹${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                          : (pmServerQuote?.total != null
+                            ? `₹${Number(pmServerQuote.total).toLocaleString("en-IN")}`
+                            : "Amount unavailable")}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons: Close Search, Reschedule, or Cancel */}
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setLookingForPartnerOpen(false)
+                  try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+                }}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Close Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setRescheduleModalOpen(true)}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reschedule
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -3916,62 +4021,29 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
                   setCancelComments("")
                   setCancelModalOpen(true)
                 }}
-                className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
+                className="flex-1 py-3 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-700 hover:bg-rose-100 font-bold text-xs sm:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
+                <Ban className="w-3.5 h-3.5" />
                 Cancel
               </button>
             </div>
-
-            {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
-            <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Relocation!</h4>
-                </div>
-                <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
-                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
-                  <p className="text-xs font-black text-amber-300">4.8 ★</p>
-                </div>
-              </div>
-
-              <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
-                <div className="flex items-center gap-2.5">
-                  <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span>Verified Professional Movers</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
-                  <span>Free Multi-Layer Packing</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span>1-Tap Live Tracking</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span>Complete Loading &amp; Unloading</span>
-                </div>
-              </div>
-
-              <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
-                <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
-                <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
-                  {/* Generated QR Code SVG */}
-                  <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
-                    <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
-                    <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
-                    <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
-                    <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
-                    <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
-                    <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
-                    <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
-                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
+      )}
+
+      {/* ── Reschedule Booking Modal ── */}
+      {rescheduleModalOpen && (
+        <BookingRescheduleModal
+          bookingId={lastBookingId}
+          currentDate={preferredDate || (selectedDate?.fullDate ? selectedDate.fullDate.toLocaleDateString("en-CA") : "")}
+          currentTimeSlot={selectedSlot || "Morning"}
+          onClose={() => setRescheduleModalOpen(false)}
+          onRescheduled={({ new_date, new_time_slot }) => {
+            setPreferredDate(new_date)
+            setSelectedSlot(new_time_slot)
+            setRescheduleModalOpen(false)
+          }}
+        />
       )}
 
       {/* ── Cancel Trip Modal ── */}
@@ -4159,7 +4231,7 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
               ? (pickupCoords?.lat ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
               : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
           }
-          serviceSlug="packers-and-movers"
+          serviceSlug="packers_movers"
           onClose={() => setMapPickerTarget(null)}
           onConfirm={(resolvedAddr) => {
             const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"
@@ -4167,11 +4239,13 @@ export function PackersMoversBookingHosurPage({ city: cityProp, cityName: cityNa
             const lng = Number(resolvedAddr?.longitude ?? resolvedAddr?.lng)
             if (mapPickerTarget === "pickup") {
               setPickup(fullAddr)
+              if (pickupError) setPickupError("")
               if (!isNaN(lat) && !isNaN(lng)) {
                 setPickupCoords({ lat, lng, forAddress: fullAddr })
               }
             } else {
               setDrop(fullAddr)
+              if (destinationError) setDestinationError("")
               if (!isNaN(lat) && !isNaN(lng)) {
                 setDropCoords({ lat, lng, forAddress: fullAddr })
               }

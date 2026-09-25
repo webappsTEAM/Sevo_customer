@@ -237,7 +237,7 @@ class PackersMoversConfigSerializer(serializers.ModelSerializer):
             "id", "city", "standard_packing_rate_cft", "premium_packing_rate_cft",
             "premium_fragile_addon", "floor_rate_no_lift_per_100cft",
             "unpacking_rate_cft", "gst_rate", "survey_cft_threshold",
-            "is_active", "created_at", "updated_at",
+            "max_helpers", "is_active", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 

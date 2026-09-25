@@ -98,6 +98,7 @@ function CameraController({
   speed = 0,
   followMode,
   recenterTrigger,
+  stopPoints = [],
 }) {
   const map = useMap()
   const initialFitRef = useRef(false)
@@ -107,13 +108,16 @@ function CameraController({
   useEffect(() => {
     if (!initialFitRef.current && destinationPos) {
       if (technicianPos) {
-        const bounds = L.latLngBounds([technicianPos, destinationPos])
+        const bounds = L.latLngBounds([technicianPos, destinationPos, ...stopPoints])
         map.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true, duration: 0.9 })
+      } else if (stopPoints.length > 0) {
+        map.fitBounds(L.latLngBounds([destinationPos, ...stopPoints]), { padding: [70, 70], maxZoom: 17, animate: true, duration: 0.9 })
       } else {
         map.flyTo(destinationPos, 17, { animate: true, duration: 0.8 })
       }
       initialFitRef.current = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destinationPos, technicianPos, map])
 
   // 2. Smooth follow with camera lead offset
@@ -144,6 +148,7 @@ function CameraController({
     const points = []
     if (technicianPos) points.push(technicianPos)
     if (destinationPos) points.push(destinationPos)
+    stopPoints.forEach((p) => points.push(p))
     if (points.length === 0) return
     if (points.length === 1) {
       map.flyTo(points[0], Math.max(map.getZoom(), 17), { animate: true, duration: 0.6 })
@@ -287,6 +292,22 @@ function CompactZoomControls() {
   )
 }
 
+/* Small labelled pin for logistics pickup ("P") / drop ("D") points. */
+function createRoutePointIcon(label, color) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};color:#fff;font:700 12px/26px system-ui,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)">${label}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+}
+
+function toLatLng(loc) {
+  const lat = loc?.latitude == null ? NaN : Number(loc.latitude)
+  const lng = loc?.longitude == null ? NaN : Number(loc.longitude)
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Main CustomerTrackingMap Component
 ───────────────────────────────────────────────────────────────────────────── */
@@ -303,6 +324,9 @@ export function CustomerTrackingMap({
   startOtp = null,
   vendorName = "",
   requestId = "",
+  // Logistics only: { pickup: {latitude, longitude, address}, drop: {...} }.
+  // Null/undefined for non-logistics bookings -> nothing extra is drawn.
+  routePoints = null,
 }) {
   const [mapLayer, setMapLayer] = useState("google_streets")
   const [roadRoute, setRoadRoute] = useState([])
@@ -367,6 +391,12 @@ export function CustomerTrackingMap({
   const destLat = destination?.latitude != null ? parseFloat(destination.latitude) : null
   const destLng = destination?.longitude != null ? parseFloat(destination.longitude) : null
   const destinationPos = destLat != null && destLng != null && !isNaN(destLat) && !isNaN(destLng) ? [destLat, destLng] : null
+  // Logistics (GT / Packers & Movers): both pickup and drop are drawn as
+  // distinct P/D stop pins, so the generic single destination pin is hidden
+  // and the camera fits both stops.
+  const logisticsStopPoints = routePoints
+    ? [toLatLng(routePoints.pickup), toLatLng(routePoints.drop)].filter(Boolean)
+    : []
 
   const rawTechLat = technicianLocation?.latitude ?? technician?.latitude
   const rawTechLng = technicianLocation?.longitude ?? technician?.longitude
@@ -719,6 +749,7 @@ export function CustomerTrackingMap({
           speed={speed}
           followMode={followMode}
           recenterTrigger={recenterTrigger}
+          stopPoints={logisticsStopPoints}
         />
 
         <CompactZoomControls />
@@ -818,13 +849,33 @@ export function CustomerTrackingMap({
                 dashArray: "6, 6",
               }}
             />
-            <Marker
-              position={destinationPos}
-              icon={createCustomerDestinationIcon()}
-              zIndexOffset={100}
-            />
+            {logisticsStopPoints.length === 0 && (
+              <Marker
+                position={destinationPos}
+                icon={createCustomerDestinationIcon()}
+                zIndexOffset={100}
+              />
+            )}
           </>
         )}
+
+        {/* ── 2b. Logistics pickup (P) & drop (D) points, always both visible ── */}
+        {routePoints && [
+          ["pickup", "P", "#059669", "Pickup"],
+          ["drop", "D", "#dc2626", "Drop"],
+        ].map(([key, label, color, title]) => {
+          const pos = toLatLng(routePoints[key])
+          if (!pos) return null
+          return (
+            <Marker
+              key={`route-${key}`}
+              position={pos}
+              icon={createRoutePointIcon(label, color)}
+              title={`${title}${routePoints[key]?.address ? `: ${routePoints[key].address}` : ""}`}
+              zIndexOffset={150}
+            />
+          )
+        })}
 
         {/* ── 3. Live Technician Vehicle Marker with Real Name & Live Telemetry ── */}
         {rawTechnicianPos && !isTerminal && (

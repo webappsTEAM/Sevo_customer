@@ -3499,6 +3499,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           startOtp={startOtp}
           vendorName={liveData?.vendor?.name || ""}
           requestId={rid}
+          routePoints={(() => {
+            // GT / Packers & Movers: show green P (pickup) + red D (drop) stop
+            // pins instead of the generic single "Your Service Location" pin.
+            const cat = String(liveData?.service_category || successData?.service_category || "").toLowerCase()
+            const isLogisticsCat = Boolean(liveData?.logistics?.leg) || ["goods", "truck", "two_wheeler", "packers", "transport"].some(k => cat.includes(k))
+            const pickup = liveData?.pickup_location || successData?.pickup_location
+            const drop = liveData?.drop_location || successData?.drop_location
+            return isLogisticsCat && (pickup || drop) ? { pickup, drop } : null
+          })()}
         />
       </div>
 
@@ -4531,44 +4540,123 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             </span>
           </div>
 
-          {/* Step 3: Technician On The Way */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
-              Technician On The Way
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
-              {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
-            </span>
-          </div>
+          {(function renderGTAwareSteps() {
+            // GT audit fix: goods_transport_truck (Mini Truck) has no
+            // "arrived" leg and is driven by a driver, not a technician
+            // performing an on-site service. The generic labels/steps below
+            // ("Technician On The Way" / "Technician Arrived at Location" /
+            // "Service In Progress") were shown unconditionally, which does
+            // not match the backend's real GT leg sequence
+            // (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+            // DELIVERED) and contradicted the leg-aware wording already used
+            // on CustomerTrackingPage.jsx for the same booking. Scoped to
+            // goods_transport_truck only -- every other category (including
+            // Two Wheeler and P&M) renders exactly the original three steps
+            // with the original flags, unchanged.
+            const _cat = String(liveData?.service_category || successData?.service_category || "").toLowerCase()
+            const _isGTTruck = _cat === "goods_transport_truck"
+            const _leg = String(liveData?.logistics?.leg || "").toUpperCase()
 
-          {/* Step 4: Technician Arrived */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
-              Technician Arrived at Location
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
-              {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
-            </span>
-          </div>
+            if (!_isGTTruck) {
+              return (
+                <>
+                  {/* Step 3: Technician On The Way */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : isOnTheWay ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : isOnTheWay ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {(isArrived || isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛵</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || isOnTheWay) ? '#0f172a' : '#94a3b8' }}>
+                      Technician On The Way
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : (isOnTheWay && etaMinutes != null) ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+                      {(isArrived || isInProgress || isCompleted) ? 'Completed' : (isOnTheWay && etaMinutes != null) ? `~${etaMinutes} mins` : isAccepted ? 'Starting soon' : 'Pending'}
+                    </span>
+                  </div>
 
-          {/* Step 5: Service In Progress */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
-              Service In Progress
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
-              {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
-            </span>
-          </div>
+                  {/* Step 4: Technician Arrived */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isArrived || isInProgress || isCompleted) ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${(isArrived || isInProgress || isCompleted) ? '#10b981' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {(isInProgress || isCompleted) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📍</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isArrived || isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                      Technician Arrived at Location
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isArrived || isInProgress || isCompleted) ? '#10b981' : '#94a3b8' }}>
+                      {(isInProgress || isCompleted) ? 'Verified' : isArrived ? 'Arrived' : 'Next'}
+                    </span>
+                  </div>
+
+                  {/* Step 5: Service In Progress */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCompleted ? '#ecfdf5' : isInProgress ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {isCompleted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🔧</span>}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isInProgress || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                      Service In Progress
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isCompleted ? '#10b981' : isInProgress ? '#3b82f6' : '#94a3b8' }}>
+                      {isCompleted ? 'Done' : isInProgress ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
+                </>
+              )
+            }
+
+            // GT (Mini Truck) leg-aware steps.
+            const legOrder = ["EN_ROUTE_PICKUP", "LOADING", "EN_ROUTE_DROP", "UNLOADING", "DELIVERED"]
+            const legIdx = legOrder.indexOf(_leg)
+            const reached = (name) => isCompleted || legIdx >= legOrder.indexOf(name)
+            const active = (name) => !isCompleted && legIdx === legOrder.indexOf(name)
+            const onTheWayDone = reached("LOADING")
+            const onTheWayActive = active("EN_ROUTE_PICKUP") || (isOnTheWay && legIdx < 0)
+            const loadingDone = reached("EN_ROUTE_DROP")
+            const loadingActive = active("LOADING")
+            const enRouteDropDone = reached("DELIVERED") || isCompleted
+            const enRouteDropActive = active("EN_ROUTE_DROP") || active("UNLOADING")
+
+            return (
+              <>
+                {/* Step 3 (GT): Driver En Route to Pickup */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: onTheWayDone ? '#ecfdf5' : onTheWayActive ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${onTheWayDone ? '#10b981' : onTheWayActive ? '#FC8019' : isAccepted ? '#f59e0b' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {onTheWayDone ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🚚</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (isAccepted || onTheWayActive) ? '#0f172a' : '#94a3b8' }}>
+                    Driver En Route to Pickup
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: onTheWayDone ? '#10b981' : onTheWayActive ? '#FC8019' : isAccepted ? '#f59e0b' : '#94a3b8' }}>
+                    {onTheWayDone ? 'Completed' : onTheWayActive ? (etaMinutes != null ? `~${etaMinutes} mins` : 'On the way') : isAccepted ? 'Starting soon' : 'Pending'}
+                  </span>
+                </div>
+
+                {/* Step 4 (GT): Loading Cargo at Pickup */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: loadingDone ? '#ecfdf5' : loadingActive ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${loadingDone ? '#10b981' : loadingActive ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {loadingDone ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>📦</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (loadingDone || loadingActive) ? '#0f172a' : '#94a3b8' }}>
+                    Loading Cargo at Pickup
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: loadingDone ? '#10b981' : loadingActive ? '#FC8019' : '#94a3b8' }}>
+                    {loadingDone ? 'Completed' : loadingActive ? 'Loading' : 'Next'}
+                  </span>
+                </div>
+
+                {/* Step 5 (GT): En Route to Drop-off */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: (isCompleted || enRouteDropDone) ? '#ecfdf5' : enRouteDropActive ? '#eff6ff' : '#f8fafc', border: `1.5px solid ${(isCompleted || enRouteDropDone) ? '#10b981' : enRouteDropActive ? '#3b82f6' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {(isCompleted || enRouteDropDone) ? <Check size={14} color="#10b981" strokeWidth={3} /> : <span style={{ fontSize: '0.75rem' }}>🛣️</span>}
+                  </div>
+                  <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: (enRouteDropActive || enRouteDropDone || isCompleted) ? '#0f172a' : '#94a3b8' }}>
+                    {_leg === "UNLOADING" ? "Unloading at Drop-off" : "En Route to Drop-off"}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (isCompleted || enRouteDropDone) ? '#10b981' : enRouteDropActive ? '#3b82f6' : '#94a3b8' }}>
+                    {(isCompleted || enRouteDropDone) ? 'Done' : enRouteDropActive ? 'Active' : 'Pending'}
+                  </span>
+                </div>
+              </>
+            )
+          })()}
 
           {/* Step 6: Service Completed */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -4938,6 +5026,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
   const [trackingBooking, setTrackingBooking] = useState(null)
+  const [cancelTargetBooking, setCancelTargetBooking] = useState(null)
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -6400,9 +6489,17 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                             <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
+
+                            {/* Live Finding Partner Indicator if not yet assigned/accepted */}
+                            {!b.is_accepted && !b.technician && !b.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(b.status || '').toLowerCase()) && (
+                              <span style={{ fontSize: '0.7rem', padding: '3px 10px', borderRadius: 99, fontWeight: 800, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} className="animate-ping" />
+                                📡 Finding Partner...
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
@@ -6414,7 +6511,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                           {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
                           {isRescheduleEligible && (
-                            <div style={{ marginTop: 6 }}>
+                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <button
                                 onClick={() => {
                                   setRescheduleBookingId(b.id)
@@ -6432,8 +6529,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
-                            {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
+                          <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.02rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                            <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Payment:</span>
+                            <span>{['paid', 'collected'].includes(b.payment_status) ? 'Paid' : (b.payment_status_display || 'Pending')}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                             {['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase()) && (
@@ -6449,6 +6547,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <RefreshCw size={13} /> Book Again
                               </button>
                             )}
+
+                            {/* Live Partner Search button if unassigned & searching */}
+                            {!b.is_accepted && !b.technician && !b.technician_name && ['new_request', 'reviewed', 'confirmed', 'assigned'].includes(String(b.status || '').toLowerCase()) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setTrackingBooking(b)
+                                }}
+                                style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: '1px solid #10b981', background: 'linear-gradient(135deg, #059669, #047857)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.25)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                title="Open Live Partner Search Radar"
+                              >
+                                <Radio size={14} className="animate-pulse" /> Live Partner Search
+                              </button>
+                            )}
+
                             {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
                               <button
                                 onClick={(e) => {
@@ -6462,6 +6577,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <MapPin size={14} /> Track Live
                               </button>
                             )}
+
+                            {/* Cancel Booking pre-acceptance */}
+                            {!['completed', 'closed', 'cancelled', 'rejected'].includes(String(b.status || '').toLowerCase()) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCancelTargetBooking(b)
+                                }}
+                                style={{ fontSize: '0.82rem', padding: '8px 14px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff1f2', fontWeight: 700, cursor: 'pointer', color: '#e11d48', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'transform 0.15s' }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                                title="Cancel Booking"
+                              >
+                                <Ban size={13} /> Cancel
+                              </button>
+                            )}
+
                             <button
                               onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
                               style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
@@ -6667,7 +6799,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
                               👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
                                 ? (b.technician?.name || b.technician_name)
-                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet')}
+                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet (Searching partner...)')}
                               {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
@@ -6872,8 +7004,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
                                 : [
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
-                                  Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
-                                  ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
+                                  !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) ? 'track' : null,
+                                  ['pending', 'confirmed', 'new_request', 'assigned'].includes(b.status) ? 'reschedule' : null,
+                                  !['completed', 'closed', 'cancelled', 'rejected'].includes(b.status) ? 'cancel' : null,
                                   'contact_support',
                                   'view_invoice',
                                   b.refund_status ? 'refund_status' : null,
@@ -6907,17 +7040,22 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               )
                               if (cleanAct === "track") {
                                 const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
-                                if (!isAcceptedJob) return null
                                 return (
                                   <button
                                     key={act}
                                     onClick={() => setTrackingBooking(b)}
-                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}
+                                    style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: isAcceptedJob ? 'linear-gradient(135deg, #FC8019, #f97316)' : 'linear-gradient(135deg, #059669, #047857)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: isAcceptedJob ? '0 2px 8px rgba(252, 128, 25, 0.3)' : '0 2px 8px rgba(5, 150, 105, 0.25)' }}
                                   >
-                                    <MapPin size={14} /> Track Live
+                                    {isAcceptedJob ? <MapPin size={14} /> : <Radio size={14} className="animate-pulse" />}
+                                    {isAcceptedJob ? "Track Live" : "Live Partner Search"}
                                   </button>
                                 )
                               }
+                              if (cleanAct === "cancel") return (
+                                <button key={act} onClick={() => setCancelTargetBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#e11d48', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <Ban size={14} /> Cancel Booking
+                                </button>
+                              )
                               if (cleanAct === "reschedule") return (
                                 <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
@@ -9630,6 +9768,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             onClose={() => {
               setTrackingBooking(null)
               try { sessionStorage.removeItem("calservice_active_tracking_id") } catch (e) { }
+            }}
+          />
+        )}
+        {cancelTargetBooking && (
+          <BookingCancellationModal
+            bookingId={cancelTargetBooking.request_id || cancelTargetBooking.id}
+            requestId={cancelTargetBooking.request_id || cancelTargetBooking.id}
+            isAccepted={Boolean(cancelTargetBooking.is_accepted)}
+            trackingToken={cancelTargetBooking.tracking_token}
+            phone={cancelTargetBooking.phone}
+            onClose={() => setCancelTargetBooking(null)}
+            onCancelled={async () => {
+              setCancelTargetBooking(null)
+              try {
+                const res = await apiFetchCustomerBookings()
+                if (res?.data) setRealBookings(res.data)
+              } catch (_) { }
             }}
           />
         )}

@@ -369,6 +369,36 @@ class GoodsItem(models.Model):
         return f"{self.name} ({self.category.name})"
 
 
+# Hard ceiling for PackersMoversConfig.max_helpers (admin-editable up to this).
+MAX_HELPERS_CAP = 20
+
+
+def resolve_helpers_requested(cart_data, city=""):
+    """Return the helper count a P&M booking asked for, clamped to the admin
+    max for that city (0..PackersMoversConfig.max_helpers). None when the
+    booking did not request helpers at all. Never raises."""
+    try:
+        items = cart_data if isinstance(cart_data, list) else [cart_data]
+        raw = None
+        for it in items:
+            if isinstance(it, dict) and it.get("helpers_requested") not in (None, ""):
+                raw = it.get("helpers_requested")
+                city = city or str(it.get("city") or "")
+                break
+        if raw is None:
+            return None
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    cfg = None
+    if city:
+        cfg = PackersMoversConfig.objects.filter(city__iexact=city, is_active=True).first()
+    if cfg is None:
+        cfg = PackersMoversConfig.objects.filter(is_active=True).first()
+    limit = cfg.max_helpers if cfg else 2
+    return max(0, min(n, limit))
+
+
 class PackersMoversConfig(models.Model):
     """
     Centralized, Admin-controlled configuration for Packers & Movers relocation pricing parameters.
@@ -410,6 +440,14 @@ class PackersMoversConfig(models.Model):
         default=500.0,
         validators=[MinValueValidator(50.0)],
         help_text="Moves exceeding this CFT volume require an on-site / video survey before binding contract"
+    )
+    max_helpers = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MaxValueValidator(MAX_HELPERS_CAP)],
+        help_text=(
+            "Maximum number of extra helpers a customer may request on a P&M booking "
+            f"(0-{MAX_HELPERS_CAP}). Crew-size/operations setting only -- no price is attached."
+        ),
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -421,3 +421,58 @@ export async function deleteAdminFaq(id, reason = "") {
 }
 
 
+
+/* =========================================================================
+ * 8. SERVICE COVERAGE (geofenced service areas)
+ *
+ * Backed by the existing ServiceZone geofence API in settings_hub
+ * (/api/settings/service-zones/) -- the same zones the booking endpoint and
+ * the public /check/ endpoint enforce. This tab only manages the zones that
+ * are configured for Goods & Transport service slugs.
+ * ========================================================================= */
+
+const ZONE_BASE = "/settings/service-zones/"
+
+export const GT_COVERAGE_SERVICES = [
+  { slug: "goods_transport_truck", label: "Mini Truck" },
+  { slug: "goods_transport_two_wheeler", label: "Two Wheeler" },
+  { slug: "packers_movers", label: "Packers & Movers" },
+]
+
+export async function fetchCoverageZones(services = GT_COVERAGE_SERVICES.map((s) => s.slug)) {
+  const qs = services.length ? `?services=${encodeURIComponent(services.join(","))}` : ""
+  try {
+    const res = await apiRequest(`${ZONE_BASE}${qs}`)
+    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []
+    return { ok: true, zones: list }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function createCoverageZone(payload) {
+  try {
+    const res = await apiRequest(ZONE_BASE, { method: "POST", json: payload })
+    return { ok: true, zone: res?.data || res }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function updateCoverageZone(id, changes) {
+  try {
+    const res = await apiRequest(`${ZONE_BASE}${id}/`, { method: "PATCH", json: changes })
+    return { ok: true, zone: res?.data || res }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}
+
+export async function deleteCoverageZone(id) {
+  try {
+    await apiRequest(`${ZONE_BASE}${id}/`, { method: "DELETE" })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: asError(err) }
+  }
+}

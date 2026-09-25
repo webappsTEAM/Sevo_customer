@@ -297,6 +297,9 @@ export function ModernServiceCatalogView({
     const subName = (activeSubService?.name || "").toLowerCase()
     const subSlug = (activeSubService?.slug || "").toLowerCase()
 
+    const activeCityRaw = localStorage.getItem("calservice_user_city") || (displayLocationText && !displayLocationText.includes("Select") ? displayLocationText.split(",")[0].trim() : "hosur")
+    const activeCitySlug = (activeCityRaw || "hosur").toLowerCase().replace(/\s+/g, "-")
+
     if (
       subSlug.includes("2_wheeler") ||
       subSlug.includes("two_wheeler") ||
@@ -307,7 +310,7 @@ export function ModernServiceCatalogView({
       pkgName.includes("bike") ||
       pkgName.includes("scooter")
     ) {
-      navigate("/two-wheelers/hosur")
+      navigate(`/two-wheelers/${activeCitySlug}`)
       return
     }
 
@@ -319,12 +322,12 @@ export function ModernServiceCatalogView({
       pkgName.includes("shifting") ||
       pkgName.includes("packers")
     ) {
-      navigate("/packers-and-movers/hosur")
+      navigate(`/packers-and-movers/${activeCitySlug}`)
       return
     }
 
-    // Default to Mini Truck Hosur specialized booking page
-    navigate("/trucks/hosur")
+    // Default to Trucks specialized booking page
+    navigate(`/trucks/${activeCitySlug}`)
   }
 
   const getLogisticsButtonText = (pkg) => {
@@ -1162,26 +1165,15 @@ export function ModernServiceCatalogView({
                           </div>
                         </div>
 
-                        {/* Know More + Proceed to Booking */}
-                        <div className="flex items-center gap-2 mt-3">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              setDetailsPackage(pkg)
-                            }}
-                            className="flex-1 py-2 px-3 rounded-xl font-bold text-xs border border-emerald-600 text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          >
-                            Know More
-                          </button>
+                        {/* Proceed to Booking */}
+                        <div className="mt-3">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleGoodsTransportProceed(pkg)
                             }}
-                            className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1"
+                            className="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <span>{getLogisticsButtonText(pkg)}</span>
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -1502,7 +1494,7 @@ export function ModernServiceCatalogView({
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-black text-slate-800">Need help booking?</div>
-                  <div className="text-[11px] text-slate-500">Hosur customer care: 080-4824-SEVO</div>
+                  <div className="text-[11px] text-slate-500">Customer care: 080-4824-SEVO</div>
                 </div>
               </div>
             </div>

@@ -112,6 +112,24 @@ def _coord(value):
         return None
 
 
+def _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng):
+    # Same company resolution as the booking endpoint, so quote-time and
+    # submit-time coverage can never disagree about which zones apply.
+    from service_requests.views import _get_company
+    from settings_hub.service_zone_engine import check_route_coverage
+
+    return check_route_coverage(
+        pickup_lat=pickup_lat,
+        pickup_lng=pickup_lng,
+        drop_lat=drop_lat,
+        drop_lng=drop_lng,
+        service_slug=category,
+        company=_get_company(request),
+        vehicle_class=tier.get_vehicle_class() if tier is not None else "",
+        vehicle_label=getattr(tier, "name", "") or "",
+    )
+
+
 class LogisticsQuoteView(APIView):
     """
     POST /api/logistics/quote/
@@ -224,6 +242,22 @@ class LogisticsQuoteView(APIView):
                     "success": False,
                     "error_code": "TIER_CATEGORY_MISMATCH",
                     "message": "That vehicle type isn't available for this service. Pick one from the list.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Service Coverage gate (admin-configured ServiceZones): refuse to
+        # quote a trip whose pickup or drop is outside ACTIVE coverage, so the
+        # customer sees the pickup/drop-specific reason in real time -- the
+        # same check the booking endpoint enforces at submit.
+        coverage = _route_coverage_for(request, category, tier, pickup_lat, pickup_lng, drop_lat, drop_lng)
+        if not coverage.allowed:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": coverage.error_code,
+                    "failed_point": coverage.failed_point,
+                    "message": coverage.message,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -681,7 +715,17 @@ class PackersMoversInventoryView(APIView):
             }
             categories_data.append(cat_payload)
 
-        return success_response(data={"categories": categories_data})
+        # Admin-configured helper limit (PackersMoversConfig.max_helpers) so
+        # the booking page can offer 0..max_helpers extra helpers.
+        from .models import PackersMoversConfig
+        city = (request.query_params.get("city") or "Hosur").strip()
+        pm_cfg = (
+            PackersMoversConfig.objects.filter(city__iexact=city, is_active=True).first()
+            or PackersMoversConfig.objects.filter(is_active=True).first()
+        )
+        max_helpers = pm_cfg.max_helpers if pm_cfg else 2
+
+        return success_response(data={"categories": categories_data, "max_helpers": max_helpers})
 
 
 class LogisticsSlotAvailabilityView(APIView):

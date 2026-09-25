@@ -13,9 +13,9 @@ class CityAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceZone)
 class ServiceZoneAdmin(admin.ModelAdmin):
-    list_display = ["name", "zone_code", "city", "zone_type", "is_active", "created_at"]
-    list_filter = ["city", "zone_type", "is_active"]
-    search_fields = ["name", "zone_code"]
+    list_display = ["name", "city", "zone_type", "status", "is_active", "created_at"]
+    list_filter = ["city", "zone_type", "status"]
+    search_fields = ["name"]
     ordering = ["city", "name"]
 
 

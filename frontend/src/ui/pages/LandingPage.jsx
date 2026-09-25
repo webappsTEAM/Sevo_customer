@@ -1347,6 +1347,26 @@ export function LandingPage() {
   const [notificationCount, setNotificationCount] = useState(0)
   const [customerBookings, setCustomerBookings] = useState([])
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [selectedCity, setSelectedCity] = useState(() => {
+    return localStorage.getItem("calservice_user_city") || "Hosur"
+  })
+
+  useEffect(() => {
+    const handleCityChange = (e) => {
+      if (e?.detail) {
+        setSelectedCity(e.detail)
+      } else {
+        const stored = localStorage.getItem("calservice_user_city")
+        if (stored) setSelectedCity(stored)
+      }
+    }
+    window.addEventListener("calservices:city_changed", handleCityChange)
+    window.addEventListener("calservice_address_changed", handleCityChange)
+    return () => {
+      window.removeEventListener("calservices:city_changed", handleCityChange)
+      window.removeEventListener("calservice_address_changed", handleCityChange)
+    }
+  }, [])
   const [modalCart, setModalCart] = useState(() => {
     const stateCart = location.state?.cart;
     if (stateCart && stateCart.length > 0) {
@@ -2412,7 +2432,13 @@ export function LandingPage() {
     if (!item) return
 
     if (item.action === "navigate" && item.url) {
-      navigate(item.url)
+      let targetUrl = item.url
+      const safeCity = selectedCity || localStorage.getItem("calservice_user_city") || "Hosur"
+      if (safeCity && targetUrl.includes("/hosur")) {
+        const citySlug = safeCity.toLowerCase().replace(/\s+/g, "-")
+        targetUrl = targetUrl.replace("/hosur", `/${citySlug}`)
+      }
+      navigate(targetUrl)
       return
     }
 
@@ -3584,6 +3610,11 @@ export function LandingPage() {
               if (locObj) {
                 const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
                 setActiveLocationLabel(labelStr)
+                const detectedCity = locObj?.city || (locObj?.locality ? locObj.locality : null) || (typeof labelStr === "string" ? labelStr.split(",")[0]?.trim() : "")
+                if (detectedCity) {
+                  setSelectedCity(detectedCity)
+                  localStorage.setItem("calservice_user_city", detectedCity)
+                }
                 if (user?.id) {
                   setCustomerLocation(user.id, labelStr)
                   setCustomerSelectedAddress(user.id, locObj)
@@ -5347,9 +5378,9 @@ export function LandingPage() {
                   booking flow so it isn't silently dropped */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
                 {[
-                  { key: "truck", name: goodsTileOverrides.truck?.name || "Mini Truck & Logistics", image: goodsTileOverrides.truck?.image, slug: "truck", route: routes.truck_booking_hosur, graphic: goodsTileOverrides.truck?.image ? undefined : TruckGraphic },
-                  { key: "two_wheeler", name: goodsTileOverrides.two_wheeler?.name || "2-Wheeler Courier", image: goodsTileOverrides.two_wheeler?.image, slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: goodsTileOverrides.two_wheeler?.image ? undefined : TwoWheelerGraphic },
-                  { key: "packers_movers", name: goodsTileOverrides.packers_movers?.name || "Packers & Movers", image: goodsTileOverrides.packers_movers?.image, slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: goodsTileOverrides.packers_movers?.image ? undefined : PackersMoversGraphic },
+                  { key: "truck", name: goodsTileOverrides.truck?.name || "Mini Truck & Logistics", slug: "truck", route: `/trucks/${(selectedCity || "hosur").toLowerCase().replace(/\s+/g, "-")}`, graphic: TruckGraphic },
+                  { key: "two_wheeler", name: goodsTileOverrides.two_wheeler?.name || "2-Wheeler Courier", slug: "two-wheeler", route: `/two-wheelers/${(selectedCity || "hosur").toLowerCase().replace(/\s+/g, "-")}`, graphic: TwoWheelerGraphic },
+                  { key: "packers_movers", name: goodsTileOverrides.packers_movers?.name || "Packers & Movers", slug: "packers-movers", route: `/packers-and-movers/${(selectedCity || "hosur").toLowerCase().replace(/\s+/g, "-")}`, graphic: PackersMoversGraphic },
                   ...goodsModalServices
                     .filter((s) => {
                       const n = (s.name || "").toLowerCase()
@@ -6622,6 +6653,11 @@ export function LandingPage() {
             if (locObj) {
               const labelStr = typeof locObj === "string" ? locObj : (locObj?.formatted_address || locObj?.locality || locObj?.city || "")
               setActiveLocationLabel(labelStr)
+              const detectedCity = locObj?.city || (locObj?.locality ? locObj.locality : null) || (typeof labelStr === "string" ? labelStr.split(",")[0]?.trim() : "")
+              if (detectedCity) {
+                setSelectedCity(detectedCity)
+                localStorage.setItem("calservice_user_city", detectedCity)
+              }
               if (user?.id) {
                 setCustomerLocation(user.id, labelStr)
                 setCustomerSelectedAddress(user.id, locObj)

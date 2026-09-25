@@ -249,3 +249,41 @@ export async function fetchGTFaqs({ category = "", city = "" } = {}) {
 }
 
 
+
+/**
+ * Service Coverage: is this pickup -> drop trip inside ACTIVE admin-configured
+ * coverage for the category? Calls the route mode of the public geofence
+ * check (settings_hub ServiceZone). Resolves to
+ *   { inCoverage: true }  or
+ *   { inCoverage: false, failedPoint: "pickup"|"drop", errorCode, message }
+ * Network failures resolve to inCoverage: true -- the booking and quote
+ * endpoints enforce coverage server-side regardless.
+ */
+export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass }) {
+  if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) return { inCoverage: true, skipped: true }
+  try {
+    const res = await apiRequest("/settings/service-zones/check/", {
+      method: "POST",
+      body: {
+        lat: pickup.lat,
+        lng: pickup.lng,
+        drop_lat: drop.lat,
+        drop_lng: drop.lng,
+        service_slug: serviceCategory,
+        ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
+      },
+    })
+    const data = res?.data || res || {}
+    if (data.in_zone === false) {
+      return {
+        inCoverage: false,
+        failedPoint: data.failed_point || "",
+        errorCode: data.error_code || "",
+        message: data.message || "This trip is outside our service area.",
+      }
+    }
+    return { inCoverage: true }
+  } catch {
+    return { inCoverage: true, skipped: true }
+  }
+}

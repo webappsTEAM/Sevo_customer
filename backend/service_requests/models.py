@@ -1818,28 +1818,95 @@ class GTWaitingChargePolicy(models.Model):
         return f"GTWaitingChargePolicy({scope}, enabled={self.is_enabled})"
 
     def charge_for(self, service_request):
-        """Returns the Decimal total waiting charge across every TripStop
-        on this booking that has both arrived_at and completed_at set, or
+        """Returns the Decimal total waiting charge for this booking, or
         Decimal('0') if disabled/unconfigured. Never raises -- a stop still
         in progress (completed_at is None) is simply skipped, not charged
-        for partial/ongoing waiting."""
+        for partial/ongoing waiting.
+
+        Dwell time is measured per TripStop (arrived_at -> completed_at)
+        when the booking has TripStop rows -- the multi-stop route case
+        (GT-B-05), where every stop including pickup/drop is a TripStop.
+
+        GT audit fix: the common single-pickup/single-drop Mini Truck
+        booking has NO TripStop rows at all -- those are only created for
+        multi-stop routes -- so the loop below never ran for an ordinary
+        booking and this policy silently charged nothing regardless of how
+        long the driver actually waited. For that case (goods_transport_truck
+        with no TripStop rows), fall back to the same append-only
+        logistics_leg_history the Vendor app's own waiting-charge
+        computation (services/waiting_charges.py) uses: dwell at pickup is
+        the time between entering LOADING and leaving for EN_ROUTE_DROP;
+        dwell at drop is the time between entering UNLOADING and reaching
+        DELIVERED. Scoped to goods_transport_truck only -- Two Wheeler and
+        P&M bookings are unaffected (P&M always has TripStop rows for its
+        multi-stop moves, so it never reaches this fallback)."""
         from decimal import Decimal
         if not self.is_active or not self.is_enabled:
             return Decimal("0")
         total_minutes_billable = 0
-        for stop in service_request.trip_stops.all():
-            if not stop.arrived_at or not stop.completed_at:
-                continue
-            dwell_seconds = (stop.completed_at - stop.arrived_at).total_seconds()
-            if dwell_seconds <= 0:
-                continue
-            dwell_minutes = int(dwell_seconds // 60)
-            billable = max(0, dwell_minutes - self.free_minutes_per_stop)
-            total_minutes_billable += billable
+        stops = list(service_request.trip_stops.all())
+        if stops:
+            for stop in stops:
+                if not stop.arrived_at or not stop.completed_at:
+                    continue
+                dwell_seconds = (stop.completed_at - stop.arrived_at).total_seconds()
+                if dwell_seconds <= 0:
+                    continue
+                dwell_minutes = int(dwell_seconds // 60)
+                billable = max(0, dwell_minutes - self.free_minutes_per_stop)
+                total_minutes_billable += billable
+        elif str(getattr(service_request, "service_category", "") or "").strip().lower() == "goods_transport_truck":
+            total_minutes_billable = self._gt_leg_history_billable_minutes(service_request)
         charge = Decimal(str(total_minutes_billable)) * Decimal(str(self.rate_per_minute))
         if self.max_charge_per_booking is not None:
             charge = min(charge, Decimal(str(self.max_charge_per_booking)))
         return charge
+
+    def _gt_leg_history_billable_minutes(self, service_request):
+        """goods_transport_truck fallback for charge_for() when the booking
+        has no TripStop rows: dwell time from logistics_leg_history, the
+        same append-only {"leg", "at", "by"} entries
+        workforce_api/services/logistics_events.py writes on the Vendor
+        side. Two windows only, matching the real GT leg sequence
+        (EN_ROUTE_PICKUP -> LOADING -> EN_ROUTE_DROP -> UNLOADING ->
+        DELIVERED): loading dwell (LOADING -> EN_ROUTE_DROP) and unloading
+        dwell (UNLOADING -> DELIVERED)."""
+        import math
+        from datetime import datetime
+
+        history = list(getattr(service_request, "logistics_leg_history", None) or [])
+
+        def _parse(ts):
+            if isinstance(ts, datetime):
+                return ts
+            if not ts:
+                return None
+            try:
+                return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+        def _first_at(legs):
+            found = [
+                _parse(h.get("at"))
+                for h in history
+                if isinstance(h, dict) and h.get("leg") in legs
+            ]
+            found = [t for t in found if t is not None]
+            return min(found) if found else None
+
+        def _dwell_minutes(start_legs, end_legs):
+            start = _first_at(start_legs)
+            end = _first_at(end_legs)
+            if start is None or end is None or end <= start:
+                return 0
+            return math.ceil((end - start).total_seconds() / 60)
+
+        loading_minutes = _dwell_minutes(("LOADING",), ("EN_ROUTE_DROP",))
+        unloading_minutes = _dwell_minutes(("UNLOADING",), ("DELIVERED",))
+        billable = max(0, loading_minutes - self.free_minutes_per_stop)
+        billable += max(0, unloading_minutes - self.free_minutes_per_stop)
+        return billable
 
 
 def get_gt_waiting_charge(service_request):

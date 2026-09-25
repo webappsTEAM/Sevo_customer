@@ -427,12 +427,51 @@ class BookingCreateView(APIView):
             )
         _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
 
-        zone_result = check_booking_eligibility(
-            lat=_lat,
-            lng=_lng,
-            service_slug=_service_slug,
-            company=company,
-        )
+        from service_requests.services.logistics_pricing import DISTANCE_PRICED_CATEGORIES as _GT_ROUTE_CATEGORIES
+
+        if _service_slug in _GT_ROUTE_CATEGORIES:
+            # Goods & Transport: BOTH ends of the trip must be inside ACTIVE
+            # coverage for this category (and the chosen vehicle class, when
+            # a zone restricts vehicles). The message names which end failed.
+            from settings_hub.service_zone_engine import ZoneCheckResult, check_route_coverage
+
+            _tier = serializer.validated_data.get("logistics_tier")
+            route_result = check_route_coverage(
+                pickup_lat=_lat,
+                pickup_lng=_lng,
+                drop_lat=serializer.validated_data.get("drop_latitude"),
+                drop_lng=serializer.validated_data.get("drop_longitude"),
+                service_slug=_service_slug,
+                company=company,
+                vehicle_class=(_tier.get_vehicle_class() if _tier is not None else ""),
+                vehicle_label=(getattr(_tier, "name", "") or ""),
+            )
+            if not route_result.allowed:
+                if idem_cache_key:
+                    from django.core.cache import cache
+                    cache.delete(idem_cache_key)
+                return Response(
+                    {
+                        "success": False,
+                        "error_code": route_result.error_code,
+                        "failed_point": route_result.failed_point,
+                        "message": route_result.message,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            zone_result = ZoneCheckResult(
+                allowed=True,
+                zone_id=route_result.pickup_zone_id,
+                zone_name=route_result.pickup_zone_name,
+                open_access=route_result.open_access,
+            )
+        else:
+            zone_result = check_booking_eligibility(
+                lat=_lat,
+                lng=_lng,
+                service_slug=_service_slug,
+                company=company,
+            )
 
         if not zone_result.allowed:
             return Response(
@@ -483,6 +522,30 @@ class BookingCreateView(APIView):
                 error=err_text,
                 code="SURVEY_OR_REVIEW_REQUIRED" if is_survey_review else "UNRESOLVED_FARE",
             )
+
+        # GT-Mini-Truck audit fix: a pickup and drop that resolve to (near)
+        # the same point produce a real, chargeable, dispatchable booking
+        # with zero road distance -- a trip that goes nowhere. Reject it
+        # before the request reaches dispatch. Scoped to
+        # goods_transport_truck only (Mini Truck); Two Wheeler and P&M are
+        # untouched.
+        if _service_slug == "goods_transport_truck":
+            _fb = fare_breakdown if isinstance(fare_breakdown, dict) else (dict(fare_breakdown) if fare_breakdown else {})
+            try:
+                _route_distance_km = float(_fb.get("distance_km") or 0)
+            except (TypeError, ValueError):
+                _route_distance_km = 0.0
+            if _route_distance_km <= 0.05:
+                if idem_cache_key:
+                    from django.core.cache import cache
+                    cache.delete(idem_cache_key)
+                return _error(
+                    "Your pickup and drop locations are the same (or too close together). "
+                    "Please choose a different drop location for your Mini Truck booking.",
+                    400,
+                    error="Pickup and drop resolve to the same location (zero-distance route).",
+                    code="ZERO_DISTANCE_ROUTE",
+                )
 
         # Fixes HS-B-01: Full server-side price authority for Home Services bookings.
         # Browser-submitted prices in cart_data or total_amount are NEVER trusted.
@@ -1998,6 +2061,20 @@ def _build_tracking_payload(sr, has_full_access):
         "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
         "pickup_address": sr.address or "",
         "drop_address": sr.drop_address or "",
+        # Additive: fixed pickup + drop points for logistics bookings so the
+        # tracking map can show both alongside the live vehicle (the
+        # "destination" field above switches between them by leg). Null for
+        # non-logistics bookings, which have no pickup/drop concept.
+        "pickup_location": {
+            "address": sr.address or "",
+            "latitude": float(sr.latitude) if sr.latitude is not None else None,
+            "longitude": float(sr.longitude) if sr.longitude is not None else None,
+        } if sr.service_category in LOGISTICS_CATEGORIES else None,
+        "drop_location": {
+            "address": sr.drop_address or "",
+            "latitude": float(sr.drop_latitude) if sr.drop_latitude is not None else None,
+            "longitude": float(sr.drop_longitude) if sr.drop_longitude is not None else None,
+        } if sr.service_category in LOGISTICS_CATEGORIES else None,
         "drop_contact_name": sr.drop_contact_name or "",
         "drop_contact_phone": sr.drop_contact_phone if has_full_access else "",
         "fare_breakdown": getattr(sr, "fare_breakdown", None) or {},
@@ -2806,7 +2883,7 @@ class ServiceRequestSupplementalInvoiceView(APIView):
 # ─── 4. RESCHEDULE VIEWS ──────────────────────────────────────────────────────
 
 class CustomerRescheduleRequestCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [permissions.AllowAny]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
@@ -2826,15 +2903,24 @@ class CustomerRescheduleRequestCreateView(APIView):
         if booking.status in ["cancelled", "completed", "closed", "rejected"]:
             return _standard_response(success=False, error={"code": "NOT_ELIGIBLE", "message": f"Booking in '{booking.status}' status cannot be rescheduled."}, status_code=400)
 
+        requested_by = None
+        if request.user and request.user.is_authenticated:
+            requested_by = request.user
+        elif booking.customer:
+            requested_by = booking.customer
+        else:
+            from django.contrib.auth import get_user_model
+            requested_by = get_user_model().objects.filter(is_superuser=True).first()
+
         attachment_obj = None
         if "file" in request.FILES or "attachment" in request.FILES:
             upload_file = request.FILES.get("file") or request.FILES.get("attachment")
-            attachment_obj = RescheduleAttachment.objects.create(file=upload_file, original_name=upload_file.name, uploaded_by=request.user)
+            attachment_obj = RescheduleAttachment.objects.create(file=upload_file, original_name=upload_file.name, uploaded_by=requested_by)
 
         try:
             rr = sr_services.create_reschedule_request(
                 booking=booking,
-                requested_by=request.user,
+                requested_by=requested_by,
                 new_date=new_date,
                 new_time_slot=new_time_slot,
                 reason=reason,

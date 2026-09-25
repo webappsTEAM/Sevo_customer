@@ -400,11 +400,19 @@ def main():
         compress_level = 1
     print(f" -> Compression level: {compress_level} (fast mode enabled)")
 
-    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=compress_level) as zipf:
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=compress_level, strict_timestamps=False) as zipf:
         total = len(files_to_zip)
         step = max(1, total // 10)
         for idx, (abs_path, arcname, _) in enumerate(files_to_zip, start=1):
-            zipf.write(abs_path, arcname=arcname)
+            try:
+                zipf.write(abs_path, arcname=arcname)
+            except ValueError:
+                try:
+                    zinfo = zipfile.ZipInfo(arcname, (1980, 1, 1, 0, 0, 0))
+                    with open(abs_path, "rb") as f:
+                        zipf.writestr(zinfo, f.read(), compress_type=zipfile.ZIP_DEFLATED)
+                except Exception as file_err:
+                    print(f"   [!] Warning: Failed to write {arcname}: {file_err}")
             if idx % step == 0 or idx == total:
                 pct = (idx / total) * 100
                 print(f"   -> Progress: {pct:5.1f}% ({idx:,}/{total:,} files)")

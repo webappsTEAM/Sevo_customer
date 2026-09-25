@@ -4,10 +4,10 @@ import {
   MapPin, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
-  User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban
+  User, Mail, MessageSquare, AlertCircle, Zap, Calendar, Check, Ban, RefreshCw
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
@@ -17,13 +17,14 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { BookingRescheduleModal } from "../components/BookingRescheduleModal.jsx"
 import { MapPickerScreen } from "../components/AddressPicker/MapPickerScreen.jsx"
+import { LogisticsFooter } from "../components/LogisticsFooter.jsx"
 import { getAddress } from "../../api/geocoding.js"
 import {
   filterLocationSuggestions,
   searchHosurPlacesOnline,
   formatExactLocation,
-  isHosurRouteServed,
   resolveLocationCoords,
 } from "../../services/hosurLocations.js"
 
@@ -565,6 +566,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
+  // Service Coverage (admin-configured ServiceZones): pickup/drop-specific
+  // reason when the trip is outside ACTIVE coverage; "" when covered.
+  const [coverageMessage, setCoverageMessage] = useState("")
   const { user } = useAuth()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
@@ -702,12 +706,14 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const [activeTab, setActiveTab] = useState("light") // 'light' | 'heavy'
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
 
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
   const [cancelledBookingModalOpen, setCancelledBookingModalOpen] = useState(false)
   const [cancelledReasonText, setCancelledReasonText] = useState("")
+  const [pickupError, setPickupError] = useState("")
   const [destinationError, setDestinationError] = useState("")
 
   // Lock body scroll when any modal or drawer is open to freeze background
@@ -1167,12 +1173,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
     const timer = setTimeout(async () => {
       setIsSearchingOnlineDrop(true)
-      const res = await searchHosurPlacesOnline(drop)
+      const res = await searchHosurPlacesOnline(drop, currentCityName)
       setOnlineDropSuggestions(res || [])
       setIsSearchingOnlineDrop(false)
     }, 250)
     return () => clearTimeout(timer)
-  }, [drop])
+  }, [drop, currentCityName])
 
   // Debounced dynamic search for pickup location
   useEffect(() => {
@@ -1181,11 +1187,11 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
       return
     }
     const timer = setTimeout(async () => {
-      const res = await searchHosurPlacesOnline(pickup)
+      const res = await searchHosurPlacesOnline(pickup, currentCityName)
       setOnlinePickupSuggestions(res || [])
     }, 250)
     return () => clearTimeout(timer)
-  }, [pickup])
+  }, [pickup, currentCityName])
 
   const localPickupMatches = filterLocationSuggestions(pickup)
   const pickupSuggestions = [
@@ -1310,11 +1316,13 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         try {
           const formatted = await getAddress(latitude, longitude)
           setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          setPickupError("")
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
           console.warn("Reverse geocoding error:", err)
-          setPickup(`Current Location (Hosur - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          setPickup(`Current Location (${currentCityName || "Hosur"} - ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+          setPickupError("")
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } finally {
@@ -1388,6 +1396,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         bestFor: bestForText,
       },
       _tierId: tier.id,
+      vehicle_class: tier.vehicle_class || "",
       is_active: tier.is_active !== false,
       max_weight_kg: Number(tier.max_weight_kg) || 0,
       max_cft: Number(tier.max_cft) || 0,
@@ -1423,25 +1432,25 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // send for every booking. Fire-and-forget from sync click handlers --
   // the Fare Breakdown/quote effect below reacts once these resolve.
   const resolvePickupLocation = async (value, targetAddress) => {
-    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
+    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value, currentCityName) : String(value))
     if (typeof value === "object" && value?.lat != null && value?.lng != null) {
       setPickupCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
       return
     }
     setPickupCoords(null)
-    const coords = await resolveLocationCoords(value)
+    const coords = await resolveLocationCoords(value, currentCityName)
     if (coords) {
       setPickupCoords({ ...coords, forAddress: addr })
     }
   }
   const resolveDropLocation = async (value, targetAddress) => {
-    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value) : String(value))
+    const addr = targetAddress || (typeof value === "object" ? formatExactLocation(value, currentCityName) : String(value))
     if (typeof value === "object" && value?.lat != null && value?.lng != null) {
       setDropCoords({ lat: value.lat, lng: value.lng, forAddress: addr })
       return
     }
     setDropCoords(null)
-    const coords = await resolveLocationCoords(value)
+    const coords = await resolveLocationCoords(value, currentCityName)
     if (coords) {
       setDropCoords({ ...coords, forAddress: addr })
     }
@@ -1450,31 +1459,21 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   const handleRouteSelect = (route) => {
     const destination = route.to || route.destination_label || ""
     if (destination) {
-      const exactDrop = formatExactLocation(destination)
+      const exactDrop = formatExactLocation(destination, currentCityName)
       setDrop(exactDrop)
       setDropCoords(null)
-      resolveLocationCoords(exactDrop).then((c) => {
+      resolveLocationCoords(exactDrop, currentCityName).then((c) => {
         if (c) setDropCoords({ ...c, forAddress: exactDrop })
       })
     }
     setSelectedRoute(route)
-    // GT audit Update 17: picking a popular route used to overwrite the
-    // pickup with a hardcoded "Sipcot Industrial Area, Hosur" even when the
-    // customer had already entered their own. The backend prices whatever
-    // pickup it is finally given, so that silently re-quoted and would have
-    // charged the trip from an address the customer never chose.
-    //
-    // A Lane models a route and its origin CITY -- there is no depot or
-    // street-level origin in the catalog, and none is invented here. So: a
-    // pickup the customer has entered is always kept, and only an empty one
-    // is seeded, from the lane's own origin city when it carries one.
     if (!pickup || !pickup.trim()) {
       const laneOrigin = route.city || route.from || route.origin_city || ""
       resolvePickupLocation(
-        laneOrigin ? `${laneOrigin}, Tamil Nadu` : "Hosur, Tamil Nadu"
+        laneOrigin ? `${laneOrigin}` : (currentCityName || "Hosur")
       )
     }
-    resolveDropLocation(`${route.to}, Tamil Nadu`)
+    resolveDropLocation(destination)
     const bar = document.getElementById("estimate-bar")
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
     if (!pickup) {
@@ -1483,24 +1482,62 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
     }
   }
 
-  const isRouteServed = (pickupVal, dropVal) => {
-    return isHosurRouteServed(pickupVal, dropVal)
-  }
+  // Real-time coverage check as soon as both points are known -- replaces
+  // the old hardcoded Hosur address-string match (isHosurRouteServed), so
+  // expanding coverage is an admin action, not a code change.
+  useEffect(() => {
+    if (!pickupPoint || !dropPoint) {
+      setCoverageMessage("")
+      setNoServiceRoute(false)
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      const res = await checkRouteCoverage({
+        serviceCategory: "goods_transport_truck",
+        pickup: pickupPoint,
+        drop: dropPoint,
+        vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
+      })
+      if (cancelled) return
+      setCoverageMessage(res.inCoverage ? "" : res.message)
+      setNoServiceRoute(!res.inCoverage)
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng, (selectedVehicle || selectedVehicleEffective)?.vehicle_class])
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
-    if (!drop || !drop.trim()) {
+    const hasNoPickup = !pickup || !pickup.trim()
+    const hasNoDrop = !drop || !drop.trim()
+
+    if (hasNoPickup) {
+      setPickupError("Pickup location is not provided")
+    } else {
+      setPickupError("")
+    }
+
+    if (hasNoDrop) {
       setDestinationError("Destination is not provided")
-      const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
-      if (dropEl) {
-        dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
-        dropEl.focus?.()
+    } else {
+      setDestinationError("")
+    }
+
+    if (hasNoPickup || hasNoDrop) {
+      const targetEl = hasNoPickup
+        ? (document.getElementById("pickup-input") || document.getElementById("estimate-bar"))
+        : (document.getElementById("drop-input") || document.getElementById("estimate-bar"))
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        targetEl.focus?.()
       }
       return
     }
+    setPickupError("")
     setDestinationError("")
     // Check if route is served
-    if (pickup && drop && !isRouteServed(pickup, drop)) {
+    if (coverageMessage) {
       setNoServiceRoute(true)
       return
     }
@@ -1976,7 +2013,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           {/* Location Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/20 text-xs font-bold text-[var(--sevo-primary)]">
             <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
-            <span>Hosur</span>
+            <span>{currentCityName || "Hosur"}</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[var(--sevo-text-secondary)]">
@@ -2078,9 +2115,13 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     onChange={(e) => {
                       setPickup(e.target.value)
                       setPickupCoords(null)
+                      if (e.target.value.trim()) setPickupError("")
                       setShowPickupSuggestions(true)
                     }}
-                    className="w-full pl-3 pr-16 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                    className={`w-full pl-3 pr-16 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${pickupError
+                        ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
+                        : "border-slate-200 focus:border-emerald-500"
+                      }`}
                     required
                     autoComplete="off"
                   />
@@ -2108,6 +2149,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     </button>
                   </div>
                 </div>
+                {pickupError && (
+                  <p className="absolute -bottom-5 left-0 text-[10px] font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap z-20 animate-in fade-in">
+                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                    <span>{pickupError}</span>
+                  </p>
+                )}
 
                 {/* Pickup Suggestions Dropdown */}
                 {showPickupSuggestions && (
@@ -2124,8 +2171,9 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                             type="button"
                             onMouseDown={(e) => {
                               e.preventDefault()
-                              const exact = formatExactLocation(loc)
+                              const exact = formatExactLocation(loc, currentCityName)
                               setPickup(exact)
+                              setPickupError("")
                               resolvePickupLocation(loc)
                               setNoServiceRoute(false)
                               setShowPickupSuggestions(false)
@@ -2492,7 +2540,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             {noServiceRoute && (
               <div className="mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-rose-400 bg-rose-50 text-rose-700 text-xs font-extrabold uppercase tracking-widest animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                WE DO NOT OPERATE FOR THE SELECTED ROUTE
+                {coverageMessage || "WE DO NOT OPERATE FOR THE SELECTED ROUTE"}
               </div>
             )}
           </div>
@@ -2502,7 +2550,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         <section className="pt-6 sm:pt-8 pb-12 sm:pb-16 max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Book Mini Trucks in Hosur
+              Book Mini Trucks in {currentCityName || "Hosur"}
             </h2>
 
             {/* Underline Tabs matching Image 1 & 4 */}
@@ -2541,24 +2589,36 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             )}
 
 
-            {destinationError && (
+            {(pickupError || destinationError) && (
               <div className="max-w-2xl mx-auto mt-4 p-4 bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
                 <div className="flex items-center gap-2.5">
                   <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-                  <span>Destination is not provided. Please enter a delivery destination in the form above to proceed with booking.</span>
+                  <span>
+                    {pickupError && destinationError
+                      ? "Pickup location and delivery destination are not provided. Please enter both in the form above to proceed with booking."
+                      : pickupError
+                        ? "Pickup location is not provided. Please enter a pickup location in the form above to proceed with booking."
+                        : "Destination is not provided. Please enter a delivery destination in the form above to proceed with booking."}
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
-                    if (dropEl) {
-                      dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                      dropEl.focus?.()
+                    const targetEl = pickupError
+                      ? (document.getElementById("pickup-input") || document.getElementById("estimate-bar"))
+                      : (document.getElementById("drop-input") || document.getElementById("estimate-bar"))
+                    if (targetEl) {
+                      targetEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                      targetEl.focus?.()
                     }
                   }}
                   className="underline font-black text-rose-800 hover:text-rose-950 cursor-pointer ml-3 shrink-0"
                 >
-                  Enter Destination ↑
+                  {pickupError && destinationError
+                    ? "Enter Locations ↑"
+                    : pickupError
+                      ? "Enter Pickup ↑"
+                      : "Enter Destination ↑"}
                 </button>
               </div>
             )}
@@ -2656,15 +2716,8 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         </p>
                       </div>
 
-                      {/* Know More underline link & Proceed to Booking button */}
-                      <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setActiveVehicleDetails(vehicle.details)}
-                          className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-4 decoration-emerald-600 hover:decoration-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none transition-colors"
-                        >
-                          Know More
-                        </button>
+                      {/* Proceed to Booking button */}
+                      <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-end">
                         <button
                           type="button"
                           onClick={() => {
@@ -2676,20 +2729,17 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                               alert("This vehicle is currently not available for instant booking. Please select an active vehicle.")
                               return
                             }
-                            if (!drop || !drop.trim()) {
-                              setDestinationError("Destination is not provided")
-                              const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
-                              if (dropEl) {
-                                dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                                dropEl.focus?.()
-                              }
-                              return
-                            }
-                            if (!pickup || !pickup.trim()) {
-                              const pickupEl = document.getElementById("pickup-input") || document.getElementById("estimate-bar")
-                              if (pickupEl) {
-                                pickupEl.scrollIntoView({ behavior: "smooth", block: "center" })
-                                pickupEl.focus?.()
+                            const hasNoPickup = !pickup || !pickup.trim()
+                            const hasNoDrop = !drop || !drop.trim()
+                            if (hasNoPickup) setPickupError("Pickup location is not provided")
+                            if (hasNoDrop) setDestinationError("Destination is not provided")
+                            if (hasNoPickup || hasNoDrop) {
+                              const targetEl = hasNoPickup
+                                ? (document.getElementById("pickup-input") || document.getElementById("estimate-bar"))
+                                : (document.getElementById("drop-input") || document.getElementById("estimate-bar"))
+                              if (targetEl) {
+                                targetEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                                targetEl.focus?.()
                               }
                               return
                             }
@@ -2717,15 +2767,15 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
         </section>
 
 
-        {/* ── Section: Popular Routes from Hosur ────────────────────── */}
+        {/* ── Section: Popular Routes ────────────────────── */}
         {LONG_DISTANCE_ROUTES.length > 0 && (
           <section className="py-8 sm:py-12 max-w-6xl mx-auto px-4 sm:px-6">
             <div className="text-center max-w-2xl mx-auto mb-8">
               <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Popular Mini Truck Delivery Routes from Hosur
+                Popular Mini Truck Delivery Routes from {currentCityName || "Hosur"}
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Guaranteed lowest freight rates with live tracking across Hosur, SIPCOT &amp; industrial corridors
+                Guaranteed lowest freight rates with live tracking across {currentCityName || "Hosur"} &amp; connected corridors
               </p>
             </div>
 
@@ -2763,66 +2813,37 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           </section>
         )}
 
-        <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
-            Areas We Serve in Hosur
-          </h2>
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
-            {HOSUR_AREAS.map((area, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
+        {HOSUR_AREAS.length > 0 && (
+          <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
+              Areas We Serve in {currentCityName || "Hosur"}
+            </h2>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 max-w-4xl mx-auto">
+              {HOSUR_AREAS.map((area, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    const formatted = formatExactLocation(`${area}, ${currentCityName || "Hosur"}`, currentCityName)
+                    setPickup(formatted)
+                    setPickupCoords(null)
+                    resolveLocationCoords(formatted, currentCityName).then((c) => {
+                      if (c) setPickupCoords({ ...c, forAddress: formatted })
+                    })
 
-                  const formatted = formatExactLocation(`${area}, Hosur`)
-                  setPickup(formatted)
-                  setPickupCoords(null)
-                  resolveLocationCoords(formatted).then((c) => {
-                    if (c) setPickupCoords({ ...c, forAddress: formatted })
-                  })
-
-                  const bar = document.getElementById("estimate-bar")
-                  if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
-              >
-                {area}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Section: Think Logistics, Think Sevo! (Page 2) ── */}
-        <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="text-center md:text-left max-w-lg">
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                Mobile App Experience
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-                Think Logistics, Think Sevo!
-              </h2>
-              <p className="text-sm text-emerald-100 mt-2">
-                Get the Sevo mobile app to start booking your mini trucks, track live deliveries, and manage invoices with a single tap.
-              </p>
-              <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
-                <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                  <span>Google Play</span>
-                </div>
-                <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                  <span>App Store</span>
-                </div>
-              </div>
+                    const bar = document.getElementById("estimate-bar")
+                    if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:text-emerald-700 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer"
+                >
+                  {area}
+                </button>
+              ))}
             </div>
+          </section>
+        )}
 
-            <div className="flex flex-col items-center bg-white text-slate-900 p-5 rounded-3xl shadow-2xl">
-              <QRCodeGraphic className="w-32 h-32" />
-              <span className="text-xs font-bold text-slate-700 mt-3">Scan to download our app!</span>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section: Other Services to Choose From (Page 2) ───── */}
+        {/* ── Section: Other Services to Choose From ───── */}
         <section className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-8">
             Other Services to Choose From
@@ -2830,7 +2851,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Packers and Movers Card */}
             <div
-              onClick={() => navigate(routes.packers_movers_booking_hosur)}
+              onClick={() => navigate(`/packers-and-movers/${currentCitySlug || "hosur"}`)}
               className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
             >
               <div className="h-24 flex items-center justify-center">
@@ -2839,7 +2860,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               <h3 className="text-base font-bold text-slate-900">Packers and Movers</h3>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); navigate(routes.packers_movers_booking_hosur) }}
+                onClick={(e) => { e.stopPropagation(); navigate(`/packers-and-movers/${currentCitySlug || "hosur"}`) }}
                 className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
               >
                 <ArrowRight className="w-4 h-4 text-white" />
@@ -2848,7 +2869,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
             {/* Two Wheelers Card */}
             <div
-              onClick={() => navigate(routes.two_wheeler_booking_hosur)}
+              onClick={() => navigate(`/two-wheelers/${currentCitySlug || "hosur"}`)}
               className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
             >
               <div className="h-24 flex items-center justify-center">
@@ -2857,31 +2878,11 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               <h3 className="text-base font-bold text-slate-900">Two Wheelers</h3>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); navigate(routes.two_wheeler_booking_hosur) }}
+                onClick={(e) => { e.stopPropagation(); navigate(`/two-wheelers/${currentCitySlug || "hosur"}`) }}
                 className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
               >
                 <ArrowRight className="w-4 h-4 text-white" />
               </button>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section: Truck for Goods Transportation in Hosur (Page 2) ── */}
-        <section className="py-12 bg-white border-y border-slate-200/70">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-4">
-              Truck for Goods Transportation in Hosur
-            </h2>
-            <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
-              <p>
-                Transport your goods hassle-free with Sevo! Download Sevo and book a truck to transport business or personal goods anywhere in Hosur.
-              </p>
-              <p>
-                Sevo offers cost-effective solutions, allowing you to shift items within your budget. You can count on Sevo to move your goods safely and reliably. With a truck just a few taps away, say goodbye to logistics hassles and trust Sevo for your transportation needs.
-              </p>
-              <p className="font-semibold text-slate-800">
-                Book now and experience smooth, affordable, and efficient goods transportation with Sevo in Hosur!
-              </p>
             </div>
           </div>
         </section>
@@ -2934,46 +2935,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
           </div>
         </section>
 
-        {/* ── Vehicle Specs Modal ───────────────────────────────── */}
-        {activeVehicleDetails && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={() => setActiveVehicleDetails(null)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative"
-            >
-              <button
-                onClick={() => setActiveVehicleDetails(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <h3 className="text-xl font-extrabold text-slate-900">{activeVehicleDetails.name}</h3>
-              <p className="text-sm font-semibold text-slate-500 mt-1">{activeVehicleDetails.capacity}</p>
 
-              <div className="mt-6">
-                <span className="font-bold text-slate-900 block mb-3">Suitable for:</span>
-                <ul className="space-y-2">
-                  {activeVehicleDetails.suitableFor?.map((item, idx) => (
-                    <li key={idx} className="flex items-start text-sm text-slate-700">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <span className="font-bold text-slate-900">Best for: </span>
-                <span className="text-sm text-slate-700">{activeVehicleDetails.bestFor}</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ── Instant Fare Breakdown Modal (kept for vehicle detail 'Proceed to Book') ─── */}
         {estimateModalOpen && (
@@ -3000,7 +2962,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                 </div>
                 <div>
                   <h3 className="text-lg font-extrabold text-slate-900">Instant Estimate</h3>
-                  <p className="text-xs text-slate-500">Hosur Mini Truck Service</p>
+                  <p className="text-xs text-slate-500">{currentCityName || "Hosur"} Mini Truck Service</p>
                 </div>
               </div>
 
@@ -3269,7 +3231,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                                 <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                               </div>
                               <div className="pt-0.5">
-                                <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
+                                <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                               </div>
                             </div>
                             <div className="flex items-start gap-4 relative bg-white">
@@ -3557,7 +3519,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                         <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
                           <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
                         </div>
-                        <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || "Hosur Origin"}</p>
+                        <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || `${currentCityName || "Hosur"} Origin`}</p>
                       </div>
                       <div className="flex items-start gap-4 relative bg-white">
                         <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
@@ -4245,83 +4207,120 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
             role="dialog"
             aria-modal="true"
             className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => {
+              setLookingForPartnerOpen(false)
+              try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+            }}
           >
-            <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
-              {/* Left Column: Looking for partner status & Order Details */}
-              <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
-                <div>
-                  {/* Pulsing radar icon */}
-                  <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
-                    <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
-                    <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
-                      <MapPin className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col p-6 md:p-8"
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setLookingForPartnerOpen(false)
+                  try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+                }}
+                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer transition-colors z-20"
+                title="Close and return to page"
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
-                    </p>
-                  </div>
-
-                  {/* Order Details Accordion */}
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
-                      className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
-                    >
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                        <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
-                      </div>
-                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {orderDetailsExpanded && (
-                      <div className="p-4 bg-white border-t border-slate-100 space-y-3">
-                        {/* Pickup */}
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                            <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
-                          </div>
-                        </div>
-                        <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
-                        {/* Drop */}
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
-                            <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
-                          </div>
-                        </div>
-                        {/* Goods Type */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Goods Type</span>
-                          <span className="font-bold text-emerald-800">{selectedGoodsType || "General Goods"}</span>
-                        </div>
-                        {/* Amount */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                            <span className="text-base">💵</span> Amount Payable
-                          </div>
-                          <span className="text-sm font-extrabold text-slate-900">
-                            {lastBookingAmount != null
-                              ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
-                              : (serverQuote?.total != null
-                                ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
-                                : "Amount unavailable")}
-                          </span>
-                        </div>
-                      </div>
-                    )}
+              <div>
+                {/* Pulsing radar icon */}
+                <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
+                  <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
+                    <MapPin className="w-6 h-6 text-white" />
                   </div>
                 </div>
 
-                {/* Cancel Button */}
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
+                  </p>
+                </div>
+
+                {/* Order Details Accordion */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden mb-6 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
+                    className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">Order Details</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "—"}</p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {orderDetailsExpanded && (
+                    <div className="p-4 bg-white border-t border-slate-100 space-y-3">
+                      {/* Pickup */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Select pickup location"}</p>
+                        </div>
+                      </div>
+                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
+                      {/* Drop */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Customer"} • {phone || "Enter phone number"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Select destination")}</p>
+                        </div>
+                      </div>
+                      {/* Goods Type */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Goods Type</span>
+                        <span className="font-bold text-emerald-800">{selectedGoodsType || "General Goods"}</span>
+                      </div>
+                      {/* Amount */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                          <span className="text-base">💵</span> Amount Payable
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {lastBookingAmount != null
+                            ? `₹ ${Number(lastBookingAmount).toLocaleString("en-IN")}`
+                            : (serverQuote?.total != null
+                              ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
+                              : "Amount unavailable")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons: Close Search, Reschedule, or Cancel */}
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLookingForPartnerOpen(false)
+                    try { sessionStorage.removeItem("calservice_active_partner_search") } catch (_) { }
+                  }}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                >
+                  Close Search
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRescheduleModalOpen(true)}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Reschedule
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -4329,62 +4328,29 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                     setCancelComments("")
                     setCancelModalOpen(true)
                   }}
-                  className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
+                  className="flex-1 py-3 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-700 hover:bg-rose-100 font-bold text-xs sm:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
+                  <Ban className="w-3.5 h-3.5" />
                   Cancel
                 </button>
               </div>
-
-              {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
-              <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
-                <div className="flex items-start justify-between mb-5">
-                  <div>
-                    <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
-                  </div>
-                  <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
-                    <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
-                    <p className="text-xs font-black text-amber-300">4.8 ★</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
-                  <div className="flex items-center gap-2.5">
-                    <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>In-Transit Updates</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
-                    <span>Exciting Discounts & Rewards</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>1-Tap Booking Options</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
-                    <span>Loading & Unloading Service</span>
-                  </div>
-                </div>
-
-                <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
-                  <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
-                  <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
-                    {/* Generated QR Code SVG */}
-                    <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
-                      <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
-                      <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
-                      <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
-                      <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
-                      <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
-                      <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
-                      <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
-                      <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
+        )}
+
+        {/* ── Reschedule Booking Modal ── */}
+        {rescheduleModalOpen && (
+          <BookingRescheduleModal
+            bookingId={lastBookingId}
+            currentDate={preferredDate || todayDateString()}
+            currentTimeSlot={selectedSlot || "Morning"}
+            onClose={() => setRescheduleModalOpen(false)}
+            onRescheduled={({ new_date, new_time_slot }) => {
+              setPreferredDate(new_date)
+              setSelectedSlot(new_time_slot)
+              setRescheduleModalOpen(false)
+            }}
+          />
         )}
 
         {/* ── Cancel Trip Modal (Matching Image 3) ── */}
@@ -4559,50 +4525,12 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
 
       </main>
 
-      {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer className="bg-[var(--sevo-surface)] border-t border-[var(--sevo-border)] pt-12 pb-8 text-xs text-[var(--sevo-text-secondary)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3 text-sm">Company</h4>
-              <ul className="space-y-2">
-                <li><span className="hover:text-emerald-600 cursor-pointer">About Us</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Careers</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Blog</span></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3 text-sm">Quick Links</h4>
-              <ul className="space-y-2">
-                <li><span className="hover:text-emerald-600 cursor-pointer">Packers &amp; Movers</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Two Wheelers</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Trucks in Hosur</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Enterprise Logistics</span></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3 text-sm">Support</h4>
-              <ul className="space-y-2">
-                <li><span onClick={() => setSupportModalOpen(true)} className="hover:text-emerald-600 cursor-pointer">Contact Us</span></li>
-                <li><span onClick={() => setSupportModalOpen(true)} className="hover:text-emerald-600 cursor-pointer">Help Center</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Privacy Policy</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Terms of Service</span></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3 text-sm">Domestic Cities</h4>
-              <p className="text-[11px] leading-relaxed text-slate-600">
-                Hosur, Bengaluru, Chennai, Coimbatore, Salem, Dharmapuri, Krishnagiri, Vellore, Madurai, Hyderabad, Mumbai, Delhi NCR
-              </p>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-            <p>© 2026 Sevo Logistics Solutions Pvt. Ltd. All rights reserved.</p>
-            <p>Affordable and Trusted Mini Truck Booking in Hosur</p>
-          </div>
-        </div>
-      </footer>
+      {/* ── Dynamic Logistics Footer ── */}
+      <LogisticsFooter
+        currentCitySlug={currentCitySlug}
+        currentCityName={currentCityName}
+        onOpenSupport={() => setSupportModalOpen(true)}
+      />
 
       {/* Support & Help Center Modal */}
       <SupportHelpCenterModal
@@ -4641,7 +4569,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               ? (pickupCoords?.lat ? { lat: Number(pickupCoords.lat), lng: Number(pickupCoords.lng) } : null)
               : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
           }
-          serviceSlug="goods-transport"
+          serviceSlug="goods_transport_truck"
           onClose={() => setMapPickerTarget(null)}
           onConfirm={(resolvedAddr) => {
             const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"
