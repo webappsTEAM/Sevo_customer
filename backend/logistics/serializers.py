@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from .models import Lane, ServiceArea, ServiceTier
@@ -9,9 +10,10 @@ class ServiceTierSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceTier
         fields = [
-            "id", "category", "category_display", "city", "slug", "name",
+            "id", "category", "category_display", "vehicle_class", "city", "slug", "name",
             "weight_class", "capacity_label", "dimensions_label", "description",
             "starting_price", "currency", "includes", "icon", "image", "order",
+            "max_weight_kg", "max_cft",
             "duration", "updated_at",
         ]
 
@@ -37,15 +39,11 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
     """
     The administrator's view of a tier -- the customer-facing
     ServiceTierSerializer above deliberately exposes only starting_price, and
-    must stay that way: the per-km rate card is not public.
+    only active tiers. This one exposes every rate-card knob and lets the admin
+    patch them in place.
 
-    Read/write for the descriptive fields, read-write for the pricing ones
-    (per-field permission is enforced in pricing_admin.update_tier_pricing,
-    not here -- a serializer cannot see the actor's role cleanly and two
-    places deciding the same thing is how they drift apart).
-
-    category / slug / city are read-only: together they are the tier's
-    identity (unique_together), the seed matches on them, and the Package
+    slug and city are deliberately read-only: the frontend pages hardcode
+    slugs like '2-wheeler' and 'tata-ace' into layout choices, and workforce
     sync maps onto slug. Renaming one from a pricing screen would orphan the
     tier from both.
     """
@@ -55,7 +53,7 @@ class ServiceTierPricingSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceTier
         fields = [
-            "id", "category", "category_display", "city", "slug", "name",
+            "id", "category", "category_display", "vehicle_class", "city", "slug", "name",
             "weight_class", "capacity_label", "dimensions_label", "description",
             "currency", "order", "is_active", "is_distance_priced",
             # capacity
@@ -136,6 +134,10 @@ class GoodsItemSerializer(serializers.ModelSerializer):
             "is_oversized", "is_prohibited", "requires_special_handling", "special_handling_charge",
             "is_two_wheeler_compatible", "order", "is_active",
         ]
+        extra_kwargs = {
+            "default_weight_kg": {"required": True, "min_value": Decimal("0.01")},
+            "default_cft": {"required": True, "min_value": Decimal("0.01")},
+        }
 
 
 class AdminGoodsItemSerializer(serializers.ModelSerializer):
@@ -152,6 +154,10 @@ class AdminGoodsItemSerializer(serializers.ModelSerializer):
             "is_two_wheeler_compatible", "order", "is_active", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "category_name", "category_slug", "created_at", "updated_at"]
+        extra_kwargs = {
+            "default_weight_kg": {"required": True, "min_value": Decimal("0.01")},
+            "default_cft": {"required": True, "min_value": Decimal("0.01")},
+        }
 
 
 class PackersMoversConfigSerializer(serializers.ModelSerializer):

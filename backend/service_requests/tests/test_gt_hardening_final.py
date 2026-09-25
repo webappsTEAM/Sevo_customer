@@ -24,7 +24,7 @@ from unittest.mock import patch, MagicMock
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
-TestCase = unittest.TestCase
+from django.test import TestCase
 
 from service_requests.models import ServiceRequest
 from service_requests.serializers import ServiceRequestPublicCreateSerializer
@@ -259,6 +259,55 @@ class GTHardeningP1ProhibitedGoodsTests(TestCase):
 class GTHardeningP2PackersMoversUnknownItemTests(TestCase):
     """P1/P2: Packers & Movers uncataloged inventory review gate tests."""
 
+    def setUp(self):
+        from logistics.models import GoodsCategory, GoodsItem, PackersMoversConfig
+        self.cat_bed = GoodsCategory.objects.create(name="Bedroom", slug="bedroom")
+        self.cat_living = GoodsCategory.objects.create(name="Living Room", slug="living-room")
+        self.item_bed = GoodsItem.objects.create(
+            category=self.cat_bed,
+            name="Double Bed - Dismantlable",
+            slug="double-bed-dismantlable",
+            default_cft=Decimal("45.0"),
+            default_weight_kg=Decimal("50.0"),
+            is_active=True,
+        )
+        self.item_fridge = GoodsItem.objects.create(
+            category=self.cat_living,
+            name="1-Door Refrigerator (Small)",
+            slug="1-door-refrigerator-small",
+            default_cft=Decimal("15.0"),
+            default_weight_kg=Decimal("40.0"),
+            is_active=True,
+        )
+        self.pm_config = PackersMoversConfig.objects.create(
+            city="Hosur",
+            standard_packing_rate_cft=Decimal("3.50"),
+            premium_packing_rate_cft=Decimal("6.00"),
+            premium_fragile_addon=Decimal("200.00"),
+            floor_rate_no_lift_per_100cft=Decimal("120.00"),
+            unpacking_rate_cft=Decimal("2.00"),
+            gst_rate=Decimal("0.1800"),
+            survey_cft_threshold=500.0,
+        )
+        from logistics.models import LogisticsCategory, ServiceTier
+        self.pm_tier = ServiceTier.objects.create(
+            category=LogisticsCategory.PACKERS_MOVERS,
+            city="Hosur",
+            slug="pm-standard-truck",
+            name="Mini Truck (Tata Ace)",
+            vehicle_class=ServiceTier.VehicleClass.TRUCK,
+            starting_price=Decimal("1500.00"),
+            base_fare=Decimal("1200.00"),
+            per_km_rate=Decimal("25.00"),
+            free_km=Decimal("3.00"),
+            loading_unloading_charge=Decimal("400.00"),
+            minimum_fare=Decimal("1500.00"),
+            max_weight_kg=Decimal("750.00"),
+            max_cft=Decimal("150.00"),
+            order=1,
+            is_active=True,
+        )
+
     def test_known_item_resolution(self):
         """Known catalog items resolve with is_known=True and requires_review=False."""
         meta = match_catalog_item("Double Bed - Dismantlable")
@@ -267,11 +316,10 @@ class GTHardeningP2PackersMoversUnknownItemTests(TestCase):
         self.assertEqual(meta["cft"], 45.0)
 
     def test_known_alias_resolution(self):
-        """Known keyword aliases resolve with is_known=True."""
+        """SEVO P0 Rule: No keyword heuristics. Unknown text without DB row resolves with is_known=False."""
         meta = match_catalog_item("Teakwood Center Coffee Table")
-        self.assertTrue(meta["is_known"])
-        self.assertFalse(meta["requires_review"])
-        self.assertEqual(meta["category"], "Living Room")
+        self.assertFalse(meta["is_known"])
+        self.assertTrue(meta["requires_review"])
 
     def test_unknown_item_flagged_for_review(self):
         """Uncataloged item without dimensions is flagged as requiring review."""
@@ -299,13 +347,15 @@ class GTHardeningP2PackersMoversUnknownItemTests(TestCase):
         self.assertIn("Industrial Hydraulic Press Machine", quote["unrecognized_items"])
 
     def test_unknown_item_with_explicit_dimensions_accepted(self):
-        """Uncataloged item with explicit customer dimensions avoids review flag."""
+        """Uncataloged item with explicit customer dimensions marks customer_custom_dimensions and requires review."""
         inventory = [
             {"name": "Custom Metal Sculpture", "cft": 18.0, "weight_kg": 35.0, "quantity": 1}
         ]
         metrics = calculate_inventory_metrics(inventory)
-        self.assertFalse(metrics["requires_review"])
+        self.assertTrue(metrics["requires_review"])
+        self.assertEqual(metrics["items"][0]["dims_source"], "customer_custom_dimensions")
         self.assertEqual(metrics["total_cft"], 18.0)
+        self.assertEqual(metrics["total_weight_kg"], 35.0)
 
     @patch("service_requests.services.routing.get_route_eta")
     def test_straight_line_estimate_distance_never_authoritative(self, mock_route):

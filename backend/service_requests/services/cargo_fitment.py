@@ -12,11 +12,14 @@ Guarantees:
 5. Deterministic vehicle fitment and capacity recommendation.
 """
 
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
 from django.db.models import Q
 
 from logistics.models import GoodsCategory, GoodsItem, ServiceTier
+
+logger = logging.getLogger(__name__)
 
 MAX_ITEM_QUANTITY = 500
 MAX_TOTAL_QUANTITY = 1000
@@ -40,6 +43,7 @@ def resolve_cargo_payload(
     goods_category_slug: Optional[str] = None,
     declared_weight_kg: Optional[Any] = None,
     strict: bool = False,
+    city: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Resolves client cargo inputs into authoritative server-side cargo attributes.
@@ -112,6 +116,8 @@ def resolve_cargo_payload(
             goods_category_slug = cargo_items["goods_category_slug"]
         if declared_weight_kg is None and "declared_weight_kg" in cargo_items:
             declared_weight_kg = cargo_items["declared_weight_kg"]
+        if not city and "city" in cargo_items:
+            city = cargo_items["city"]
         cargo_items = cargo_items.get("items") or cargo_items.get("cargo_items") or []
 
     # 2. Bulk load cargo items to prevent N+1 queries
@@ -120,7 +126,7 @@ def resolve_cargo_payload(
         item_slugs = []
         for entry in cargo_items:
             if isinstance(entry, dict):
-                iid = entry.get("item_id") or entry.get("id")
+                iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
                 islug = entry.get("item_slug") or entry.get("slug")
                 if iid:
                     try:
@@ -154,7 +160,7 @@ def resolve_cargo_payload(
                 })
                 continue
 
-            iid = entry.get("item_id") or entry.get("id")
+            iid = entry.get("goods_item_id") or entry.get("goods_item") or entry.get("item_id") or entry.get("id")
             islug = entry.get("item_slug") or entry.get("slug")
             identifier = islug or iid or "unknown"
 
@@ -264,6 +270,21 @@ def resolve_cargo_payload(
                     "selected_category": category_obj.name,
                 })
 
+            # Unconfigured cargo item safety gate: items with unconfigured dimensions (None or <= 0)
+            # cannot participate in instant authoritative pricing or vehicle fitment.
+            if (
+                item.default_weight_kg is None
+                or item.default_weight_kg <= Decimal("0.00")
+                or item.default_cft is None
+                or item.default_cft <= Decimal("0.00")
+            ):
+                validation_errors.append({
+                    "error": f"Cargo item '{item.name}' does not have configured physical dimensions (weight and volume required).",
+                    "code": "UNCONFIGURED_CARGO_ITEM",
+                    "item": item.slug,
+                })
+                continue
+
             item_weight = item.default_weight_kg * quantity
             item_cft = item.default_cft * quantity
             item_sp_handling = (item.special_handling_charge * quantity) if item.requires_special_handling else Decimal("0.00")
@@ -325,7 +346,21 @@ def resolve_cargo_payload(
 
     # 5. Two-Wheeler Compatibility Check
     is_2w_compatible = category_allows_2w and (not has_2w_incompatible_item)
-    if final_weight_kg > Decimal("20.00") or total_cft > Decimal("2.50"):
+    tw_query = ServiceTier.objects.filter(is_active=True, category="two_wheeler")
+    if city:
+        tw_tier = tw_query.filter(city__iexact=str(city).strip()).first()
+    else:
+        tw_tier = tw_query.first()
+
+    if tw_tier:
+        max_tw_wt = tw_tier.get_max_weight_kg()
+        max_tw_cft = tw_tier.get_max_cft()
+        if max_tw_wt > 0 and final_weight_kg > max_tw_wt:
+            is_2w_compatible = False
+        if max_tw_cft > 0 and total_cft > max_tw_cft:
+            is_2w_compatible = False
+    else:
+        logger.warning("No active two_wheeler ServiceTier found in database for city '%s'; disabling 2W eligibility.", city)
         is_2w_compatible = False
 
     has_prohibited = len(prohibited_item_names) > 0
@@ -361,12 +396,44 @@ def resolve_cargo_payload(
             if has_prohibited else ""
         ),
         "requires_special_handling": special_handling_charge > 0,
+        "has_special_handling": special_handling_charge > 0,
         "special_handling_charge": _money(special_handling_charge),
         "category_allows_two_wheeler": category_allows_2w,
         "is_two_wheeler_compatible": is_2w_compatible,
+        "has_two_wheeler_incompatible_item": has_2w_incompatible_item,
         "category_name": category_obj.name if category_obj else "",
         "category_slug": category_obj.slug if category_obj else "",
+        "min_vehicle_class": (getattr(category_obj, "min_vehicle_class", "") or "any").strip().lower(),
     }
+
+
+VEHICLE_CLASS_RANKS = {
+    "any": 0,
+    "two_wheeler": 1,
+    "2w": 1,
+    "three_wheeler": 2,
+    "3w": 2,
+    "3-wheeler": 2,
+    "truck": 3,
+    "light_truck": 3,
+    "pickup": 4,
+    "heavy_truck": 5,
+}
+
+
+def get_tier_class_rank(tier: ServiceTier) -> int:
+    """
+    Authoritative vehicle class ranking purely from database configuration.
+    SEVO P0 Rule: No slug, name, or regex string guessing.
+    Unconfigured or invalid vehicle_class fails closed (returns 0).
+    """
+    if not tier:
+        return 0
+    v_class = tier.get_vehicle_class() if hasattr(tier, "get_vehicle_class") else getattr(tier, "vehicle_class", None)
+    if not v_class:
+        return 0
+    v_class_clean = str(v_class).strip().lower()
+    return VEHICLE_CLASS_RANKS.get(v_class_clean, 0)
 
 
 def evaluate_vehicle_fitment(
@@ -380,26 +447,41 @@ def evaluate_vehicle_fitment(
     if not tier:
         return False, "Vehicle tier not specified."
 
+    tier_rank = get_tier_class_rank(tier)
+    if tier_rank <= 0:
+        return False, "Vehicle tier class is unconfigured or invalid."
+
     if not cargo_summary.get("is_valid", True):
-        first_err = cargo_summary.get("validation_errors", [{}])[0]
+        first_err = (cargo_summary.get("validation_errors") or [{}])[0]
         return False, first_err.get("error", "Invalid cargo details.")
 
     if cargo_summary.get("has_prohibited", False):
         return False, cargo_summary.get("prohibited_reason") or "Cargo contains prohibited items."
 
-    total_wt = Decimal(str(cargo_summary.get("total_weight_kg", 0)))
-    total_vol = Decimal(str(cargo_summary.get("total_cft", 0)))
+    # 1. Goods Category min_vehicle_class enforcement
+    min_class = (cargo_summary.get("min_vehicle_class") or "any").strip().lower()
+    min_rank = VEHICLE_CLASS_RANKS.get(min_class, 0)
+    if min_rank > tier_rank:
+        cat_name = cargo_summary.get("category_name") or "Selected goods"
+        return False, f"Goods category '{cat_name}' requires minimum vehicle class of '{min_class.upper()}'. {tier.name} is not eligible."
 
-    # 1. Two-wheeler specific checks
+    # 2. Two-wheeler specific checks
     if tier.category == "two_wheeler":
         if not cargo_summary.get("is_two_wheeler_compatible", True):
             return False, "This cargo contains items or category incompatible with two-wheeler transport."
-        if total_wt > Decimal("20.00"):
-            return False, f"Cargo weight ({total_wt} kg) exceeds two-wheeler safety limit (20 kg)."
-        if total_vol > Decimal("2.50"):
-            return False, f"Cargo volume ({total_vol} CFT) exceeds two-wheeler cargo bay volume (2.50 CFT)."
+        if cargo_summary.get("oversized_count", 0) > 0:
+            return False, "Oversized cargo cannot be transported on a two-wheeler."
+        if cargo_summary.get("heavy_count", 0) > 0:
+            return False, "Heavy cargo items cannot be transported on a two-wheeler."
 
-    # 2. General payload and volume check against tier
+    # 3. 3-Wheeler oversized restriction
+    if tier_rank == 2 and cargo_summary.get("oversized_count", 0) > 0:
+        return False, "Oversized items require a larger flatbed truck or pickup (not suitable for 3-Wheeler)."
+
+    total_wt = Decimal(str(cargo_summary.get("total_weight_kg", 0)))
+    total_vol = Decimal(str(cargo_summary.get("total_cft", 0)))
+
+    # 4. Authoritative payload and volume check against ServiceTier database configuration
     return tier.evaluate_cargo_fit(total_wt, total_vol)
 
 
@@ -413,20 +495,21 @@ def recommend_vehicles_for_cargo(
     - recommended_tier: smallest suitable vehicle that safely accommodates the cargo
     - suitable_tiers: all tiers that can carry the cargo (sorted by capacity then price)
     - incompatible_tiers: tiers that cannot carry the cargo with reasons
+
+    SEVO P1 Rule: NO cross-city vehicle fallback. If no tiers configured for city,
+    fail closed with NO_VEHICLE_AVAILABLE.
     """
     if vehicle_category:
         tiers = ServiceTier.objects.filter(is_active=True, city__iexact=city, category=vehicle_category)
-        if not tiers.exists():
-            tiers = ServiceTier.objects.filter(is_active=True, category=vehicle_category)
     else:
         tiers = ServiceTier.objects.filter(is_active=True, city__iexact=city, category__in=["two_wheeler", "truck"])
-        if not tiers.exists():
-            tiers = ServiceTier.objects.filter(is_active=True, category__in=["two_wheeler", "truck"])
 
     suitable = []
     incompatible = []
 
     for tier in tiers:
+        if get_tier_class_rank(tier) <= 0:
+            continue
         is_fit, reason = evaluate_vehicle_fitment(tier, cargo_summary)
         tier_info = {
             "id": tier.id,
@@ -464,7 +547,10 @@ def recommend_vehicles_for_cargo(
     has_prohibited = cargo_summary.get("has_prohibited", False)
     is_valid = cargo_summary.get("is_valid", True)
     if not suitable:
-        if not is_valid:
+        if not tiers.exists():
+            fit_error_code = "NO_VEHICLE_AVAILABLE"
+            fit_reason = f"No vehicle tiers are available or configured for city '{city}'."
+        elif not is_valid:
             first_err = (cargo_summary.get("validation_errors") or [{}])[0]
             fit_error_code = first_err.get("code", "INVALID_CARGO_DETAILS")
             fit_reason = first_err.get("error", "Invalid cargo details.")
@@ -486,6 +572,7 @@ def recommend_vehicles_for_cargo(
             "special_handling_charge": str(cargo_summary.get("special_handling_charge", "0.00")),
             "requires_special_handling": cargo_summary.get("requires_special_handling", False),
             "is_valid": cargo_summary.get("is_valid", True),
+            "is_two_wheeler_compatible": cargo_summary.get("is_two_wheeler_compatible", True),
             "validation_errors": cargo_summary.get("validation_errors", []),
         },
         "recommended_tier": recommended,

@@ -40,7 +40,8 @@ const AVAILABLE_CATEGORIES = [
   { id: "painting", name: "Painting & Waterproofing", desc: "Wall painting & waterproofing" },
   { id: "mason", name: "Mason Work", desc: "Civil, brick & plastering repairs" },
   { id: "appliance_repair", name: "Appliance Repair", desc: "Washing machine, fridge & microwave" },
-  { id: "groceries", name: "Groceries & Vegetables", desc: "Fresh produce & daily essentials" }
+  { id: "groceries", name: "Groceries", desc: "Fresh produce & daily essentials" },
+  { id: "vegetables", name: "Vegetables", desc: "Farm-fresh organic vegetables" }
 ];
 
 const AVAILABLE_SERVICES = [

@@ -221,6 +221,22 @@ export function VegetableFullScreenPage() {
     return () => { cancelled = true }
   }, [])
 
+  // Load approved categories from database
+  const [approvedCategories, setApprovedCategories] = useState([])
+  useEffect(() => {
+    let isMounted = true
+    apiRequest("/inventory/vegetable-categories/?status=APPROVED&only_roots=true")
+      .then((res) => {
+        if (!isMounted) return
+        const list = res?.data || (Array.isArray(res) ? res : [])
+        if (Array.isArray(list)) {
+          setApprovedCategories(list.filter((c) => c.is_active && c.name))
+        }
+      })
+      .catch((err) => console.error("Failed to load approved categories:", err))
+    return () => { isMounted = false }
+  }, [])
+
   // Fetch active vegetables from database catalog with live real-time sync
   useEffect(() => {
     let isMounted = true
@@ -243,7 +259,9 @@ export function VegetableFullScreenPage() {
                 mrp: mrp,
                 discount: discount,
                 delivery: "8 MINS",
-                category: getCategoryFromName(pkg.name),
+                category: pkg.vegetable_category_name || "Daily Essentials",
+                category_parent: pkg.vegetable_category_parent_name || null,
+                category_full_path: pkg.vegetable_category_full_path || "",
                 image: customPhoto,
                 description: pkg.description || "",
                 in_stock: pkg.in_stock !== false,
@@ -457,23 +475,30 @@ export function VegetableFullScreenPage() {
   // Filtered produce list
   const filteredVegetables = useMemo(() => {
     return vegetables.filter((v) => {
-      const q = searchQuery.toLowerCase()
+      const q = searchQuery.toLowerCase().trim()
       const matchesSearch =
-        !searchQuery ||
+        !q ||
         v.name.toLowerCase().includes(q) ||
-        (v.category && v.category.toLowerCase().includes(q))
+        (v.category && v.category.toLowerCase().includes(q)) ||
+        (v.category_parent && v.category_parent.toLowerCase().includes(q)) ||
+        (v.category_full_path && v.category_full_path.toLowerCase().includes(q))
+
       const matchesCategory =
-        categoryFilter === "All" || v.category === categoryFilter
+        categoryFilter === "All" ||
+        v.category === categoryFilter ||
+        v.category_parent === categoryFilter ||
+        (v.category_full_path && v.category_full_path.includes(categoryFilter))
+
       return matchesSearch && matchesCategory
     })
   }, [vegetables, searchQuery, categoryFilter])
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] text-slate-900 flex flex-col font-sans pb-24 lg:pb-0">
+    <div className="min-h-screen bg-[#f8f8f8] text-slate-900 flex flex-col font-sans pb-24 lg:pb-0">
       {/* ── Top Navigation Bar ── */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => {
@@ -483,49 +508,35 @@ export function VegetableFullScreenPage() {
                   navigate(routes.landing)
                 }
               }}
-              className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5 text-xs font-black cursor-pointer"
+              className="p-1.5 -ml-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition-colors flex items-center cursor-pointer"
             >
-              <ChevronLeft className="w-5 h-5 text-slate-700" />
-              <span className="hidden sm:inline">
-                {selectedProduct ? "Back to All Vegetables" : "Back to Home"}
-              </span>
+              <ChevronLeft className="w-5 h-5" />
             </button>
 
-            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-
-            <div className="flex items-center gap-2">
-              <span className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-sm text-lg">
-                🥕
-              </span>
-              <div>
-                <h1 className="text-base sm:text-lg font-black text-slate-900 leading-none">
-                  Farm-Fresh Vegetables
-                </h1>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 mt-1">
-                  <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span className="text-emerald-700 font-black flex items-center gap-1">
-                    <span>🏪</span> {activeStore?.store_name || "Caldim Fresh Produce"}
-                  </span>
-                  <span>•</span>
-                  <span className="truncate max-w-[180px] sm:max-w-[260px]">{activeLocationLabel}</span>
-                </div>
+            <div>
+              <div className="flex items-center gap-1.5 text-[15px] sm:text-base font-extrabold text-slate-900 leading-none">
+                <span className="bg-[#FFC300] text-slate-900 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide">
+                  {vegTiming.headerBadge || "8 mins"}
+                </span>
+                <span>Farm-Fresh Vegetables</span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 mt-1">
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate max-w-[160px] sm:max-w-[260px]">{activeLocationLabel}</span>
+                <span className="text-slate-300">•</span>
+                <span className="truncate max-w-[140px] font-bold text-slate-600">{activeStore?.store_name || "Caldim Fresh Produce"}</span>
               </div>
             </div>
           </div>
 
           {/* Right Header Badges & Cart */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden md:flex items-center gap-1.5 text-xs font-black text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-              <Clock className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{vegTiming.headerBadge}</span>
-            </span>
-
             {/* Cart Button */}
             {totalCartCount > 0 && (
               <button
                 type="button"
                 onClick={() => setShowCartDrawer(true)}
-                className="bg-[#0B8860] hover:bg-[#097351] text-white px-4 py-2 rounded-xl font-black text-xs sm:text-sm flex items-center gap-2.5 shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-95 animate-in fade-in"
+                className="bg-[#0C831F] hover:bg-[#0a6d19] text-white px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95 animate-in fade-in"
               >
                 <ShoppingCart className="w-4 h-4" />
                 <div className="flex items-center gap-1.5 leading-none">
@@ -577,69 +588,41 @@ export function VegetableFullScreenPage() {
           deliveryBadge={vegTiming.cardDeliveryBadge}
         />
       ) : (
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-          {/* Banner Hero */}
-          <div className="rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="z-10 max-w-xl text-center md:text-left">
-              <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 inline-block mb-3">
-                ⚡ Farm-to-Kitchen Direct Express
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
-                100% Crisp, Fresh Harvested Vegetables
-              </h2>
-              <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-2 leading-relaxed opacity-90">
-                Pick your daily produce and tap <strong className="text-amber-300">"🍳 What Can I Make?"</strong> on any vegetable to discover healthy homestyle recipes and required vegetables in 1 click!
-              </p>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-3 shrink-0">
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[120px]">
-                <div className="text-2xl font-black text-amber-300">68+</div>
-                <div className="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider mt-0.5">Farm Veggies</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[120px]">
-                <div className="text-2xl font-black text-white">8 Mins</div>
-                <div className="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider mt-0.5">Express Speed</div>
-              </div>
-            </div>
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4">
+          {/* Slim promo strip — replaces the old decorative hero */}
+          <div className="rounded-lg bg-[#0C831F] px-4 py-2.5 text-white flex items-center gap-2 text-[11px] sm:text-xs font-bold">
+            <span className="text-base leading-none">⚡</span>
+            <span>100% Crisp, Farm-Harvested Vegetables — tap</span>
+            <span className="bg-white/15 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px]">🍳 What Can I Make?</span>
+            <span>on any item for instant recipe ideas</span>
           </div>
 
-          
-          {/* ── Multi-Vendor Store Selector Banner ── */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-100 shadow-sm transition-all hover:shadow-md">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex items-start sm:items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-emerald-700/20 shrink-0">
+          {/* ── Multi-Vendor Store Selector Strip ── */}
+          <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-black text-lg shrink-0">
                   🏪
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Verified Grocery Partner
-                    </span>
-                    <span className="text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h2 className="text-sm font-extrabold text-slate-900 leading-tight">
+                      {activeStore?.store_name || "Caldim Fresh Vegetables & Produce"}
+                    </h2>
+                    <span className="text-[11px] font-bold text-amber-600 flex items-center gap-0.5">
                       ★ {activeStore?.rating_average ? Number(activeStore.rating_average).toFixed(1) : "5.0"}
-                      <span className="text-slate-400 font-normal">({activeStore?.total_reviews || 0} reviews)</span>
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-emerald-600" />
-                      {activeStore?.estimated_delivery_mins || 25} mins express delivery
                     </span>
                   </div>
-
-                  <h2 className="text-lg sm:text-xl font-black text-slate-900 mt-1 leading-tight flex items-center gap-2">
-                    {activeStore?.store_name || "Caldim Fresh Produce & Groceries"}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {activeStore?.tagline || "Direct farm-fresh vegetables delivered to your doorstep"} • Radius: {activeStore?.delivery_radius_km || 8}km
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    {activeStore?.estimated_delivery_mins || 25} mins delivery • {activeStore?.tagline || "Direct farm-fresh vegetables"}
                   </p>
                 </div>
               </div>
 
               {/* Store Switcher Selection */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Select Store:</span>
-                <div className="flex items-center gap-2 overflow-x-auto w-full min-w-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pb-1 sm:pb-0">
+              {stores.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto min-w-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                   {stores.map((s) => {
                     const isSelected = activeStore?.id === s.id
                     return (
@@ -647,32 +630,30 @@ export function VegetableFullScreenPage() {
                         key={s.id}
                         type="button"
                         onClick={() => handleSelectStore(s)}
-                        className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
                           isSelected
-                            ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20 ring-2 ring-emerald-600/30"
-                            : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                            ? "bg-slate-900 text-white"
+                            : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
                         }`}
                       >
-                        <span className="text-sm">🏪</span>
                         <span>{s.store_name}</span>
-                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200 ml-1" />}
+                        {isSelected && <CheckCircle2 className="w-3 h-3" />}
                       </button>
                     )
                   })}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Active Store Promo / Coupon Strip */}
             {storeCoupons.length > 0 && (
-              <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
-                <span className="text-emerald-700 font-black shrink-0 flex items-center gap-1">
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-600">
+                <span className="text-[#0C831F] font-black shrink-0 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Store Offers:
+                  Offers:
                 </span>
                 {storeCoupons.map((c) => (
-                  <span key={c.code} className="bg-amber-50 text-amber-900 px-3 py-1 rounded-xl border border-amber-200 text-[11px] font-black shrink-0 flex items-center gap-1.5">
-                    <span>🏷️</span>
+                  <span key={c.code} className="bg-[#FFF6DA] text-amber-900 px-2.5 py-1 rounded-lg border border-amber-200 text-[10.5px] font-bold shrink-0 flex items-center gap-1">
                     <span>Use code <strong className="underline uppercase tracking-wide">{c.code}</strong>: ₹{Math.round(c.discount_value)} OFF (Min ₹{Math.round(c.min_order_amount)})</span>
                   </span>
                 ))}
@@ -681,22 +662,22 @@ export function VegetableFullScreenPage() {
           </div>
 
           {/* Search & Category Tabs */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search fresh vegetables (e.g. Tomato, Onion, Potato, Spinach, Drumstick)..."
-                className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:border-emerald-500 shadow-xs"
+                className="w-full pl-10 pr-9 py-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:border-slate-400"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -705,15 +686,20 @@ export function VegetableFullScreenPage() {
 
             {/* Category Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {VEG_CATEGORY_FILTERS.map((cat) => (
+              {Array.from(new Set([
+                "All",
+                ...approvedCategories
+                  .map((c) => c.name)
+                  .filter((n) => Boolean(n) && n.trim().toLowerCase() !== "all")
+              ])).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategoryFilter(cat)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer border ${
                     categoryFilter === cat
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                   }`}
                 >
                   {cat}
@@ -725,11 +711,11 @@ export function VegetableFullScreenPage() {
           {/* ── Vegetables Produce Grid ── */}
           {loading ? (
             <div className="py-24 text-center">
-              <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <div className="w-8 h-8 border-4 border-[#0C831F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-sm font-bold text-slate-600">Loading farm produce catalog…</p>
             </div>
           ) : filteredVegetables.length === 0 ? (
-            <div className="py-20 text-center bg-white rounded-3xl border border-slate-200">
+            <div className="py-20 text-center bg-white rounded-lg border border-slate-200">
               <span className="text-4xl">🥬</span>
               <h3 className="text-base font-bold text-slate-800 mt-2">No vegetables found matching "{searchQuery}"</h3>
               <p className="text-xs text-slate-500 mt-1">Try another search term or clear the category filters.</p>
@@ -739,13 +725,13 @@ export function VegetableFullScreenPage() {
                   setSearchQuery("")
                   setCategoryFilter("All")
                 }}
-                className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+                className="mt-4 px-4 py-2 rounded-lg bg-[#0C831F] text-white text-xs font-bold hover:bg-[#0a6d19] cursor-pointer"
               >
                 Reset Filters
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
               {filteredVegetables.map((item) => (
                 <VegetableProductCard
                   key={item.id}

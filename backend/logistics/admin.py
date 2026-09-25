@@ -5,13 +5,17 @@ from .models import Lane, ServiceArea, ServiceTier, GoodsCategory, GoodsItem, Pa
 
 @admin.register(ServiceTier)
 class ServiceTierAdmin(admin.ModelAdmin):
-    list_display = ["name", "category", "weight_class", "city", "starting_price", "order", "is_active"]
-    list_filter = ["category", "weight_class", "city", "is_active"]
+    list_display = [
+        "name", "category", "vehicle_class", "city", "starting_price", "base_fare", "per_km_rate",
+        "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge",
+        "surge_multiplier", "max_weight_kg", "max_cft", "order", "is_active"
+    ]
+    list_filter = ["category", "vehicle_class", "weight_class", "city", "is_active"]
     search_fields = ["name", "slug"]
     ordering = ["category", "city", "order"]
     fieldsets = (
         ("Tier Identity", {
-            "fields": ("name", "slug", "category", "city", "weight_class", "order", "is_active", "description", "image")
+            "fields": ("name", "slug", "category", "vehicle_class", "city", "weight_class", "order", "is_active", "description", "image")
         }),
         ("Rate Card & Pricing", {
             "fields": ("starting_price", "base_fare", "per_km_rate", "free_km", "minimum_fare", "loading_unloading_charge", "additional_stop_charge", "surge_multiplier", "currency")

@@ -73,7 +73,7 @@ export async function evaluateCargoFitment(payload) {
  * for display only, and never treat that as an authoritative fare.
  */
 export async function fetchLogisticsQuote({
-  serviceCategory, tierId, pickup, drop, stopCount,
+  serviceCategory, tierId, pickup, drop, stopCount, waypoints, cargoItems, goodsCategoryId, goodsCategorySlug, declaredWeightKg,
 }) {
   if (!serviceCategory || !tierId || !pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED" }
@@ -89,6 +89,11 @@ export async function fetchLogisticsQuote({
         drop_latitude: drop.lat,
         drop_longitude: drop.lng,
         ...(stopCount ? { stop_count: stopCount } : {}),
+        ...(Array.isArray(waypoints) && waypoints.length > 0 ? { waypoints } : {}),
+        ...(Array.isArray(cargoItems) && cargoItems.length > 0 ? { cargo_items: cargoItems } : {}),
+        ...(goodsCategoryId ? { goods_category_id: goodsCategoryId } : {}),
+        ...(goodsCategorySlug ? { goods_category: goodsCategorySlug } : {}),
+        ...(declaredWeightKg != null ? { declared_weight_kg: declaredWeightKg } : {}),
       },
     })
     const data = res?.data || res
@@ -97,22 +102,42 @@ export async function fetchLogisticsQuote({
     }
     return {
       total: data.total,
+      quoteId: data.quote_id || data.breakdown?.quote_id || null,
+      quoteHash: data.quote_hash || data.breakdown?.quote_hash || null,
+      createdAt: data.created_at || data.breakdown?.created_at || null,
+      expiresAt: data.expires_at || data.breakdown?.expires_at || null,
       currency: data.currency || "INR",
       pricingMode: data.pricing_mode,
       isAuthoritative: Boolean(data.is_authoritative),
       isEstimate: Boolean(data.is_estimate),
       distanceSource: data.distance_source || data.breakdown?.distance_source,
       estimateNotice: data.estimate_notice || data.breakdown?.estimate_notice,
+      cargoSummary: data.cargo_summary || data.breakdown?.cargo_summary || null,
+      specialHandling: data.special_handling || data.breakdown?.special_handling || "0.00",
       breakdown: data.breakdown || null,
       tierId: data.tier_id,
+      tierName: data.tier_name,
     }
   } catch (err) {
+    const payload = err?.data || err?.body || {}
     return {
       error: true,
-      errorCode: err?.data?.error_code || "QUOTE_FAILED",
-      message: err?.data?.message || "",
+      errorCode: payload.error_code || "QUOTE_FAILED",
+      message: payload.message || err?.message || "",
+      recommendedVehicle: payload.recommended_vehicle || null,
+      suitableVehicles: payload.suitable_vehicles || [],
+      cargoSummary: payload.cargo_summary || null,
+      validationErrors: payload.validation_errors || [],
     }
   }
+}
+
+/**
+ * Fetch database-backed P&M inventory categories and items.
+ */
+export async function fetchPackersMoversInventory() {
+  const res = await apiRequest("/logistics/packers-movers/inventory/")
+  return res?.data || res
 }
 
 /**
@@ -130,6 +155,8 @@ export async function fetchPackersMoversQuote({
   dropFloor = 0,
   dropHasLift = true,
   relocationType = "Within City",
+  city = "Hosur",
+  serviceTierId = null,
 }) {
   if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
     return { error: true, errorCode: "COORDINATES_REQUIRED", message: "Pickup and drop coordinates are required." }
@@ -151,6 +178,8 @@ export async function fetchPackersMoversQuote({
         drop_floor: dropFloor,
         drop_has_lift: dropHasLift,
         relocation_type: relocationType,
+        city,
+        selected_tier_id: serviceTierId,
       },
     })
     const data = res?.data || res
@@ -160,6 +189,25 @@ export async function fetchPackersMoversQuote({
       error: true,
       errorCode: err?.data?.error_code || "QUOTE_FAILED",
       message: err?.data?.message || err?.message || "Failed to calculate quote.",
+    }
+  }
+}
+
+/**
+ * P1-11: Fetch authoritative booking slot availability evaluated server-side.
+ */
+export async function fetchLogisticsSlots({ date, category = "goods_transport_truck" } = {}) {
+  const params = {}
+  if (date) params.date = date
+  if (category) params.category = category
+  const qs = new URLSearchParams(params).toString()
+  try {
+    const res = await apiRequest(`/logistics/slots/${qs ? `?${qs}` : ""}`)
+    return res?.data || res
+  } catch (err) {
+    return {
+      error: true,
+      message: err?.data?.error || err?.message || "Failed to fetch slot availability",
     }
   }
 }

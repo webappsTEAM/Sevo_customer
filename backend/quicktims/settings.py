@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "logistics",
     "orders",
     "carts",
+    "vegetable_orders",
     "customer_care",
     "reports",
     "workforce_integration",
@@ -520,12 +521,20 @@ LOGGING = {
     },
 }
 
-if "test" in sys.argv:
+if "test" in sys.argv or IS_TESTING:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         k: "10000/minute" for k in REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
     }
 
 
-
-
-
+# ── Test Database Safety Guard ───────────────────────────────────────────────
+# Aborts execution if testing mode is active but the final resolved database
+# engine is anything other than SQLite.
+if IS_TESTING:
+    _final_engine = DATABASES.get("default", {}).get("ENGINE", "")
+    if "sqlite3" not in _final_engine:
+        raise RuntimeError(
+            f"TEST DATABASE SAFETY GUARD FATAL: Testing mode detected (IS_TESTING=True), "
+            f"but final DATABASES['default']['ENGINE'] is '{_final_engine}'. "
+            "Tests must run on SQLite only to protect shared/production databases."
+        )

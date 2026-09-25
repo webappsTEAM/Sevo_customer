@@ -8,10 +8,12 @@ import {
   Gift, FileText, Phone, Mail, ChevronRight,
   Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight,
   ChefHat, Utensils, Monitor, Tablet, Smartphone, Maximize2, RefreshCw,
-  IndianRupee, CheckCircle2, ChevronDown, ChevronUp, Pencil, Search, X
+  IndianRupee, CheckCircle2, ChevronDown, ChevronUp, Pencil, Search, X,
+  Megaphone, LayoutGrid
 } from "lucide-react"
 import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
+import MediaUploadField from "../components/MediaUploadField.jsx"
 import { AdminRecipesPage } from "./catalog/AdminRecipesPage.jsx"
 import { AdminRecommendationsPage } from "./catalog/AdminRecommendationsPage.jsx"
 
@@ -31,7 +33,7 @@ const HERO_ILLUSTRATION_PRESETS = [
   {
     id: "grocery",
     title: "Food, Health & Farm Fresh Delivery",
-    description: "Fresh groceries & vegetables delivery photo",
+    description: "Farm-fresh vegetables delivery photo",
     url: "/assets/sevo_photo_food_health.jpg"
   },
   {
@@ -342,6 +344,26 @@ export default function HomePageCustomizerPage() {
     { id: "recipes", label: "Vegetable Recipes", icon: ChefHat, color: "text-emerald-600 bg-emerald-50" },
     { id: "recommendations", label: "Produce Pairings", icon: Utensils, color: "text-green-700 bg-green-50" },
     { id: "offers", label: "Promotional Offers", icon: Gift, color: "text-pink-600 bg-pink-50" },
+    // Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+    // ... give the access to upload the banners, advertisement, top cards
+    // [Groceries, Services] images") -- mobile-app-only assets, kept
+    // separate from the web sections above.
+    { id: "mobileBanners", label: "Mobile App Banners", icon: Smartphone, color: "text-sky-600 bg-sky-50" },
+    { id: "mobileAds", label: "Mobile Advertisement", icon: Megaphone, color: "text-orange-600 bg-orange-50" },
+    { id: "mobileTopCards", label: "Mobile Quick Access Cards", icon: LayoutGrid, color: "text-emerald-700 bg-emerald-50" },
+    // Added 2026-09-23 per explicit request ("make the 'Best Seller' has
+    // reliable data and the counts... give privilege to admin to update
+    // this from the admin panel"): the customer app's Home "Bestsellers"
+    // strip used to be built ENTIRELY from the separate Vendor Grocery
+    // Hub's own live product feed, grouped client-side -- the admin here
+    // had no way to control which tiles showed or what "+N more" said, and
+    // that vendor feed can carry stale/unreliable category groupings. This
+    // tab lets the admin author the tiles directly (title, image, a
+    // manually-entered product count, and a link) the same way Mobile Top
+    // Cards works -- the app now prefers this admin-authored list whenever
+    // it's non-empty, falling back to the old auto-grouped vendor tiles
+    // only when the admin hasn't configured any yet.
+    { id: "mobileBestsellers", label: "Mobile Bestsellers", icon: Star, color: "text-amber-600 bg-amber-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
     { id: "testimonials", label: "Customer Reviews", icon: Award, color: "text-orange-600 bg-orange-50" },
     { id: "footer", label: "Footer & Contacts", icon: FileText, color: "text-slate-600 bg-slate-100" },
@@ -1144,6 +1166,519 @@ export default function HomePageCustomizerPage() {
                           value={off.link || ""}
                           onChange={(e) => updateOfferField("link", e.target.value)}
                           placeholder="?category=cleaning or https://..."
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MOBILE APP BANNERS -- added 2026-09-17 per explicit request
+              ("add a side section 'Mobile' ... give the access to upload the
+              banners, advertisement, top cards [Groceries, Services]
+              images"). Same "single admin-uploaded image + optional link"
+              pattern as the web's Promotional Offers tab above, but stored
+              under config.mobile.banners so mobile creative never gets mixed
+              up with (or accidentally shows) web-only assets. Consumed by
+              the customer app's homepage_repository.dart. */}
+          {activeTab === "mobileBanners" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-sky-500" />
+                    Mobile App — Home Banners
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    The rotating banner carousel shown at the top of the customer app's Home screen. Each card is a single image you upload here (plus an optional click-through link) — the app never draws its own text on top of it.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newBanner = { id: `mb-${Date.now()}`, image: "", mediaType: "image", link: "", enabled: true, flow: "both" }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, banners: [...(prev.mobile?.banners || []), newBanner] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Banner
+                </button>
+              </div>
+
+              {(!config.mobile?.banners || config.mobile.banners.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No mobile banners yet — add one above. Until then the app falls back to its own default carousel.</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(config.mobile?.banners || []).map((banner, idx) => {
+                  const updateBannerField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.banners || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, banners: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={banner.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Banner #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateBannerField("enabled", banner.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${banner.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {banner.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.banners || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, banners: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <MediaUploadField
+                        value={banner.image || ""}
+                        mediaType={banner.mediaType || "image"}
+                        onChange={(newPath, newMediaType) => {
+                          setConfig(prev => {
+                            const newItems = [...(prev.mobile?.banners || [])]
+                            newItems[idx] = { ...newItems[idx], image: newPath, mediaType: newMediaType || "image" }
+                            const next = { ...prev, mobile: { ...prev.mobile, banners: newItems } }
+                            saveHomePageConfig(next)
+                            return next
+                          })
+                        }}
+                        section="mobile-banners"
+                        fallbackSrc=""
+                        aspectRatio="aspect-[16/9]"
+                      />
+
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={banner.link || ""}
+                          onChange={(e) => updateBannerField("link", e.target.value)}
+                          placeholder="?category=cleaning or https://..."
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+
+                      {/* Added 2026-09-19 per explicit request ("give access
+                          to admin panel to update dynamically" separate
+                          banners for Services vs Groceries) — previously the
+                          app could only GUESS which mode a banner belonged
+                          to from keywords in the link above. This is the
+                          real, explicit setting the app now reads first. */}
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Show On</label>
+                        <select
+                          value={banner.flow || "both"}
+                          onChange={(e) => updateBannerField("flow", e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
+                        >
+                          <option value="both">Both (Services &amp; Groceries)</option>
+                          <option value="services">Services only</option>
+                          <option value="groceries">Groceries only</option>
+                        </select>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MOBILE ADVERTISEMENT */}
+          {activeTab === "mobileAds" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Megaphone className="w-5 h-5 text-orange-500" />
+                    Mobile App — Advertisement
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Extra promotional/ad card(s) shown on the customer app's Home screen, separate from the banner carousel above. Same rule: a single uploaded image plus an optional link, no code-drawn text.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newAd = { id: `ma-${Date.now()}`, image: "", mediaType: "image", link: "", enabled: true, flow: "both" }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, ads: [...(prev.mobile?.ads || []), newAd] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-orange-50 text-orange-700 hover:bg-orange-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Advertisement
+                </button>
+              </div>
+
+              {(!config.mobile?.ads || config.mobile.ads.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No advertisement configured yet — nothing extra is shown on the app's Home screen until you add one.</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(config.mobile?.ads || []).map((ad, idx) => {
+                  const updateAdField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.ads || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, ads: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={ad.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Ad #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateAdField("enabled", ad.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${ad.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {ad.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.ads || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, ads: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <MediaUploadField
+                        value={ad.image || ""}
+                        mediaType={ad.mediaType || "image"}
+                        onChange={(newPath, newMediaType) => {
+                          setConfig(prev => {
+                            const newItems = [...(prev.mobile?.ads || [])]
+                            newItems[idx] = { ...newItems[idx], image: newPath, mediaType: newMediaType || "image" }
+                            const next = { ...prev, mobile: { ...prev.mobile, ads: newItems } }
+                            saveHomePageConfig(next)
+                            return next
+                          })
+                        }}
+                        section="mobile-ads"
+                        fallbackSrc=""
+                        aspectRatio="aspect-[16/9]"
+                      />
+
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={ad.link || ""}
+                          onChange={(e) => updateAdField("link", e.target.value)}
+                          placeholder="?category=cleaning or https://..."
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+
+                      {/* Added 2026-09-19 — see the matching "Show On"
+                          field in the Banners tab above for why. */}
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Show On</label>
+                        <select
+                          value={ad.flow || "both"}
+                          onChange={(e) => updateAdField("flow", e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold bg-white"
+                        >
+                          <option value="both">Both (Services &amp; Groceries)</option>
+                          <option value="services">Services only</option>
+                          <option value="groceries">Groceries only</option>
+                        </select>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MOBILE TOP CARDS (Quick-Access Row) */}
+          {/* Fixed 2026-09-18 per explicit request ("Top cards 'Groceries'
+              and 'services' could be editable like add new, delete and make
+              text also editable from admin panel"): this used to be
+              exactly 2 fixed cards (image + link only, no label field at
+              all). Now a free-form list matching the Banners/Advertisement
+              tabs above -- Add Card / Delete / enable-toggle, plus a new
+              editable Label input per card, so the admin can rename, add or
+              remove quick-access cards without a code change. */}
+          {activeTab === "mobileTopCards" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <LayoutGrid className="w-5 h-5 text-emerald-600" />
+                    Mobile App — Quick Access Cards
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    The small shortcut cards at the top of the customer app's Home screen (originally always "Groceries" / "Services"). Add, remove, relabel or reorder any number of cards here — each one's label, image and link are fully editable. Leave a card's image empty to keep using its matching category's own catalog photo.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newCard = { id: `tc-${Date.now()}`, label: "New Card", image: "", link: "", enabled: true }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, topCards: [...(prev.mobile?.topCards || []), newCard] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Card
+                </button>
+              </div>
+
+              {(!config.mobile?.topCards || config.mobile.topCards.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No quick-access cards yet — add one above. Until then the app falls back to its own default Groceries / Services pair.</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(config.mobile?.topCards || []).map((card, idx) => {
+                  const updateTopCardField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.topCards || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, topCards: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={card.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Card #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateTopCardField("enabled", card.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${card.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {card.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.topCards || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, topCards: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Label</label>
+                        <input
+                          type="text"
+                          value={card.label || ""}
+                          onChange={(e) => updateTopCardField("label", e.target.value)}
+                          placeholder="Groceries"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <ImageUploadField
+                        value={card.image || ""}
+                        onChange={(newPath) => updateTopCardField("image", newPath)}
+                        section="mobile-top-cards"
+                        fallbackSrc=""
+                        label="Card Image"
+                        aspectRatio="aspect-[16/9]"
+                      />
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={card.link || ""}
+                          onChange={(e) => updateTopCardField("link", e.target.value)}
+                          placeholder="?category=cleaning, /categories/... or leave blank"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MOBILE BESTSELLERS */}
+          {/* Added 2026-09-23 per explicit request ("make the 'Best Seller'
+              has reliable data and the counts... give privilege to admin to
+              update this from the admin panel") -- same Add/Delete/enable-
+              toggle pattern as Mobile Quick Access Cards above, plus a
+              manually-entered "Product Count" field since that number used
+              to come from an uncontrolled, separate vendor feed. */}
+          {activeTab === "mobileBestsellers" && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-600" />
+                    Mobile App — Bestsellers
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    The "Bestsellers" tiles on the customer app's Home screen (Groceries mode). Add, remove, relabel or reorder any number of tiles here -- each one's title, image, product count and link are fully admin-controlled instead of being auto-generated from the vendor product feed. Leave this list empty to fall back to the old auto-grouped tiles.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newTile = { id: `bs-${Date.now()}`, title: "New Category", thumbnails: [], productCount: 0, link: "", enabled: true }
+                    setConfig(prev => {
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: [...(prev.mobile?.bestsellers || []), newTile] } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Tile
+                </button>
+              </div>
+
+              {(!config.mobile?.bestsellers || config.mobile.bestsellers.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No Bestsellers tiles yet -- add one above. Until then the app falls back to its own auto-grouped vendor product tiles.</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(config.mobile?.bestsellers || []).map((tile, idx) => {
+                  const updateTileField = (field, value) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.bestsellers || [])]
+                      newItems[idx] = { ...newItems[idx], [field]: value }
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  // Each tile shows a 2x2 grid of up to 4 admin-uploaded
+                  // product thumbnails on the customer app (matching the
+                  // vendor-derived Bestsellers tile it replaces) instead of
+                  // one flat image -- this immutably updates a single slot
+                  // in tile.thumbnails while preserving the rest of the tile.
+                  const updateTileThumbnail = (slotIdx, newPath) => {
+                    setConfig(prev => {
+                      const newItems = [...(prev.mobile?.bestsellers || [])]
+                      const prevThumbs = [...(newItems[idx]?.thumbnails || [])]
+                      prevThumbs[slotIdx] = newPath
+                      newItems[idx] = { ...newItems[idx], thumbnails: prevThumbs }
+                      const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                      saveHomePageConfig(next)
+                      return next
+                    })
+                  }
+                  return (
+                    <div key={tile.id || idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-slate-700">Tile #{idx + 1}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateTileField("enabled", tile.enabled === false)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${tile.enabled !== false ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                          >
+                            {tile.enabled !== false ? "On" : "Off"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfig(prev => {
+                                const newItems = (prev.mobile?.bestsellers || []).filter((_, i) => i !== idx)
+                                const next = { ...prev, mobile: { ...prev.mobile, bestsellers: newItems } }
+                                saveHomePageConfig(next)
+                                return next
+                              })
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title</label>
+                        <input
+                          type="text"
+                          value={tile.title || ""}
+                          onChange={(e) => updateTileField("title", e.target.value)}
+                          placeholder="Vegetables & Fruits"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Thumbnails (2x2 grid, up to 4)</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[0, 1, 2, 3].map((slotIdx) => (
+                            <ImageUploadField
+                              key={slotIdx}
+                              value={(tile.thumbnails || [])[slotIdx] || ""}
+                              onChange={(newPath) => updateTileThumbnail(slotIdx, newPath)}
+                              section="mobile-bestsellers"
+                              fallbackSrc=""
+                              label={`Thumb ${slotIdx + 1}`}
+                              aspectRatio="aspect-square"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Product Count (shown as "+N more")</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={tile.productCount ?? 0}
+                          onChange={(e) => updateTileField("productCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          placeholder="193"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Click-Through Link</label>
+                        <input
+                          type="text"
+                          value={tile.link || ""}
+                          onChange={(e) => updateTileField("link", e.target.value)}
+                          placeholder="?category=vegetables_groceries, /categories/... or leave blank"
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
                         />
                       </div>

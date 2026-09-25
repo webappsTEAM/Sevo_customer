@@ -17,11 +17,45 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SECTIONS = {
     "hero", "categories", "offers", "why-choose-us",
-    "how-it-works", "featured-pros", "testimonials", "general"
+    "how-it-works", "featured-pros", "testimonials", "general",
+    # Added 2026-09-17 per explicit request ("add a side section 'Mobile'
+    # ... give the access to upload the banners, advertisement, top cards
+    # [Groceries, Services] images"): these three back the new "Mobile App"
+    # admin nav section (HomePageCustomizerPage.jsx tabs mobileBanners /
+    # mobileAds / mobileTopCards) so mobile-only image uploads get their own
+    # Supabase Storage folder (homepage/mobile-*) instead of being mixed
+    # into the web's "offers"/"categories" folders.
+    "mobile-banners", "mobile-ads", "mobile-top-cards",
+    # Added 2026-09-23 per explicit request ("make the 'Best Seller' has
+    # reliable data and the counts... give privilege to admin to update
+    # this from the admin panel"): backs the new "Mobile Bestsellers" admin
+    # nav section (HomePageCustomizerPage.jsx tab mobileBestsellers) so the
+    # app's Home "Bestsellers" tiles can be admin-authored (title, image,
+    # a manually-entered product count, link) instead of being entirely
+    # derived from the separate Vendor Grocery Hub's own live product feed.
+    "mobile-bestsellers",
 }
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# Added 2026-09-21 per explicit request ("the banners and advertisement
+# could allow admin to upload video and images... and that should be
+# reflected in mobile application"): banners/ads previously only ever
+# accepted a still image (this view ran every upload through
+# ImageOptimizer, which opens the file with PIL — a video file would
+# simply fail there). Video files skip optimization entirely (there's no
+# safe way to "compress a video with PIL") and upload as-is, capped well
+# below the image limit's assumption of "a photo" since a banner is meant
+# to be a short, small looping clip, not a full video, and every extra MB
+# here is a customer on mobile data waiting for the Home screen to load.
+ALLOWED_VIDEO_MIME_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
+VIDEO_EXTENSION_BY_MIME = {
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+}
+MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 
 def _extract_image_paths(config_data):
@@ -74,6 +108,15 @@ def _resolve_image_urls(config_data):
             if k in ("image_path", "image", "avatar", "photo", "cover", "heroImage", "heroIllustration") and isinstance(v, str) and v:
                 resolved[f"{k}_url"] = SupabaseStorageService.get_public_url(v)
             if k == "collageImages" and isinstance(v, list):
+                resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
+            # Added 2026-09-23 alongside the "Mobile Bestsellers" tab: each
+            # tile carries up to 4 raw Supabase Storage paths in
+            # "thumbnails" (a 2x2 grid, same shape as "collageImages"
+            # above) -- without this, the mobile app would only ever see
+            # the raw storage path, not a fetchable CDN URL (the exact
+            # "image_url vs image" bug already fixed once for every other
+            # image field on this page).
+            if k == "thumbnails" and isinstance(v, list):
                 resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
         return resolved
     elif isinstance(config_data, list):
@@ -129,7 +172,7 @@ class HomePageConfigAPIView(APIView):
                     },
                     "categories": [
                         {"id": "cat-1", "title": "For You", "subtitle": "Curated services & recommendations", "badge": "For You", "image": "/mockups/category_for_you.png", "link": "/booking?category=for_you", "enabled": True, "display_order": 1},
-                        {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "/mockups/category_food_health.png", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
+                        {"id": "cat-2", "title": "Food and Health", "subtitle": "Farm-fresh vegetables & wellness essentials", "badge": "Vegetables", "image": "/mockups/category_food_health.png", "link": "/vegetables", "enabled": True, "display_order": 2},
                         {"id": "cat-3", "title": "Home & Repair Services", "subtitle": "Cleaning, repairs, painting & masonry", "badge": "5 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3},
                         {"id": "cat-4", "title": "Goods & Transport", "subtitle": "Mini trucks, 2-wheelers & logistics", "badge": "Transport", "image": "/mockups/service_transport.jpg", "link": "/logistics", "enabled": True, "display_order": 4}
                     ],
@@ -215,6 +258,66 @@ class HomePageConfigAPIView(APIView):
                         "phone": "+91 98765 43210",
                         "email": "support@calservices.com",
                         "workingHours": "Mon – Sun (8 AM – 8 PM)"
+                    },
+                    # Added 2026-09-17: mobile-app-only assets, edited from the
+                    # admin's new "Mobile App" nav section. Kept separate from
+                    # "hero"/"offers"/"categories" (the web homepage's own
+                    # banners/categories) so an admin can upload different
+                    # creative for the app without touching the website, and
+                    # so the app never accidentally shows a web-only asset (or
+                    # vice versa). Consumed by the customer app's
+                    # homepage_repository.dart / home_screen.dart.
+                    "mobile": {
+                        # Home-screen banner carousel — same shape as
+                        # "offers.items" (single admin-uploaded image + an
+                        # optional click-through link, no code-drawn text).
+                        "banners": [],
+                        # In-app advertisement slot(s) — same shape as banners;
+                        # rendered as an extra promo card on the Home screen
+                        # when at least one enabled item has an image.
+                        "ads": [],
+                        # The quick-access card row at the top of the Home
+                        # screen. Fixed 2026-09-18 per explicit request
+                        # ("Top cards 'Groceries' and 'Services' could be
+                        # editable like add new, delete and make text also
+                        # editable from admin panel"): this used to be a
+                        # fixed {groceries, services} object with only an
+                        # image+link each (no editable label) — now a plain
+                        # list so the admin can add, delete and relabel any
+                        # number of cards. The mobile app falls back to the
+                        # matching catalog Category's own image whenever a
+                        # card's "image" is empty. The customer app's
+                        # homepage_repository.dart still accepts the older
+                        # object shape too, for any config saved before this
+                        # change, and upgrades it to this list shape the
+                        # next time the admin publishes.
+                        "topCards": [
+                            {"id": "groceries", "label": "Groceries", "image": "", "link": "", "enabled": True},
+                            {"id": "services", "label": "Services", "image": "", "link": "", "enabled": True}
+                        ],
+                        # Added 2026-09-23 per explicit request ("make the
+                        # 'Best Seller' has reliable data and the counts...
+                        # give privilege to admin to update this from the
+                        # admin panel"): the Home screen's "Bestsellers"
+                        # tiles used to be built entirely from the separate
+                        # Vendor Grocery Hub's own live product feed, grouped
+                        # client-side — the admin had no control over which
+                        # tiles showed or what count each one displayed.
+                        # Fixed again the same day (reference screenshot vs.
+                        # first cut, "the best seller should have been
+                        # updated like this by the admin"): a tile is a 2x2
+                        # GRID of up to 4 product photos, not one flat image
+                        # — so each entry here is {id, title, thumbnails
+                        # (list of up to 4 image paths), productCount, link,
+                        # enabled}, and "thumbnails" gets the same
+                        # list-of-strings CDN resolution as "collageImages"
+                        # above (see _resolve_image_urls). productCount is
+                        # manually entered since that number used to come
+                        # from an uncontrolled feed. The customer app's
+                        # homepage_repository.dart prefers this list over
+                        # the auto-grouped vendor tiles whenever it's
+                        # non-empty.
+                        "bestsellers": []
                     }
                 }
                 return Response({
@@ -313,6 +416,13 @@ class HomePageImageUploadAPIView(APIView):
     """
     permission_classes = [IsAdminRole, RequireModuleAccess("cms", "edit_sections")]
 
+    # Added 2026-09-21 alongside the video-upload feature: video is only
+    # accepted for the two sections that actually render admin media as a
+    # single full-bleed asset (the banner carousel and the advertisement
+    # card) — never hero/categories/etc, which compose an uploaded image
+    # into a larger designed layout no video player belongs in.
+    VIDEO_ALLOWED_SECTIONS = {"mobile-banners", "mobile-ads"}
+
     def post(self, request):
         user = request.user if request.user and request.user.is_authenticated else None
 
@@ -324,6 +434,12 @@ class HomePageImageUploadAPIView(APIView):
 
         if section not in ALLOWED_SECTIONS:
             return Response({"error": f"Invalid section '{section}'. Allowed: {list(ALLOWED_SECTIONS)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = (getattr(file_obj, "content_type", "") or "").lower()
+        is_video = content_type in ALLOWED_VIDEO_MIME_TYPES
+
+        if is_video:
+            return self._upload_video(request, file_obj, section, content_type, user)
 
         # 1. Optimize and WebP compress <= 500KB with under-100KB preservation
         try:
@@ -389,6 +505,7 @@ class HomePageImageUploadAPIView(APIView):
                 "media_id": str(media.id),
                 "image_path": storage_path,
                 "image_url": public_url,
+                "media_type": "image",
                 "original_name": file_obj.name,
                 "dimensions": optimized["dimensions"],
                 "original_dimensions": optimized.get("original_dimensions"),
@@ -406,6 +523,91 @@ class HomePageImageUploadAPIView(APIView):
             SupabaseStorageService.delete_file(storage_path)
             return Response({"success": False, "error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _upload_video(self, request, file_obj, section, content_type, user):
+        """
+        Added 2026-09-21 per explicit request ("the banners and
+        advertisement could allow admin to upload video and images").
+        Mirrors the image path above (validate -> upload to Supabase ->
+        HomePageMedia record -> old-file cleanup -> JSON response) but
+        uploads the raw video bytes as-is — there's no equivalent to
+        ImageOptimizer's WebP re-encode for video here, so this is the one
+        step video skips relative to the image flow, not a shortcut taken
+        on the validation/cleanup/response contract.
+        """
+        if section not in self.VIDEO_ALLOWED_SECTIONS:
+            return Response({
+                "success": False,
+                "error": f"Video uploads are only supported for: {sorted(self.VIDEO_ALLOWED_SECTIONS)}.",
+                "message": f"Video uploads are only supported for: {sorted(self.VIDEO_ALLOWED_SECTIONS)}.",
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if file_obj.size > MAX_VIDEO_FILE_SIZE:
+            size_mb = file_obj.size / (1024 * 1024)
+            limit_mb = MAX_VIDEO_FILE_SIZE // (1024 * 1024)
+            msg = f"Video is too large ({size_mb:.1f} MB). Maximum is {limit_mb} MB — keep banner/ad clips short."
+            return Response({"success": False, "error": msg, "message": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        extension = VIDEO_EXTENSION_BY_MIME.get(content_type, "mp4")
+
+        try:
+            file_bytes = file_obj.read()
+        except Exception as e:
+            logger.error(f"Failed to read uploaded video file: {e}")
+            return Response({"success": False, "error": "Could not read uploaded video file", "message": "Could not read uploaded video file"}, status=status.HTTP_400_BAD_REQUEST)
+
+        storage_path = SupabaseStorageService.generate_storage_path(
+            folder=f"homepage/{section}",
+            extension=extension,
+        )
+
+        upload_success, public_url, error_msg = SupabaseStorageService.upload_file(
+            file_bytes=file_bytes,
+            path=storage_path,
+            content_type=content_type,
+        )
+        if not upload_success:
+            return Response({"success": False, "error": error_msg or "Failed to upload video to Supabase Storage", "message": error_msg or "Failed to upload video to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        old_image_path = (request.data.get("old_image_path") or request.data.get("old_path") or "").strip()
+        old_deleted = False
+        if old_image_path:
+            try:
+                old_deleted = SupabaseStorageService.delete_file(old_image_path)
+            except Exception as del_err:
+                logger.warning(f"Failed to delete old homepage media '{old_image_path}': {del_err}")
+
+        try:
+            with transaction.atomic():
+                media = HomePageMedia.objects.create(
+                    section=section,
+                    original_name=file_obj.name,
+                    image_path=storage_path,
+                    mime_type=content_type,
+                    file_size=file_obj.size,
+                    dimensions="",
+                    uploaded_by=user,
+                    is_active=False,
+                    cleanup_status="UNREFERENCED",
+                )
+
+            return Response({
+                "success": True,
+                "url": public_url,
+                "path": storage_path,
+                "media_id": str(media.id),
+                "image_path": storage_path,
+                "image_url": public_url,
+                "media_type": "video",
+                "original_name": file_obj.name,
+                "file_size": file_obj.size,
+                "original_size": file_obj.size,
+                "old_deleted": old_deleted,
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as db_err:
+            logger.error(f"Database creation failed after video Storage upload: {db_err}. Cleaning up Storage file.")
+            SupabaseStorageService.delete_file(storage_path)
+            return Response({"success": False, "error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class HomePageImageDeleteAPIView(APIView):

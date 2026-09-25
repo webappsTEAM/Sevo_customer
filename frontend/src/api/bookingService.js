@@ -18,22 +18,42 @@ export async function createBooking(payload, idempotencyKey = null) {
   return apiRequest("/booking/", { method: "POST", json: bodyData, headers })
 }
 
-export async function cancelBooking(identifier, reason = "Customer requested cancellation", options = {}) {
+export async function cancelBooking(identifier, reason = "Customer requested cancellation", optionsOrToken = "", optionalPhone = "") {
   const payload = { reason }
-  if (typeof options === "string") {
-    payload.token = options
-  } else if (options && typeof options === "object") {
-    if (options.token) payload.token = options.token
-    if (options.phone) payload.phone = options.phone
+  let token = ""
+  let phone = ""
+
+  if (typeof optionsOrToken === "string") {
+    token = optionsOrToken
+    phone = optionalPhone
+  } else if (optionsOrToken && typeof optionsOrToken === "object") {
+    token = optionsOrToken.token || ""
+    phone = optionsOrToken.phone || ""
   }
-  if (!payload.token) {
+
+  if (!token) {
     try {
       const urlParams = new URLSearchParams(window.location.search)
-      const t = urlParams.get("token") || sessionStorage.getItem("active_tracking_token")
-      if (t) payload.token = t
+      token = urlParams.get("token") || sessionStorage.getItem("active_tracking_token") || localStorage.getItem("calservice_customer_token") || ""
     } catch (_) {}
   }
-  return apiRequest(`/booking/${identifier}/cancel/`, { method: "POST", json: payload })
+  if (!phone) {
+    try {
+      const savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}")
+      phone = savedObj?.phone || localStorage.getItem("caltrack_customer_phone") || ""
+    } catch (_) {}
+  }
+
+  if (token) {
+    payload.token = token
+    payload.tracking_token = token
+  }
+  if (phone) {
+    payload.phone = phone
+  }
+
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ""
+  return apiRequest(`/booking/${identifier}/cancel/${tokenQuery}`, { method: "POST", json: payload })
 }
 
 export async function getBookingStatus(identifier, token = "") {

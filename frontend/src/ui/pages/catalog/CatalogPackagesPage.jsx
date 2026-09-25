@@ -1688,8 +1688,8 @@ const CORE_PILLARS = [
   },
   {
     key: "vegetables_groceries",
-    shortName: "Groceries & Fresh Produce",
-    fullName: "Farm-Fresh Groceries & Daily Produce",
+    shortName: "Vegetables",
+    fullName: "Farm-Fresh Vegetables",
     icon: Carrot,
     accentColor: "blue",
     activeClass: "bg-indigo-600 text-white shadow-md shadow-indigo-600/25 border-indigo-600",

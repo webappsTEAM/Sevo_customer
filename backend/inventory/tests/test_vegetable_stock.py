@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 from rest_framework.exceptions import ValidationError
 
 from companies.models import Company
-from inventory.models import InventoryItem, StockMovement
+from inventory.models import InventoryItem, StockMovement, Vegetable, VegetableStockMovement
 from service_requests.models import CatalogCategory, Service, Package, ServiceRequest
 from inventory.utils.unit_conversion import to_grams, format_grams_for_display
 from inventory.services import vegetable_stock_service
@@ -104,7 +104,7 @@ class VegetableStockTestSuite(TestCase):
             entered_by_user=self.admin_user,
         )
         self.assertEqual(item.stock_quantity_grams, 5000)
-        movement = StockMovement.objects.filter(item=item, movement_type=StockMovement.MovementType.RESTOCK).first()
+        movement = VegetableStockMovement.objects.filter(vegetable=item, movement_type=VegetableStockMovement.MovementType.RESTOCK).first()
         self.assertIsNotNone(movement)
         self.assertEqual(movement.delta_grams, 5000)
         self.assertEqual(movement.balance_after_grams, 5000)
@@ -117,7 +117,7 @@ class VegetableStockTestSuite(TestCase):
             company=self.company,
         )
         self.assertEqual(item.stock_quantity_grams, 5500)
-        self.assertEqual(StockMovement.objects.filter(item=item).count(), 2)
+        self.assertEqual(VegetableStockMovement.objects.filter(vegetable=item).count(), 2)
 
     # 2. test_adjust_stock_sets_absolute_value_and_logs_reason_and_delta
     def test_adjust_stock_sets_absolute_value_and_logs_reason_and_delta(self):
@@ -131,7 +131,7 @@ class VegetableStockTestSuite(TestCase):
             entered_by_user=self.admin_user,
         )
         self.assertEqual(item.stock_quantity_grams, 8000)
-        adj_movement = StockMovement.objects.filter(item=item, movement_type=StockMovement.MovementType.ADJUSTMENT).first()
+        adj_movement = VegetableStockMovement.objects.filter(vegetable=item, movement_type=VegetableStockMovement.MovementType.ADJUSTMENT).first()
         self.assertIsNotNone(adj_movement)
         self.assertEqual(adj_movement.delta_grams, -2000)
         self.assertEqual(adj_movement.balance_after_grams, 8000)
@@ -145,7 +145,7 @@ class VegetableStockTestSuite(TestCase):
         
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 8500)
-        sold_m = StockMovement.objects.filter(booking_ref="SR-TEST-001", movement_type=StockMovement.MovementType.SOLD).first()
+        sold_m = VegetableStockMovement.objects.filter(booking_ref="SR-TEST-001", movement_type=VegetableStockMovement.MovementType.SOLD).first()
         self.assertIsNotNone(sold_m)
         self.assertEqual(sold_m.delta_grams, -1500)
         self.assertEqual(sold_m.balance_after_grams, 8500)
@@ -157,25 +157,14 @@ class VegetableStockTestSuite(TestCase):
         # Try booking 2 kg via BookingCreateView
         self.client.force_authenticate(user=self.customer_user)
         payload = {
-            # Not "Test Customer" -- validate_customer_name() on
-            # ServiceRequestPublicCreateSerializer deliberately blocklists
-            # that exact string (and other obvious placeholders) as an
-            # anti-fraud guard, which would fail this booking before the
-            # stock check under test ever runs.
             "customer_name": "Priya Ramesh",
             "phone": "9876543210",
             "service_category": "vegetables",
             "issue_title": "Vegetable Delivery",
             "address": "123 Market St, Hosur",
-            # Required: BookingCreateView rejects a booking outright when
-            # coordinates are missing (HS-B-04 fix -- see service_requests/
-            # views.py), before the stock check under test ever runs. The
-            # test company has no ServiceZone rows, so the zone-eligibility
-            # engine treats this as open access regardless of the actual
-            # coordinate values.
             "latitude": 12.9716,
             "longitude": 77.5946,
-            "preferred_date": timezone.localdate().strftime("%Y-%m-%d"),
+            "preferred_date": (timezone.localdate() + timedelta(days=1)).strftime("%Y-%m-%d"),
             "cart_data": [
                 {"id": self.pkg_tomato.id, "name": self.pkg_tomato.name, "quantity": 2, "unit": "kg"}
             ],
@@ -204,7 +193,7 @@ class VegetableStockTestSuite(TestCase):
         self.pkg_potato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 10000)
         self.assertEqual(self.pkg_potato.stock_item.stock_quantity_grams, 1000)
-        self.assertFalse(StockMovement.objects.filter(booking_ref="SR-FAIL-01").exists())
+        self.assertFalse(VegetableStockMovement.objects.filter(booking_ref="SR-FAIL-01").exists())
 
     # 6. test_deadlock_free_sorting
     def test_deadlock_free_sorting(self):
@@ -261,7 +250,7 @@ class VegetableStockTestSuite(TestCase):
         self.pkg_tomato.stock_item.refresh_from_db()
         self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 5000)
         self.assertEqual(
-            StockMovement.objects.filter(booking_ref="SR-CANCEL-001", movement_type=StockMovement.MovementType.RESTOCKED_ON_CANCELLATION).count(),
+            VegetableStockMovement.objects.filter(booking_ref="SR-CANCEL-001", movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_CANCELLATION).count(),
             1
         )
 
@@ -344,7 +333,7 @@ class VegetableStockTestSuite(TestCase):
         items = [{"product": self.pkg_onion, "quantity": 10, "unit": "kg"}]
         # Booking without stock_item passes through unchanged
         vegetable_stock_service.reserve_stock_for_booking_items(items, self.company, booking_ref="SR-NOTRACK-01")
-        self.assertFalse(StockMovement.objects.filter(booking_ref="SR-NOTRACK-01").exists())
+        self.assertFalse(VegetableStockMovement.objects.filter(booking_ref="SR-NOTRACK-01").exists())
 
     # 15. test_cache_invalidated_on_stock_movement
     def test_cache_invalidated_on_stock_movement(self):
@@ -359,76 +348,90 @@ class VegetableStockTestSuite(TestCase):
         vegetable_stock_service.add_stock(self.pkg_tomato, 5, "kg", self.company)
         self.assertIsNone(cache.get(cache_key))
 
-    # 16. test_daily_reset_sets_live_stock_to_default_and_logs_movement
-    def test_daily_reset_sets_live_stock_to_default_and_logs_movement(self):
-        vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 25, "kg", self.company)
-        item = self.pkg_tomato.stock_item
-        # Simulate previous day
-        item.last_reset_date = timezone.localdate() - timedelta(days=1)
-        item.stock_quantity_grams = 2000 # 2kg remaining from yesterday
-        item.save()
-
-        applied = vegetable_stock_service.apply_daily_reset(item, self.company)
-        self.assertTrue(applied)
-        item.refresh_from_db()
+    # 16. test_persistent_stock_carries_over_without_daily_reset
+    def test_persistent_stock_carries_over_without_daily_reset(self):
+        item = vegetable_stock_service.add_stock(self.pkg_tomato, 25, "kg", self.company)
         self.assertEqual(item.stock_quantity_grams, 25000)
-        self.assertEqual(item.last_reset_date, timezone.localdate())
-        m = StockMovement.objects.filter(item=item, movement_type=StockMovement.MovementType.DAILY_RESET).first()
-        self.assertIsNotNone(m)
-        self.assertEqual(m.delta_grams, 23000)
-        self.assertEqual(m.balance_after_grams, 25000)
 
-    # 17. test_daily_reset_is_idempotent_within_same_business_day
-    def test_daily_reset_is_idempotent_within_same_business_day(self):
-        vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 20, "kg", self.company, apply_now=True)
-        item = self.pkg_tomato.stock_item
-        self.assertEqual(item.last_reset_date, timezone.localdate())
+        # Simulate date change — stock must persist without automatic reset
+        self.pkg_tomato.refresh_from_db()
+        status = vegetable_stock_selectors.get_stock_status(self.pkg_tomato)
+        self.assertTrue(status["in_stock"])
+        self.assertEqual(self.pkg_tomato.stock_item.stock_quantity_grams, 25000)
 
-        # Calling apply_daily_reset again today should no-op
-        applied = vegetable_stock_service.apply_daily_reset(item, self.company)
-        self.assertFalse(applied)
-        # Should only have 1 movement
-        self.assertEqual(StockMovement.objects.filter(item=item, movement_type=StockMovement.MovementType.DAILY_RESET).count(), 1)
+    # 17. test_booking_deduction_and_overnight_persistence
+    def test_booking_deduction_and_overnight_persistence(self):
+        item = vegetable_stock_service.add_stock(self.pkg_tomato, 20, "kg", self.company)
+        self.assertEqual(item.stock_quantity_grams, 20000)
 
-    # 18. test_daily_reset_does_not_carry_over_previous_remaining
-    def test_daily_reset_does_not_carry_over_previous_remaining(self):
-        vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 15, "kg", self.company)
-        item = self.pkg_tomato.stock_item
-        item.last_reset_date = timezone.localdate() - timedelta(days=1)
-        item.stock_quantity_grams = 8000 # 8kg remaining
-        item.save()
-
-        vegetable_stock_service.apply_daily_reset(item, self.company)
-        item.refresh_from_db()
-        # Exactly 15000g, NOT 15000 + 8000
-        self.assertEqual(item.stock_quantity_grams, 15000)
-
-    # 19. test_lazy_reset_fallback_applies_missed_reset_before_booking_check
-    def test_lazy_reset_fallback_applies_missed_reset_before_booking_check(self):
-        vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 20, "kg", self.company)
-        item = self.pkg_tomato.stock_item
-        item.last_reset_date = timezone.localdate() - timedelta(days=1)
-        item.stock_quantity_grams = 0 # 0g leftover from yesterday
-        item.save()
-
-        # Customer attempts booking 5kg today — lazy reset should fire and restore to 20kg, then reserve 5kg -> 15kg
+        # Reserve 5kg in booking
         items = [{"product": self.pkg_tomato, "quantity": 5, "unit": "kg"}]
-        vegetable_stock_service.reserve_stock_for_booking_items(items, self.company, booking_ref="SR-LAZY-01")
+        vegetable_stock_service.reserve_stock_for_booking_items(items, self.company, booking_ref="SR-PERSIST-01")
+
         item.refresh_from_db()
         self.assertEqual(item.stock_quantity_grams, 15000)
-        self.assertEqual(item.last_reset_date, timezone.localdate())
 
-    # 20. test_default_daily_quantity_null_skips_auto_reset
-    def test_default_daily_quantity_null_skips_auto_reset(self):
+        # Stock movements audit ledger
+        self.assertEqual(
+            VegetableStockMovement.objects.filter(vegetable=item, movement_type=VegetableStockMovement.MovementType.SOLD).count(),
+            1
+        )
+        # Ensure no DAILY_RESET movement is generated
+        self.assertFalse(
+            VegetableStockMovement.objects.filter(vegetable=item, movement_type=VegetableStockMovement.MovementType.DAILY_RESET).exists()
+        )
+
+    # 18. test_insufficient_stock_fails_without_reset_side_effects
+    def test_insufficient_stock_fails_without_reset_side_effects(self):
+        vegetable_stock_service.add_stock(self.pkg_tomato, 2, "kg", self.company)
+        item = self.pkg_tomato.stock_item
+        self.assertEqual(item.stock_quantity_grams, 2000)
+
+        # Customer attempts booking 5kg when only 2kg exists
+        items = [{"product": self.pkg_tomato, "quantity": 5, "unit": "kg"}]
+        with self.assertRaises(vegetable_stock_service.InsufficientStockError):
+            vegetable_stock_service.reserve_stock_for_booking_items(items, self.company, booking_ref="SR-INSUF-01")
+
+        # Stock remains unchanged at 2kg
+        item.refresh_from_db()
+        self.assertEqual(item.stock_quantity_grams, 2000)
+
+    # 19. test_cancellation_restores_persistent_stock
+    def test_cancellation_restores_persistent_stock(self):
+        vegetable_stock_service.add_stock(self.pkg_tomato, 20, "kg", self.company)
+        item = self.pkg_tomato.stock_item
+
+        # Book 5kg -> 15kg
+        items = [{"product": self.pkg_tomato, "quantity": 5, "unit": "kg"}]
+        vegetable_stock_service.reserve_stock_for_booking_items(items, self.company, booking_ref="SR-CANCEL-01")
+        item.refresh_from_db()
+        self.assertEqual(item.stock_quantity_grams, 15000)
+
+        # Mock service request for cancellation restoration
+        from types import SimpleNamespace
+        sr = SimpleNamespace(request_id="SR-CANCEL-01", company=self.company)
+        vegetable_stock_service.release_stock_for_booking(sr)
+
+        item.refresh_from_db()
+        self.assertEqual(item.stock_quantity_grams, 20000)
+        self.assertTrue(
+            VegetableStockMovement.objects.filter(
+                vegetable=item,
+                movement_type=VegetableStockMovement.MovementType.RESTOCKED_ON_CANCELLATION
+            ).exists()
+        )
+
+    # 20. test_default_daily_quantity_serves_as_reference_without_auto_reset
+    def test_default_daily_quantity_serves_as_reference_without_auto_reset(self):
         item = vegetable_stock_service.add_stock(self.pkg_tomato, 10, "kg", self.company)
         self.assertIsNone(item.default_daily_quantity_grams)
-        item.last_reset_date = timezone.localdate() - timedelta(days=1)
-        item.save()
-
-        applied = vegetable_stock_service.apply_daily_reset(item, self.company)
-        self.assertFalse(applied)
-        item.refresh_from_db()
         self.assertEqual(item.stock_quantity_grams, 10000)
+
+        # Set default restock baseline
+        vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 30, "kg", self.company)
+        item.refresh_from_db()
+        self.assertEqual(item.default_daily_quantity_grams, 30000)
+        self.assertEqual(item.stock_quantity_grams, 10000) # Live stock remains 10kg
 
     # 21. test_same_day_restock_after_sellout_returns_item_to_in_stock
     def test_same_day_restock_after_sellout_returns_item_to_in_stock(self):
@@ -442,38 +445,23 @@ class VegetableStockTestSuite(TestCase):
         self.pkg_tomato.refresh_from_db()
         self.assertTrue(vegetable_stock_selectors.get_stock_status(self.pkg_tomato)["in_stock"])
 
-    # 22. test_set_default_with_apply_now_immediately_resets_today
-    def test_set_default_with_apply_now_immediately_resets_today(self):
+    # 22. test_set_default_does_not_modify_live_stock
+    def test_set_default_does_not_modify_live_stock(self):
         vegetable_stock_service.add_stock(self.pkg_tomato, 5, "kg", self.company)
         item = vegetable_stock_service.set_default_daily_quantity(
             product=self.pkg_tomato,
             quantity=30,
             unit="kg",
             company=self.company,
-            apply_now=True,
-        )
-        self.assertEqual(item.stock_quantity_grams, 30000)
-        self.assertEqual(item.default_daily_quantity_grams, 30000)
-        self.assertEqual(item.last_reset_date, timezone.localdate())
-
-    # 23. test_set_default_without_apply_now_does_not_change_todays_live_stock
-    def test_set_default_without_apply_now_does_not_change_todays_live_stock(self):
-        vegetable_stock_service.add_stock(self.pkg_tomato, 5, "kg", self.company)
-        item = vegetable_stock_service.set_default_daily_quantity(
-            product=self.pkg_tomato,
-            quantity=30,
-            unit="kg",
-            company=self.company,
-            apply_now=False,
         )
         self.assertEqual(item.stock_quantity_grams, 5000) # Live stock remains 5kg
         self.assertEqual(item.default_daily_quantity_grams, 30000)
 
-    # 24. test_daily_history_report_derives_opening_sold_closing_correctly
+    # 23. test_daily_history_report_derives_opening_sold_closing_correctly
     def test_daily_history_report_derives_opening_sold_closing_correctly(self):
         today = timezone.localdate()
-        # Create daily reset movement (opening 20kg)
-        item = vegetable_stock_service.set_default_daily_quantity(self.pkg_tomato, 20, "kg", self.company, apply_now=True)
+        # Restock 20kg
+        vegetable_stock_service.add_stock(self.pkg_tomato, 20, "kg", self.company)
         # Sell 4kg
         vegetable_stock_service.reserve_stock_for_booking_items(
             [{"product": self.pkg_tomato, "quantity": 4, "unit": "kg"}],
@@ -491,27 +479,14 @@ class VegetableStockTestSuite(TestCase):
         self.assertEqual(len(history), 1)
         day_report = history[0]
         self.assertEqual(day_report["date"], today.strftime("%Y-%m-%d"))
-        self.assertEqual(day_report["opening_grams"], 20000)
+        self.assertEqual(day_report["opening_grams"], 0) # Day started at 0 before the 20kg restock
+        self.assertEqual(day_report["restocked_grams"], 20000)
         self.assertEqual(day_report["sold_grams"], 6000)
         self.assertEqual(day_report["closing_grams"], 14000)
 
     # 25. Catalog Cache Population Test
-    #
-    # Renamed from "multi-tenant cache isolation": Package/Service carry no
-    # company/org FK at all (CatalogServiceListView's queryset is
-    # `Package.objects.all()`, unfiltered by tenant), so the catalog this
-    # endpoint serves is genuinely shared across companies by design -- a
-    # leftover from before django-tenants was removed in favor of the
-    # current single-schema platform (see quicktims/settings.py's
-    # "Database Configuration" comment). There is no per-company catalog
-    # data here to isolate, so asserting distinct per-company cache keys
-    # was asserting a guarantee this endpoint never provides. What's
-    # actually worth covering is what the view really does: cache by query
-    # params only, and reuse that one entry for any caller (admin or
-    # otherwise) issuing the same query, regardless of company.
     @override_settings(DEBUG=False)
     def test_catalog_list_is_cached_by_query_params_across_companies(self):
-        # First admin (company 1) request populates the cache.
         self.client.force_authenticate(user=self.admin_user)
         res1 = self.client.get(f"/api/catalog/services/?service_slug=vegetables&status=ACTIVE")
         self.assertEqual(res1.status_code, 200)
@@ -521,9 +496,6 @@ class VegetableStockTestSuite(TestCase):
         self.assertIsNotNone(cached_payload)
         self.assertEqual(cached_payload, res1.data)
 
-        # A second admin from a different company, issuing the identical
-        # query, hits the same shared cache entry -- since the underlying
-        # catalog isn't tenant-scoped, that's correct, not a leak.
         admin_user2 = User.objects.create_user(
             username="admin2",
             email="admin2@calservices.com",
@@ -573,16 +545,23 @@ class VegetableStockWriteLockdownTestSuite(TestCase):
             duration="500 g",
             status="ACTIVE",
         )
-        self.item = InventoryItem.objects.create(
+        self.item = Vegetable.objects.create(
             org=self.company,
+            package=self.pkg,
             name="Lockdown Test Tomato (Produce)",
-            category=InventoryItem.Category.CONSUMABLE,
             sku="VEG-LOCKDOWN-TOMATO",
             unit="kg",
             stock_quantity_grams=5000,
         )
         self.pkg.stock_item = self.item
         self.pkg.save(update_fields=["stock_item"])
+
+        self.inv_item = InventoryItem.objects.create(
+            org=self.company,
+            name="Warehouse Ladder",
+            category=InventoryItem.Category.EQUIPMENT,
+            sku="TOOL-LADDER",
+        )
 
     def test_restock_endpoint_refuses_write(self):
         res = self.client.post(
@@ -627,13 +606,13 @@ class VegetableStockWriteLockdownTestSuite(TestCase):
         self.assertEqual(create_res.status_code, 403)
 
         update_res = self.client.patch(
-            f"/api/inventory/items/{self.item.id}/", {"name": "Renamed"}, format="json",
+            f"/api/inventory/items/{self.inv_item.id}/", {"name": "Renamed"}, format="json",
         )
         self.assertEqual(update_res.status_code, 403)
 
-        delete_res = self.client.delete(f"/api/inventory/items/{self.item.id}/")
+        delete_res = self.client.delete(f"/api/inventory/items/{self.inv_item.id}/")
         self.assertEqual(delete_res.status_code, 403)
-        self.assertTrue(InventoryItem.objects.filter(id=self.item.id).exists())
+        self.assertTrue(InventoryItem.objects.filter(id=self.inv_item.id).exists())
 
     def test_read_only_endpoints_still_work(self):
         list_res = self.client.get("/api/inventory/vegetable-stock/")

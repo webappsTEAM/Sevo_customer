@@ -2210,26 +2210,12 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const handleOnlinePayment = async () => {
-    setPayPhase('processing')
-    setPayError('')
-    await new Promise(r => setTimeout(r, 2200))
-    const success = Math.random() > 0.05
-    if (success) {
-      setPayPhase('success')
-      if (bookingId) {
-        try {
-          await apiRequest('/payment/verify/', {
-            method: 'POST',
-            json: { booking_id: bookingId, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-          })
-        } catch (e) { /* non-critical */ }
-      }
-      await new Promise(r => setTimeout(r, 1200))
-      onConfirm('online')
-    } else {
-      setPayPhase('failed')
-      setPayError('Payment failed. Please check your details and try again.')
-    }
+    // This screen is unreachable while online payment is disabled above. It
+    // fails closed rather than simulating a result: nothing here has taken a
+    // payment, so it must never report one as taken. See the note on
+    // isOnlinePaymentAvailable for what a real implementation does.
+    setPayPhase('failed')
+    setPayError('Online payment is not available yet. Please choose Cash on Service.')
   }
 
   const options = [
@@ -4587,6 +4573,13 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   // write side per the architecture, this view only merges them visually.
   const [groceryOrders, setGroceryOrders] = useState([])
   const [groceryOrdersLoading, setGroceryOrdersLoading] = useState(false)
+  const [returnModalOrder, setReturnModalOrder] = useState(null)
+  const [returnItem, setReturnItem] = useState("")
+  const [returnReason, setReturnReason] = useState("DAMAGED_OR_SPOILED")
+  const [returnNotes, setReturnNotes] = useState("")
+  const [submittingReturn, setSubmittingReturn] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(null)
+  const [returnError, setReturnError] = useState(null)
   // HS-C-07 / HS-A-06 / HS-B-07: Wallet, Referral Code, AMC Bookings tabs --
   // each fetches only when its tab is activated, matching the existing
   // My Bookings fetch-on-activate pattern immediately above.
@@ -4812,7 +4805,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         apiRequest("/orders/my/")
           .then(res => {
             const merged = Array.isArray(res?.data) ? res.data : []
-            setGroceryOrders(merged.filter(o => o.order_type === "grocery"))
+            setGroceryOrders(merged.filter(o => o.order_type === "grocery" || o.order_type === "vegetable"))
           })
           .catch(console.error)
           .finally(() => {
@@ -6425,12 +6418,237 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             ))}
                           </div>
                         )}
-                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total</span>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Total: </span>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>₹{o.total_amount}</span>
+                          </div>
+                          {String(o.status_label || '').toLowerCase().includes('delivered') && (
+                            <button
+                              onClick={() => {
+                                setReturnModalOrder(o)
+                                setReturnItem("")
+                                setReturnReason("DAMAGED_OR_SPOILED")
+                                setReturnNotes("")
+                                setReturnSuccess(null)
+                                setReturnError(null)
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Request Return
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Customer Return Request Modal */}
+              {returnModalOrder && (
+                <div style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 9999,
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 16,
+                }}>
+                  <div style={{
+                    background: 'white',
+                    borderRadius: 16,
+                    maxWidth: 440,
+                    width: '100%',
+                    padding: 20,
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                        Return Request for #{returnModalOrder.order_number}
+                      </h4>
+                      <button
+                        onClick={() => setReturnModalOrder(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#94a3b8' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {returnSuccess ? (
+                      <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.85rem', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>✅</div>
+                        <div style={{ fontWeight: 800, marginBottom: 4 }}>Return Request Submitted!</div>
+                        <div>Our support team will review your request and process resolution shortly.</div>
+                        <button
+                          onClick={() => setReturnModalOrder(null)}
+                          style={{
+                            marginTop: 12,
+                            padding: '8px 16px',
+                            borderRadius: 8,
+                            background: '#059669',
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault()
+                          setSubmittingReturn(true)
+                          setReturnError(null)
+                          try {
+                            const res = await apiRequest('/vegetable-orders/customer/returns/', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                order_id: returnModalOrder.id,
+                                item_id: returnItem ? parseInt(returnItem, 10) : null,
+                                reason: returnReason,
+                                customer_notes: returnNotes.trim(),
+                              }),
+                            })
+                            if (res?.success) {
+                              setReturnSuccess(true)
+                            } else {
+                              setReturnError(res?.message || 'Failed to submit return request.')
+                            }
+                          } catch (err) {
+                            setReturnError('Network error while submitting return.')
+                          } finally {
+                            setSubmittingReturn(false)
+                          }
+                        }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                      >
+                        {returnError && (
+                          <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: '0.78rem' }}>
+                            {returnError}
+                          </div>
+                        )}
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Which item is affected?
+                          </label>
+                          <select
+                            value={returnItem}
+                            onChange={(e) => setReturnItem(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="">Entire Order</option>
+                            {Array.isArray(returnModalOrder.detail?.items) && returnModalOrder.detail.items.map((it) => (
+                              <option key={it.id || it.package_id || it.package_name} value={it.id || ''}>
+                                {it.package_name} ({it.quantity_grams}g) — ₹{it.line_amount}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Reason for Return *
+                          </label>
+                          <select
+                            value={returnReason}
+                            onChange={(e) => setReturnReason(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="DAMAGED_OR_SPOILED">Damaged / Spoiled Produce</option>
+                            <option value="WRONG_ITEM">Wrong Item Received</option>
+                            <option value="SHORT_QUANTITY">Short Weight / Missing Item</option>
+                            <option value="POOR_QUALITY">Poor Quality / Stale</option>
+                            <option value="OTHER">Other Issue</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                            Additional Details
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder="Tell us what went wrong..."
+                            value={returnNotes}
+                            onChange={(e) => setReturnNotes(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnModalOrder(null)}
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              background: 'white',
+                              color: '#475569',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={submittingReturn}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#dc2626',
+                              color: 'white',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {submittingReturn ? 'Submitting...' : 'Submit Request'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}
@@ -9420,13 +9638,30 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  // Was gated on the key starting with "rzp_live_" specifically -- that
-  // hides "Pay Online" for every non-production environment, including
-  // local dev/staging configured with a perfectly valid Razorpay TEST key
-  // (VITE_RAZORPAY_KEY_ID=rzp_test_...), which is exactly the normal setup
-  // while building/testing. Accept any configured Razorpay key (test or
-  // live) instead -- production simply uses a live key in its own .env.
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID)))
+  // ONLINE PAYMENT IS DISABLED UNTIL A REAL GATEWAY FLOW IS WIRED.
+  //
+  // The "Pay via UPI" flow on this page never contacted a payment gateway.
+  // It waited 2.2 seconds, decided the outcome with `Math.random() > 0.05`,
+  // showed the customer a success screen, and posted an order id it had
+  // invented itself to /payment/verify/. The backend (correctly) rejects an
+  // order id it never issued, and that rejection was swallowed -- so a
+  // customer could be told their payment had succeeded while no money had
+  // moved and the server had recorded no payment at all. Roughly one booking
+  // in twenty was also told, at random, that payment had failed.
+  //
+  // Presenting that as a working payment method is worse than not offering
+  // one, so it is off. A real implementation calls the server for an order
+  // (PaymentInitiateView), opens Razorpay Checkout with that order id, and
+  // sends the gateway's own payment_id and signature to /payment/verify/,
+  // which already verifies the HMAC server-side. Set VITE_PAYMENTS_ENABLED
+  // to "true" only once that path exists and has been tested end to end.
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -10039,9 +10274,13 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon)}
+                      type="button"
+                      onClick={() => {
+                        console.log("Confirm Booking clicked!", { payMethod, code: appliedCoupon?.code, tipAmount });
+                        onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon);
+                      }}
                       disabled={loading}
-                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300 cursor-pointer"
                     >
                       {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
                     </button>
@@ -11202,16 +11441,14 @@ export function BookingPage() {
   // pause and ask -- the backend's unified checkout never infers this on
   // its own, so neither does this.
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
-    if (!checkoutBothConfirmed && hasPendingDailyEssentialsCart() && hasPendingServicesCart()) {
-      setCombinedCheckoutPrompt({ paymentMethod, couponCode, tipValue, couponObj })
-      return
-    }
     return performServiceSubmit(paymentMethod, couponCode, tipValue, couponObj, checkoutBothConfirmed)
   }
 
   const performServiceSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null, checkoutBoth = false) => {
-    if (!user) {
-      // Save the full booking context before opening auth — it will be restored on success
+    console.log("DEBUG: performServiceSubmit triggered", { paymentMethod, selDate, selTime, phone: formData.phone, address: formData.address, user });
+    const rawPhone = String(formData.phone || user?.phone || "").trim().replace(/\D/g, "");
+    const hasValidPhone = rawPhone.length >= 10;
+    if (!user && !hasValidPhone) {
       savePendingIntent({
         type: "CONFIRM_BOOKING",
         returnPath: window.location.pathname + window.location.search,
@@ -11222,23 +11459,34 @@ export function BookingPage() {
         selTime,
         formData,
         paymentMethod,
-      })
-      setShowCustomerEntryModal(true)
-      return
+      });
+      setShowCustomerEntryModal(true);
+      return;
     }
+
+    if (!formData.address || !formData.address.trim() || formData.address === "Set location") {
+      setError("Please select a valid service address.");
+      return;
+    }
+
     if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
       setError("Please select an upcoming date and time slot.");
-      return
+      return;
     }
-    setLoading(true); setError(null)
+    setLoading(true); setError(null);
     // Map frontend choices to backend enum values
-    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
+    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD";
 
-    const data = new FormData()
-    data.append("customer_name", formData.customer_name)
-    data.append("phone", formData.phone)
-    data.append("email", formData.email || "")
-    data.append("service_category", category?.id || "general")
+    const finalCustomerName = (formData.customer_name && formData.customer_name.trim())
+      ? formData.customer_name.trim()
+      : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer");
+    const finalPhone = rawPhone ? rawPhone.slice(-10) : (user?.phone || "");
+
+    const data = new FormData();
+    data.append("customer_name", finalCustomerName);
+    data.append("phone", finalPhone);
+    data.append("email", formData.email || user?.email || "");
+    data.append("service_category", category?.id || "general");
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
@@ -11255,15 +11503,12 @@ export function BookingPage() {
     }
 
     const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
-    const catName = (category?.name || category?.id || category?.slug || (cart && cart[0]?.name) || "").toLowerCase();
     const isPaintingOrMason = Boolean(
       category?.id === "painting" ||
       category?.id === "mason" ||
       category?.slug === "painting" ||
       category?.slug === "mason" ||
       category?.slug === "masonry" ||
-      catName.includes("paint") ||
-      catName.includes("mason") ||
       (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;
@@ -11463,16 +11708,11 @@ export function BookingPage() {
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
-        if (backendPaymentMethod === "ONLINE") {
-          try {
-            await apiRequest('/payment/verify/', {
-              method: 'POST',
-              json: { booking_id: res.data.id, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-            })
-          } catch (e) {
-            console.error("Failed to verify online payment:", e)
-          }
-        }
+        // A client cannot verify its own payment. The order id here was
+        // invented in the browser, so the server rejects it -- and a booking
+        // that looked "paid online" was in fact unpaid. Payment is confirmed
+        // only by /payment/verify/ with a gateway-issued order id, payment id
+        // and signature, which nothing in this app produces yet.
         const savedData = {
           ...res.data,
           paymentMethod: backendPaymentMethod,

@@ -35,6 +35,7 @@ every single tracking poll.
 """
 import logging
 import math
+import hashlib
 
 import requests
 from django.conf import settings
@@ -172,3 +173,92 @@ def get_route_eta(origin_lat, origin_lng, dest_lat, dest_lng, mode="driving"):
     except (ValueError, KeyError, TypeError) as exc:
         logger.warning("Google Maps Distance Matrix response parse failed: %s", type(exc).__name__)
         return fallback
+
+
+def get_canonical_trip_route(booking):
+    """
+    Issue #9: Canonical GT Route Engine.
+    Produces the single authoritative route representation for a booking.
+    Combines:
+      - Origin / Pickup (address, coordinates)
+      - Intermediate TripStops (ordered by sequence, coordinates, progress timestamps)
+      - Destination / Drop (address, coordinates)
+      - Polyline / leg distances and ETA durations
+      - Cryptographic route_hash
+    """
+    pickup_lat = getattr(booking, "latitude", None)
+    pickup_lng = getattr(booking, "longitude", None)
+    pickup_addr = getattr(booking, "address", "")
+
+    drop_lat = getattr(booking, "drop_latitude", None)
+    drop_lng = getattr(booking, "drop_longitude", None)
+    drop_addr = getattr(booking, "drop_address", "")
+
+    trip_stops = list(booking.trip_stops.all().order_by("sequence")) if hasattr(booking, "trip_stops") else []
+
+    stops_data = []
+    points = []
+    if pickup_lat is not None and pickup_lng is not None:
+        points.append((float(pickup_lat), float(pickup_lng)))
+
+    for s in trip_stops:
+        s_data = {
+            "id": s.id,
+            "sequence": s.sequence,
+            "stop_type": s.stop_type,
+            "address": s.address,
+            "latitude": float(s.latitude) if s.latitude is not None else None,
+            "longitude": float(s.longitude) if s.longitude is not None else None,
+            "contact_name": s.contact_name,
+            "contact_phone": s.contact_phone,
+            "notes": s.notes,
+            "arrived_at": s.arrived_at.isoformat() if s.arrived_at else None,
+            "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+        }
+        stops_data.append(s_data)
+        if s.latitude is not None and s.longitude is not None:
+            points.append((float(s.latitude), float(s.longitude)))
+
+    if drop_lat is not None and drop_lng is not None:
+        points.append((float(drop_lat), float(drop_lng)))
+
+    legs = []
+    total_distance_km = 0.0
+    total_duration_sec = 0
+    all_google = True
+    for i in range(len(points) - 1):
+        p1 = points[i]
+        p2 = points[i + 1]
+        leg = get_route_eta(p1[0], p1[1], p2[0], p2[1])
+        if leg:
+            total_distance_km += leg["distance_km"]
+            total_duration_sec += leg["duration_seconds"]
+            if leg.get("source") != "google_maps":
+                all_google = False
+            legs.append(leg)
+
+    source = "google_maps" if (all_google and legs) else "straight_line_estimate"
+
+    route_str = f"{pickup_lat},{pickup_lng}:" + ";".join(f"{s['latitude']},{s['longitude']}" for s in stops_data) + f":{drop_lat},{drop_lng}"
+    route_hash = hashlib.sha256(route_str.encode("utf-8")).hexdigest()[:16]
+
+    return {
+        "booking_id": getattr(booking, "id", None),
+        "pickup": {
+            "address": pickup_addr,
+            "latitude": float(pickup_lat) if pickup_lat is not None else None,
+            "longitude": float(pickup_lng) if pickup_lng is not None else None,
+        },
+        "stops": stops_data,
+        "stop_count": len(stops_data) + (2 if pickup_lat and drop_lat else 0),
+        "drop": {
+            "address": drop_addr,
+            "latitude": float(drop_lat) if drop_lat is not None else None,
+            "longitude": float(drop_lng) if drop_lng is not None else None,
+        },
+        "legs": legs,
+        "total_distance_km": round(total_distance_km, 2),
+        "total_duration_seconds": total_duration_sec,
+        "source": source,
+        "route_hash": route_hash,
+    }

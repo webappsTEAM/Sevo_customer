@@ -462,13 +462,13 @@ function businessNowParts() {
 }
 
 function isSlotInPast(dateStr, slotStr) {
-  if (!dateStr || !slotStr) return false
+  if (!slotStr) return false
 
   const business = businessNowParts()
   const todayStr = business.dateStr
 
-  // Normalize dateStr
-  const cleanDateStr = String(dateStr).split('T')[0].trim()
+  // Normalize dateStr (default to today if omitted or empty)
+  const cleanDateStr = dateStr ? String(dateStr).split('T')[0].trim() : todayStr
 
   // If date is before today, it's in the past
   if (cleanDateStr < todayStr) return true
@@ -9227,7 +9227,13 @@ function StepWorkflowCheckout({
 
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
-  const isOnlinePaymentAvailable = Boolean(import.meta.env.VITE_RAZORPAY_KEY_ID && String(import.meta.env.VITE_RAZORPAY_KEY_ID).startsWith("rzp_live_"))
+  const isOnlinePaymentAvailable = Boolean(
+    String(import.meta.env.VITE_PAYMENTS_ENABLED) !== 'false' &&
+    (
+      !import.meta.env.VITE_RAZORPAY_KEY_ID ||
+      /^rzp_(live|test)_/.test(String(import.meta.env.VITE_RAZORPAY_KEY_ID))
+    )
+  )
   const [payMethod, setPayMethod] = useState(isOnlinePaymentAvailable ? "online" : "cash")
   const [editingPhone, setEditingPhone] = useState(false)
   const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
@@ -9757,7 +9763,7 @@ function StepWorkflowCheckout({
                                   if (selectedDate) setShowSlotPicker(false)
                                 }}
                                 className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center select-none ${isPast
-                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-40 pointer-events-none"
                                   : isSel
                                   ? "bg-indigo-600 text-white border-indigo-600 shadow-xs cursor-pointer"
                                   : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white cursor-pointer"
@@ -10649,7 +10655,19 @@ export function BookingPage() {
       }
     }
   }, [isTrackingActive, trackParam, storedBookingData, routerLocation.state, hasIncomingOrder]);
-  const [selDate, setSelDate] = useState("")
+  const [selDate, setSelDate] = useState(() => {
+    try {
+      const b = businessNowParts()
+      if (b.hour >= SAME_DAY_CUTOFF_HOUR) {
+        const d = new Date(b.now)
+        d.setDate(d.getDate() + 1)
+        return d.toISOString().split('T')[0]
+      }
+      return b.dateStr || ""
+    } catch {
+      return ""
+    }
+  })
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
@@ -10979,8 +10997,10 @@ export function BookingPage() {
   }
 
   const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
-    if (!user) {
-      // Save the full booking context before opening auth — it will be restored on success
+    console.log("DEBUG: performServiceSubmit triggered", { paymentMethod, selDate, selTime, phone: formData.phone, address: formData.address, user });
+    const rawPhone = String(formData.phone || user?.phone || "").trim().replace(/\D/g, "");
+    const hasValidPhone = rawPhone.length >= 10;
+    if (!user && !hasValidPhone) {
       savePendingIntent({
         type: "CONFIRM_BOOKING",
         returnPath: window.location.pathname + window.location.search,
@@ -10991,23 +11011,34 @@ export function BookingPage() {
         selTime,
         formData,
         paymentMethod,
-      })
-      setShowCustomerEntryModal(true)
-      return
+      });
+      setShowCustomerEntryModal(true);
+      return;
     }
+
+    if (!formData.address || !formData.address.trim() || formData.address === "Set location") {
+      setError("Please select a valid service address.");
+      return;
+    }
+
     if (!selDate || !selTime || isSlotInPast(selDate, selTime)) {
       setError("Please select an upcoming date and time slot.");
-      return
+      return;
     }
-    setLoading(true); setError(null)
+    setLoading(true); setError(null);
     // Map frontend choices to backend enum values
-    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
+    const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD";
 
-    const data = new FormData()
-    data.append("customer_name", formData.customer_name)
-    data.append("phone", formData.phone)
-    data.append("email", formData.email || "")
-    data.append("service_category", category?.id || "general")
+    const finalCustomerName = (formData.customer_name && formData.customer_name.trim())
+      ? formData.customer_name.trim()
+      : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer");
+    const finalPhone = rawPhone ? rawPhone.slice(-10) : (user?.phone || "");
+
+    const data = new FormData();
+    data.append("customer_name", finalCustomerName);
+    data.append("phone", finalPhone);
+    data.append("email", formData.email || user?.email || "");
+    data.append("service_category", category?.id || "general");
 
     const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
     const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
@@ -11024,15 +11055,12 @@ export function BookingPage() {
     }
 
     const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
-    const catName = (category?.name || category?.id || category?.slug || (cart && cart[0]?.name) || "").toLowerCase();
     const isPaintingOrMason = Boolean(
       category?.id === "painting" ||
       category?.id === "mason" ||
       category?.slug === "painting" ||
       category?.slug === "mason" ||
       category?.slug === "masonry" ||
-      catName.includes("paint") ||
-      catName.includes("mason") ||
       (cart && cart.some(c => isConsultationItem(c, category)))
     );
     const isFreeCategory = itemTotal === 0 && isPaintingOrMason;

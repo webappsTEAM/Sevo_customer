@@ -242,11 +242,17 @@ class CatalogServiceListView(APIView):
             if cached_res is not None:
                 return Response(cached_res)
 
-        qs = Package.objects.select_related("service", "service__category").all().order_by('name')
+        qs = Package.objects.select_related("service", "service__category", "stock_item", "stock_item__category").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         if service_slug:
             qs = qs.filter(service__slug=service_slug)
+            if service_slug == "vegetables":
+                qs = qs.filter(
+                    stock_item__isnull=False,
+                    stock_item__status="APPROVED",
+                    stock_item__category__status="APPROVED",
+                )
         if status_filter:
             qs = qs.filter(status=status_filter)
         data = CatalogServiceSerializer(qs, many=True).data
@@ -439,6 +445,8 @@ class BookingCreateView(APIView):
             # otherwise it falls back to the previous flat lane/tier
             # lookup. The client-submitted total_amount is still never
             # trusted for any logistics category.
+            # Multi-stop waypoints extraction for authoritative fare resolution
+            req_waypoints = request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")
             corrected_fare, fare_breakdown = resolve_logistics_fare_v2(
                 service_category=serializer.validated_data.get("service_category", ""),
                 logistics_tier=serializer.validated_data.get("logistics_tier"),
@@ -449,6 +457,7 @@ class BookingCreateView(APIView):
                 drop_lat=serializer.validated_data.get("drop_latitude"),
                 drop_lng=serializer.validated_data.get("drop_longitude"),
                 cart_data=serializer.validated_data.get("cart_data"),
+                waypoints=req_waypoints,
             )
         except UnresolvedLogisticsFareError as err:
             # Fixes GT-B-01: a logistics booking with neither a resolvable
@@ -669,7 +678,7 @@ class BookingCreateView(APIView):
                     return Response({"success": False, "errors": e.detail}, status=status.HTTP_400_BAD_REQUEST)
                 raise e
 
-            return _success(
+            resp = _success(
                 data={
                     "request_id": sr.request_id,
                     "id": sr.id,
@@ -696,6 +705,15 @@ class BookingCreateView(APIView):
                 message="Your AC estimation request has been submitted successfully.",
                 status_code=201 if created else 200,
             )
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.set(idem_cache_key, {
+                    "body": resp.data,
+                    "status": resp.status_code,
+                    "in_progress": False,
+                    "payload_hash": req_payload_hash,
+                }, timeout=86400)
+            return resp
 
         # Ensure cart_data carries clean numeric prices matching authoritative fare
         clean_cart = serializer.validated_data.get("cart_data")
@@ -714,26 +732,139 @@ class BookingCreateView(APIView):
                             item["price"] = float(corrected_fare)
                         else:
                             item["price"] = p_val
+                        if fare_breakdown:
+                            item["logistics_snapshot"] = _jsonable_fare_breakdown(fare_breakdown)
                     else:
                         item["price"] = p_val
             serializer.validated_data["cart_data"] = clean_cart
 
-        sr = serializer.save(
-            company=company,
-            customer=customer_user,
-            email=final_email,
-            status=initial_status,
-            payment_method=payment_method,
-            payment_status=initial_payment_status,
-            total_amount=corrected_fare,
+        save_kwargs = {
+            "company": company,
+            "customer": customer_user,
+            "email": final_email,
+            "status": initial_status,
+            "payment_method": payment_method,
+            "payment_status": initial_payment_status,
+            "total_amount": corrected_fare,
             # GT-B-01: the itemised quote behind total_amount, when the
             # fare was distance-computed. Empty for flat-priced bookings.
-            fare_breakdown=_jsonable_fare_breakdown(fare_breakdown),
+            "fare_breakdown": _jsonable_fare_breakdown(fare_breakdown),
             # Zone snapshot — captured at creation time so existing bookings
             # remain valid even if admin later edits or removes the zone.
-            service_zone_id_snapshot=zone_result.zone_id,
-            service_zone_name_snapshot=zone_result.zone_name or "",
-        )
+            "service_zone_id_snapshot": zone_result.zone_id,
+            "service_zone_name_snapshot": zone_result.zone_name or "",
+        }
+        if not serializer.validated_data.get("logistics_tier") and fare_breakdown and fare_breakdown.get("tier_id"):
+            from logistics.models import ServiceTier
+            tier_obj = ServiceTier.objects.filter(id=fare_breakdown["tier_id"]).first()
+            if tier_obj:
+                save_kwargs["logistics_tier"] = tier_obj
+
+        try:
+            with transaction.atomic():
+                sr = serializer.save(**save_kwargs)
+
+                # Hard-block on insufficient vegetable stock (mirrors GroceryCheckoutView's
+                # pattern in orders/views.py, see DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md
+                # Phase 3). Uses the already-built BookingService.extract_vegetable_items /
+                # reserve_stock_for_booking_items, with the real permanent sr.request_id as
+                # booking_ref -- this is what BookingService.create_service_request_booking
+                # already does, wired in here since this view builds the ServiceRequest
+                # inline rather than through that helper. Runs immediately after sr is
+                # created so a failure here rolls back cleanly before any coupon usage,
+                # Order/OrderItem wrapper, or notification side effects below.
+                from service_requests.services.booking_service import BookingService
+                from inventory.services.vegetable_stock_service import InsufficientStockError, reserve_stock_for_booking_items
+
+                veg_items = BookingService.extract_vegetable_items(sr.cart_data)
+                if veg_items:
+                    try:
+                        with transaction.atomic():
+                            reserve_stock_for_booking_items(
+                                items=veg_items, company=company, booking_ref=sr.request_id,
+                            )
+                    except InsufficientStockError:
+                        sr.delete()
+                        if idem_cache_key:
+                            from django.core.cache import cache
+                            cache.delete(idem_cache_key)
+                        return _error(
+                            "This quantity is no longer available. Please reduce the quantity and try again.",
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                # Multi-stop GT routing: persist TripStop records if stops provided in request
+                raw_stops = request.data.get("stops") or request.data.get("trip_stops") or request.data.get("waypoints")
+                if not raw_stops and clean_cart and isinstance(clean_cart, list) and len(clean_cart) > 0:
+                    c0 = clean_cart[0] if isinstance(clean_cart[0], dict) else {}
+                    raw_stops = c0.get("stops") or c0.get("waypoints") or c0.get("trip_stops")
+                if raw_stops and isinstance(raw_stops, list) and len(raw_stops) > 0:
+                    formatted_stops = []
+                    has_explicit_pickup = any(isinstance(s, dict) and str(s.get("stop_type", "")).upper() == "PICKUP" for s in raw_stops)
+                    has_explicit_drop = any(isinstance(s, dict) and str(s.get("stop_type", "")).upper() == "DROP" for s in raw_stops)
+
+                    if not has_explicit_pickup and (sr.address or sr.latitude):
+                        formatted_stops.append({
+                            "address": sr.address or f"Pickup ({sr.latitude}, {sr.longitude})",
+                            "stop_type": "PICKUP",
+                            "contact_name": sr.customer_name or "",
+                            "contact_phone": sr.phone or "",
+                            "latitude": sr.latitude,
+                            "longitude": sr.longitude,
+                            "notes": "Pickup location",
+                        })
+
+                    for s in raw_stops:
+                        if isinstance(s, dict):
+                            st = str(s.get("stop_type") or "WAYPOINT").upper()
+                            if st == "PICKUP" and not has_explicit_pickup:
+                                continue
+                            if st == "DROP" and not has_explicit_drop:
+                                continue
+                            addr = str(s.get("address") or "").strip()
+                            lat_val = s.get("lat") or s.get("latitude")
+                            lng_val = s.get("lng") or s.get("longitude")
+                            if not addr and lat_val and lng_val:
+                                addr = f"Stop ({lat_val}, {lng_val})"
+                            if addr:
+                                formatted_stops.append({
+                                    "address": addr,
+                                    "stop_type": st,
+                                    "contact_name": str(s.get("contact_name") or "").strip(),
+                                    "contact_phone": str(s.get("contact_phone") or "").strip(),
+                                    "latitude": lat_val,
+                                    "longitude": lng_val,
+                                    "notes": str(s.get("notes") or "").strip(),
+                                })
+
+                    if not has_explicit_drop and (sr.drop_address or sr.drop_latitude):
+                        formatted_stops.append({
+                            "address": sr.drop_address or f"Drop ({sr.drop_latitude}, {sr.drop_longitude})",
+                            "stop_type": "DROP",
+                            "contact_name": sr.drop_contact_name or "",
+                            "contact_phone": sr.drop_contact_phone or "",
+                            "latitude": sr.drop_latitude,
+                            "longitude": sr.drop_longitude,
+                            "notes": "Drop location",
+                        })
+
+                    if formatted_stops:
+                        actor = customer_user or sr.customer or request.user
+                        sr_services.set_trip_stops(sr, actor, formatted_stops)
+                        logger.info(f"[GT_MULTI_STOP] Created {len(formatted_stops)} TripStop rows for ServiceRequest #{sr.id}")
+        except Exception as trip_stop_err:
+            if idem_cache_key:
+                from django.core.cache import cache
+                cache.delete(idem_cache_key)
+            logger.error(f"[BOOKING_ROLLBACK] Booking creation rolled back due to trip stop persistence failure: {trip_stop_err}")
+            return Response(
+                {
+                    "success": False,
+                    "error": f"Failed to persist route trip stops: {str(trip_stop_err)}",
+                    "code": "TRIP_STOPS_PERSISTENCE_FAILED",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
         if coupon_code:
@@ -842,12 +973,16 @@ class BookingCreateView(APIView):
         # the vendor side, this still delivers it, just without blocking the
         # request that doesn't need to wait on it.
         try:
-            import threading
-            threading.Thread(
-                target=WorkforceIntegrationService.dispatch_job,
-                args=(sr.id,),
-                daemon=True,
-            ).start()
+            from django.conf import settings
+            if getattr(settings, "TESTING", False):
+                WorkforceIntegrationService.dispatch_job(sr.id)
+            else:
+                import threading
+                threading.Thread(
+                    target=WorkforceIntegrationService.dispatch_job,
+                    args=(sr.id,),
+                    daemon=True,
+                ).start()
         except Exception as dispatch_err:
             logger.warning(f"Could not start background workforce dispatch for booking {sr.id}: {dispatch_err}")
 
@@ -858,13 +993,18 @@ class BookingCreateView(APIView):
         # response.
         if _new_account_created:
             try:
-                import threading
-                from .notifications import notify_account_created
-                threading.Thread(
-                    target=notify_account_created,
-                    args=(customer_user, sr),
-                    daemon=True,
-                ).start()
+                from django.conf import settings
+                if getattr(settings, "TESTING", False):
+                    from .notifications import notify_account_created
+                    notify_account_created(customer_user, sr)
+                else:
+                    import threading
+                    from .notifications import notify_account_created
+                    threading.Thread(
+                        target=notify_account_created,
+                        args=(customer_user, sr),
+                        daemon=True,
+                    ).start()
             except Exception as notify_err:
                 logger.warning(f"Could not start account-created notification for booking {sr.id}: {notify_err}")
 
@@ -968,16 +1108,63 @@ class CustomerMyBookingsView(APIView):
                 | Q(phone=f"+91{clean_phone}")
             )
 
+        # Sweep expired on-demand logistics bookings (> 10 mins without an assigned partner)
+        from datetime import timedelta
+        import django.utils.timezone as django_timezone
+        from service_requests.state_machine import apply_transition
+        from workforce_integration.services import WorkforceIntegrationService
+        from service_requests.services.logistics_pricing import LOGISTICS_CATEGORIES
+
+        ten_minutes_ago = django_timezone.now() - timedelta(minutes=10)
+        stale_logistics_qs = ServiceRequest.objects.filter(
+            query,
+            status__in=[
+                ServiceRequest.Status.UNASSIGNED,
+                ServiceRequest.Status.NEW_REQUEST,
+                ServiceRequest.Status.DRAFT,
+            ],
+            created_at__lt=ten_minutes_ago,
+        ).filter(
+            Q(service_category__in=LOGISTICS_CATEGORIES)
+            | Q(service_category__startswith="goods_")
+            | Q(service_category__icontains="truck")
+            | Q(service_category__icontains="two_wheeler")
+        )
+        for stale_sr in stale_logistics_qs:
+            try:
+                with transaction.atomic():
+                    locked_sr = ServiceRequest.objects.select_for_update().get(pk=stale_sr.pk)
+                    if locked_sr.status in [
+                        ServiceRequest.Status.UNASSIGNED,
+                        ServiceRequest.Status.NEW_REQUEST,
+                        ServiceRequest.Status.DRAFT,
+                    ] and not locked_sr.external_assignment_id and not locked_sr.technician_name:
+                        prev_st = locked_sr.status
+                        apply_transition(locked_sr, ServiceRequest.Status.CANCELLED)
+                        locked_sr.cancelled_at = django_timezone.now()
+                        locked_sr.cancelled_by_persona = "system"
+                        locked_sr.cancellation_reason = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+                        locked_sr.cancellation_note = "Search window expired (no delivery partner found within 10 minutes)"
+                        locked_sr.cancelled_at_status = prev_st
+                        locked_sr._status_reason_code = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+                        locked_sr._status_reason_note = "Search window expired (no delivery partner found within 10 minutes)"
+                        locked_sr.save()
+                        WorkforceIntegrationService.cancel_workforce_job(
+                            locked_sr.id, reason="Search window expired (no delivery partner found within 10 minutes)"
+                        )
+            except Exception as ex:
+                logger.warning(f"Error auto-expiring stale logistics booking {stale_sr.id}: {ex}")
+
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
-            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer", "estimation", "estimation__fee").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-created_at").distinct()
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
         return _success(data=serializer.data)
@@ -1090,16 +1277,42 @@ class CustomerBookingCancelView(APIView):
             "Selected wrong service, date, or address": ServiceRequest.CancellationReason.WRONG_SERVICE,
             "Found alternative service / Solved myself": ServiceRequest.CancellationReason.FOUND_ALTERNATIVE,
             "Price or payment issue": ServiceRequest.CancellationReason.PRICE_OR_PAYMENT,
+            "Search window expired (no delivery partner found within 10 minutes)": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
+            "Search window expired - no delivery partner available within 10 minutes": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
+            "Search window expired": ServiceRequest.CancellationReason.SEARCH_EXPIRED,
         }
-        normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
+        if "search window expired" in str(reason).lower() or "expired" in str(reason).lower():
+            normalized_reason = ServiceRequest.CancellationReason.SEARCH_EXPIRED
+        else:
+            normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
 
         with transaction.atomic():
+            sr = ServiceRequest.objects.select_for_update().get(pk=sr.pk)
+            if sr.status == ServiceRequest.Status.CANCELLED:
+                return _success(
+                    data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+                    message="Booking is already cancelled.",
+                )
+            if getattr(sr, "otp_verified", False) or sr.status in [
+                ServiceRequest.Status.IN_PROGRESS,
+                ServiceRequest.Status.PROOF_SUBMITTED,
+                ServiceRequest.Status.COMPLETED,
+            ]:
+                return Response(
+                    {
+                        "success": False,
+                        "code": "CANCELLATION_LOCKED_AFTER_OTP",
+                        "message": "Cancellation is locked because customer OTP has been verified.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            previous_status = sr.status
             apply_transition(sr, ServiceRequest.Status.CANCELLED, actor=actor)
             sr.cancelled_at = django_timezone.now()
             sr.cancelled_by = cancelled_by_user
             sr.cancelled_by_persona = persona
             sr.cancellation_reason = normalized_reason
-            sr.cancellation_note = reason if normalized_reason == ServiceRequest.CancellationReason.OTHER else ""
+            sr.cancellation_note = reason if normalized_reason in [ServiceRequest.CancellationReason.OTHER, ServiceRequest.CancellationReason.SEARCH_EXPIRED] else ""
             sr.cancelled_at_status = previous_status
             
             # Pass details to status log save hook
@@ -1107,6 +1320,9 @@ class CustomerBookingCancelView(APIView):
             sr._status_reason_note = reason
             
             sr.save()
+            if hasattr(sr, "estimation") and sr.estimation is not None:
+                sr.estimation.status = "CANCELLED"
+                sr.estimation.save(update_fields=["status", "updated_at"])
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
@@ -1199,7 +1415,8 @@ def _build_logistics_progress(sr):
     None or a missing key, so clients can read it unconditionally.
     """
     empty = {"leg": "", "leg_updated_at": None, "leg_history": [], "stops": [], "proofs": []}
-    if sr.service_category not in LOGISTICS_CATEGORIES:
+    cat = (sr.service_category or "").strip().lower()
+    if cat not in [c.lower() for c in LOGISTICS_CATEGORIES]:
         return empty
 
     try:
@@ -1303,6 +1520,11 @@ def _build_tracking_payload(sr, has_full_access):
             ServiceRequest.LogisticsLeg.EN_ROUTE_DROP,
             ServiceRequest.LogisticsLeg.UNLOADING,
             ServiceRequest.LogisticsLeg.DELIVERED,
+            ServiceRequest.LogisticsLeg.IN_TRANSIT,
+            ServiceRequest.LogisticsLeg.ARRIVED_DROP,
+            ServiceRequest.LogisticsLeg.REASSEMBLY,
+            ServiceRequest.LogisticsLeg.UNPACKING,
+            ServiceRequest.LogisticsLeg.COMPLETED,
         }
         try:
             stops = list(sr.trip_stops.all().order_by("sequence"))
@@ -1365,7 +1587,7 @@ def _build_tracking_payload(sr, has_full_access):
     # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
     # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
     tracking = None
-    active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
+    active_statuses = {"accepted", "on_the_way", "en_route", "arrived", "in_progress"}
     if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
         # Must be the numeric pk: the vendor's tracking routes are <int:pk>, so
         # passing request_id (an alphanumeric like "HM0001") never matched any
@@ -1378,12 +1600,23 @@ def _build_tracking_payload(sr, has_full_access):
     # ASSIGNED != ACCEPTED.
     # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
     # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
-    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
+    POST_ACCEPT_STATUSES = [
+        "accepted", "on_the_way", "en_route", "arrived", "service_started",
+        "in_progress", "on_hold", "proof_submitted", "payment_pending",
+        "cash_pending", "waiting_for_payment", "settling", "completed",
+        "closed", "feedback_pending", "feedback_received"
+    ]
+    technician_assigned = bool(
+        sr.status in (["assigned"] + POST_ACCEPT_STATUSES)
+        or sr.workforce_job_id or sr.external_assignment_id
+        or sr.technician_name
+    )
     technician_accepted = bool(
-        sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+        sr.status in POST_ACCEPT_STATUSES
+        or (sr.technician_name and sr.status not in ["draft", "new_request", "unassigned", "assigned", "cancelled", "rejected"])
     )
     is_accepted = technician_accepted
-    tracking_available = bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress"])
+    tracking_available = bool(sr.status in ["accepted", "on_the_way", "en_route", "arrived", "in_progress", "proof_submitted", "cash_pending", "waiting_for_payment"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
     vendor_data = None
@@ -1440,7 +1673,7 @@ def _build_tracking_payload(sr, has_full_access):
 
         if not tech_name and hasattr(sr, "assignments"):
             assignment = sr.assignments.filter(
-                status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+                status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]
             ).order_by("-id").first()
             if assignment:
                 tech_name = assignment.technician_name or None
@@ -1460,10 +1693,13 @@ def _build_tracking_payload(sr, has_full_access):
         if not tech_name and getattr(sr, "assigned_employee", None):
             emp = sr.assigned_employee
             tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
-            tech_phone = getattr(emp, "phone", None) or tech_phone
+            tech_phone = getattr(emp, "phone", None) or (getattr(getattr(emp, "user", None), "phone", None)) or tech_phone
             tech_photo = getattr(emp, "photo", None) or tech_photo
             tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
             tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
+
+        if not tech_phone:
+            tech_phone = sr.technician_phone or None
 
         # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
         # Location is top-level 'location' in older callers, nested inside
@@ -1552,6 +1788,8 @@ def _build_tracking_payload(sr, has_full_access):
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
+            "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
+            "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
             "updated_at": (
                 tracking.get("updated_at")
                 or (loc.get("received_at") if loc else None)
@@ -1570,8 +1808,30 @@ def _build_tracking_payload(sr, has_full_access):
                 "freshness": freshness,
             }
 
-    # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
-    start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
+    # OTP is exposed to customer once partner ACCEPTS and booking is not cancelled/rejected
+    start_otp = sr.start_otp if (is_accepted and sr.status not in ["cancelled", "rejected"]) else None
+
+    # Retrieve Cash Payment Confirmation OTP if one was generated for this booking
+    payment_confirmation_otp = None
+    if sr.status not in ["cancelled", "rejected"]:
+        try:
+            import re
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT message FROM workforce_notification "
+                    "WHERE related_object_id IN (%s, %s) "
+                    "AND notification_type = 'PAYMENT_CONFIRMATION_OTP' "
+                    "ORDER BY created_at DESC LIMIT 1;",
+                    [str(sr.id), str(sr.request_id or "")],
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    m = re.search(r'OTP\s+([0-9]{6})', row[0])
+                    if m:
+                        payment_confirmation_otp = m.group(1)
+        except Exception:
+            pass
 
     payment_confirmation_otp = None
     if sr.payment_status in ("cash_pending", "cash_collected", "pending"):
@@ -1624,6 +1884,23 @@ def _build_tracking_payload(sr, has_full_access):
         for ev in sr.status_events.all().order_by("occurred_at")
     ] if hasattr(sr, "status_events") else []
 
+    quote_obj = None
+    quotation_history = []
+    if sr.status not in ["draft", "new_request"] and not (sr.service_category or "").startswith("goods_transport") and (sr.service_category or "") != "packers_movers":
+        for b_cand in [sr.request_id, sr.id, getattr(sr, "workforce_job_id", None)]:
+            if b_cand:
+                q_res = WorkforceIntegrationService.get_quote_by_booking_id(str(b_cand))
+                if q_res and q_res.get("quote"):
+                    candidate_quote = q_res.get("quote")
+                    if isinstance(candidate_quote, dict) and candidate_quote.get("has_quote") is not False:
+                        if candidate_quote.get("quote_number") or candidate_quote.get("id") or candidate_quote.get("quote_id") or candidate_quote.get("items"):
+                            quote_obj = candidate_quote
+                history = WorkforceIntegrationService.get_quote_history_by_booking_id(str(b_cand))
+                if history:
+                    quotation_history = history
+                if quote_obj or quotation_history:
+                    break
+
     return {
         "booking_id": sr.id,
         "status_history": status_history,
@@ -1647,10 +1924,6 @@ def _build_tracking_payload(sr, has_full_access):
         "payment_status": sr.payment_status or "pending",
         "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
-        # GT-B-03 / GT-D-01: the logistics trip's own progress, separate
-        # from `status` (which is shared by every service category). Only
-        # populated for logistics bookings; every other booking gets the
-        # empty defaults, so no existing consumer changes shape.
         "logistics": _build_logistics_progress(sr),
         "service_location": {
             "address": dest_address,
@@ -1676,7 +1949,15 @@ def _build_tracking_payload(sr, has_full_access):
         "start_otp": start_otp,
         "payment_confirmation_otp": payment_confirmation_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
-        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
+        "vehicle_number": tracking.get("vehicle_number") if (tracking and isinstance(tracking, dict)) else "",
+        "vehicle_type": tracking.get("vehicle_type") if (tracking and isinstance(tracking, dict)) else "",
+        "pickup_address": sr.address or "",
+        "drop_address": sr.drop_address or "",
+        "drop_contact_name": sr.drop_contact_name or "",
+        "drop_contact_phone": sr.drop_contact_phone if has_full_access else "",
+        "fare_breakdown": getattr(sr, "fare_breakdown", None) or {},
+        "quote": quote_obj,
+        "quotation_history": quotation_history,
     }
 
 
@@ -1890,24 +2171,31 @@ class AdminSRListView(APIView):
         from rest_framework.pagination import PageNumberPagination
         from service_requests.models import BookingAssignment
 
-        qs = _sr_qs(request).select_related("customer", "feedback").prefetch_related(
-            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+        qs = _sr_qs(request).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer", "estimation", "estimation__fee").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-created_at")
 
         status_param = request.query_params.get("status")
         category_param = request.query_params.get("service_category")
+        dispatch_status_param = request.query_params.get("dispatch_status")
         search_param = request.query_params.get("search")
 
         if status_param:
             qs = qs.filter(status=status_param)
         if category_param:
             qs = qs.filter(service_category=category_param)
+        if dispatch_status_param:
+            statuses = [s.strip() for s in dispatch_status_param.split(",") if s.strip()]
+            if len(statuses) == 1:
+                qs = qs.filter(dispatch_status=statuses[0])
+            elif len(statuses) > 1:
+                qs = qs.filter(dispatch_status__in=statuses)
         if search_param:
             qs = qs.filter(
                 Q(request_id__icontains=search_param) |
@@ -2011,7 +2299,19 @@ class AdminSRAssignView(APIView):
                 sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name")
 
             sr.save()
-            WorkforceIntegrationService.dispatch_job(sr, notes=notes)
+
+            def _do_dispatch():
+                try:
+                    from service_requests.tasks import async_dispatch_service_request
+                    async_dispatch_service_request.delay(sr.id)
+                except Exception:
+                    try:
+                        from service_requests.tasks import async_dispatch_service_request
+                        async_dispatch_service_request(sr.id)
+                    except Exception as err:
+                        logger.error(f"Manual admin dispatch failed for booking {sr.id}: {err}")
+
+            transaction.on_commit(_do_dispatch)
 
         # Broadcast live tracking update to customer
         try:
@@ -2560,14 +2860,14 @@ class CustomerActiveBookingsListView(APIView):
         allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way", "arrived", "in_progress", "proof_submitted", "unassigned"]
         from django.db.models import Prefetch
         from service_requests.models import BookingAssignment
-        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).select_related("customer", "feedback").prefetch_related(
-            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer", "estimation", "estimation__fee").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).order_by("-id").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(qs, many=True, context={"request": request}).data)
 
@@ -2679,14 +2979,14 @@ class CustomerEligibleBookingsListView(APIView):
         bookings = ServiceRequest.objects.filter(
             query,
             status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
-        ).select_related("customer", "feedback").prefetch_related(
-            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+        ).select_related("customer", "feedback", "estimation", "estimation__fee").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer", "estimation", "estimation__fee").order_by("created_at")),
             "child_requests__reschedule_requests",
             "child_requests__work_extensions",
             Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
             Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
             Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
-            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
+            Prefetch("assignments", queryset=BookingAssignment.objects.filter(status__in=["accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "closed"]).order_by("-id")),
         ).exclude(refund_requests__isnull=False).order_by("-created_at").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(bookings, many=True, context={"request": request}).data)
 
@@ -3592,7 +3892,7 @@ class CustomerBookingMessagesView(APIView):
     docstring for why this doesn't attempt push/websockets or phone-number
     masking (X-09's other half).
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def _get_booking(self, pk, identifier):
         sr_id = pk or identifier
@@ -3604,7 +3904,22 @@ class CustomerBookingMessagesView(APIView):
             return None
 
     def _check_owner(self, sr, request):
-        return sr.customer_id == request.user.id or getattr(request.user, "role", "").upper() == "ADMIN"
+        provided_token = request.data.get("token") or request.query_params.get("token") or request.headers.get("X-Tracking-Token")
+        if provided_token and sr.tracking_token:
+            if str(sr.tracking_token).strip().lower() == str(provided_token).strip().lower():
+                if not _tracking_token_is_expired(sr):
+                    return True
+
+        if request.user and request.user.is_authenticated:
+            if getattr(request.user, "role", "").upper() == "ADMIN" or getattr(request.user, "is_superuser", False):
+                return True
+            if sr.customer_id and sr.customer_id == request.user.id:
+                return True
+            if request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower():
+                return True
+            if request.user.phone and sr.phone and request.user.phone.strip()[-10:] == sr.phone.strip()[-10:]:
+                return True
+        return False
 
     def get(self, request, pk=None, identifier=None):
         sr = self._get_booking(pk, identifier)
@@ -3631,11 +3946,17 @@ class CustomerBookingMessagesView(APIView):
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message cannot be empty."}, status_code=400)
         if len(body) > 2000:
             return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "Message is too long (max 2000 characters)."}, status_code=400)
+        sender_user = request.user if (request.user and request.user.is_authenticated) else None
+        sender_name = (
+            sr.customer_name or
+            (request.user.get_full_name() if (request.user and request.user.is_authenticated) else None) or
+            "Customer"
+        )
         msg = BookingMessage.objects.create(
             booking=sr,
             sender_persona=BookingMessage.SenderPersona.CUSTOMER,
-            sender_name=sr.customer_name or request.user.get_full_name() or "Customer",
-            sender_user=request.user,
+            sender_name=sender_name,
+            sender_user=sender_user,
             body=body,
         )
         return _standard_response(success=True, data=BookingMessageSerializer(msg).data, status_code=201)
@@ -3903,15 +4224,27 @@ class CustomerQuoteDecideView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, token):
+        decision = (request.data.get("decision") or request.data.get("action") or "").strip().upper()
+        if decision in ["ACCEPT", "APPROVED"]:
+            decision = "CUSTOMER_ACCEPTED"
+        elif decision in ["REQUEST_CHANGES", "REQUESTED_CHANGES", "CHANGES_REQUESTED"]:
+            decision = "CHANGE_REQUESTED"
+        elif decision in ["DECLINE", "REJECTED"]:
+            decision = "DECLINED"
+
         try:
-            quote = PaintingQuote.objects.get(customer_decision_token=token)
-        except PaintingQuote.DoesNotExist:
-            return _error("Quotation not found.", 404)
+            quote = PaintingQuote.objects.filter(customer_decision_token=token).first() or PaintingQuote.objects.filter(quote_number=token).first()
+        except Exception:
+            quote = None
+
+        if not quote:
+            wf_res = WorkforceIntegrationService.decide_quote(token, decision, request.data)
+            if wf_res.get("success"):
+                return _success(message=wf_res.get("message", "Quotation decision submitted successfully."))
+            return _error(wf_res.get("message", "Quotation not found."), 404)
 
         if quote.status in [PaintingQuote.Status.APPROVED, PaintingQuote.Status.SUPERSEDED, PaintingQuote.Status.DECLINED]:
             return _error(f"Cannot perform decision. Quotation is already in state: {quote.status}.", 400)
-
-        decision = (request.data.get("decision") or "").strip().upper()
         if decision == "CUSTOMER_ACCEPTED":
             with transaction.atomic():
                 quote.status = PaintingQuote.Status.APPROVED
@@ -4347,88 +4680,394 @@ class AdminQuoteActionView(APIView):
 class CustomerQuotePDFView(APIView):
     """
     GET /api/booking/quote/<str:token>/pdf/
-    Generates and returns a PDF receipt/quotation for the customer.
+    GET /api/booking/<int:booking_id>/quote/pdf/
+    GET /api/booking/<str:identifier>/quote/pdf/
+    Generates and returns an official PDF quotation for the customer.
     """
     permission_classes = [permissions.AllowAny]
 
-    def get(self, request, token):
-        try:
-            quote = PaintingQuote.objects.get(customer_decision_token=token)
-        except PaintingQuote.DoesNotExist:
+    def get(self, request, token=None, booking_id=None, identifier=None):
+        lookup_key = str(token or booking_id or identifier or "").strip()
+        if not lookup_key:
             from django.http import HttpResponse
-            return HttpResponse("Quotation not found.", status=404)
+            return HttpResponse("Quotation identifier required.", status=400)
 
+        quote_data = None
+        customer_info = {}
+
+        # 1. Try to fetch from workforce_quote / WorkforceIntegrationService
+        try:
+            from workforce_integration.services import WorkforceIntegrationService
+            from django.db import connection
+
+            base_qnum = lookup_key.split('-V')[0].split('-v')[0]
+            v_target = None
+            if '-V' in lookup_key.upper():
+                parts = lookup_key.upper().split('-V')
+                if len(parts) > 1 and parts[1].isdigit():
+                    v_target = int(parts[1])
+
+            with connection.cursor() as cursor:
+                # Try finding quote_id directly or by job/token/versioned quote_number
+                if v_target is not None:
+                    sql = """
+                        SELECT id, job_id, quote_number, decision_token 
+                        FROM workforce_quote 
+                        WHERE (quote_number = %s OR quote_number = %s) 
+                          AND quote_version = %s
+                        ORDER BY id DESC LIMIT 1
+                    """
+                    cursor.execute(sql, [lookup_key, base_qnum, v_target])
+                else:
+                    sql = """
+                        SELECT id, job_id, quote_number, decision_token 
+                        FROM workforce_quote 
+                        WHERE decision_token = %s 
+                           OR quote_number = %s 
+                           OR quote_number = %s
+                           OR CAST(id AS TEXT) = %s 
+                           OR CAST(job_id AS TEXT) = %s
+                        ORDER BY id DESC LIMIT 1
+                    """
+                    cursor.execute(sql, [lookup_key, lookup_key, base_qnum, lookup_key, lookup_key])
+
+                row = cursor.fetchone()
+                if row:
+                    qid = row[0]
+                    quote_data = WorkforceIntegrationService._build_quote_dict_from_db(qid)
+                    if row[1]:
+                        sr = ServiceRequest.objects.filter(pk=row[1]).first()
+                        if sr:
+                            customer_info = {
+                                "name": sr.customer_name or (sr.customer.get_full_name() if sr.customer else ""),
+                                "phone": sr.phone or "",
+                                "email": sr.email or "",
+                                "address": sr.address or "",
+                                "request_id": sr.request_id or f"SR{sr.id}",
+                            }
+        except Exception as e:
+            logger.warning(f"Error querying workforce_quote for PDF {lookup_key}: {e}")
+
+        # 2. Try looking up by ServiceRequest request_id / ID if not yet resolved
+        if not quote_data:
+            sr = None
+            if lookup_key.isdigit():
+                sr = ServiceRequest.objects.filter(pk=int(lookup_key)).first()
+            if not sr:
+                sr = ServiceRequest.objects.filter(request_id__iexact=lookup_key).first()
+
+            if sr:
+                customer_info = {
+                    "name": sr.customer_name or (sr.customer.get_full_name() if sr.customer else ""),
+                    "phone": sr.phone or "",
+                    "email": sr.email or "",
+                    "address": sr.address or "",
+                    "request_id": sr.request_id or f"SR{sr.id}",
+                }
+                try:
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT id FROM workforce_quote 
+                            WHERE job_id = %s OR quote_number = %s 
+                            ORDER BY id DESC LIMIT 1
+                        """, [sr.id, sr.request_id])
+                        r = cursor.fetchone()
+                        if r:
+                            quote_data = WorkforceIntegrationService._build_quote_dict_from_db(r[0])
+                except Exception as ex:
+                    logger.warning(f"Error fetching quote by sr for PDF {lookup_key}: {ex}")
+
+        # 3. Fallback to legacy PaintingQuote
+        if not quote_data:
+            pq = PaintingQuote.objects.filter(
+                Q(customer_decision_token=lookup_key) | Q(quote_number=lookup_key) | Q(id=int(lookup_key) if lookup_key.isdigit() else -1)
+            ).first()
+            if pq:
+                quote_data = {
+                    "quote_number": pq.quote_number,
+                    "quote_version": pq.quote_version,
+                    "title": f"Quotation for {pq.property_type or 'Service'}",
+                    "service_name": pq.property_type or "Painting & Surface Coating",
+                    "status": pq.status or "ACCEPTED",
+                    "total_paintable_area": pq.total_paintable_area,
+                    "total_area": pq.total_paintable_area,
+                    "subtotal": float(pq.subtotal or 0),
+                    "discount_amount": float(pq.discount or 0),
+                    "tax_amount": float(pq.tax or 0),
+                    "total_amount": float(pq.grand_total or 0),
+                    "advance_amount": float(pq.advance_amount or 0),
+                    "balance_amount": float(pq.balance_amount or 0),
+                    "valid_until": pq.valid_until.isoformat() if pq.valid_until else None,
+                    "items": [
+                        {
+                            "name": it.description,
+                            "quantity": float(it.quantity or 1),
+                            "unit": "sqft",
+                            "unit_price": float(it.final_rate or 0),
+                            "total_amount": float(it.amount or 0),
+                        }
+                        for it in pq.items.all()
+                    ],
+                    "measurements": [
+                        {
+                            "name": m.area_name or "Area",
+                            "length": float(m.length or 0),
+                            "width": float(m.width or 0),
+                            "height": float(m.height or 0) if m.height else None,
+                            "calculated_area": float(m.area or 0),
+                        }
+                        for m in getattr(pq, "measurements", []).all() if hasattr(pq, "measurements")
+                    ] if hasattr(pq, "measurements") else [],
+                }
+                if pq.booking:
+                    customer_info = {
+                        "name": pq.booking.customer_name or "",
+                        "phone": pq.booking.phone or "",
+                        "email": pq.booking.email or "",
+                        "address": pq.booking.address or "",
+                        "request_id": pq.booking.request_id or "",
+                    }
+
+        if not quote_data:
+            from django.http import HttpResponse
+            return HttpResponse("Quotation not found for the specified identifier.", status=404)
+
+        # Generate PDF using ReportLab
+        from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
+        from reportlab.lib import colors
         from django.http import HttpResponse
         import io
+        import datetime
 
         buffer = io.BytesIO()
-        p = canvas.Canvas(buffer)
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
 
-        # Draw header
-        p.setFont("Helvetica-Bold", 18)
-        p.drawString(100, 750, "CalTrack Painting Service Quotation")
-        p.setFont("Helvetica", 10)
-        p.drawString(100, 735, f"Date generated: {quote.created_at.strftime('%d/%m/%Y %H:%M')}")
-        
-        # Meta info
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(100, 700, "Quotation Summary")
-        p.setFont("Helvetica", 10)
-        p.drawString(100, 680, f"Quote Number: {quote.quote_number} (v{quote.quote_version})")
-        p.drawString(100, 665, f"Property Type: {quote.property_type or 'Residential'}")
-        p.drawString(100, 650, f"Total Paintable Area: {quote.total_paintable_area} sq.ft")
-        p.drawString(100, 635, f"Warranty: {quote.warranty or 'No Warranty'}")
-        p.drawString(100, 620, f"Validity: {quote.valid_until.strftime('%d/%m/%Y') if quote.valid_until else 'N/A'}")
-        
-        # Draw items header
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(100, 580, "Line Items")
-        y = 560
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(100, y, "Description")
-        p.drawString(350, y, "Qty")
-        p.drawString(400, y, "Rate")
-        p.drawString(480, y, "Amount")
-        
-        p.setFont("Helvetica", 9)
-        for item in quote.items.all():
-            y -= 20
-            p.drawString(100, y, item.description[:45])
-            p.drawString(350, y, str(item.quantity))
-            p.drawString(400, y, f"Rs. {item.final_rate}")
-            p.drawString(480, y, f"Rs. {item.amount}")
-            if y < 100:
-                p.showPage()
-                y = 750
+        # ── Header Banner ──
+        p.setFillColor(colors.HexColor("#312E81"))  # Indigo 900
+        p.rect(0, height - 75, width, 75, fill=1, stroke=0)
 
-        # Totals
-        y -= 30
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(350, y, "Subtotal:")
-        p.drawString(480, y, f"Rs. {quote.subtotal}")
-        y -= 15
-        p.drawString(350, y, "Discount:")
-        p.drawString(480, y, f"Rs. {quote.discount}")
-        y -= 15
-        p.drawString(350, y, "Tax (GST):")
-        p.drawString(480, y, f"Rs. {quote.tax}")
-        y -= 20
+        p.setFillColor(colors.white)
+        p.setFont("Helvetica-Bold", 20)
+        p.drawString(45, height - 42, "SEVO")
+        p.setFont("Helvetica", 10)
+        p.drawString(45, height - 58, "Official Service Estimation & Quotation")
+
+        q_num = quote_data.get("quote_number") or quote_data.get("raw_quote_number") or "QUOTE"
         p.setFont("Helvetica-Bold", 13)
-        p.drawString(350, y, "Grand Total:")
-        p.drawString(480, y, f"Rs. {quote.grand_total}")
-        
-        # Split details
-        if quote.advance_amount > 0 and quote.balance_amount > 0:
-            y -= 25
-            p.setFont("Helvetica", 10)
-            p.drawString(100, y, f"Payment Split: 50% Advance (Rs. {quote.advance_amount}) + 50% Balance (Rs. {quote.balance_amount})")
+        p.drawRightString(width - 45, height - 42, f"#{q_num}")
+        p.setFont("Helvetica", 9)
+        v_num = quote_data.get("quote_version") or quote_data.get("version") or 1
+        p.drawRightString(width - 45, height - 58, f"Version {v_num} | Status: {str(quote_data.get('status') or '').replace('_', ' ')}")
+
+        y = height - 105
+
+        # ── Two Columns: Customer Info & Quote Summary ──
+        # Left Box (Customer Info)
+        p.setFillColor(colors.HexColor("#F8FAFC"))
+        p.roundRect(45, y - 85, 250, 80, 6, fill=1, stroke=0)
+        p.setFillColor(colors.HexColor("#475569"))
+        p.setFont("Helvetica-Bold", 8)
+        p.drawString(55, y - 16, "CUSTOMER & SERVICE DETAILS")
+        p.setFillColor(colors.HexColor("#0F172A"))
+        p.setFont("Helvetica-Bold", 10)
+        c_name = customer_info.get("name") or "Valued Customer"
+        p.drawString(55, y - 30, c_name[:35])
+        p.setFont("Helvetica", 8.5)
+        c_phone = customer_info.get("phone") or ""
+        c_email = customer_info.get("email") or ""
+        contact_str = f"Phone: {c_phone}" + (f" | {c_email}" if c_email else "")
+        p.drawString(55, y - 44, contact_str[:42])
+        c_addr = customer_info.get("address") or "Service site address on file"
+        p.drawString(55, y - 58, c_addr[:45])
+        if customer_info.get("request_id"):
+            p.drawString(55, y - 70, f"Booking Ref: {customer_info['request_id']}")
+
+        # Right Box (Quotation Details)
+        p.setFillColor(colors.HexColor("#F8FAFC"))
+        p.roundRect(width - 45 - 250, y - 85, 250, 80, 6, fill=1, stroke=0)
+        p.setFillColor(colors.HexColor("#475569"))
+        p.setFont("Helvetica-Bold", 8)
+        p.drawString(width - 45 - 240, y - 16, "QUOTATION METADATA")
+        p.setFillColor(colors.HexColor("#0F172A"))
+        p.setFont("Helvetica", 8.5)
+        p.drawString(width - 45 - 240, y - 30, f"Service: {quote_data.get('service_name') or quote_data.get('title') or 'Consultation'}"[:38])
+        valid_until = quote_data.get("valid_until")
+        if valid_until:
+            if isinstance(valid_until, str) and "T" in valid_until:
+                valid_until = valid_until.split("T")[0]
+            p.drawString(width - 45 - 240, y - 44, f"Valid Until: {valid_until}")
+        tot_area = quote_data.get("total_area") or quote_data.get("total_paintable_area") or 0
+        if tot_area:
+            p.drawString(width - 45 - 240, y - 58, f"Total Area: {tot_area} sq.ft")
+        p.drawString(width - 45 - 240, y - 70, f"Date Issued: {datetime.date.today().strftime('%d-%b-%Y')}")
+
+        y = y - 110
+
+        # ── Scope of Work / Line Items Table ──
+        items = quote_data.get("items") or []
+        p.setFillColor(colors.HexColor("#4338CA"))
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(45, y, "SCOPE OF WORK & LINE ITEMS")
+        y -= 14
+
+        # Table Header
+        p.setFillColor(colors.HexColor("#EEF2FF"))
+        p.roundRect(45, y - 16, width - 90, 18, 4, fill=1, stroke=0)
+        p.setFillColor(colors.HexColor("#312E81"))
+        p.setFont("Helvetica-Bold", 8.5)
+        p.drawString(55, y - 12, "Description")
+        p.drawString(width - 240, y - 12, "Qty")
+        p.drawString(width - 180, y - 12, "Rate (Rs.)")
+        p.drawString(width - 100, y - 12, "Amount (Rs.)")
+
+        y -= 22
+        p.setFont("Helvetica", 8.5)
+        for it in items:
+            p.setFillColor(colors.HexColor("#1E293B"))
+            desc = it.get("name") or it.get("description") or "Service Execution"
+            qty_str = f"{it.get('quantity', 1)} {it.get('unit', 'sqft')}"
+            rate_val = float(it.get("unit_price") or it.get("rate") or 0)
+            amt_val = float(it.get("total_amount") or it.get("amount") or (it.get("quantity", 1) * rate_val))
+
+            p.drawString(55, y, desc[:42])
+            p.drawString(width - 240, y, qty_str)
+            p.drawString(width - 180, y, f"{rate_val:,.2f}")
+            p.drawRightString(width - 55, y, f"{amt_val:,.2f}")
+
+            # Light divider
+            p.setStrokeColor(colors.HexColor("#E2E8F0"))
+            p.setLineWidth(0.5)
+            p.line(45, y - 4, width - 45, y - 4)
+
+            y -= 16
+            if y < 150:
+                p.showPage()
+                y = height - 50
+
+        # ── Measurements Breakdown Table ──
+        measurements = quote_data.get("measurements") or []
+        if measurements:
+            y -= 12
+            p.setFillColor(colors.HexColor("#4338CA"))
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(45, y, "MEASUREMENTS BREAKDOWN")
+            y -= 14
+
+            p.setFillColor(colors.HexColor("#F1F5F9"))
+            p.roundRect(45, y - 16, width - 90, 18, 4, fill=1, stroke=0)
+            p.setFillColor(colors.HexColor("#334155"))
+            p.setFont("Helvetica-Bold", 8.5)
+            p.drawString(55, y - 12, "Area / Section")
+            p.drawString(width - 240, y - 12, "Dimensions (L x W x H)")
+            p.drawString(width - 100, y - 12, "Calculated Area")
+
+            y -= 22
+            p.setFont("Helvetica", 8.5)
+            for m in measurements:
+                p.setFillColor(colors.HexColor("#334155"))
+                m_name = m.get("name") or m.get("area_name") or "Area"
+                l, w, h = m.get("length"), m.get("width"), m.get("height")
+                dim_str = f"{l}ft x {w}ft" + (f" x {h}ft" if h else "")
+                calc_area = float(m.get("calculated_area") or m.get("final_area") or m.get("area") or 0)
+
+                p.drawString(55, y, m_name[:35])
+                p.drawString(width - 240, y, dim_str)
+                p.drawRightString(width - 55, y, f"{calc_area:,.2f} sq.ft")
+
+                p.setStrokeColor(colors.HexColor("#E2E8F0"))
+                p.setLineWidth(0.5)
+                p.line(45, y - 4, width - 45, y - 4)
+                y -= 15
+
+        # ── Financial Summary ──
+        # ── Financial Summary ──
+        subtotal = float(quote_data.get("subtotal") or quote_data.get("subtotal_amount") or 0)
+        discount = float(quote_data.get("discount_amount") or 0)
+        tax = float(quote_data.get("tax_amount") or 0)
+        grand_total = float(quote_data.get("total_amount") or quote_data.get("grand_total") or 0)
+        inspection_fee_adj = float(quote_data.get("inspection_fee_adjusted") or 0)
+        net_payable = float(quote_data.get("net_payable") or (grand_total - inspection_fee_adj if inspection_fee_adj > 0 else grand_total))
+        adv_pct = float(quote_data.get("advance_percent") or 0)
+        adv_amt = float(quote_data.get("advance_amount") or (net_payable * (adv_pct / 100.0) if adv_pct > 0 else 0.0))
+        bal_amt = float(quote_data.get("balance_amount") or (net_payable - adv_amt))
+
+        box_height = 125 if inspection_fee_adj > 0 else 110
+        y -= 15
+        if (y - box_height) < 40:
+            p.showPage()
+            y = height - 50
+
+        p.setFillColor(colors.HexColor("#F8FAFC"))
+        p.roundRect(width - 45 - 260, y - box_height, 260, box_height, 6, fill=1, stroke=0)
+
+        p.setFillColor(colors.HexColor("#475569"))
+        p.setFont("Helvetica", 8.5)
+        cur_y = y - 16
+        p.drawString(width - 45 - 245, cur_y, "Subtotal:")
+        p.drawRightString(width - 55, cur_y, f"Rs. {subtotal:,.2f}")
+
+        if discount > 0:
+            cur_y -= 14
+            p.drawString(width - 45 - 245, cur_y, "Discount:")
+            p.drawRightString(width - 55, cur_y, f"- Rs. {discount:,.2f}")
+
+        cur_y -= 14
+        p.drawString(width - 45 - 245, cur_y, "GST / Taxes (18%):")
+        p.drawRightString(width - 55, cur_y, f"Rs. {tax:,.2f}")
+
+        if inspection_fee_adj > 0:
+            cur_y -= 14
+            p.setFillColor(colors.HexColor("#16A34A"))
+            p.drawString(width - 45 - 245, cur_y, "Consultation Fee Adjusted:")
+            p.drawRightString(width - 55, cur_y, f"- Rs. {inspection_fee_adj:,.2f}")
+
+        cur_y -= 8
+        p.setStrokeColor(colors.HexColor("#CBD5E1"))
+        p.setLineWidth(1)
+        p.line(width - 45 - 245, cur_y, width - 55, cur_y)
+
+        cur_y -= 14
+        p.setFillColor(colors.HexColor("#0F172A"))
+        p.setFont("Helvetica-Bold", 10.5)
+        p.drawString(width - 45 - 245, cur_y, "Net Payable:")
+        p.drawRightString(width - 55, cur_y, f"Rs. {net_payable:,.2f}")
+
+        cur_y -= 14
+        p.setFont("Helvetica", 7.8)
+        p.setFillColor(colors.HexColor("#4338CA"))
+        if adv_pct > 0 or adv_amt > 0:
+            p.drawString(width - 45 - 245, cur_y, f"Advance ({int(adv_pct)}%): Rs. {adv_amt:,.2f}")
+            cur_y -= 11
+            p.drawString(width - 45 - 245, cur_y, f"Balance on Completion: Rs. {bal_amt:,.2f}")
+        else:
+            p.drawString(width - 45 - 245, cur_y, f"Payment: 100% on Completion (Rs. {net_payable:,.2f})")
+
+        # ── Terms & Notes ──
+        p.setFillColor(colors.HexColor("#64748B"))
+        p.setFont("Helvetica-Bold", 8)
+        p.drawString(45, y - 16, "TERMS & CONDITIONS")
+        p.setFont("Helvetica", 7.5)
+        p.drawString(45, y - 28, "1. This quotation is generated based on site consultation measurements.")
+        p.drawString(45, y - 38, "2. Material charges and GST (18%) are inclusive unless stated otherwise.")
+        p.drawString(45, y - 48, "3. Work execution begins following customer approval and advance payment.")
+        p.drawString(45, y - 58, "4. Any additional work beyond this scope will require a revision or extension.")
+
+        # Footer
+        p.setFont("Helvetica-Oblique", 7.5)
+        p.setFillColor(colors.HexColor("#94A3B8"))
+        p.drawString(45, 25, "Thank you for choosing SEVO. For assistance, contact support.")
+        p.drawRightString(width - 45, 25, f"Generated: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
         p.showPage()
         p.save()
 
         buffer.seek(0)
         response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="Quote-{quote.quote_number}.pdf"'
+        is_attachment = request.GET.get("download") in ["1", "true", "yes"] or request.GET.get("attachment") in ["1", "true", "yes"]
+        disp_type = "attachment" if is_attachment else "inline"
+        response["Content-Disposition"] = f'{disp_type}; filename="Quotation-{q_num}.pdf"'
         return response
 

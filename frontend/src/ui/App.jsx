@@ -68,6 +68,28 @@ const VegetableStockAdminPage = lazy(() =>
   import("./pages/inventory/VegetableStockAdminPage.jsx").then(m => ({ default: m.VegetableStockAdminPage || m.default }))
 )
 
+const VegetableAdminHomePage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminHomePage.jsx").then(m => ({ default: m.default || m.VegetableAdminHomePage }))
+)
+const VegetableAdminOrdersPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminOrdersPage.jsx").then(m => ({ default: m.default || m.VegetableAdminOrdersPage }))
+)
+const VegetableAdminReturnsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminReturnsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminReturnsPage }))
+)
+const VegetableAdminClaimsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminClaimsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminClaimsPage }))
+)
+const VegetableAdminCatalogUploadsPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCatalogUploadsPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCatalogUploadsPage }))
+)
+const VegetableAdminCategoriesApprovalPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesApprovalPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesApprovalPage }))
+)
+const VegetableAdminCategoriesPage = lazy(() =>
+  import("./pages/vegetables/VegetableAdminCategoriesPage.jsx").then(m => ({ default: m.default || m.VegetableAdminCategoriesPage }))
+)
+
 const CatalogDashboardPage = lazy(() =>
   import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
@@ -137,6 +159,9 @@ const ACInspectionStatusPage = lazy(() =>
 )
 const VegetableFullScreenPage = lazy(() =>
   import("./pages/VegetableFullScreenPage.jsx").then(m => ({ default: m.VegetableFullScreenPage || m.default }))
+)
+const MarketplacePage = lazy(() =>
+  import("./pages/MarketplacePage.jsx").then(m => ({ default: m.MarketplacePage || m.default }))
 )
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
@@ -371,6 +396,10 @@ export function App() {
           <Route path="/vegetables" element={<VegetableFullScreenPage />} />
           <Route path="/vegetable" element={<VegetableFullScreenPage />} />
           <Route path="/fresh-vegetables" element={<VegetableFullScreenPage />} />
+          <Route path={routes.marketplace} element={<MarketplacePage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
+          <Route path="/mart" element={<MarketplacePage />} />
+          <Route path="/seller-hub" element={<MarketplacePage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.logistics_booking} element={<LogisticsBookingPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
@@ -524,6 +553,13 @@ export function App() {
               <Route path={routes.admin_feedback} element={<RequireModule module="reviews"><FeedbackManagementPage /></RequireModule>} />
               <Route path={routes.inventory_vegetables} element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
               <Route path="/admin/vegetable-stock" element={<RequireModule module="inventory"><VegetableStockAdminPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_home} element={<RequireModule module="inventory"><VegetableAdminHomePage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_orders} element={<RequireModule module="inventory"><VegetableAdminOrdersPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_returns} element={<RequireModule module="inventory"><VegetableAdminReturnsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_claims} element={<RequireModule module="inventory"><VegetableAdminClaimsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_catalog_uploads} element={<RequireModule module="inventory"><VegetableAdminCatalogUploadsPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories_approval} element={<RequireModule module="inventory"><VegetableAdminCategoriesApprovalPage /></RequireModule>} />
+              <Route path={routes.vegetable_admin_categories} element={<RequireModule module="inventory"><VegetableAdminCategoriesPage /></RequireModule>} />
             </Route>
 
             {/* Homepage Builder edits Customer Web content that is public to

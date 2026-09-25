@@ -12,7 +12,7 @@ Rules:
   - All querysets scoped to customer / admin personas
   - Clean domain exceptions via rest_framework.exceptions
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import Q, F
 from django.utils import timezone
@@ -1049,6 +1049,8 @@ def list_admin_complaints(admin_actor, filters=None, company=None):
 # built-in address/drop_address pair). See TripStop's docstring for why
 # this is additive rather than a replacement of those two fields.
 LOGISTICS_STOP_CATEGORIES = {"goods_transport_truck", "goods_transport_two_wheeler", "goods_transport", "packers_movers"}
+MAX_INTERMEDIATE_WAYPOINTS = 3
+MAX_TOTAL_TRIP_STOPS = 5
 
 
 def set_trip_stops(booking, customer, stops):
@@ -1064,32 +1066,127 @@ def set_trip_stops(booking, customer, stops):
     supplied, so the ordering a customer submits is always exactly what
     gets stored.
     """
-    if booking.customer_id != customer.id and getattr(customer, "role", "").upper() != "ADMIN":
+    is_admin = getattr(customer, "role", "").upper() == "ADMIN" or getattr(customer, "is_superuser", False)
+    if booking.customer_id != customer.id and not is_admin:
         raise PermissionError("You do not have permission to edit stops for this booking.")
     if booking.service_category not in LOGISTICS_STOP_CATEGORIES:
         raise ValueError("Multi-stop routing is only available for goods transport and packers & movers bookings.")
-    if len(stops) > 20:
-        raise ValueError("A single trip cannot have more than 20 stops.")
+    if len(stops) > MAX_TOTAL_TRIP_STOPS:
+        raise ValueError(f"A single trip cannot have more than {MAX_INTERMEDIATE_WAYPOINTS} intermediate stops ({MAX_TOTAL_TRIP_STOPS} total stops).")
+
+    booking_status = (getattr(booking, "status", "") or "").lower()
+    has_assigned_driver = getattr(booking, "assigned_employee_id", None) is not None
+    if not is_admin and (
+        booking_status in [
+            "assigned", "accepted", "on_the_way", "en_route", "arrived", "in_progress", "completed", "cancelled"
+        ] or has_assigned_driver
+    ):
+        raise ValueError("Route cannot be modified once a driver has been assigned or accepted the trip.")
+
+    from .address_service import AddressService
+
     for s in stops:
-        if not (s.get("address") or "").strip():
+        addr = (s.get("address") or "").strip()
+        if not addr:
             raise ValueError("Every stop requires an address.")
+        lat = s.get("latitude")
+        lng = s.get("longitude")
+
+        # In a distance-priced GT route, coordinates are strictly mandatory.
+        # If omitted, attempt authoritative geocoding from the address.
+        if lat is None or lng is None:
+            geo = AddressService.resolve_address_coordinates(street_address=addr)
+            if geo and geo.get("latitude") is not None and geo.get("longitude") is not None:
+                lat = geo["latitude"]
+                lng = geo["longitude"]
+                s["latitude"] = lat
+                s["longitude"] = lng
+            else:
+                raise ValueError(
+                    f"Stop '{addr}' does not have valid coordinates and geocoding could not resolve them. "
+                    "Valid latitude and longitude are required for route stops."
+                )
+
+        try:
+            lat_d = Decimal(str(lat))
+            if not (-90 <= lat_d <= 90):
+                raise ValueError(f"Stop latitude {lat_d} is outside valid range (-90 to 90).")
+        except (InvalidOperation, TypeError):
+            raise ValueError(f"Invalid latitude value: {lat}")
+
+        try:
+            lng_d = Decimal(str(lng))
+            if not (-180 <= lng_d <= 180):
+                raise ValueError(f"Stop longitude {lng_d} is outside valid range (-180 to 180).")
+        except (InvalidOperation, TypeError):
+            raise ValueError(f"Invalid longitude value: {lng}")
 
     with transaction.atomic():
-        TripStop.objects.filter(booking=booking).delete()
-        created = []
+        existing_stops = list(TripStop.objects.filter(booking=booking).order_by("sequence"))
+        existing_by_seq = {s.sequence: s for s in existing_stops}
+        existing_by_id = {s.id: s for s in existing_stops}
+
+        result = []
+        used_ids = set()
+
         for i, s in enumerate(stops, start=1):
-            created.append(TripStop.objects.create(
-                booking=booking,
-                sequence=i,
-                stop_type=(s.get("stop_type") or TripStop.StopType.WAYPOINT).upper(),
-                address=s["address"].strip(),
-                contact_name=(s.get("contact_name") or "").strip(),
-                contact_phone=(s.get("contact_phone") or "").strip(),
-                latitude=s.get("latitude"),
-                longitude=s.get("longitude"),
-                notes=(s.get("notes") or "").strip(),
-            ))
-    return created
+            stop_id = s.get("id") or s.get("stop_id")
+            stop_obj = None
+            if stop_id and int(stop_id) in existing_by_id:
+                stop_obj = existing_by_id[int(stop_id)]
+            elif i in existing_by_seq and existing_by_seq[i].id not in used_ids:
+                stop_obj = existing_by_seq[i]
+
+            stop_type = (s.get("stop_type") or TripStop.StopType.WAYPOINT).upper()
+            address = s["address"].strip()
+            contact_name = (s.get("contact_name") or "").strip()
+            contact_phone = (s.get("contact_phone") or "").strip()
+            latitude = s.get("latitude")
+            longitude = s.get("longitude")
+            notes = (s.get("notes") or "").strip()
+
+            if stop_obj:
+                stop_obj.sequence = i
+                stop_obj.stop_type = stop_type
+                stop_obj.address = address
+                stop_obj.contact_name = contact_name
+                stop_obj.contact_phone = contact_phone
+                stop_obj.latitude = latitude
+                stop_obj.longitude = longitude
+                stop_obj.notes = notes
+                stop_obj.save(update_fields=[
+                    "sequence", "stop_type", "address", "contact_name",
+                    "contact_phone", "latitude", "longitude", "notes",
+                ])
+                used_ids.add(stop_obj.id)
+                result.append(stop_obj)
+            else:
+                new_stop = TripStop.objects.create(
+                    booking=booking,
+                    sequence=i,
+                    stop_type=stop_type,
+                    address=address,
+                    contact_name=contact_name,
+                    contact_phone=contact_phone,
+                    latitude=latitude,
+                    longitude=longitude,
+                    notes=notes,
+                )
+                used_ids.add(new_stop.id)
+                result.append(new_stop)
+
+        # Clean up surplus stops that were removed from the route,
+        # but NEVER delete a stop that already has delivery proofs or arrival timestamps recorded.
+        surplus = [s for s in existing_stops if s.id not in used_ids]
+        for surplus_stop in surplus:
+            has_proof = getattr(surplus_stop, "delivery_proofs", None) and surplus_stop.delivery_proofs.exists()
+            has_progress = surplus_stop.arrived_at or surplus_stop.completed_at
+            if not has_proof and not has_progress:
+                surplus_stop.delete()
+            else:
+                logger.info("Preserving historical stop %s with recorded proof/timestamps", surplus_stop.id)
+
+    return result
 
 
 def list_trip_stops(booking):

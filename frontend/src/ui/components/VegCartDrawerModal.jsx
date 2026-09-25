@@ -20,7 +20,7 @@ export function VegCartDrawerModal({
   setFoodCart,
   selectedFoodSubModule,
   getFoodItemPhoto,
-  deliveryAddress = "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu",
+  deliveryAddress = "Select Location",
   deliveryAddressType = "Home",
   onChangeAddress,
   isServiceAvailable = true,

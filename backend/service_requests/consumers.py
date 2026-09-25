@@ -25,10 +25,21 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     Identifier can be ServiceRequest.request_id (e.g. SR-0299), primary key, or tracking_token UUID.
     """
 
+    @classmethod
+    async def encode_json(cls, content):
+        from django.core.serializers.json import DjangoJSONEncoder
+        return json.dumps(content, cls=DjangoJSONEncoder)
+
     async def connect(self):
         try:
-            self.identifier = self.scope["url_route"]["kwargs"].get("identifier", "").strip()
-            self.query_string = self.scope.get("query_string", b"").decode("utf-8")
+            kwargs = self.scope.get("url_route", {}).get("kwargs", {}) if isinstance(self.scope.get("url_route"), dict) else {}
+            self.identifier = kwargs.get("identifier", "").strip()
+            if not self.identifier:
+                path = self.scope.get("path", "").strip("/")
+                parts = path.split("/")
+                if len(parts) >= 3 and parts[0] == "ws" and parts[1] in ["tracking", "live", "live-location"]:
+                    self.identifier = parts[2].strip()
+            self.query_string = self.scope.get("query_string", b"").decode("utf-8") if isinstance(self.scope.get("query_string"), (bytes, bytearray)) else str(self.scope.get("query_string") or "")
             self.groups_joined = []
 
             if not self.identifier:
@@ -46,6 +57,8 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             self.sr = await self._resolve_service_request(self.identifier)
             if not self.sr:
                 logger.warning(f"WebSocket tracking connection rejected: Booking '{self.identifier}' not found.")
+                await self.accept()
+                await self.send_json({"event": "error", "error": f"Booking '{self.identifier}' not found."})
                 await self.close(code=4004)
                 return
 
@@ -53,6 +66,8 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             is_authorized = await self._is_authorized()
             if not is_authorized:
                 logger.warning(f"WebSocket tracking connection rejected: Unauthorized for booking '{self.identifier}'.")
+                await self.accept()
+                await self.send_json({"event": "error", "error": "Unauthorized or missing valid tracking token."})
                 await self.close(code=4003)
                 return
 
@@ -268,6 +283,69 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
 
         return None
 
+    def _get_authenticated_user_sync(self):
+        user = self.scope.get("user")
+        if user and user.is_authenticated:
+            return user
+
+        from django.conf import settings
+        from django.contrib.auth import get_user_model
+        from rest_framework_simplejwt.tokens import AccessToken
+        import urllib.parse
+        from http.cookies import SimpleCookie
+
+        cookie_name = getattr(settings, "AUTH_COOKIE", "qt_access")
+        raw_token = None
+
+        # 1. From scope['cookies']
+        cookies = self.scope.get("cookies") or {}
+        if cookie_name in cookies:
+            raw_token = cookies[cookie_name]
+
+        # 2. From headers
+        if not raw_token:
+            headers = dict(self.scope.get("headers", []))
+            cookie_header = headers.get(b"cookie", b"").decode("utf-8")
+            if cookie_header:
+                try:
+                    c = SimpleCookie()
+                    c.load(cookie_header)
+                    if cookie_name in c:
+                        raw_token = c[cookie_name].value
+                except Exception:
+                    pass
+
+            if not raw_token:
+                auth_header = headers.get(b"authorization", b"").decode("utf-8")
+                if auth_header.lower().startswith("bearer "):
+                    raw_token = auth_header[7:].strip()
+
+        # 3. From query string
+        if not raw_token and self.query_string:
+            params = urllib.parse.parse_qs(self.query_string)
+            token_candidate = (
+                (params.get("token") or [None])[0]
+                or (params.get("access_token") or [None])[0]
+                or (params.get("jwt") or [None])[0]
+            )
+            if token_candidate and token_candidate.count(".") == 2:
+                raw_token = token_candidate.strip()
+
+        if raw_token:
+            try:
+                token_obj = AccessToken(raw_token)
+                user_id = token_obj.get("user_id")
+                if user_id:
+                    User = get_user_model()
+                    resolved_user = User.objects.filter(pk=user_id, is_active=True).first()
+                    if resolved_user:
+                        self.scope["user"] = resolved_user
+                        return resolved_user
+            except Exception:
+                pass
+
+        return None
+
     @sync_to_async
     def _is_authorized(self):
         if not self.sr:
@@ -276,7 +354,7 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         # Extract token from query string
         import urllib.parse
         from service_requests.views import _tracking_token_is_expired
-        params = urllib.parse.parse_qs(self.query_string)
+        params = urllib.parse.parse_qs(getattr(self, "query_string", ""))
         provided_token = (params.get("token") or [None])[0]
 
         # 1. Authorized via valid, non-expired tracking_token query parameter
@@ -296,7 +374,7 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             return True
 
         # 3. Authorized via authenticated customer ownership, assigned technician, or staff RBAC
-        user = self.scope.get("user")
+        user = self._get_authenticated_user_sync()
         if user and user.is_authenticated:
             from accounts.permissions import is_super_admin, can
             if is_super_admin(user) or can(user, "live_tracking", "view") or can(user, "dispatch", "view"):
@@ -306,18 +384,6 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             if getattr(self.sr, "assigned_employee", None) and getattr(self.sr.assigned_employee, "user_id", None) == user.id:
                 return True
 
-        # Bug found (BLOCKER): this used to have a 4th branch here --
-        # "if self.sr: return True" -- which granted full read access to
-        # ANY booking's live GPS position, technician name/photo, ETA, and
-        # customer address to anyone who could resolve a request_id or PK,
-        # no authentication or tracking token required at all. That
-        # directly contradicted the properly-secured REST sibling serving
-        # the same data (CustomerBookingLiveLocationView), which requires a
-        # matching non-expired tracking token, or an authenticated
-        # owner/admin/assigned-technician. Removed -- this consumer now
-        # uses exactly that same model (also added the matching non-expired
-        # token check to branches 1 and 2 above, which this REST sibling
-        # already enforces but this consumer previously didn't).
         return False
 
     @sync_to_async
@@ -338,7 +404,7 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             return False
 
         import urllib.parse
-        params = urllib.parse.parse_qs(self.query_string)
+        params = urllib.parse.parse_qs(getattr(self, "query_string", ""))
         provided_token = (params.get("token") or [None])[0]
 
         if provided_token and self.sr.tracking_token and str(self.sr.tracking_token).lower() == str(provided_token).strip().lower():
@@ -346,7 +412,7 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         if str(self.identifier).lower() == str(self.sr.tracking_token).lower():
             return True
 
-        user = self.scope.get("user")
+        user = self._get_authenticated_user_sync()
         if user and user.is_authenticated:
             from accounts.permissions import is_super_admin, can
             if is_super_admin(user) or can(user, "live_tracking", "verify") or can(user, "dispatch", "manage"):
@@ -364,7 +430,7 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         from accounts.permissions import is_super_admin, can
         # Refresh from database
         self.sr.refresh_from_db()
-        user = self.scope.get("user")
+        user = self._get_authenticated_user_sync()
         has_full_access = False
         if user and user.is_authenticated and (is_super_admin(user) or can(user, "live_tracking", "view")):
             has_full_access = True

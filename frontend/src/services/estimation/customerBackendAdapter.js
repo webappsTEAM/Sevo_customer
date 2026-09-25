@@ -98,6 +98,8 @@ export const customerBackendAdapter = {
       preferred_time: data.preferred_time || data.scheduledTime || "10:00 AM - 12:00 PM",
       payment_method: data.paymentMethod || "COD",
       job_type: "ESTIMATION",
+      request_kind: "ESTIMATION",
+      catalog_service_id: String(data.catalog_service_id || data.serviceId || data.service_id || data.acDetails?.service_id || "ac-inspection"),
       ac_type: acType,
       ac_brand: acBrand,
       ac_capacity: acCapacity,
