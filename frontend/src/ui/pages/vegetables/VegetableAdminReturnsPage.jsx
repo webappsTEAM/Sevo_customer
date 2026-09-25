@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   RotateCcw, Search, Filter, RefreshCw, AlertCircle, CheckCircle2,
   Clock, X, Check, Eye, DollarSign, Package, User, Phone,
-  ChevronRight, Calendar, AlertTriangle, ArrowRight, ShieldCheck, FileText, CornerDownRight
+  ChevronRight, Calendar, AlertTriangle, ArrowRight, ShieldCheck, FileText, CornerDownRight, History
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 
@@ -40,6 +40,7 @@ export default function VegetableAdminReturnsPage() {
   const [actionStatus, setActionStatus] = useState("APPROVED")
   const [actionResolution, setActionResolution] = useState("REFUND")
   const [actionRefundAmount, setActionRefundAmount] = useState("")
+  const [actionRestockItem, setActionRestockItem] = useState(false)
   const [actionAdminNotes, setActionAdminNotes] = useState("")
   const [submittingAction, setSubmittingAction] = useState(false)
 
@@ -85,6 +86,7 @@ export default function VegetableAdminReturnsPage() {
     setActionStatus(ret.status === "REQUESTED" ? "APPROVED" : ret.status)
     setActionResolution(ret.resolution_action && ret.resolution_action !== "NONE" ? ret.resolution_action : "REFUND")
     setActionRefundAmount(ret.refund_amount > 0 ? String(ret.refund_amount) : "")
+    setActionRestockItem(false)
     setActionAdminNotes("")
 
     try {
@@ -116,6 +118,7 @@ export default function VegetableAdminReturnsPage() {
         status: actionStatus,
         resolution_action: actionStatus === "REJECTED" ? "REJECTED" : actionResolution,
         refund_amount: actionResolution === "REFUND" ? (parseFloat(actionRefundAmount) || 0) : 0,
+        restock_item: actionResolution === "REFUND" ? actionRestockItem : false,
         admin_notes: actionAdminNotes.trim(),
       }
 
@@ -454,6 +457,23 @@ export default function VegetableAdminReturnsPage() {
                       </div>
                     )}
 
+                    {/* Linked Stock Movement Card if Resolved/Recorded */}
+                    {selectedReturn.stock_movement_detail && (
+                      <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 space-y-2">
+                        <h5 className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <History size={14} /> Audited Stock Movement #{selectedReturn.stock_movement_detail.id}
+                        </h5>
+                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400 space-y-1">
+                          <p>• Type: <span className="font-mono font-bold">{selectedReturn.stock_movement_detail.type_display || selectedReturn.stock_movement_detail.type}</span></p>
+                          <p>• Delta: <span className={`font-mono font-bold ${selectedReturn.stock_movement_detail.delta_grams > 0 ? "text-emerald-600" : selectedReturn.stock_movement_detail.delta_grams < 0 ? "text-rose-600" : "text-slate-600"}`}>{selectedReturn.stock_movement_detail.delta_grams > 0 ? `+${selectedReturn.stock_movement_detail.delta_grams}g` : `${selectedReturn.stock_movement_detail.delta_grams}g`}</span></p>
+                          <p>• Balance After: <span className="font-mono font-bold">{selectedReturn.stock_movement_detail.balance_after_grams}g</span></p>
+                          {selectedReturn.stock_movement_detail.reason && (
+                            <p className="text-[10px] text-slate-500 italic mt-1 font-mono">{selectedReturn.stock_movement_detail.reason}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Admin Action Form */}
                     <form onSubmit={handleActionSubmit} className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
                       <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -492,22 +512,54 @@ export default function VegetableAdminReturnsPage() {
                           </div>
 
                           {actionResolution === "REFUND" && (
-                            <div>
-                              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Refund Amount (₹)</label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-2 text-slate-400 font-bold">₹</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={actionRefundAmount}
-                                  onChange={(e) => setActionRefundAmount(e.target.value)}
-                                  className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500"
-                                />
+                            <>
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Refund Amount (₹)</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2 text-slate-400 font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={actionRefundAmount}
+                                    onChange={(e) => setActionRefundAmount(e.target.value)}
+                                    className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500"
+                                  />
+                                </div>
+                                <span className="text-[10px] text-slate-400 mt-1 block">
+                                  * Record-keeping flag only. Mark refund issued via manual provider/cash.
+                                </span>
                               </div>
-                              <span className="text-[10px] text-slate-400 mt-1 block">
-                                * Record-keeping flag only. Mark refund issued via manual provider/cash.
-                              </span>
+
+                              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                                <label className="flex items-start gap-2.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={actionRestockItem}
+                                    onChange={(e) => setActionRestockItem(e.target.checked)}
+                                    className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                                  />
+                                  <div>
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200 block text-xs">
+                                      Restock returned item into live inventory
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                                      Enable if the returned item is in good condition and can be resold. If left unchecked (default for damaged/spoiled produce), a write-off ledger entry will be logged instead.
+                                    </span>
+                                  </div>
+                                </label>
+                              </div>
+                            </>
+                          )}
+
+                          {actionResolution === "REPLACEMENT" && (
+                            <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-[11px] text-blue-700 dark:text-blue-300">
+                              <p className="font-semibold flex items-center gap-1.5">
+                                <Package size={13} /> Stock Consequence:
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-blue-600 dark:text-blue-400">
+                                Resolving as Replacement will validate stock availability and deduct the returned item's quantity ({selectedReturn.item_quantity_grams || "order"}g) from live inventory.
+                              </p>
                             </div>
                           )}
                         </>
