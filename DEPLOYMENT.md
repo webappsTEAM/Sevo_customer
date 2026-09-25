@@ -1,8 +1,8 @@
-# CalTrack Deployment & Operations Guide
+# sevo Deployment & Operations Guide
 
 ## Infrastructure Stack
 
-- **Web Server / Reverse Proxy**: Nginx (`caltrack-nginx.conf`)
+- **Web Server / Reverse Proxy**: Nginx (`sevo-nginx.conf`)
 - **Frontend App**: React + Vite (Static build served via Nginx)
 - **Backend Application**: Django + Gunicorn / Daphne (`quicktims.asgi:application`)
 - **Database**: PostgreSQL (Single-schema with company-level scoping)
@@ -19,7 +19,7 @@ Ensure `.env` contains production variables:
 ```env
 DJANGO_DEBUG=0
 DJANGO_SECRET_KEY=your_production_secret
-DJANGO_ALLOWED_HOSTS=caldimproducts.com,www.caldimproducts.com
+DJANGO_ALLOWED_HOSTS=sevo.co.in,www.sevo.co.in,vendor.sevo.co.in
 DB_NAME=postgres
 DB_USER=postgres
 DB_PASSWORD=your_db_password

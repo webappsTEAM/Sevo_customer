@@ -1,6 +1,6 @@
 /**
  * CustomerTrackingPage.jsx
- * Canonical, Rapido-Style Customer Live Tracking Page for CalTrack.
+ * Canonical, Rapido-Style Customer Live Tracking Page for sevo.
  */
 
 import React, { useState, useEffect, useRef } from "react"
@@ -109,6 +109,24 @@ export function CustomerTrackingPage({
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [copiedPayOtp, setCopiedPayOtp] = useState(false)
 
+  // Multi-service booking (Sept 2026): when this booking is one task of a
+  // multi-service parent Order (data.order_id + sibling_task_count > 1,
+  // both added to the tracking payload -- see
+  // service_requests/views.py::_build_tracking_payload), fetch the sibling
+  // tasks once so this page can show "other services in this booking"
+  // alongside the live map for the currently-tracked task -- the map itself
+  // still tracks one technician at a time, which is the task being viewed.
+  const [siblingTasks, setSiblingTasks] = useState(null)
+  const siblingOrderId = data?.order_id
+  const siblingCount = data?.sibling_task_count || 1
+  useEffect(() => {
+    if (!siblingOrderId || siblingCount <= 1) { setSiblingTasks(null); return }
+    let cancelled = false
+    apiRequest(`/orders/${siblingOrderId}/`)
+      .then((res) => { if (!cancelled && res?.success) setSiblingTasks(res.data) })
+      .catch(() => { /* not the booking owner, or not authenticated -- silently omit the panel */ })
+    return () => { cancelled = true }
+  }, [siblingOrderId, siblingCount])
   // Quotation Management State
   const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
   const [showRequestChangesModal, setShowRequestChangesModal] = useState(false)
@@ -438,6 +456,9 @@ export function CustomerTrackingPage({
               startOtp={startOtp}
               vendorName={vendorName}
               requestId={data?.request_id || activeIdentifier}
+              routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
+                ? { pickup: data?.pickup_location, drop: data?.drop_location }
+                : null}
             />
 
             {/* Unified Floating Overlay Card */}
@@ -934,6 +955,39 @@ export function CustomerTrackingPage({
                   <MapPin size={15} color="#2563eb" style={{ flexShrink: 0, marginTop: 2 }} />
                   <span className="ltp-addr-text">{data?.destination?.address || data?.service_location?.address}</span>
                 </div>
+              </div>
+            )}
+
+            {/* AC Estimation & Quotation banner */}
+            {Boolean(data?.job_type === "ESTIMATION" || data?.estimation || (data?.issue_title && data.issue_title.toLowerCase().includes("inspection"))) && (
+              <div className="ltp-card" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 16 }}>📋</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "#166534", textTransform: "uppercase" }}>
+                    AC Inspection &amp; Estimation
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, color: "#15803d", margin: "0 0 10px 0", lineHeight: 1.4 }}>
+                  Technician will inspect cooling, gas, and electricals on-site. Any repair quotation will be shared digitally for your approval.
+                </p>
+                <a
+                  href={`/ac-inspection/status/${encodeURIComponent(data?.request_id || activeIdentifier)}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 12px",
+                    borderRadius: 8,
+                    background: "#16a34a",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    textDecoration: "none"
+                  }}
+                >
+                  <span>View Diagnostic Timeline &amp; Quotation</span>
+                  <span>→</span>
+                </a>
               </div>
             )}
 

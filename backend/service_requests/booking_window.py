@@ -15,7 +15,7 @@ Asia/Kolkata) via django.utils.timezone, never a naive datetime.now().
 Both values are settings-driven so they can be tuned per environment without a
 code change:
     BOOKING_SAME_DAY_CUTOFF_HOUR  (default 18, i.e. 6 PM local)
-    BOOKING_MIN_LEAD_MINUTES      (default 60)
+    BOOKING_MIN_LEAD_MINUTES      (default 30)
 """
 import datetime
 import logging
@@ -26,7 +26,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 DEFAULT_CUTOFF_HOUR = 18
-DEFAULT_MIN_LEAD_MINUTES = 60
+DEFAULT_MIN_LEAD_MINUTES = 30
 
 # Accepted spellings for a slot, in the order they are tried. The frontend
 # sends 24-hour "HH:MM"; the 12-hour forms are accepted because several of the
@@ -103,14 +103,12 @@ def cutoff_label(service_category=None):
     return f"{display}:00 {suffix}"
 
 
-def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None):
+def validate_booking_slot(preferred_date, preferred_time=None, now=None, service_category=None, service=None):
     """
-    Validate a requested date/slot against the booking window.
+    Validate a requested date/slot against the booking window and service time slot engine.
 
     Returns an error string suitable for showing to a customer, or None when
-    the slot is acceptable. Only same-day bookings are constrained; future
-    dates are always allowed, and an unparseable slot string falls back to the
-    day-level rule rather than rejecting a booking we simply cannot read.
+    the slot is acceptable.
     """
     if preferred_date is None:
         return None
@@ -120,6 +118,24 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
 
     if preferred_date < today:
         return "Preferred date cannot be in the past."
+
+    # If service is passed or resolvable, validate against the authoritative service time slot engine
+    resolved_svc = service
+    if not resolved_svc and service_category:
+        try:
+            from service_requests.services.time_slot_service import resolve_service
+            resolved_svc, _ = resolve_service(service_category)
+        except Exception:
+            resolved_svc = None
+
+    if resolved_svc:
+        try:
+            from service_requests.services.time_slot_service import validate_slot_availability_for_booking
+            is_valid, err_msg = validate_slot_availability_for_booking(resolved_svc, preferred_date, preferred_time)
+            if not is_valid:
+                return err_msg
+        except Exception as exc:
+            logger.warning(f"Error during service slot validation: {exc}")
 
     if preferred_date > today:
         return None
@@ -138,10 +154,12 @@ def validate_booking_slot(preferred_date, preferred_time=None, now=None, service
         datetime.datetime.combine(preferred_date, slot_time),
         timezone.get_current_timezone(),
     )
-    earliest = now + datetime.timedelta(minutes=get_min_lead_minutes())
+    now_floor = now.replace(second=0, microsecond=0)
+    earliest = now_floor + datetime.timedelta(minutes=get_min_lead_minutes())
     if slot_dt < earliest:
         return (
             f"That time slot has already passed or is too soon. "
             f"Please choose a slot at least {get_min_lead_minutes()} minutes from now."
         )
     return None
+

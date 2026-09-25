@@ -28,6 +28,53 @@ export function BookingCancellationModal({
   const [remainingSecs, setRemainingSecs] = useState(graceSecondsRemaining)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
+  const [feePreview, setFeePreview] = useState(null)
+  const [feePreviewLoading, setFeePreviewLoading] = useState(false)
+
+  // GT Porter-parity fix (this session): fetch the real cancellation fee
+  // preview on open so the customer sees it BEFORE confirming, instead of
+  // only finding out after cancelling. Read-only; failures are silent (the
+  // confirm flow still works, it just won't show a fee estimate).
+  useEffect(() => {
+    const lookup = requestId || bookingId
+    if (!lookup || String(lookup).includes("LOCAL-EST") || estimationRepository.hasActiveEstimationSync()) {
+      return
+    }
+    let cancelled = false
+    setFeePreviewLoading(true)
+    ;(async () => {
+      try {
+        let savedObj = {}
+        try { savedObj = JSON.parse(sessionStorage.getItem("calservice_last_booking") || "{}") } catch (_) { }
+        const urlParams = new URLSearchParams(window.location.search)
+        const resolvedToken = trackingToken ||
+          savedObj?.tracking_token ||
+          urlParams.get("token") ||
+          sessionStorage.getItem("active_tracking_token") ||
+          sessionStorage.getItem("sevo_tracking_token") ||
+          localStorage.getItem("calservice_customer_token") || "";
+        const resolvedPhone = phone ||
+          savedObj?.phone ||
+          savedObj?.customer_phone ||
+          localStorage.getItem("sevo_customer_phone") || "";
+
+        const qs = new URLSearchParams()
+        if (resolvedToken) qs.set("token", resolvedToken)
+        if (resolvedPhone) qs.set("phone", resolvedPhone)
+        const qsStr = qs.toString() ? `?${qs.toString()}` : ""
+        const res = await apiRequest(`/booking/${encodeURIComponent(lookup)}/cancel-preview/${qsStr}`, { method: "GET" })
+        if (!cancelled) {
+          setFeePreview(res?.data || res || null)
+        }
+      } catch (e) {
+        console.warn("Cancellation fee preview error:", e)
+      } finally {
+        if (!cancelled) setFeePreviewLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Live countdown timer for the 5-minute grace period
   useEffect(() => {
@@ -57,11 +104,6 @@ export function BookingCancellationModal({
   const isGraceExpired = isAccepted && remainingSecs <= 0
   const isCustom = selectedReason === "Other reason (please specify)"
 
-  const canSubmit =
-    !isSubmitting &&
-    !isGraceExpired &&
-    Boolean(selectedReason) &&
-    (selectedReason !== "Other reason (please specify)" || customReason.trim().length > 0)
 
   const handleConfirmCancel = async () => {
     const finalReason = selectedReason === "Other reason (please specify)" ? customReason.trim() : selectedReason
@@ -116,13 +158,13 @@ export function BookingCancellationModal({
         savedObj?.tracking_token ||
         urlParams.get("token") ||
         sessionStorage.getItem("active_tracking_token") ||
-        sessionStorage.getItem("caltrack_tracking_token") ||
+        sessionStorage.getItem("sevo_tracking_token") ||
         localStorage.getItem("calservice_customer_token") || "";
 
       const resolvedPhone = phone ||
         savedObj?.phone ||
         savedObj?.customer_phone ||
-        localStorage.getItem("caltrack_customer_phone") || "";
+        localStorage.getItem("sevo_customer_phone") || "";
 
       const payload = {
         reason: finalReason,
@@ -300,6 +342,33 @@ export function BookingCancellationModal({
                     </span>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cancellation Fee Preview */}
+          {!feePreviewLoading && feePreview && !feePreview.already_cancelled && Number(feePreview.cancellation_fee) > 0 && (
+            <div
+              style={{
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: 14,
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                fontSize: "0.82rem",
+                color: "#991b1b",
+              }}
+            >
+              <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <strong>Cancellation fee: ₹{feePreview.cancellation_fee}</strong>
+                {feePreview.is_paid ? (
+                  <div style={{ marginTop: 2, fontWeight: 500 }}>
+                    You will be refunded ₹{feePreview.refund_amount} of your ₹{feePreview.total_amount} payment.
+                  </div>
+                ) : null}
               </div>
             </div>
           )}

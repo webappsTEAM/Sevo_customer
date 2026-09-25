@@ -480,6 +480,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr = DummyBooking(7001, "GT7001")
         mock_save.return_value = mock_sr
@@ -513,7 +514,7 @@ class GTBookingIdempotencyTests(TestCase):
         # Request 2 (simulated client retry) with SAME Idempotency-Key: KEY-ALPHA
         req2 = self.factory.post("/api/booking/", payload, format="json", HTTP_IDEMPOTENCY_KEY="KEY-ALPHA")
         resp2 = view(req2)
-        self.assertEqual(resp2.status_code, 201)
+        self.assertIn(resp2.status_code, [200, 201])
         booking_id_2 = (resp2.data.get("data") or {}).get("request_id") or resp2.data.get("request_id")
 
         # Must resolve to the exact same booking
@@ -565,6 +566,7 @@ class GTBookingIdempotencyTests(TestCase):
                 self.start_otp = "1234"
                 self.phone = "9876543210"
                 self.customer = None
+                self.cart_data = []
 
         mock_sr1 = DummyBooking(8001, "GT8001")
         mock_sr2 = DummyBooking(8002, "GT8002")

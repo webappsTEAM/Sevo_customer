@@ -2,14 +2,14 @@ import React from "react"
 import { useNavigate } from "react-router-dom"
 import { routes } from "../routes.js"
 
-export function CalTrackLogo({ size = "md", showTagline = false, className = "", theme = "light", onClick }) {
+export function sevoLogo({ size = "md", showTagline = false, className = "", theme = "light", onClick }) {
   const navigate = useNavigate()
   const isDark = theme === "dark"
 
-  const emblemHeight = typeof size === "number" 
-    ? Math.max(24, Math.round(size * 1.3)) 
+  const emblemHeight = typeof size === "number"
+    ? Math.max(24, Math.round(size * 1.3))
     : size === "sm" ? 28 : size === "lg" ? 42 : 34
-    
+
   const textHeight = typeof size === "number"
     ? Math.max(14, Math.round(size * 0.7))
     : size === "sm" ? 14 : size === "lg" ? 20 : 17
@@ -44,3 +44,5 @@ export function CalTrackLogo({ size = "md", showTagline = false, className = "",
   )
 }
 
+export const SevoLogo = sevoLogo
+export default sevoLogo

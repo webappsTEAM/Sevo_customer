@@ -62,7 +62,7 @@ def seed_invoices():
                     "status": inv_data["status"],
                     "billing_date": inv_data["billing_date"],
                     "due_date": inv_data["due_date"],
-                    "pdf_url": "https://caltrack.com/invoices/mock.pdf"
+                    "pdf_url": "https://sevo.com/invoices/mock.pdf"
                 }
             )
         print("Seed complete.")

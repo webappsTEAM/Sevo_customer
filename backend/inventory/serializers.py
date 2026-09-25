@@ -139,7 +139,7 @@ class VegetableStockAdminListSerializer(serializers.Serializer):
     product_id = serializers.IntegerField(source="id")
     name = serializers.CharField()
     slug = serializers.CharField()
-    image = serializers.CharField(allow_blank=True, allow_null=True)
+    image = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
     mrp = serializers.SerializerMethodField()
     offer_price = serializers.SerializerMethodField()
@@ -159,9 +159,20 @@ class VegetableStockAdminListSerializer(serializers.Serializer):
     restock_level_grams = serializers.SerializerMethodField()
     reorder_level_display = serializers.SerializerMethodField()
     reorder_level_grams = serializers.SerializerMethodField()
+    unit_basis = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
     sku = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
+
+    def get_image(self, obj):
+        if getattr(obj, "image", None) and str(obj.image).strip():
+            return str(obj.image).strip()
+        if hasattr(obj, "stock_item") and obj.stock_item:
+            if obj.stock_item.image and str(obj.stock_item.image).strip():
+                return str(obj.stock_item.image).strip()
+            if obj.stock_item.category and obj.stock_item.category.image and str(obj.stock_item.category.image).strip():
+                return str(obj.stock_item.category.image).strip()
+        return ""
 
     def get_status_info(self, obj):
         if not hasattr(obj, "_cached_admin_status"):
@@ -226,6 +237,9 @@ class VegetableStockAdminListSerializer(serializers.Serializer):
     def get_vegetable_gram(self, obj):
         return self.get_status_info(obj)["vegetable_gram"]
 
+    def get_unit_basis(self, obj):
+        return self.get_status_info(obj).get("unit_basis", "WEIGHT")
+
     def get_unit(self, obj):
         return self.get_status_info(obj)["unit"]
 
@@ -250,7 +264,6 @@ class VegetableCategorySerializer(serializers.ModelSerializer):
     parent_slug = serializers.CharField(source="parent.slug", read_only=True, default=None)
     full_path = serializers.CharField(read_only=True)
     depth = serializers.IntegerField(read_only=True)
-    unit_of_measurement_display = serializers.CharField(source="get_unit_of_measurement_display", read_only=True, default=None)
     ancestors = serializers.SerializerMethodField()
     vegetables_count = serializers.SerializerMethodField()
     direct_vegetables_count = serializers.SerializerMethodField()
@@ -268,7 +281,7 @@ class VegetableCategorySerializer(serializers.ModelSerializer):
             'id', 'parent', 'parent_name', 'parent_slug',
             'full_path', 'depth', 'ancestors',
             'name', 'slug', 'description', 'image',
-            'sort_order', 'is_active', 'unit_of_measurement', 'unit_of_measurement_display', 'status', 'source', 'is_leaf',
+            'sort_order', 'is_active', 'status', 'source', 'is_leaf',
             'requested_by', 'requested_by_name', 'requested_at',
             'rejection_reason', 'is_resubmission',
             'reviewed_by', 'reviewed_by_name', 'reviewed_at',
@@ -305,8 +318,6 @@ class VegetableCategorySerializer(serializers.ModelSerializer):
             "full_path": s.full_path,
             "depth": s.depth,
             "is_leaf": s.is_leaf,
-            "unit_of_measurement": s.unit_of_measurement,
-            "unit_of_measurement_display": s.get_unit_of_measurement_display(),
             "status": s.status,
             "vegetables_count": s.vegetables.count(),
             "subcategories_count": s.subcategories.count(),
@@ -346,14 +357,13 @@ class VegetableCategoryCreateUpdateSerializer(serializers.ModelSerializer):
         model = VegetableCategory
         fields = [
             'id', 'parent', 'name', 'slug', 'description', 'image',
-            'sort_order', 'is_active', 'unit_of_measurement', 'status', 'source',
+            'sort_order', 'is_active', 'status', 'source',
         ]
         extra_kwargs = {
             'slug': {'required': False},
             'status': {'required': False},
             'source': {'required': False},
             'parent': {'required': False, 'allow_null': True},
-            'unit_of_measurement': {'required': False, 'allow_null': True},
         }
 
     def validate(self, attrs):
@@ -383,14 +393,13 @@ class VegetableApprovalItemSerializer(serializers.ModelSerializer):
     category_slug = serializers.CharField(source="category.slug", read_only=True, default="")
     category_parent_name = serializers.CharField(source="category.parent.name", read_only=True, default=None)
     category_full_path = serializers.CharField(source="category.full_path", read_only=True, default="Uncategorized")
-    category_unit_of_measurement = serializers.CharField(source="category.unit_of_measurement", read_only=True, default=None)
-    category_unit_of_measurement_display = serializers.CharField(source="category.get_unit_of_measurement_display", read_only=True, default=None)
     category_status = serializers.CharField(source="category.status", read_only=True, default="PENDING")
     price = serializers.SerializerMethodField()
     mrp = serializers.SerializerMethodField()
     pack_size = serializers.SerializerMethodField()
     requested_by_name = serializers.SerializerMethodField()
     reviewed_by_name = serializers.SerializerMethodField()
+    variants = serializers.SerializerMethodField()
 
     class Meta:
         from inventory.models import Vegetable
@@ -398,8 +407,8 @@ class VegetableApprovalItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'sku', 'unit', 'image', 'status', 'source',
             'category', 'category_name', 'category_slug', 'category_parent_name', 'category_full_path',
-            'category_unit_of_measurement', 'category_unit_of_measurement_display', 'category_status',
-            'price', 'mrp', 'pack_size',
+            'category_status',
+            'price', 'mrp', 'pack_size', 'variants',
             'requested_by', 'requested_by_name', 'requested_at',
             'rejection_reason', 'is_resubmission',
             'reviewed_by', 'reviewed_by_name', 'reviewed_at',
@@ -431,6 +440,94 @@ class VegetableApprovalItemSerializer(serializers.ModelSerializer):
             return obj.reviewed_by.get_full_name() or obj.reviewed_by.username or obj.reviewed_by.email
         return None
 
+    def get_variants(self, obj):
+        if obj.package:
+            vars_qs = obj.package.variants.all().order_by("sort_order", "pack_value", "id")
+            return [{
+                "id": v.id,
+                "name": v.display_name,
+                "pack_value": str(v.pack_value),
+                "unit": v.unit,
+                "unit_basis": v.unit_basis,
+                "base_price": str(v.base_price),
+                "mrp": str(v.mrp) if v.mrp else None,
+                "sku": v.sku,
+                "is_default": v.is_default,
+                "is_active": v.is_active,
+                "status": v.status,
+                "rejection_reason": v.rejection_reason,
+            } for v in vars_qs]
+        return []
+
+
+class VegetableVariantApprovalItemSerializer(serializers.ModelSerializer):
+    request_type = serializers.CharField(default="variant", read_only=True)
+    item_type = serializers.CharField(default="VARIANT", read_only=True)
+    target_vegetable_id = serializers.IntegerField(source="vegetable.id", read_only=True)
+    vegetable_name = serializers.CharField(source="vegetable.name", read_only=True)
+    category_full_path = serializers.CharField(source="vegetable.category.full_path", read_only=True, default="Uncategorized")
+    image = serializers.CharField(source="vegetable.image", read_only=True, default="")
+    display_name = serializers.CharField(read_only=True)
+    price = serializers.SerializerMethodField()
+    pack_size = serializers.SerializerMethodField()
+    requested_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+    existing_variants = serializers.SerializerMethodField()
+
+    class Meta:
+        from service_requests.models import PackageVariant
+        model = PackageVariant
+        fields = [
+            'id', 'request_type', 'item_type', 'package', 'vegetable', 'target_vegetable_id', 'vegetable_name',
+            'category_full_path', 'image', 'name', 'display_name',
+            'pack_value', 'unit', 'unit_basis', 'base_price', 'price', 'mrp', 'pack_size', 'sku',
+            'is_default', 'is_active', 'status', 'source',
+            'requested_by', 'requested_by_name', 'requested_at',
+            'rejection_reason', 'is_resubmission',
+            'reviewed_by', 'reviewed_by_name', 'reviewed_at',
+            'existing_variants', 'created_at', 'updated_at',
+        ]
+
+    def get_price(self, obj):
+        if obj.base_price is not None:
+            return str(obj.base_price)
+        return "0.00"
+
+    def get_pack_size(self, obj):
+        val = obj.pack_value
+        u = obj.unit or "kg"
+        if val is not None:
+            try:
+                return f"{float(val):g} {u}".strip()
+            except (ValueError, TypeError):
+                return f"{val} {u}".strip()
+        return obj.display_name or u
+
+    def get_requested_by_name(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username or obj.requested_by.email
+        return "Vendor / Admin"
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return obj.reviewed_by.get_full_name() or obj.reviewed_by.username or obj.reviewed_by.email
+        return None
+
+    def get_existing_variants(self, obj):
+        if obj.package:
+            other_vars = obj.package.variants.filter(status="APPROVED").exclude(id=obj.id).order_by("pack_value")
+            return [{
+                "id": v.id,
+                "name": v.display_name,
+                "pack_value": str(v.pack_value),
+                "unit": v.unit,
+                "base_price": str(v.base_price),
+                "price": str(v.base_price),
+                "mrp": str(v.mrp) if v.mrp else None,
+                "is_default": v.is_default,
+            } for v in other_vars]
+        return []
+
 
 class ApprovalActionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["APPROVE", "REJECT"])
@@ -443,7 +540,10 @@ class ApprovalActionSerializer(serializers.Serializer):
 
 
 class SingleCatalogRequestSerializer(serializers.Serializer):
-    request_type = serializers.ChoiceField(choices=["category", "vegetable", "category_with_vegetable"], default="vegetable")
+    request_type = serializers.ChoiceField(
+        choices=["category", "vegetable", "category_with_vegetable", "variant"],
+        default="vegetable"
+    )
     # Category fields
     parent_id = serializers.IntegerField(required=False, allow_null=True)
     category_id = serializers.IntegerField(required=False, allow_null=True)
@@ -451,21 +551,26 @@ class SingleCatalogRequestSerializer(serializers.Serializer):
     category_slug = serializers.CharField(required=False, allow_blank=True)
     category_description = serializers.CharField(required=False, allow_blank=True)
     category_image = serializers.CharField(required=False, allow_blank=True)
-    category_unit = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     # Vegetable / Produce fields
+    target_vegetable_id = serializers.IntegerField(required=False, allow_null=True)
     vegetable_name = serializers.CharField(required=False, allow_blank=True)
     vegetable_sku = serializers.CharField(required=False, allow_blank=True)
+    sku = serializers.CharField(required=False, allow_blank=True)
     vegetable_unit = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+    unit = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    unit_basis = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    variant_name = serializers.CharField(required=False, allow_blank=True)
     price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     mrp = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     pack_size = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     pack_value = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    variants = serializers.ListField(child=serializers.DictField(), required=False, default=list)
     image_url = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
     tag = serializers.CharField(required=False, allow_blank=True)
     # Resubmission reference (if vendor is resubmitting an existing rejected record)
     resubmit_id = serializers.IntegerField(required=False, allow_null=True)
-    resubmit_type = serializers.ChoiceField(choices=["category", "vegetable"], required=False, allow_null=True)
+    resubmit_type = serializers.ChoiceField(choices=["category", "vegetable", "variant"], required=False, allow_null=True)
 
     def validate(self, data):
         price = data.get("price")
@@ -478,37 +583,62 @@ class SingleCatalogRequestSerializer(serializers.Serializer):
         return data
 
 
+ALLOWED_UNITS = [
+    "g", "kg", "grams", "kilograms", "gm", "gms",
+    "pc", "pcs", "piece", "pieces",
+    "bunch", "bunches",
+    "packet", "packets", "pkt", "pkts", "box", "boxes",
+    "dozen", "dozens", "dz",
+    "unit", "units"
+]
+
+
 class VegetableRestockActionSerializer(serializers.Serializer):
     quantity = serializers.FloatField(required=True)
-    unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg")
+    unit = serializers.ChoiceField(choices=ALLOWED_UNITS, default="kg")
 
 
 class VegetableAdjustActionSerializer(serializers.Serializer):
     quantity = serializers.FloatField(required=True)
-    unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg")
+    unit = serializers.ChoiceField(choices=ALLOWED_UNITS, default="kg")
     reason = serializers.CharField(required=True, allow_blank=False)
 
 
 class VegetableSetDefaultActionSerializer(serializers.Serializer):
     quantity = serializers.FloatField(required=False, allow_null=True)
-    unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg")
+    unit = serializers.ChoiceField(choices=ALLOWED_UNITS, default="kg")
     apply_now = serializers.BooleanField(default=False)
 
 
 class VegetableDetailsUpdateSerializer(serializers.Serializer):
+    image = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
     price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     mrp = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     offer_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     offer_percentage = serializers.FloatField(required=False, allow_null=True)
     vegetable_gram = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    unit_basis = serializers.CharField(max_length=20, required=False, default="WEIGHT")
     opening_stock_quantity = serializers.FloatField(required=False, allow_null=True)
-    opening_stock_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    opening_stock_unit = serializers.ChoiceField(choices=ALLOWED_UNITS, required=False, allow_blank=True, allow_null=True)
     current_stock_quantity = serializers.FloatField(required=False, allow_null=True)
-    current_stock_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    current_stock_unit = serializers.ChoiceField(choices=ALLOWED_UNITS, required=False, allow_blank=True, allow_null=True)
     restock_level_quantity = serializers.FloatField(required=False, allow_null=True)
-    restock_level_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    restock_level_unit = serializers.ChoiceField(choices=ALLOWED_UNITS, required=False, allow_blank=True, allow_null=True)
     reorder_level_quantity = serializers.FloatField(required=False, allow_null=True)
-    reorder_level_unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg", required=False)
+    reorder_level_unit = serializers.ChoiceField(choices=ALLOWED_UNITS, required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, data):
+        from inventory.utils.unit_conversion import unit_basis_for_unit, UnitBasis
+        basis = data.get("unit_basis") or (self.context.get("unit_basis") if self.context else None)
+        if basis:
+            for field in ["opening_stock_unit", "current_stock_unit", "restock_level_unit", "reorder_level_unit"]:
+                if field in data and data[field]:
+                    inferred = unit_basis_for_unit(data[field])
+                    if inferred != basis:
+                        raise serializers.ValidationError({
+                            field: f"Unit '{data[field]}' is incompatible with {basis} basis item."
+                        })
+        return data
 
 
 class VegetableClaimListSerializer(serializers.ModelSerializer):
@@ -533,15 +663,19 @@ class VegetableClaimListSerializer(serializers.ModelSerializer):
 
     def get_vegetable_image(self, obj):
         if obj.vegetable:
-            if obj.vegetable.image:
-                return obj.vegetable.image
-            if obj.vegetable.package and obj.vegetable.package.image:
-                return obj.vegetable.package.image
+            if obj.vegetable.image and str(obj.vegetable.image).strip():
+                return str(obj.vegetable.image).strip()
+            if obj.vegetable.package and obj.vegetable.package.image and str(obj.vegetable.package.image).strip():
+                return str(obj.vegetable.package.image).strip()
+            if obj.vegetable.category and obj.vegetable.category.image and str(obj.vegetable.category.image).strip():
+                return str(obj.vegetable.category.image).strip()
         return "/mockups/vegetables_realistic.png"
 
     def get_quantity_display(self, obj):
-        from inventory.utils.unit_conversion import format_grams_for_display
-        return format_grams_for_display(obj.quantity_grams)
+        from inventory.utils.unit_conversion import format_stock_for_display
+        basis = getattr(obj.vegetable, "unit_basis", "WEIGHT") if obj.vegetable else "WEIGHT"
+        unit = getattr(obj.vegetable, "unit", "g") if obj.vegetable else "g"
+        return format_stock_for_display(obj.quantity_grams, unit_basis=basis, unit=unit)
 
     def get_created_by_name(self, obj):
         if not obj.created_by:
@@ -583,19 +717,29 @@ class VegetableClaimDetailSerializer(serializers.ModelSerializer):
 
     def get_vegetable_image(self, obj):
         if obj.vegetable:
-            if obj.vegetable.image:
-                return obj.vegetable.image
-            if obj.vegetable.package and obj.vegetable.package.image:
-                return obj.vegetable.package.image
+            if obj.vegetable.image and str(obj.vegetable.image).strip():
+                return str(obj.vegetable.image).strip()
+            if obj.vegetable.package and obj.vegetable.package.image and str(obj.vegetable.package.image).strip():
+                return str(obj.vegetable.package.image).strip()
+            if obj.vegetable.category and obj.vegetable.category.image and str(obj.vegetable.category.image).strip():
+                return str(obj.vegetable.category.image).strip()
         return "/mockups/vegetables_realistic.png"
 
     def get_quantity_display(self, obj):
-        from inventory.utils.unit_conversion import format_grams_for_display
-        return format_grams_for_display(obj.quantity_grams)
+        from inventory.utils.unit_conversion import format_stock_for_display
+        basis = getattr(obj.vegetable, "unit_basis", "WEIGHT") if obj.vegetable else "WEIGHT"
+        unit = getattr(obj.vegetable, "unit", "g") if obj.vegetable else "g"
+        return format_stock_for_display(obj.quantity_grams, unit_basis=basis, unit=unit)
 
     def get_current_stock_display(self, obj):
-        from inventory.utils.unit_conversion import format_grams_for_display
-        return format_grams_for_display(obj.vegetable.stock_quantity_grams or 0)
+        from inventory.utils.unit_conversion import format_stock_for_display
+        if not obj.vegetable:
+            return "0 g"
+        return format_stock_for_display(
+            obj.vegetable.stock_quantity_grams or 0,
+            unit_basis=obj.vegetable.unit_basis,
+            unit=obj.vegetable.unit,
+        )
 
     def get_created_by_name(self, obj):
         if not obj.created_by:
@@ -616,7 +760,10 @@ class VegetableClaimDetailSerializer(serializers.ModelSerializer):
             "id": obj.stock_movement.id,
             "movement_type": obj.stock_movement.movement_type,
             "delta_grams": obj.stock_movement.delta_grams,
+            "delta_display": obj.stock_movement.delta_display,
             "balance_after_grams": obj.stock_movement.balance_after_grams,
+            "unit_basis": obj.stock_movement.unit_basis,
+            "unit_label": obj.stock_movement.unit_label,
             "reason": obj.stock_movement.reason,
             "created_at": obj.stock_movement.created_at.isoformat() if obj.stock_movement.created_at else None,
         }
@@ -633,7 +780,7 @@ class VegetableClaimCreateSerializer(serializers.Serializer):
         ("OTHER", "Other"),
     ])
     quantity = serializers.FloatField(required=True)
-    unit = serializers.ChoiceField(choices=["g", "kg", "grams", "kilograms"], default="kg")
+    unit = serializers.ChoiceField(choices=ALLOWED_UNITS, default="kg")
     estimated_loss_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 

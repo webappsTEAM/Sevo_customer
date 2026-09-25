@@ -44,8 +44,8 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 _ASSUMED_URBAN_SPEED_KMH = 25.0
-_CACHE_TTL_SECONDS = 45
-_REQUEST_TIMEOUT_SECONDS = 4
+_CACHE_TTL_SECONDS = 90      # Extended from 45s: customers don't need sub-minute ETA freshness
+_REQUEST_TIMEOUT_SECONDS = 2  # Reduced from 4s: was the direct cause of 4-5s polling stalls
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
 
 

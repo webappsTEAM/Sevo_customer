@@ -78,6 +78,36 @@ ALLOWED_TRANSITIONS = {
     # app's own transition table and read-side filters -- so they are not
     # added here; if that changes, this comment is the place to revisit it.
     "redispatching":          {S.UNASSIGNED, S.ASSIGNED, S.ACCEPTED, S.CANCELLED},
+
+    # GT audit follow-up to X-03: "on_hold" has the exact same problem as
+    # "redispatching" above, and was missed by that pass. The vendor app's
+    # "put a job on hold" endpoint (workforce_api/views.py, the
+    # WorkforceJobHoldView-style action guarded by `job.status == "in_progress"`)
+    # calls apply_transition(job, "on_hold", ...) for real -- this is a live,
+    # reachable status on any in_progress job (GT or home-service), not a
+    # theoretical one. Before this entry, a booking sitting at "on_hold" hit
+    # the same ALLOWED_TRANSITIONS.get(current_status, set()) fallback as
+    # "redispatching" did: empty set, "Allowed transitions: none (terminal
+    # state)", for any Customer-app-side action (customer cancels while their
+    # job is paused, an admin corrects it, etc.) even though the job is not
+    # actually finished.
+    #
+    # Targets mirror exactly what the vendor app's own state machine allows
+    # transitioning *to* from "on_hold" ("in_progress", "cancelled",
+    # "unable_to_complete") -- all three already have equivalents in this
+    # app's own Status enum, so no new enum member is needed here either.
+    # "service_started" and "reassigned" (the other two vendor-only strings
+    # not yet handled here) were checked the same way "en_route"/"offering"/
+    # "dispatching" were for the redispatching entry above -- searched across
+    # vendor/backend/workforce_api/views.py and vendor/backend/service_requests/
+    # vendor_views.py and found no call site that actually passes them to
+    # apply_transition() (only present in ALLOWED_TRANSITIONS as an unused
+    # option, or in "reassigned"'s case, only ever referenced as a code
+    # comment describing the "redispatching" path) -- so, like "en_route" etc.,
+    # they are not added here. This was not a full-codebase search (the
+    # audit that found this could not run a repo-wide grep), so if either is
+    # ever found live, add it here the same way.
+    "on_hold":                {S.IN_PROGRESS, S.CANCELLED, S.UNABLE_TO_COMPLETE},
 }
 
 """
