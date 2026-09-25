@@ -12895,7 +12895,7 @@ export function BookingPage() {
     if (isEstimation) {
       const estItem = (cart && cart.find(c => c.jobType === "ESTIMATION" || c.id === "serv-hvac-ac-inspection" || c.id === "ac-inspection" || c.id === "hvac-ac-inspection" || (c.ac_brand && c.ac_type) || (c.name && c.name.toLowerCase().includes("inspection")))) || (cart && cart[0]) || {};
       data.append("job_type", "ESTIMATION");
-      data.append("estimation_fee", String(estItem.price || "199"));
+      data.append("estimation_fee", String(estItem.price || dynamicAcInspectionFee || "199"));
       const rawAc = String(estItem.ac_type || "SPLIT").toUpperCase();
       const normalizedAcType = rawAc.includes("WINDOW") ? "WINDOW" : (rawAc.includes("SPLIT") ? "SPLIT" : (rawAc.includes("CASSETTE") ? "CASSETTE" : (rawAc.includes("TOWER") ? "TOWER" : "SPLIT")));
       data.append("ac_type", normalizedAcType);
@@ -19259,13 +19259,41 @@ export function CustomCleaningPackageModal({
 
   const [showAcInspectionModal, setShowAcInspectionModal] = useState(false);
   const [activeAcInspectionItem, setActiveAcInspectionItem] = useState(null);
+  const [dynamicAcInspectionFee, setDynamicAcInspectionFee] = useState(() => {
+    try {
+      const c = localStorage.getItem("calservices_ac_inspection_fee");
+      return c && !isNaN(Number(c)) ? Number(c) : 199;
+    } catch (_) {
+      return 199;
+    }
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicFee() {
+      try {
+        const res = await fetch("/api/service-requests/ac-inspection/rate-card/").then((r) => r.json());
+        if (isMounted && res?.data?.diagnostic_fee != null) {
+          const fee = Number(res.data.diagnostic_fee);
+          setDynamicAcInspectionFee(fee);
+          try {
+            localStorage.setItem("calservices_ac_inspection_fee", String(fee));
+          } catch (_) {}
+        }
+      } catch (e) {
+        console.warn("[BookingPage] Failed to fetch dynamic AC inspection fee:", e);
+      }
+    }
+    loadDynamicFee();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleAcInspectionSubmit = (inspectionData) => {
     setShowAcInspectionModal(false);
     setSelectedPackageDetail(null);
 
     const inspectionCartId = "serv-hvac-ac-inspection";
-    const unitPrice = Number(inspectionData.price) || 199;
+    const unitPrice = Number(inspectionData.price) || dynamicAcInspectionFee || 199;
     const qty = Math.max(1, Number(inspectionData.quantity) || 1);
 
     const remainingCart = cart.filter(c => c.id !== inspectionCartId && c.id !== "hvac-ac-inspection");
@@ -20556,10 +20584,11 @@ export function CustomCleaningPackageModal({
 
     // Guarantee that AC Inspection tab always displays ONLY ONE single service card
     if (activeSubTab === "AC Inspection" || activeSubTab === "Not Sure? Book Inspection") {
-      const baseInspection = OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {
+      const baseInspection = {
+        ...(OTHER_SERVICES.hvac?.["AC Inspection"]?.[0] || {}),
         id: "hvac-ac-inspection",
         name: "AC Inspection",
-        price: 199,
+        price: dynamicAcInspectionFee || 199,
         duration: "45 mins",
         badge: "Certified Inspection",
         badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -20580,7 +20609,7 @@ export function CustomCleaningPackageModal({
     }
 
     return finalPlans;
-  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData]);
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab, categoryHasRealServices, categoriesData, dynamicAcInspectionFee]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -22385,7 +22414,7 @@ export function CustomCleaningPackageModal({
           quantity: formData?.ac_quantity || 1,
           notes: formData?.ac_notes || ""
         }}
-        basePrice={activeAcInspectionItem?.price || 199}
+        basePrice={activeAcInspectionItem?.price || dynamicAcInspectionFee || 199}
       />
     </div>
   );

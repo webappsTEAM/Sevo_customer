@@ -18,6 +18,8 @@ import {
 } from "../../utils/customerLocationStorage.js";
 import {
   ESTIMATION_FEE,
+  getDynamicEstimationFee,
+  setDynamicEstimationFee,
   ESTIMATION_DURATION,
   ESTIMATION_TITLE,
   ESTIMATION_SUBTITLE,
@@ -57,13 +59,22 @@ function saveStoredEstimations(list) {
 export const customerBackendAdapter = {
   /**
    * Returns AC Inspection service metadata for cards and detail modal.
+   * Dynamically loads fee from PostgreSQL single source of truth.
    */
   async fetchEstimationService() {
+    let fee = getDynamicEstimationFee();
+    try {
+      const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
+      if (res?.data?.diagnostic_fee != null) {
+        fee = setDynamicEstimationFee(res.data.diagnostic_fee);
+      }
+    } catch (_) {}
+
     return {
       id: "ac-inspection",
       name: ESTIMATION_TITLE,
       subtitle: ESTIMATION_SUBTITLE,
-      price: ESTIMATION_FEE,
+      price: fee,
       duration: ESTIMATION_DURATION,
       badge: "Diagnosis & Inspection",
       badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
@@ -155,6 +166,8 @@ export const customerBackendAdapter = {
       }
     } catch (_) {}
 
+    const activeFee = data.estimationFee || getDynamicEstimationFee() || 199;
+
     const payload = {
       customer_name: customerName,
       phone: data.phone || "",
@@ -168,7 +181,7 @@ export const customerBackendAdapter = {
       preferred_date: prefDate,
       preferred_time: prefTime,
       payment_method: data.paymentMethod || "COD",
-      total_amount: data.estimationFee || ESTIMATION_FEE,
+      total_amount: activeFee,
       job_type: "ESTIMATION",
       request_kind: "ESTIMATION",
       catalog_service_id: String(data.catalog_service_id || data.serviceId || data.service_id || data.acDetails?.service_id || "ac-inspection"),
@@ -182,7 +195,7 @@ export const customerBackendAdapter = {
         {
           id: "ac-inspection",
           name: ESTIMATION_TITLE,
-          price: data.estimationFee || ESTIMATION_FEE,
+          price: activeFee,
           quantity: acQuantity,
           jobType: "ESTIMATION",
         },
@@ -214,8 +227,8 @@ export const customerBackendAdapter = {
         status_display: "Estimation Requested",
         payment_status: responseData.payment_status || "pending",
         payment_status_display: "Pending Inspection",
-        total_amount: responseData.total_amount || data.estimationFee || ESTIMATION_FEE,
-        estimationFee: responseData.estimation?.fee_amount || data.estimationFee || ESTIMATION_FEE,
+        total_amount: responseData.total_amount || activeFee,
+        estimationFee: responseData.estimation?.fee_amount || activeFee,
         preferred_date: payload.preferred_date,
         preferred_time: payload.preferred_time,
         scheduledDate: payload.preferred_date,
@@ -241,7 +254,7 @@ export const customerBackendAdapter = {
           {
             id: "ac-inspection",
             name: ESTIMATION_TITLE,
-            price: data.estimationFee || ESTIMATION_FEE,
+            price: activeFee,
             quantity: acQuantity,
             jobType: "ESTIMATION",
           },

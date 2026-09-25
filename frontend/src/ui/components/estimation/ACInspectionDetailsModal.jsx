@@ -19,7 +19,7 @@ export function ACInspectionDetailsModal({
     return config?.rateCardCategories || []
   }, [config])
 
-  const fee = config?.fee || 199
+  const fee = config?.diagnostic_fee != null ? Number(config.diagnostic_fee) : (config?.fee || 199)
 
   if (!isOpen) return null
 

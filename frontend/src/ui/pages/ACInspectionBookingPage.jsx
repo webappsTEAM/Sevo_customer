@@ -17,11 +17,13 @@ import {
 
 import { routes } from "../routes.js";
 import { useAuth } from "../../state/auth/useAuth.js";
-import { extractApiErrorMessage } from "../../api/client.js";
+import { extractApiErrorMessage, apiRequest } from "../../api/client.js";
 import { getCustomerSelectedAddress, getCustomerCoordinates } from "../../utils/customerLocationStorage.js";
 import { estimationRepository } from "../../services/estimation/estimationRepository.js";
 import {
   ESTIMATION_FEE,
+  getDynamicEstimationFee,
+  setDynamicEstimationFee,
   ESTIMATION_TITLE,
   ESTIMATION_SUBTITLE,
   ESTIMATION_DESCRIPTION,
@@ -149,6 +151,25 @@ export function ACInspectionBookingPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [dynamicFee, setDynamicFee] = useState(() => getDynamicEstimationFee() || 199);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicFee() {
+      try {
+        const res = await apiRequest("/service-requests/ac-inspection/rate-card/");
+        if (isMounted && res?.data?.diagnostic_fee != null) {
+          const loadedFee = Number(res.data.diagnostic_fee);
+          setDynamicFee(loadedFee);
+          setDynamicEstimationFee(loadedFee);
+        }
+      } catch (err) {
+        console.warn("[ACInspectionBookingPage] Failed to fetch dynamic fee:", err);
+      }
+    }
+    loadDynamicFee();
+    return () => { isMounted = false; };
+  }, []);
 
   const formData = useMemo(
     () => ({ phone: contact.phone, address, landmark, flat_house_no: "" }),
@@ -196,7 +217,7 @@ export function ACInspectionBookingPage() {
         customerReportedIssue,
         notes,
         photos: photoFile ? [photoFile] : [],
-        estimationFee: ESTIMATION_FEE,
+        estimationFee: dynamicFee,
       });
 
       if (result?.success && result?.data) {
@@ -224,7 +245,7 @@ export function ACInspectionBookingPage() {
       id: inspectionCartId,
       db_id: inspectionCartId,
       name: "AC Inspection & Diagnostic",
-      price: ESTIMATION_FEE || 199,
+      price: dynamicFee,
       quantity: qty,
       duration: "45 mins",
       ac_brand: acDetails.brand,
@@ -289,7 +310,7 @@ export function ACInspectionBookingPage() {
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] text-slate-400 font-bold uppercase">Inspection Fee</div>
-            <div className="text-lg font-black text-emerald-700">₹{ESTIMATION_FEE}</div>
+            <div className="text-lg font-black text-emerald-700">₹{dynamicFee}</div>
           </div>
         </div>
 
@@ -474,7 +495,7 @@ export function ACInspectionBookingPage() {
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-[11px] text-slate-500 font-semibold">
             <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
-            <span>Pay only the ₹{ESTIMATION_FEE} inspection fee. No surprise charges.</span>
+            <span>Pay only the ₹{dynamicFee} inspection fee. No surprise charges.</span>
           </div>
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
             <button
@@ -516,7 +537,7 @@ export function ACInspectionBookingPage() {
         formData={formData}
         selectedDate={selectedDate}
         selectedTime={selectedTime}
-        fee={ESTIMATION_FEE}
+        fee={dynamicFee}
         payMethod="cash"
       />
 
