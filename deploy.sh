@@ -73,6 +73,7 @@ pip install -r requirements.txt
 # ─── 5. Run Django migrations ─────────────────────────────────────────────────
 echo "[5/9] Running Django migrations..."
 python manage.py migrate --noinput
+python manage.py ingest_knowledge
 
 # ─── 6. Collect static files ─────────────────────────────────────────────────
 echo "[6/9] Collecting static files..."
