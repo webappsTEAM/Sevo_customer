@@ -5430,7 +5430,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   }
 
   useEffect(() => {
-    if (activeTab === "My Bookings" && user) {
+    if (user) {
       const fetchBookings = (showLoading = false) => {
         if (showLoading && (!realBookings || realBookings.length === 0)) {
           setBookingsLoading(true)
@@ -5455,10 +5455,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         window.removeEventListener("focus", onFocus)
       }
     }
-  }, [activeTab, user])
+  }, [user])
 
   useEffect(() => {
-    if (activeTab === "My Bookings" && user) {
+    const isOrdersTab = ["My Bookings", "Upcoming & Active", "Past Services"].includes(activeTab)
+    if (isOrdersTab && user) {
       const fetchGroceryOrders = (showLoading = false) => {
         if (showLoading && (!groceryOrders || groceryOrders.length === 0)) {
           setGroceryOrdersLoading(true)
@@ -6468,7 +6469,29 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
-      case "My Bookings":
+      case "Upcoming & Active":
+      case "Past Services":
+      case "My Bookings": {
+        const isUpcomingTab = activeTab === "Upcoming & Active"
+        const isPastTab = activeTab === "Past Services"
+        const currentFilter = isUpcomingTab ? "active" : isPastTab ? "completed" : bookingListFilter
+
+        const displayedBookings = (realBookings || []).filter(b => {
+          if (b.parent_request) return false
+          const st = String(b.status || '').toLowerCase()
+          if (currentFilter === "active") {
+            return ['new_request', 'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched', 'confirmed', 'reviewed', 'waiting_for_payment'].includes(st)
+          }
+          if (currentFilter === "completed") {
+            return ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)
+          }
+          return true
+        })
+
+        const activeCount = liveActiveBookings.length
+        const completedCount = completedBookings.length
+        const allCount = (realBookings || []).filter(b => !b.parent_request).length
+
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div style={{ marginBottom: '1.25rem' }}>
@@ -7532,6 +7555,445 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             </div>
           </motion.div>
         )
+      }
+
+case "Book Again": {
+        const pastCompleted = (realBookings || []).filter(b =>
+          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+        )
+
+        const seenPackages = new Set()
+        const uniqueRebookItems = []
+        for (const b of pastCompleted) {
+          const key = b.package_id || b.issue_title || b.service_category
+          if (!seenPackages.has(key)) {
+            seenPackages.add(key)
+            uniqueRebookItems.push(b)
+          }
+        }
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: '1.4rem' }}>⚡</span>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Book Again</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Re-order your previous home services in Hosur with 1 tap. Previous address and preferences are pre-selected.
+              </p>
+            </div>
+
+            {uniqueRebookItems.length === 0 ? (
+              <div>
+                <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0', marginBottom: 24 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <RefreshCw size={26} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Previous Services to Re-book</h4>
+                  <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
+                    Once you complete a service, you can re-order it here instantly. Explore our most popular Hosur home services below:
+                  </p>
+                </div>
+
+                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Popular Hosur Services</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  {[
+                    { name: 'Foam & Power Jet AC Service', price: '₹499', cat: 'ac_appliances', icon: '❄️' },
+                    { name: 'Intense Bathroom Cleaning', price: '₹399', cat: 'cleaning_pest', icon: '🧹' },
+                    { name: 'Sofa & Fabric Deep Shampoo', price: '₹499', cat: 'cleaning_pest', icon: '🛋️' },
+                    { name: 'Home Pest & Cockroach Control', price: '₹799', cat: 'cleaning_pest', icon: '🐜' },
+                    { name: 'Waterproofing & Masonry Inspection', price: '₹0 (Free Quote)', cat: 'masonry', icon: '🧱' },
+                    { name: 'Hosur Local Goods Transport', price: '₹299 onwards', cat: 'goods_transport', icon: '🚚' },
+                  ].map((srv, idx) => (
+                    <div key={idx} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: '1.4rem' }}>{srv.icon}</span>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#0f172a' }}>{srv.name}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700, marginTop: 2 }}>{srv.price}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          window.location.href = `/home?category=${srv.cat}`;
+                        }}
+                        style={{ padding: '6px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        Book
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {uniqueRebookItems.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: 'white',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{title}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                            ✓ Serviced
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>📅 Last booked: {b.preferred_date || 'Recently'}</span>
+                          <span>•</span>
+                          <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span>
+                        </div>
+                        {b.address && (
+                          <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: 4 }}>
+                            📍 {b.address}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {b.total_amount && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Previous Rate</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a' }}>₹{Number(b.total_amount).toLocaleString('en-IN')}</div>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRebookBooking(b)}
+                          style={{
+                            padding: '10px 20px',
+                            background: 'linear-gradient(135deg, #059669, #047857)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 10,
+                            fontWeight: 800,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: '0 2px 8px rgba(5,150,105,0.25)'
+                          }}
+                        >
+                          <RefreshCw size={14} /> Book Again
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
+case "30-Day Warranties": {
+        const completedServices = (realBookings || []).filter(b =>
+          ['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(String(b.status || '').toLowerCase())
+        )
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <ShieldCheck size={26} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>30-Day Doorstep Guarantee</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Every service completed with SEVO is backed by our signature 30-Day Doorstep Guarantee.
+              </p>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #064e3b, #065f46)',
+              borderRadius: 18,
+              padding: '1.5rem',
+              color: 'white',
+              marginBottom: '1.5rem',
+              boxShadow: '0 4px 16px rgba(6,78,59,0.2)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a7f3d0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Zero-Cost Revisit Promise
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white' }}>
+                    Issue resurfacing? We fix it completely free.
+                  </div>
+                </div>
+              </div>
+              <p style={{ margin: '0 0 14px', fontSize: '0.84rem', color: '#d1fae5', lineHeight: 1.5 }}>
+                If any serviced part or appliance develops the same issue within 30 days of completion, our verified professional will revisit your doorstep to re-inspect and resolve it with zero inspection or service fee.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ 100% Free Doorstep Revisit
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ Genuine Parts Guarantee
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', color: '#ecfdf5', fontWeight: 700 }}>
+                  ✓ Priority Dispatch Support
+                </div>
+              </div>
+            </div>
+
+            <h4 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+              Your Protected Services ({completedServices.length})
+            </h4>
+
+            {completedServices.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+                <ShieldCheck size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
+                <h5 style={{ margin: '0 0 4px', fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>No Covered Services Yet</h5>
+                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
+                  When you complete a service, its active 30-day revisit warranty and days remaining will appear right here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Explore Guaranteed Services
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {completedServices.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  const bookingDate = new Date(b.created_at || b.preferred_date || Date.now())
+                  const daysPassed = Math.floor((Date.now() - bookingDate.getTime()) / (1000 * 60 * 60 * 24))
+                  const isWarrantyActive = daysPassed <= 30
+                  const daysRemaining = Math.max(0, 30 - daysPassed)
+                  const expiryDate = new Date(bookingDate.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })
+
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: isWarrantyActive ? '1.5px solid #a7f3d0' : '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: isWarrantyActive ? '#f0fdf4' : 'white',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>{title}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 2 }}>
+                            Booking #{b.request_id || `SR-${b.id}`} • Completed: {b.preferred_date || 'Recently'}
+                          </div>
+                        </div>
+
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          padding: '4px 12px',
+                          borderRadius: 99,
+                          background: isWarrantyActive ? '#dcfce7' : '#f1f5f9',
+                          color: isWarrantyActive ? '#15803d' : '#64748b',
+                          border: isWarrantyActive ? '1px solid #86efac' : '1px solid #e2e8f0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}>
+                          <ShieldCheck size={14} />
+                          {isWarrantyActive ? `Active Guarantee (${daysRemaining} days left)` : 'Warranty Expired'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 10, marginTop: 6 }}>
+                        <div style={{ fontSize: '0.78rem', color: isWarrantyActive ? '#065f46' : '#64748b', fontWeight: 600 }}>
+                          {isWarrantyActive ? `🛡️ Full doorstep protection active until ${expiryDate}` : `Expired on ${expiryDate}`}
+                        </div>
+
+                        {isWarrantyActive ? (
+                          <a
+                            href={`https://wa.me/919944686884?text=${encodeURIComponent(`Hi SEVO Team, I want to claim a 30-day warranty revisit for booking #${b.request_id || b.id} (${title})`)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              padding: '6px 14px',
+                              background: '#059669',
+                              color: 'white',
+                              borderRadius: 8,
+                              fontSize: '0.78rem',
+                              fontWeight: 800,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              boxShadow: '0 2px 6px rgba(5,150,105,0.2)'
+                            }}
+                          >
+                            Claim Free Revisit →
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRebookBooking(b)}
+                            style={{
+                              padding: '6px 14px',
+                              background: '#f1f5f9',
+                              color: '#334155',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 8,
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Renew / Book Again
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
+case "My Invoices": {
+        const invoicedBookings = (realBookings || []).filter(b => !b.parent_request && b.status !== 'draft')
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <FileText size={24} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Invoices & Receipts</h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                Download official GST-compliant tax invoices and payment summaries for all your SEVO bookings.
+              </p>
+            </div>
+
+            {invoicedBookings.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                <FileText size={32} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
+                <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No Invoices Generated Yet</h4>
+                <p style={{ margin: '0 auto 16px', fontSize: '0.82rem', color: '#64748b', maxWidth: 360 }}>
+                  Once you place or complete a service booking, your downloadable tax invoice will appear here automatically.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); window.location.href = "/home"; }}
+                  style={{ padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Book a Service
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {invoicedBookings.map((b) => {
+                  const rawTitle = b.service_category_display || b.issue_title || 'Service Booking'
+                  const title = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
+                  const isPaid = ['paid', 'collected'].includes(String(b.payment_status || '').toLowerCase())
+
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 16,
+                        padding: '1.25rem',
+                        background: 'white',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.98rem' }}>{title}</span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: 99,
+                            background: isPaid ? '#ecfdf5' : '#fffbeb',
+                            color: isPaid ? '#059669' : '#d97706',
+                            border: isPaid ? '1px solid #a7f3d0' : '1px solid #fde68a'
+                          }}>
+                            {isPaid ? '✓ Paid' : 'Payment Pending'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>#{b.request_id || `SR-${b.id}`}</span>
+                          <span>•</span>
+                          <span>{b.preferred_date || 'Date N/A'}</span>
+                          <span>•</span>
+                          <span>Mode: {(b.payment_method || 'COD').toUpperCase()}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Total Amount</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
+                            ₹{Number(b.total_amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#f8fafc',
+                            border: '1.5px solid #cbd5e1',
+                            borderRadius: 10,
+                            color: '#0f172a',
+                            fontWeight: 800,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={e => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.color = '#059669'; }}
+                          onMouseOut={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                        >
+                          <FileText size={14} /> Download PDF
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )
+      }
+
       case "Saved Addresses":
         return (
           <SavedAddressesPage user={user} onClose={onClose} />
