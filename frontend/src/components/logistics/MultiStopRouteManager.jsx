@@ -414,7 +414,7 @@ export function MultiStopRouteManager({
 
   // Same behaviour as the Pickup field's "Live GPS": reverse-geocode the
   // device position and use it as this stop's address + coordinates.
-  const useCurrentLocation = (id) => {
+  const fillFromCurrentLocation = (id) => {
     if (!navigator.geolocation) {
       setGpsById((p) => ({ ...p, [id]: { loading: false, error: "Location is not supported by your browser. Enter the address instead." } }))
       return
@@ -646,7 +646,7 @@ export function MultiStopRouteManager({
                         </button>
                         <button
                           type="button"
-                          onClick={() => useCurrentLocation(stop.id)}
+                          onClick={() => fillFromCurrentLocation(stop.id)}
                           disabled={gpsById[stop.id]?.loading}
                           aria-label={`Use my current location for stop ${idx + 1}`}
                           title="Fetch live GPS location"

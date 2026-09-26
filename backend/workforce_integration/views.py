@@ -104,7 +104,7 @@ def _verify_webhook_signature(request) -> bool:
     if getattr(settings, "DEBUG", False) and "wf_webhook_secret_default" not in valid_secrets:
         valid_secrets.append("wf_webhook_secret_default")
 
-    if provided_secret and any(hmac.compare_digest(provided_secret, s) for s in valid_secrets):
+    if provided_secret and any(hmac.compare_digest(provided_secret.encode("utf-8"), s.encode("utf-8")) for s in valid_secrets):
         return True
 
     signature = (
@@ -121,7 +121,7 @@ def _verify_webhook_signature(request) -> bool:
             raw_body,
             hashlib.sha256
         ).hexdigest()
-        if hmac.compare_digest(signature, expected_sig):
+        if hmac.compare_digest(signature.encode("utf-8"), expected_sig.encode("utf-8")):
             return True
 
     return False
@@ -1200,7 +1200,7 @@ class WorkforceBookingFromQuoteView(APIView):
             # Fixes the same webhook-auth bypass as _verify_webhook_signature
             # above -- this used to also accept the well-known default
             # strings unconditionally, regardless of the configured secret.
-            if not hmac.compare_digest(provided_secret, WORKFORCE_WEBHOOK_SECRET):
+            if not hmac.compare_digest(provided_secret.encode("utf-8"), WORKFORCE_WEBHOOK_SECRET.encode("utf-8")):
                 return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
         else:
             return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)

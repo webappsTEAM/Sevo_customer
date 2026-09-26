@@ -12,6 +12,7 @@ import logging
 import uuid
 from decimal import Decimal
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.http import HttpResponse
@@ -354,7 +355,7 @@ class PaymentVerifyView(APIView):
                 f"{order_id}|{payment_id}".encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
-            if not hmac.compare_digest(expected_signature, str(signature)):
+            if not hmac.compare_digest(expected_signature.encode("utf-8"), str(signature).encode("utf-8")):
                 payment.status = ServiceRequest.PaymentStatus.FAILED
                 payment.error_code = "signature_mismatch"
                 payment.save(update_fields=["status", "error_code", "updated_at"])
