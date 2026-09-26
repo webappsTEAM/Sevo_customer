@@ -215,7 +215,7 @@ class CatalogCategoryListView(APIView):
         from django.core.cache import cache
         from django.conf import settings
 
-        use_cache = not getattr(settings, 'DEBUG', False)
+        use_cache = True
         
         if use_cache:
             data = cache.get("catalog_categories_list")
@@ -244,7 +244,7 @@ class CatalogServiceListView(APIView):
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
-        use_cache = not getattr(settings, 'DEBUG', False)
+        use_cache = True
         cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
         
         if use_cache:
