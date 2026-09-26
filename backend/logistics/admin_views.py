@@ -26,7 +26,7 @@ from accounts.permissions import RequireModuleAccess
 from decimal import Decimal, InvalidOperation
 from django.utils.text import slugify
 
-from .models import GoodsCategory, GoodsItem, ServiceTier, PackersMoversConfig
+from .models import GoodsCategory, GoodsItem, ServiceTier, PackersMoversConfig, LogisticsSlot, Lane, GTFaq
 from .pricing_admin import (
     DESCRIPTIVE_FIELDS,
     PRICING_FIELDS,
@@ -38,9 +38,12 @@ from .pricing_admin import (
 from .serializers import (
     AdminGoodsCategorySerializer,
     AdminGoodsItemSerializer,
+    AdminLogisticsSlotSerializer,
     PackersMoversConfigSerializer,
     ServiceTierChangeLogSerializer,
     ServiceTierPricingSerializer,
+    LaneSerializer,
+    GTFaqSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -265,6 +268,7 @@ class AdminGoodsCategoryListView(APIView):
             slug=slug,
             icon=str(data.get("icon") or "package").strip(),
             description=str(data.get("description") or "").strip(),
+            info_banner=str(data.get("info_banner") or "").strip(),
             allows_two_wheeler=bool(data.get("allows_two_wheeler", True)),
             min_vehicle_class=str(data.get("min_vehicle_class") or "any").strip(),
             order=order,
@@ -338,7 +342,7 @@ class AdminGoodsCategoryDetailView(APIView):
                 cat.slug = new_slug
                 changes.append("slug")
 
-        for field in ("icon", "description", "min_vehicle_class"):
+        for field in ("icon", "description", "info_banner", "min_vehicle_class"):
             if field in data:
                 val = str(data[field] or "").strip()
                 old_val = getattr(cat, field)
@@ -503,6 +507,7 @@ class AdminGoodsItemListView(APIView):
             category=category,
             name=name,
             slug=slug,
+            subcategory=str(data.get("subcategory") or "").strip(),
             unit=str(data.get("unit") or "piece").strip(),
             default_weight_kg=wt,
             default_cft=cft,
@@ -632,6 +637,21 @@ class AdminGoodsItemDetailView(APIView):
                 if new_fee < Decimal("0"):
                     return _fail("Special handling charge cannot be negative.", "INVALID_HANDLING_FEE", status.HTTP_400_BAD_REQUEST)
                 if new_fee != item.special_handling_charge:
+                    # GT audit Update 8: special_handling_charge is a real
+                    # money field (feeds both GT and P&M fare calculations --
+                    # see cargo_fitment.py / packers_movers_pricing.py) but
+                    # this whole view was previously gated only on plain
+                    # "edit" at the top of patch(). Require modify_price
+                    # specifically for this field, checked here (before any
+                    # mutation or audit-log write for it) so the other
+                    # descriptive fields above/below stay on plain "edit".
+                    if not _can(request.user, "modify_price"):
+                        return _fail(
+                            "Changing a goods item's special handling charge "
+                            "requires the 'modify_price' permission on the "
+                            "Pricing module.",
+                            "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+                        )
                     CatalogChangeLog.objects.create(entity_type="GoodsItem", entity_id=item.id, field_name="special_handling_charge", old_value=str(item.special_handling_charge), new_value=str(new_fee), changed_by=request.user, reason=reason)
                     item.special_handling_charge = new_fee
                     if new_fee > 0:
@@ -648,6 +668,13 @@ class AdminGoodsItemDetailView(APIView):
                     CatalogChangeLog.objects.create(entity_type="GoodsItem", entity_id=item.id, field_name=bfield, old_value=str(old_b), new_value=str(bval), changed_by=request.user, reason=reason)
                     setattr(item, bfield, bval)
                     changes.append(bfield)
+
+        if "subcategory" in data:
+            sub_val = str(data["subcategory"] or "").strip()
+            if sub_val != item.subcategory:
+                CatalogChangeLog.objects.create(entity_type="GoodsItem", entity_id=item.id, field_name="subcategory", old_value=item.subcategory, new_value=sub_val, changed_by=request.user, reason=reason)
+                item.subcategory = sub_val
+                changes.append("subcategory")
 
         if "unit" in data:
             u_val = str(data["unit"] or "").strip()
@@ -716,6 +743,16 @@ class AdminPackersMoversConfigView(APIView):
         return _ok(PackersMoversConfigSerializer(config).data)
 
     def patch(self, request):
+        # GT audit Update 7: this used to gate the ENTIRE patch (including
+        # the six rate fields below, which are genuine live pricing inputs
+        # to the P&M fare engine -- see packers_movers_pricing.py) on plain
+        # "edit". Per the RBAC matrix (accounts/permissions.py), "manager"
+        # and "finance" both hold pricing:edit but explicitly NOT
+        # pricing:modify_price -- exactly the roles the modify_price split
+        # exists to keep away from rates. _can(request.user, "edit") alone
+        # is still the right gate for this endpoint to be reachable at all
+        # (and for survey_cft_threshold/is_active, which are not money), but
+        # the six rate fields need the stronger check below.
         if not _can(request.user, "edit"):
             return _fail("Permission denied to edit P&M pricing config.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
         data = request.data if isinstance(request.data, dict) else {}
@@ -740,27 +777,49 @@ class AdminPackersMoversConfigView(APIView):
             "unpacking_rate_cft": "unpacking_rate_cft",
             "gst_rate": "gst_rate",
         }
+
+        # ── Pricing permission gate (Update 7 fix) ──────────────────────────
+        # Parse and validate every rate field FIRST, without mutating config
+        # or writing any audit row, so a denied request leaves the database
+        # completely untouched -- not even a partial write of the fields the
+        # actor "would have" been allowed to change, since all six here are
+        # money. Only after confirming at least one rate field would actually
+        # change value do we require modify_price; a request that resends the
+        # same values needs no elevated permission.
+        _parsed_dec = {}
         for field_name, attr in dec_fields.items():
             if field_name in data:
                 try:
                     val = Decimal(str(data[field_name]))
-                    if val < Decimal("0"):
-                        return _fail(f"{field_name} cannot be negative.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
-                    old_val = getattr(config, attr)
-                    if val != old_val:
-                        CatalogChangeLog.objects.create(
-                            entity_type="PackersMoversConfig",
-                            entity_id=config.id,
-                            field_name=field_name,
-                            old_value=str(old_val),
-                            new_value=str(val),
-                            changed_by=request.user,
-                            reason=reason,
-                        )
-                        setattr(config, attr, val)
-                        changes.append(field_name)
                 except (InvalidOperation, TypeError, ValueError):
                     return _fail(f"Invalid decimal for {field_name}.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if val < Decimal("0"):
+                    return _fail(f"{field_name} cannot be negative.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+                if val != getattr(config, attr):
+                    _parsed_dec[field_name] = val
+        if _parsed_dec and not _can(request.user, "modify_price"):
+            return _fail(
+                "Changing Packers & Movers pricing rates requires the "
+                "'modify_price' permission on the Pricing module.",
+                "PRICING_FORBIDDEN", status.HTTP_403_FORBIDDEN,
+            )
+        # ── End pricing permission gate ─────────────────────────────────────
+
+        for field_name, attr in dec_fields.items():
+            if field_name in _parsed_dec:
+                val = _parsed_dec[field_name]
+                old_val = getattr(config, attr)
+                CatalogChangeLog.objects.create(
+                    entity_type="PackersMoversConfig",
+                    entity_id=config.id,
+                    field_name=field_name,
+                    old_value=str(old_val),
+                    new_value=str(val),
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                setattr(config, attr, val)
+                changes.append(field_name)
 
         if "survey_cft_threshold" in data:
             try:
@@ -783,6 +842,32 @@ class AdminPackersMoversConfigView(APIView):
             except (ValueError, TypeError):
                 return _fail("Invalid number for survey_cft_threshold.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
 
+        # Helper-count limit: crew-size / operations setting, not money, so
+        # plain "edit" is enough (same as survey_cft_threshold).
+        if "max_helpers" in data:
+            from .models import MAX_HELPERS_CAP
+            raw_h = data["max_helpers"]
+            try:
+                if isinstance(raw_h, bool) or float(raw_h) != int(float(raw_h)):
+                    raise ValueError
+                h_val = int(float(raw_h))
+            except (ValueError, TypeError):
+                return _fail("max_helpers must be a whole number.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+            if h_val < 0 or h_val > MAX_HELPERS_CAP:
+                return _fail(f"max_helpers must be between 0 and {MAX_HELPERS_CAP}.", "INVALID_VALUE", status.HTTP_400_BAD_REQUEST)
+            if h_val != config.max_helpers:
+                CatalogChangeLog.objects.create(
+                    entity_type="PackersMoversConfig",
+                    entity_id=config.id,
+                    field_name="max_helpers",
+                    old_value=str(config.max_helpers),
+                    new_value=str(h_val),
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                config.max_helpers = h_val
+                changes.append("max_helpers")
+
         if "is_active" in data:
             b_val = bool(data["is_active"])
             if b_val != config.is_active:
@@ -793,5 +878,569 @@ class AdminPackersMoversConfigView(APIView):
             config.save()
 
         return _ok(PackersMoversConfigSerializer(config).data, changed=changes, message="P&M pricing config updated successfully.")
+
+
+class AdminLogisticsSlotListView(APIView):
+    """
+    GET  /api/logistics/admin/slots/  -- list all operating slots with filters
+    POST /api/logistics/admin/slots/  -- create a new operating time slot
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        qs = LogisticsSlot.objects.all()
+
+        cat = (request.query_params.get("category") or "").strip().lower()
+        if cat:
+            qs = qs.filter(Q(category="") | Q(category__iexact=cat))
+
+        city = (request.query_params.get("city") or "").strip().lower()
+        if city:
+            qs = qs.filter(Q(city="") | Q(city__iexact=city))
+
+        group = (request.query_params.get("group") or "").strip()
+        if group:
+            qs = qs.filter(group__iexact=group)
+
+        is_active = (request.query_params.get("is_active") or "").strip().lower()
+        if is_active in ("true", "1", "yes"):
+            qs = qs.filter(is_active=True)
+        elif is_active in ("false", "0", "no"):
+            qs = qs.filter(is_active=False)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(Q(slot_label__icontains=search) | Q(group__icontains=search))
+
+        qs = qs.order_by("category", "city", "order", "start_time")
+        data = AdminLogisticsSlotSerializer(qs, many=True).data
+        return _ok(data, total_count=len(data))
+
+    def post(self, request):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to create slots.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        slot_label = str(data.get("slot_label") or "").strip()
+        if not slot_label:
+            return _fail("Slot label is required (e.g. '08:00 AM - 09:00 AM').", "LABEL_REQUIRED", status.HTTP_400_BAD_REQUEST)
+
+        group = str(data.get("group") or "Morning").strip()
+        category = str(data.get("category") or "").strip()
+        city = str(data.get("city") or "").strip().lower()
+
+        try:
+            capacity = int(data.get("capacity") or 10)
+            if capacity < 1:
+                return _fail("Capacity must be at least 1.", "INVALID_CAPACITY", status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            capacity = 10
+
+        try:
+            order = int(data.get("order") or 0)
+        except (ValueError, TypeError):
+            order = 0
+
+        slot = LogisticsSlot.objects.create(
+            category=category,
+            city=city,
+            group=group,
+            slot_label=slot_label,
+            capacity=capacity,
+            order=order,
+            is_active=bool(data.get("is_active", True)),
+        )
+
+        from service_requests.models import CatalogChangeLog
+        CatalogChangeLog.objects.create(
+            entity_type="LogisticsSlot",
+            entity_id=slot.id,
+            field_name="created",
+            old_value="",
+            new_value=f"[{category or 'all'}/{city or 'all'}] {slot_label}",
+            changed_by=request.user,
+            reason=str(data.get("reason") or "Created via Logistics Admin API").strip(),
+        )
+
+        return _ok(AdminLogisticsSlotSerializer(slot).data, message="Operating slot created successfully.")
+
+
+class AdminLogisticsSlotDetailView(APIView):
+    """
+    GET    /api/logistics/admin/slots/<pk>/  -- slot detail
+    PATCH  /api/logistics/admin/slots/<pk>/  -- update slot configuration
+    DELETE /api/logistics/admin/slots/<pk>/  -- toggle active / delete
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _slot(self, pk):
+        return LogisticsSlot.objects.filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        slot = self._slot(pk)
+        if not slot:
+            return _fail("Logistics slot not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        return _ok(AdminLogisticsSlotSerializer(slot).data)
+
+    def patch(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit slots.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        slot = self._slot(pk)
+        if not slot:
+            return _fail("Logistics slot not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        from service_requests.models import CatalogChangeLog
+        reason = str(data.get("reason") or "Updated via Logistics Admin API").strip()
+        changes = []
+
+        for str_field in ("slot_label", "group", "category", "city"):
+            if str_field in data:
+                val = str(data[str_field] or "").strip()
+                old_val = getattr(slot, str_field)
+                if val != old_val:
+                    CatalogChangeLog.objects.create(
+                        entity_type="LogisticsSlot", entity_id=slot.id,
+                        field_name=str_field, old_value=str(old_val), new_value=val,
+                        changed_by=request.user, reason=reason
+                    )
+                    setattr(slot, str_field, val)
+                    changes.append(str_field)
+
+        if "capacity" in data:
+            try:
+                c_val = int(data["capacity"])
+                if c_val >= 1 and c_val != slot.capacity:
+                    CatalogChangeLog.objects.create(
+                        entity_type="LogisticsSlot", entity_id=slot.id,
+                        field_name="capacity", old_value=str(slot.capacity), new_value=str(c_val),
+                        changed_by=request.user, reason=reason
+                    )
+                    slot.capacity = c_val
+                    changes.append("capacity")
+            except (ValueError, TypeError):
+                pass
+
+        if "order" in data:
+            try:
+                ord_val = int(data["order"])
+                if ord_val != slot.order:
+                    CatalogChangeLog.objects.create(
+                        entity_type="LogisticsSlot", entity_id=slot.id,
+                        field_name="order", old_value=str(slot.order), new_value=str(ord_val),
+                        changed_by=request.user, reason=reason
+                    )
+                    slot.order = ord_val
+                    changes.append("order")
+            except (ValueError, TypeError):
+                pass
+
+        if "is_active" in data:
+            b_val = bool(data["is_active"])
+            if b_val != slot.is_active:
+                CatalogChangeLog.objects.create(
+                    entity_type="LogisticsSlot", entity_id=slot.id,
+                    field_name="is_active", old_value=str(slot.is_active), new_value=str(b_val),
+                    changed_by=request.user, reason=reason
+                )
+                slot.is_active = b_val
+                changes.append("is_active")
+
+        if changes:
+            slot.save()
+
+        return _ok(AdminLogisticsSlotSerializer(slot).data, changed=changes, message="Slot updated successfully.")
+
+    def delete(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to deactivate slots.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        slot = self._slot(pk)
+        if not slot:
+            return _fail("Logistics slot not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        slot.is_active = False
+        slot.save(update_fields=["is_active", "updated_at"])
+        return _ok(AdminLogisticsSlotSerializer(slot).data, message="Slot deactivated successfully.")
+
+
+class AdminLaneListView(APIView):
+    """
+    GET  /api/logistics/admin/lanes/  -- list all lanes with filtering
+    POST /api/logistics/admin/lanes/  -- create a new fixed-fare lane
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view lanes.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        qs = Lane.objects.all()
+        cat = (request.query_params.get("category") or "").strip().lower()
+        if cat:
+            qs = qs.filter(category__iexact=cat)
+
+        city = (request.query_params.get("city") or "").strip().lower()
+        if city:
+            qs = qs.filter(city__iexact=city)
+
+        is_active = (request.query_params.get("is_active") or "").strip().lower()
+        if is_active in ("true", "1", "yes"):
+            qs = qs.filter(is_active=True)
+        elif is_active in ("false", "0", "no"):
+            qs = qs.filter(is_active=False)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(Q(destination_label__icontains=search) | Q(city__icontains=search))
+
+        qs = qs.order_by("category", "city", "order", "id")
+        data = LaneSerializer(qs, many=True).data
+        return _ok(data, total_count=len(data))
+
+    def post(self, request):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to create lanes.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        destination_label = str(data.get("destination_label") or "").strip()
+        if not destination_label:
+            return _fail("Destination label is required (e.g. 'Bengaluru Hub').", "LABEL_REQUIRED", status.HTTP_400_BAD_REQUEST)
+
+        category = str(data.get("category") or "goods_transport_truck").strip()
+        city = str(data.get("city") or "Hosur").strip()
+
+        try:
+            fare = Decimal(str(data.get("fare") or "0.00"))
+            if fare < Decimal("0.00"):
+                return _fail("Fare must be non-negative.", "INVALID_FARE", status.HTTP_400_BAD_REQUEST)
+        except (InvalidOperation, TypeError, ValueError):
+            return _fail("Invalid fare amount.", "INVALID_FARE", status.HTTP_400_BAD_REQUEST)
+
+        distance_km = None
+        if data.get("distance_km") not in (None, ""):
+            try:
+                distance_km = Decimal(str(data["distance_km"]))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        dest_lat = None
+        if data.get("destination_latitude") not in (None, ""):
+            try:
+                dest_lat = Decimal(str(data["destination_latitude"]))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        dest_lng = None
+        if data.get("destination_longitude") not in (None, ""):
+            try:
+                dest_lng = Decimal(str(data["destination_longitude"]))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        try:
+            order = int(data.get("order") or 0)
+        except (ValueError, TypeError):
+            order = 0
+
+        lane = Lane.objects.create(
+            category=category,
+            city=city,
+            destination_label=destination_label,
+            destination_latitude=dest_lat,
+            destination_longitude=dest_lng,
+            distance_km=distance_km,
+            eta_label=str(data.get("eta_label") or "").strip(),
+            fare=fare,
+            currency=str(data.get("currency") or "INR").strip(),
+            order=order,
+            is_active=bool(data.get("is_active", True)),
+        )
+
+        from service_requests.models import CatalogChangeLog
+        CatalogChangeLog.objects.create(
+            entity_type="Lane",
+            entity_id=lane.id,
+            field_name="created",
+            old_value="",
+            new_value=f"[{category}/{city}] -> {destination_label} (₹{fare})",
+            changed_by=request.user,
+            reason=str(data.get("reason") or "Created via Logistics Admin API").strip(),
+        )
+
+        return _ok(LaneSerializer(lane).data, message="Lane created successfully.")
+
+
+class AdminLaneDetailView(APIView):
+    """
+    GET    /api/logistics/admin/lanes/<pk>/  -- lane detail
+    PATCH  /api/logistics/admin/lanes/<pk>/  -- update lane
+    DELETE /api/logistics/admin/lanes/<pk>/  -- toggle active / delete
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _lane(self, pk):
+        return Lane.objects.filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view lane.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        lane = self._lane(pk)
+        if not lane:
+            return _fail("Lane not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        return _ok(LaneSerializer(lane).data)
+
+    def patch(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit lanes.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        lane = self._lane(pk)
+        if not lane:
+            return _fail("Lane not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        reason = str(data.get("reason") or "Updated via Logistics Admin API").strip()
+        from service_requests.models import CatalogChangeLog
+
+        changes = []
+        for str_field in ("category", "city", "destination_label", "eta_label", "currency"):
+            if str_field in data:
+                val = str(data[str_field] or "").strip()
+                old_val = getattr(lane, str_field, "")
+                if val != old_val:
+                    CatalogChangeLog.objects.create(
+                        entity_type="Lane", entity_id=lane.id,
+                        field_name=str_field, old_value=str(old_val), new_value=val,
+                        changed_by=request.user, reason=reason
+                    )
+                    setattr(lane, str_field, val)
+                    changes.append(str_field)
+
+        for dec_field in ("fare", "distance_km", "destination_latitude", "destination_longitude"):
+            if dec_field in data:
+                raw_val = data[dec_field]
+                old_val = getattr(lane, dec_field)
+                if raw_val in (None, ""):
+                    new_val = None
+                else:
+                    try:
+                        new_val = Decimal(str(raw_val))
+                    except (InvalidOperation, TypeError, ValueError):
+                        continue
+                if new_val != old_val:
+                    CatalogChangeLog.objects.create(
+                        entity_type="Lane", entity_id=lane.id,
+                        field_name=dec_field, old_value=str(old_val), new_value=str(new_val),
+                        changed_by=request.user, reason=reason
+                    )
+                    setattr(lane, dec_field, new_val)
+                    changes.append(dec_field)
+
+        if "order" in data:
+            try:
+                ord_val = int(data["order"])
+                if ord_val != lane.order:
+                    CatalogChangeLog.objects.create(
+                        entity_type="Lane", entity_id=lane.id,
+                        field_name="order", old_value=str(lane.order), new_value=str(ord_val),
+                        changed_by=request.user, reason=reason
+                    )
+                    lane.order = ord_val
+                    changes.append("order")
+            except (ValueError, TypeError):
+                pass
+
+        if "is_active" in data:
+            b_val = bool(data["is_active"])
+            if b_val != lane.is_active:
+                CatalogChangeLog.objects.create(
+                    entity_type="Lane", entity_id=lane.id,
+                    field_name="is_active", old_value=str(lane.is_active), new_value=str(b_val),
+                    changed_by=request.user, reason=reason
+                )
+                lane.is_active = b_val
+                changes.append("is_active")
+
+        if changes:
+            lane.save()
+
+        return _ok(LaneSerializer(lane).data, changed=changes, message="Lane updated successfully.")
+
+    def delete(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to deactivate lanes.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        lane = self._lane(pk)
+        if not lane:
+            return _fail("Lane not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        lane.is_active = False
+        lane.save(update_fields=["is_active", "updated_at"])
+        return _ok(LaneSerializer(lane).data, message="Lane deactivated successfully.")
+
+
+class AdminGTFaqListView(APIView):
+    """
+    GET  /api/logistics/admin/faqs/  -- list all GT FAQs with filtering
+    POST /api/logistics/admin/faqs/  -- create a new FAQ
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view FAQs.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        qs = GTFaq.objects.all()
+        cat = (request.query_params.get("category") or "").strip().lower()
+        if cat:
+            qs = qs.filter(Q(category="") | Q(category__iexact=cat))
+
+        city = (request.query_params.get("city") or "").strip().lower()
+        if city:
+            qs = qs.filter(Q(city="") | Q(city__iexact=city))
+
+        is_active = (request.query_params.get("is_active") or "").strip().lower()
+        if is_active in ("true", "1", "yes"):
+            qs = qs.filter(is_active=True)
+        elif is_active in ("false", "0", "no"):
+            qs = qs.filter(is_active=False)
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(Q(question__icontains=search) | Q(answer__icontains=search))
+
+        qs = qs.order_by("category", "city", "order", "id")
+        data = GTFaqSerializer(qs, many=True).data
+        return _ok(data, total_count=len(data))
+
+    def post(self, request):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to create FAQs.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        question = str(data.get("question") or "").strip()
+        answer = str(data.get("answer") or "").strip()
+        if not question or not answer:
+            return _fail("Both question and answer are required.", "FIELDS_REQUIRED", status.HTTP_400_BAD_REQUEST)
+
+        category = str(data.get("category") or "").strip().lower()
+        city = str(data.get("city") or "").strip().lower()
+
+        try:
+            order = int(data.get("order") or 0)
+        except (ValueError, TypeError):
+            order = 0
+
+        faq = GTFaq.objects.create(
+            category=category,
+            city=city,
+            question=question,
+            answer=answer,
+            order=order,
+            is_active=bool(data.get("is_active", True)),
+        )
+
+        from service_requests.models import CatalogChangeLog
+        CatalogChangeLog.objects.create(
+            entity_type="GTFaq",
+            entity_id=faq.id,
+            field_name="created",
+            old_value="",
+            new_value=f"[{category or 'all'}/{city or 'all'}] {question[:50]}",
+            changed_by=request.user,
+            reason=str(data.get("reason") or "Created via Logistics Admin API").strip(),
+        )
+
+        return _ok(GTFaqSerializer(faq).data, message="FAQ created successfully.")
+
+
+class AdminGTFaqDetailView(APIView):
+    """
+    GET    /api/logistics/admin/faqs/<pk>/  -- FAQ detail
+    PATCH  /api/logistics/admin/faqs/<pk>/  -- update FAQ
+    DELETE /api/logistics/admin/faqs/<pk>/  -- toggle active / delete
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _faq(self, pk):
+        return GTFaq.objects.filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not _can(request.user, "view"):
+            return _fail("Permission denied to view FAQ.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        faq = self._faq(pk)
+        if not faq:
+            return _fail("FAQ not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        return _ok(GTFaqSerializer(faq).data)
+
+    def patch(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to edit FAQs.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        faq = self._faq(pk)
+        if not faq:
+            return _fail("FAQ not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        data = request.data if isinstance(request.data, dict) else {}
+        reason = str(data.get("reason") or "Updated via Logistics Admin API").strip()
+        from service_requests.models import CatalogChangeLog
+
+        changes = []
+        for str_field in ("category", "city", "question", "answer"):
+            if str_field in data:
+                val = str(data[str_field] or "").strip()
+                old_val = getattr(faq, str_field, "")
+                if val != old_val:
+                    CatalogChangeLog.objects.create(
+                        entity_type="GTFaq", entity_id=faq.id,
+                        field_name=str_field, old_value=str(old_val)[:200], new_value=val[:200],
+                        changed_by=request.user, reason=reason
+                    )
+                    setattr(faq, str_field, val)
+                    changes.append(str_field)
+
+        if "order" in data:
+            try:
+                ord_val = int(data["order"])
+                if ord_val != faq.order:
+                    CatalogChangeLog.objects.create(
+                        entity_type="GTFaq", entity_id=faq.id,
+                        field_name="order", old_value=str(faq.order), new_value=str(ord_val),
+                        changed_by=request.user, reason=reason
+                    )
+                    faq.order = ord_val
+                    changes.append("order")
+            except (ValueError, TypeError):
+                pass
+
+        if "is_active" in data:
+            b_val = bool(data["is_active"])
+            if b_val != faq.is_active:
+                CatalogChangeLog.objects.create(
+                    entity_type="GTFaq", entity_id=faq.id,
+                    field_name="is_active", old_value=str(faq.is_active), new_value=str(b_val),
+                    changed_by=request.user, reason=reason
+                )
+                faq.is_active = b_val
+                changes.append("is_active")
+
+        if changes:
+            faq.save()
+
+        return _ok(GTFaqSerializer(faq).data, changed=changes, message="FAQ updated successfully.")
+
+    def delete(self, request, pk):
+        if not _can(request.user, "edit"):
+            return _fail("Permission denied to deactivate FAQs.", "FORBIDDEN", status.HTTP_403_FORBIDDEN)
+        faq = self._faq(pk)
+        if not faq:
+            return _fail("FAQ not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+
+        faq.is_active = False
+        faq.save(update_fields=["is_active", "updated_at"])
+        return _ok(GTFaqSerializer(faq).data, message="FAQ deactivated successfully.")
+
+
 
 

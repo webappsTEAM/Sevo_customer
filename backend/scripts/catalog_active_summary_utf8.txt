@@ -1,0 +1,253 @@
+
+=======================================================
+CATEGORY #16 [home_pest_control] 'Cleaning & Pest Control'
+=======================================================
+  SERVICE #28 [pest-control] 'Pest & Termite Control' (4 active pkgs)
+    - Pkg #200 [pest-termite-kb] 'Termite Control (Kitchen & Bathroom)' | Price: ₹None | 2-3 hrs
+    - Pkg #201 [pest-termite-apt] 'Apartment Termite Extermination' | Price: ₹None | 2-3 hrs
+    - Pkg #202 [pest-termite-bung] 'Bungalow & Villa Termite Extermination' | Price: ₹None | 2-3 hrs
+    - Pkg #1006 [cockroach-ant-control-apartment] 'Intense Cockroach & Ant Control (Apartment)' | Price: ₹699.00 | 45 mins
+  SERVICE #25 [bathroom-cleaning] 'Bathroom Cleaning' (3 active pkgs)
+    - Pkg #988 [deep-cleaning] 'Intense Bathroom Deep Cleaning (1 Bathroom)' | Price: ₹349.00 | 45-60 mins
+    - Pkg #1004 [2-bathrooms-deep-cleaning-combo] '2 Bathrooms Deep Cleaning Combo' | Price: ₹699.00 | 1.5 - 2 hrs
+    - Pkg #1005 [3-bathrooms-deep-cleaning-combo] '3 Bathrooms Deep Cleaning Combo' | Price: ₹999.00 | 2 - 2.5 hrs
+  SERVICE #23 [kitchen-cleaning] 'Kitchen Cleaning' (22 active pkgs)
+    - Pkg #310 [occ-basic] 'Full Kitchen cleaning(Basic)' | Price: ₹None | 2 hrs
+    - Pkg #311 [occ-deep] 'Full Kitchen Cleaning – Deep Clean' | Price: ₹None | 3 hrs
+    - Pkg #312 [empty-kitchen] 'Empty Kitchen Cleaning' | Price: ₹None | 1.5 hrs
+    - Pkg #313 [kitchen-tiles-slabs] 'Kitchen Tiles and Slabs Cleaning' | Price: ₹None | 45 mins
+    - Pkg #314 [cabinet-trolley-clean] 'Cabinet & Trolley Cleaning (Interior & exterior)' | Price: ₹None | 1.5 hrs
+    - Pkg #315 [fridge-single] 'Fridge cleaning - Single door' | Price: ₹None | 30 mins
+    - Pkg #316 [fridge-double] 'Fridge cleaning - Double door' | Price: ₹None | 1 hr
+    - Pkg #317 [fridge-triple] 'Fridge cleaning - Side by side/ Triple door' | Price: ₹None | 1 hr
+    - Pkg #318 [chimney-clean] 'Chimney Cleaning' | Price: ₹None | 45 mins
+    - Pkg #319 [chimney-stove-clean] 'Chimney & stove cleaning' | Price: ₹None | 1 hr 10 mins
+    - Pkg #320 [stove-2b] 'Gas stove cleaning - 2 burners' | Price: ₹None | 30 mins
+    - Pkg #321 [stove-3b] 'Gas stove cleaning - 3 burners' | Price: ₹None | 45 mins
+    - Pkg #322 [stove-4b] 'Gas stove cleaning - 4+ burners' | Price: ₹None | 1 hr
+    - Pkg #323 [dishwasher-clean] 'Dishwasher Cleaning' | Price: ₹None | 1 hr
+    - Pkg #324 [air-fryer-clean] 'Air fryer cleaning' | Price: ₹None | 30 mins
+    - Pkg #325 [otg-clean] 'OTG cleaning' | Price: ₹None | 50 mins
+    - Pkg #326 [sandwich-clean] 'Sandwich Maker/Griller cleaning' | Price: ₹None | 15 mins
+    - Pkg #327 [quick-sink-under-sink] 'Sink & under sink cleaning' | Price: ₹None | 20 mins
+    - Pkg #328 [quick-kitchen-window] 'Kitchen Window Cleaning' | Price: ₹None | 30 mins
+    - Pkg #329 [quick-dining-table] 'Dining Table & Chairs Cleaning' | Price: ₹None | 30 mins
+    - Pkg #331 [quick-exhaust-fan-clean] 'Kitchen Exhaust Fan Cleaning' | Price: ₹None | 30 mins
+    - Pkg #411 [kitchen-microwave-clean] 'Microwave cleaning' | Price: ₹None | 15 mins
+  SERVICE #24 [sofa-cleaning] 'Sofa Cleaning' (7 active pkgs)
+    - Pkg #166 [fabric-sofa-clean] 'Fabric Sofa Cleaning' | Price: ₹None | 1 hr
+    - Pkg #167 [fabric-sofa-cushion-clean] 'Fabric Sofa & Cushion Cleaning' | Price: ₹None | 1.5 hrs
+    - Pkg #168 [leather-sofa-clean] 'Leather Sofa Cleaning' | Price: ₹None | 1 hr
+    - Pkg #169 [leather-sofa-cushion-clean] 'Leather Sofa & Cushion Cleaning' | Price: ₹None | 1.5 hrs
+    - Pkg #170 [mattress-deep] 'Mattress Deep Cleaning' | Price: ₹None | 1 hr
+    - Pkg #171 [mattress-pillow-refresh] 'Mattress & Pillow Refresh' | Price: ₹None | 1.5 hrs
+    - Pkg #172 [carpet-deep] 'Carpet Cleaning' | Price: ₹None | 1 hr
+  SERVICE #26 [full-house-cleaning] 'Full House Cleaning' (14 active pkgs)
+    - Pkg #184 [unfurnished-apt-deep] 'Unoccupied apartment' | Price: ₹None | 3  hrs
+    - Pkg #185 [classic-apt-deep] 'Full Apartment Cleaning — Classic' | Price: ₹None | 4 hrs
+    - Pkg #186 [gold-apt-deep] 'Full Apartment Cleaning — Gold' | Price: ₹None | 4 hrs
+    - Pkg #187 [diamond-apt-deep] 'Full Apartment Cleaning — Diamond' | Price: ₹None | 4 hrs 30 mins
+    - Pkg #188 [unoccupied-bungalow-deep] 'Unoccupied Apartment Move-in Clean' | Price: ₹None | 5 hrs
+    - Pkg #189 [classic-bungalow-deep] 'Villa Deep Cleaning — Classic' | Price: ₹None | 5 hrs
+    - Pkg #190 [gold-bungalow-deep] 'Villa Deep Cleaning — Gold' | Price: ₹None | 5 hrs 30 mins
+    - Pkg #191 [diamond-bungalow-deep] 'Villa Deep Cleaning — Diamond' | Price: ₹None | 6 hrs
+    - Pkg #194 [window-clean-under-4] 'Window Cleaning (Upto 4 Ft X 4 Ft)' | Price: ₹None | 30 mins
+    - Pkg #195 [window-clean-above-4] 'Window Cleaning (Above 4 Ft X 4 Ft)' | Price: ₹None | 1 hr
+    - Pkg #330 [quick-fan-clean] 'Ceiling Fan Cleaning' | Price: ₹None | 15 mins
+    - Pkg #332 [quick-balcony-upto-4ft] 'Balcony Cleaning: Upto 4 ft Width' | Price: ₹None | 30 mins
+    - Pkg #333 [quick-balcony-above-4ft] 'Balcony Cleaning: Above 4 ft Width' | Price: ₹None | 50 mins
+    - Pkg #334 [quick-door-clean] 'Door Cleaning' | Price: ₹None | 10 mins
+
+=======================================================
+CATEGORY #17 [paintings] 'Painting & Waterproofing'
+=======================================================
+  SERVICE #94 [wood-metal] 'Wood & Metal' (5 active pkgs)
+    - Pkg #751 [wm-doors] 'Doors' | Price: ₹None | 3 days
+    - Pkg #752 [wm-windows] 'Windows' | Price: ₹None | 6 days
+    - Pkg #753 [wm-grills] 'Grills' | Price: ₹None | 4 days
+    - Pkg #754 [wm-cabinets] 'Cabinet' | Price: ₹None | 5 days
+    - Pkg #755 [wm-gates] 'Gates' | Price: ₹None | 6 days
+  SERVICE #92 [exterior-painting] 'Exterior Painting' (4 active pkgs)
+    - Pkg #742 [ext-wall] 'Exterior Wall' | Price: ₹None | 2-3 days
+    - Pkg #743 [ext-building] 'Building Exterior' | Price: ₹None | 3-5 days
+    - Pkg #744 [ext-compound] 'Compound Wall' | Price: ₹None | 5-7 days
+    - Pkg #745 [ext-terrace] 'Terrace' | Price: ₹None | 1-2 days
+  SERVICE #91 [interior-painting] 'Interior Painting' (6 active pkgs)
+    - Pkg #737 [int-single-wall] 'Single Wall' | Price: ₹None | 1-2 days
+    - Pkg #738 [int-one-room] 'One Room' | Price: ₹None | 2-3 days
+    - Pkg #739 [int-multi-room] 'Two or More Rooms' | Price: ₹None | 3-5 days
+    - Pkg #740 [int-full-home] 'Full Home' | Price: ₹None | 1-2 weeks
+    - Pkg #741 [int-ceiling] 'Ceiling' | Price: ₹None | 1 day
+    - Pkg #1007 [free-interior-laser-consultation] 'Free On-Site Laser Measurement & Color Consultation' | Price: ₹0.00 | 45 mins
+  SERVICE #93 [waterproofing] 'Waterproofing' (8 active pkgs)
+    - Pkg #938 [wp-tank] 'Water Tank Waterproofing' | Price: ₹1700.00 | 1 day
+    - Pkg #939 [wp-bathroom] 'Bathroom Waterproofing' | Price: ₹3500.00 | 1 day
+    - Pkg #940 [wp-terrace-2] 'Terrace Waterproofing — 2 Coat' | Price: ₹20.00 | 1 day
+    - Pkg #941 [wp-terrace-4] 'Terrace Waterproofing — 4 Coat' | Price: ₹50.00 | 2 days
+    - Pkg #942 [wp-pu-dampness] 'PU Coating / Dampness Treatment' | Price: ₹35.00 | 1 day
+    - Pkg #943 [wp-tarsheet] '3 mm Tar Sheet / Gas Heating Waterproofing' | Price: ₹100.00 | 2 days
+    - Pkg #944 [wp-roof-repair] 'Roof Repair / Patch Work' | Price: ₹30.00 | 1 day
+    - Pkg #945 [wp-epoxy] 'Industrial Epoxy Flooring' | Price: ₹60.00 | 2 days
+
+=======================================================
+CATEGORY #39 [electrician_plumbing_carpentry] 'Electrician, Plumber & Carpenter'
+=======================================================
+  SERVICE #137 [electrician] 'Electrician Services' (4 active pkgs)
+    - Pkg #1011 [switch-socket-replacement] 'Switch / Socket Installation & Repair' | Price: ₹149.00 | 30 mins
+    - Pkg #1012 [ceiling-fan-installation] 'Ceiling Fan Installation / Regulator Repair' | Price: ₹249.00 | 30-45 mins
+    - Pkg #1013 [mcb-fuse-tripping-fix] 'MCB Tripping & Short Circuit Fix' | Price: ₹399.00 | 45 mins
+    - Pkg #1014 [full-house-electrical-audit] 'Complete Home Electrical Health Audit' | Price: ₹999.00 | 1.5 hrs
+  SERVICE #138 [plumbing] 'Plumber Services' (3 active pkgs)
+    - Pkg #1015 [tap-mixer-repair-replacement] 'Tap / Mixer Installation & Leak Repair' | Price: ₹149.00 | 30 mins
+    - Pkg #1016 [drain-blockage-unclogging] 'Washbasin / Sink / Floor Drain Unclogging' | Price: ₹349.00 | 45 mins
+    - Pkg #1017 [toilet-flush-tank-repair] 'Toilet Flush Tank & Commode Leak Fix' | Price: ₹299.00 | 45 mins
+  SERVICE #139 [carpentry] 'Carpenter Services' (3 active pkgs)
+    - Pkg #1018 [lock-latch-replacement] 'Door Lock & Handle Installation / Repair' | Price: ₹249.00 | 30-45 mins
+    - Pkg #1019 [furniture-bed-wardrobe-assembly] 'Furniture Assembly / Disassembly (Bed / Wardrobe)' | Price: ₹499.00 | 1-1.5 hrs
+    - Pkg #1020 [drill-hang-wall-shelf] 'Drill & Wall Hang (Shelves, Curtains, Mirrors)' | Price: ₹199.00 | 30 mins
+
+=======================================================
+CATEGORY #15 [ac_appliance] 'AC & Appliance Repair'
+=======================================================
+  SERVICE #136 [microwave] 'Microwave Repair' (1 active pkgs)
+    - Pkg #1003 [microwave-repair-check] 'Microwave Heating & Spark Diagnostics' | Price: ₹249.00 | 30 mins
+  SERVICE #130 [refrigerator] 'Refrigerator Repair' (4 active pkgs)
+    - Pkg #971 [fresh-gas-filling] 'Refrigerator Gas Charging & Leak Check' | Price: ₹899.00 | 45 mins
+    - Pkg #989 [motor-repair] 'Compressor & Motor Diagnostics' | Price: ₹399.00 | 45 mins
+    - Pkg #997 [fridge-cooling-issue-check] 'Refrigerator Inspection & Diagnostics' | Price: ₹249.00 | 30-45 mins
+    - Pkg #998 [fridge-gas-refill] 'Refrigerator Gas Charging (R600a / R134a)' | Price: ₹1699.00 | 1 hr
+  SERVICE #134 [washing-machine] 'Washing Machine Repair' (2 active pkgs)
+    - Pkg #999 [washing-machine-deep-clean] 'Washing Machine Drum Jet Descaling' | Price: ₹599.00 | 45 mins
+    - Pkg #1000 [washing-machine-repair-check] 'Washing Machine Repair & Diagnostics' | Price: ₹249.00 | 30-45 mins
+  SERVICE #135 [tv-display] 'TV Installation & Repair' (2 active pkgs)
+    - Pkg #1001 [tv-wall-mounting] 'LED / Smart TV Wall Mounting' | Price: ₹399.00 | 30-45 mins
+    - Pkg #1002 [tv-repair-check] 'TV Fault Diagnostics (Sound / Backlight)' | Price: ₹299.00 | 30-45 mins
+  SERVICE #62 [ac-service-cleaning] 'AC Service & Cleaning' (3 active pkgs)
+    - Pkg #994 [general-ac-service] 'General AC Service' | Price: ₹349.00 | 30 mins
+    - Pkg #995 [foam-power-jet-split] 'Foam & Power Jet AC Service — Split' | Price: ₹599.00 | 45 mins
+    - Pkg #996 [anti-rust-deep-clean-ac] 'Anti-Rust Deep Clean AC Service' | Price: ₹799.00 | 60 mins
+  SERVICE #63 [ac-repair] 'AC Repair & Diagnostics' (6 active pkgs)
+    - Pkg #278 [ac-less-no-cooling-check] 'AC Less / No Cooling Diagnostics' | Price: ₹None | 30 mins
+    - Pkg #279 [ac-water-leakage-repair] 'AC Water Leakage & Drain Repair' | Price: ₹None | 35 mins
+    - Pkg #493 [ac-noise-vibration-check] 'AC Noise & Vibration Diagnostics' | Price: ₹None | 30 mins
+    - Pkg #494 [ac-fan-motor-repair] 'AC Fan Motor Replacement / Repair' | Price: ₹None | 45 mins
+    - Pkg #495 [ac-sensor-remote-repair] 'AC On / Off & Remote Sensor Repair' | Price: ₹None | 30 mins
+    - Pkg #496 [ac-inverter-error-codes] 'Inverter AC Error Code Diagnostics' | Price: ₹None | 40 mins
+  SERVICE #64 [ac-gas-refill] 'AC Gas & Refrigerant' (6 active pkgs)
+    - Pkg #280 [ac-complete-gas-refill] 'Complete AC Gas Charging (R32 / R410A / R22)' | Price: ₹None | 1 hr
+    - Pkg #281 [ac-gas-topup] 'AC Gas Top-Up & Pressure Balancing' | Price: ₹None | 45 mins
+    - Pkg #497 [ac-nitrogen-leak-test] 'High-Pressure Nitrogen Leak Test' | Price: ₹None | 30 mins
+    - Pkg #498 [ac-brazing-welding] 'Copper Coil Pinhole Brazing & Welding' | Price: ₹None | 45 mins
+    - Pkg #604 [hvac-gas-3] 'Service Valve Replacement' | Price: ₹None | 45 mins
+    - Pkg #605 [hvac-gas-4] 'Cooling Coil / Condenser Coil Repair' | Price: ₹None | 1.5 hrs
+  SERVICE #65 [ac-installation] 'AC Installation & Uninstallation' (8 active pkgs)
+    - Pkg #282 [split-ac-installation] 'Split AC Complete Installation' | Price: ₹None | 1.5 hrs
+    - Pkg #283 [split-ac-uninstallation] 'Split AC Safe Uninstallation' | Price: ₹None | 45 mins
+    - Pkg #499 [split-ac-reinstallation-combo] 'Split AC Dismount & Re-Installation Combo' | Price: ₹None | 2.5 hrs
+    - Pkg #500 [window-ac-installation] 'Window AC Installation' | Price: ₹None | 45 mins
+    - Pkg #501 [outdoor-wall-bracket-fit] 'Heavy-Duty Outdoor AC Wall Stand Fit' | Price: ₹None | 30 mins
+    - Pkg #609 [hvac-reinst-ind] 'Indoor Unit Reinstallation' | Price: ₹None | 1 hr
+    - Pkg #610 [hvac-reinst-out] 'Outdoor Unit Reinstallation' | Price: ₹None | 1 hr
+    - Pkg #973 [full-installation] 'Split AC Standard Installation (Standard Fit)' | Price: ₹None | 1.5 hrs
+
+=======================================================
+CATEGORY #11 [mason] 'Masonry & Civil Work'
+=======================================================
+  SERVICE #121 [bathroom-tile-fixing] 'Bathroom Tile Fixing' (2 active pkgs)
+    - Pkg #993 [bathroom-tile-fixing] 'Complete Bathroom Floor & Wall Tile Replacement' | Price: ₹None | 2-3 days
+    - Pkg #1010 [tile-re-grouting-crack-repair] 'Tile Re-grouting & Crack Repair (Per Bathroom)' | Price: ₹1299.00 | 3-4 hrs
+  SERVICE #120 [minor-masonry] 'Minor Masonry / Small Construction Work' (3 active pkgs)
+    - Pkg #992 [minor-masonry] 'Small Masonry & Brick Wall Construction' | Price: ₹None | 2-3 days
+    - Pkg #1008 [free-masonry-site-inspection] 'Free On-Site Masonry Inspection & Estimation' | Price: ₹0.00 | 45 mins
+    - Pkg #1009 [civil-core-cutting-chipping] 'Civil Core Cutting & Chipping (Per Point)' | Price: ₹449.00 | 1 hr
+
+=======================================================
+CATEGORY #12 [goods_transports] 'Goods & Transport'
+=======================================================
+  SERVICE #131 [mini-truck] 'Mini Truck' (4 active pkgs)
+    - Pkg #982 [3-wheeler] '3 Wheeler (500 kg Capacity)' | Price: ₹160.00 | 15-20 mins
+    - Pkg #983 [tata-ace] 'Tata Ace (750 kg Capacity)' | Price: ₹205.00 | 15-20 mins
+    - Pkg #984 [pickup-8ft] 'Pickup 8ft (1.2 Ton Capacity)' | Price: ₹300.00 | 20-25 mins
+    - Pkg #985 [1-7-ton] '1.7 Ton Heavy Mini Truck' | Price: ₹380.00 | 25-30 mins
+  SERVICE #132 [2-wheeler] '2-Wheeler' (3 active pkgs)
+    - Pkg #978 [parcel-service] '2-Wheeler Standard Parcel Courier' | Price: ₹None | 30-45 mins
+    - Pkg #986 [2-wheeler] '2-Wheeler Instant Parcel Delivery (Up to 20 kg)' | Price: ₹48.00 | 30-45 mins
+    - Pkg #987 [2-wheeler-electric-express] '2-Wheeler Electric Express Courier' | Price: ₹55.00 | 15-30 mins
+  SERVICE #133 [packers-movers] 'Packers & Movers' (3 active pkgs)
+    - Pkg #979 [1rk-1bhk-shifting] '1 RK / 1 BHK Household Shifting' | Price: ₹1499.00 | 2-4 hrs
+    - Pkg #980 [2bhk-3bhk-shifting] '2 BHK / 3 BHK Household Shifting' | Price: ₹2999.00 | 4-6 hrs
+    - Pkg #981 [villa-office-relocation] 'Villa / Corporate Office Relocation' | Price: ₹4499.00 | Full Day
+
+=======================================================
+CATEGORY #18 [vegetables_groceries] 'Farm-Fresh Vegetables & Groceries'
+=======================================================
+  SERVICE #50 [vegetables] 'Farm-Fresh Vegetable' (66 active pkgs)
+    - Pkg #868 [veg-tomato-thakkali-1] 'Tomato (Thakkali)' | Price: ₹18.00 | 500 g
+    - Pkg #869 [veg-onion-vengayam-2] 'Onion (Vengayam)' | Price: ₹60.00 | 1 kg
+    - Pkg #870 [veg-garlic-poondu-3] 'Garlic (Poondu)' | Price: ₹44.00 | 100 g
+    - Pkg #871 [veg-ginger-4] 'Ginger' | Price: ₹24.00 | 100 g
+    - Pkg #872 [veg-potato-urulaikizhangu-5] 'Potato (Urulaikizhangu)' | Price: ₹31.00 | 1 kg
+    - Pkg #873 [veg-green-chilli-pachai-milagaai-6] 'Green Chilli (Pachai Milagaai)' | Price: ₹11.00 | 100 g
+    - Pkg #874 [veg-curry-leaves-karuvepillai-7] 'Curry Leaves (Karuvepillai)' | Price: ₹9.00 | 1 bunch
+    - Pkg #875 [veg-coriander-bunch-kothamalli-8] 'Coriander Bunch (Kothamalli)' | Price: ₹15.00 | 100 g
+    - Pkg #876 [veg-lady-finger-vendaikkai-9] 'Lady Finger (Vendaikkai)' | Price: ₹17.00 | 250 g
+    - Pkg #877 [veg-lemon-elumichai-pazham-10] 'Lemon (Elumichai Pazham)' | Price: ₹53.00 | 200 g
+    - Pkg #878 [veg-spinach-palak-keerai-11] 'Spinach (Palak Keerai)' | Price: ₹25.00 | 200 g
+    - Pkg #879 [veg-orange-carrot-local-carrot-12] 'Orange Carrot (Local Carrot)' | Price: ₹49.00 | 500 g
+    - Pkg #880 [veg-green-cucumber-vellarikai-13] 'Green Cucumber (Vellarikai)' | Price: ₹26.00 | 500 g
+    - Pkg #881 [veg-brinjal-vari-kathirikkai-14] 'Brinjal (Vari Kathirikkai)' | Price: ₹23.00 | 250 g
+    - Pkg #882 [veg-button-mushroom-kaalan-15] 'Button Mushroom (Kaalan)' | Price: ₹78.00 | 180 g
+    - Pkg #883 [veg-green-capsicum-kudai-milagaai-16] 'Green Capsicum (Kudai Milagaai)' | Price: ₹19.00 | 250 g
+    - Pkg #884 [veg-cauliflower-pookosu-17] 'Cauliflower (Pookosu)' | Price: ₹37.00 | 300 g
+    - Pkg #885 [veg-cabbage-muttaikose-18] 'Cabbage (Muttaikose)' | Price: ₹23.00 | 400 g
+    - Pkg #886 [veg-sweet-corn-cob-cholam-19] 'Sweet Corn Cob (Cholam)' | Price: ₹24.00 | 1 pc
+    - Pkg #887 [veg-french-beans-beans-20] 'French Beans (Beans)' | Price: ₹36.00 | 250 g
+    - Pkg #888 [veg-bitter-gourd-pavakkai-21] 'Bitter Gourd (Pavakkai)' | Price: ₹28.00 | 500 g
+    - Pkg #889 [veg-bottle-gourd-surakkai-22] 'Bottle Gourd (Surakkai)' | Price: ₹24.00 | 400 g
+    - Pkg #890 [veg-snake-gourd-pudalangai-23] 'Snake Gourd (Pudalangai)' | Price: ₹24.00 | 500 g
+    - Pkg #891 [veg-ridge-gourd-peerangai-24] 'Ridge Gourd (Peerangai)' | Price: ₹25.00 | 500 g
+    - Pkg #892 [veg-beetroot-25] 'Beetroot' | Price: ₹37.00 | 500 g
+    - Pkg #893 [veg-radish-mullangi-26] 'Radish (Mullangi)' | Price: ₹24.00 | 500 g
+    - Pkg #894 [veg-mint-leaves-pudina-27] 'Mint Leaves (Pudina)' | Price: ₹15.00 | 100 g
+    - Pkg #895 [veg-drumstick-murungakkai-28] 'Drumstick (Murungakkai)' | Price: ₹18.00 | 2 pcs
+    - Pkg #896 [veg-drumstick-leaves-moringa-29] 'Drumstick Leaves (Moringa)' | Price: ₹17.00 | 100 g
+    - Pkg #897 [veg-baby-potato-urulaikizhangu-30] 'Baby Potato (Urulaikizhangu)' | Price: ₹24.00 | 500 g
+    - Pkg #898 [veg-ooty-potato-31] 'Ooty Potato' | Price: ₹57.00 | 1 kg
+    - Pkg #899 [veg-sambhar-onion-vengayam-32] 'Sambhar Onion (Vengayam)' | Price: ₹31.00 | 250 g
+    - Pkg #900 [veg-spring-onion-vengaya-thaal-33] 'Spring Onion (Vengaya Thaal)' | Price: ₹20.00 | 250 g
+    - Pkg #901 [veg-sweet-potato-chakkara-valli-34] 'Sweet Potato (Chakkara Valli)' | Price: ₹39.00 | 450 g
+    - Pkg #902 [veg-peeled-garlic-uricha-poondu-35] 'Peeled Garlic (Uricha Poondu)' | Price: ₹65.00 | 100 g
+    - Pkg #903 [veg-fenugreek-methi-36] 'Fenugreek (Methi)' | Price: ₹30.00 | 250 g
+    - Pkg #904 [veg-green-peas-pachai-pattani-37] 'Green Peas (Pachai Pattani)' | Price: ₹76.00 | 250 g
+    - Pkg #905 [veg-green-lettuce-38] 'Green Lettuce' | Price: ₹27.00 | 100 g
+    - Pkg #906 [veg-broccoli-39] 'Broccoli' | Price: ₹40.00 | 200 g
+    - Pkg #907 [veg-ash-gourd-sambal-pusanikkai-40] 'Ash Gourd (Sambal Pusanikkai)' | Price: ₹55.00 | 1kg
+    - Pkg #908 [veg-chow-chow-41] 'Chow Chow' | Price: ₹35.00 | 400 g
+    - Pkg #909 [veg-ivy-gourd-kovakkai-42] 'Ivy Gourd (Kovakkai)' | Price: ₹11.00 | 250 g
+    - Pkg #910 [veg-broad-beans-avarakkai-43] 'Broad Beans (Avarakkai)' | Price: ₹19.00 | 250 g
+    - Pkg #911 [veg-cluster-beans-kothavarangai-44] 'Cluster Beans (Kothavarangai)' | Price: ₹16.00 | 250 g
+    - Pkg #912 [veg-cowpea-beans-karamani-45] 'Cowpea Beans (Karamani)' | Price: ₹28.00 | 250 g
+    - Pkg #913 [veg-colocasia-seppankizhangu-46] 'Colocasia (Seppankizhangu)' | Price: ₹22.00 | 250 g
+    - Pkg #914 [veg-raw-banana-vazhakkai-47] 'Raw Banana (Vazhakkai)' | Price: ₹49.00 | 3 pcs
+    - Pkg #915 [veg-banana-stem-vazhai-thandu-48] 'Banana Stem (Vazhai Thandu)' | Price: ₹18.00 | 800 g
+    - Pkg #916 [veg-green-zucchini-49] 'Green Zucchini' | Price: ₹35.00 | 200 g
+    - Pkg #917 [veg-yellow-bell-pepper-manjal-kuda-milagai-50] 'Yellow Bell Pepper (Manjal Kuda Milagai)' | Price: ₹70.00 | 125 g
+    - Pkg #918 [veg-red-bell-pepper-51] 'Red Bell Pepper' | Price: ₹56.00 | 125 g
+    - Pkg #919 [veg-baby-corn-packet-52] 'Baby Corn - Packet' | Price: ₹35.00 | 200 g
+    - Pkg #920 [veg-green-amaranthus-leaves-53] 'Green Amaranthus Leaves' | Price: ₹22.00 | 250 g
+    - Pkg #921 [veg-red-amaranthus-leaves-54] 'Red Amaranthus Leaves' | Price: ₹24.00 | 250 g
+    - Pkg #923 [veg-green-moong-sprouts-56] 'Green Moong Sprouts' | Price: ₹58.00 | 150 g
+    - Pkg #924 [veg-raw-turmeric-manjal-57] 'Raw Turmeric (Manjal)' | Price: ₹78.00 | 250 g
+    - Pkg #926 [veg-raw-papaya-pappalikkai-59] 'Raw Papaya (Pappalikkai)' | Price: ₹45.00 | 400 g
+    - Pkg #927 [veg-knol-khol-nookal-60] 'Knol Khol (Nookal)' | Price: ₹26.00 | 500 g
+    - Pkg #928 [veg-neem-leaves-veppilai-61] 'Neem Leaves (Veppilai)' | Price: ₹22.00 | 1 pack
+    - Pkg #929 [veg-fresh-rosemary-62] 'Fresh Rosemary' | Price: ₹18.00 | 10 g
+    - Pkg #930 [veg-italian-basil-leaves-63] 'Italian Basil Leaves' | Price: ₹43.00 | 50 g
+    - Pkg #931 [veg-green-pumpkin-pusanikkai-64] 'Green Pumpkin (Pusanikkai)' | Price: ₹48.00 | 400 g
+    - Pkg #932 [veg-pumpkin-yellow-cut-65] 'Pumpkin Yellow (Cut)' | Price: ₹50.00 | 200 g
+    - Pkg #933 [veg-disco-pumpkin-66] 'Disco Pumpkin' | Price: ₹58.00 | 500 g
+    - Pkg #935 [veg-pointed-gourd-68] 'Pointed Gourd' | Price: ₹56.00 | 250 g
+    - Pkg #936 [veg-brinjal-bharta-69] 'Brinjal - Bharta' | Price: ₹31.00 | 500 g
+  SERVICE #51 [groceries] 'Groceries' (2 active pkgs)
+    - Pkg #118 [monthly-kitchen-staples] 'Monthly Kitchen Staples Pack' | Price: ₹849.00 | Coming Soon
+    - Pkg #119 [essential-dals-grains] 'Essential Dals & Grains Combo' | Price: ₹429.00 | Coming Soon

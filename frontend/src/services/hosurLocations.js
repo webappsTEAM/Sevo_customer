@@ -521,16 +521,13 @@ export function filterLocationSuggestions(searchText) {
     if (result.length >= 9) break
   }
 
-  // If user typed custom text that didn't match local list, ensure candidate is present immediately
-  if (result.length === 0 && cleanQ.length >= 2) {
-    result.push({
-      name: toTitleCase(searchText.trim()),
-      subtitle: "Hosur, Tamil Nadu",
-      category: "Hosur Location",
-      fullAddress: formatExactLocation(searchText),
-    })
-  }
-
+  // No local match: return nothing and let the live geocoder answer. This
+  // used to synthesize a coordinate-less "<query>, Hosur" candidate, which
+  // (a) labelled e.g. "Chennai" as a Hosur location, (b) was then geocoded
+  // as "Chennai, Hosur", and (c) because the booking pages de-duplicate
+  // online results by name against local ones, HID the real "Chennai"
+  // result from the geocoder. The pages already offer a "Use '<text>'"
+  // button when there are no suggestions at all.
   return result
 }
 
@@ -564,45 +561,51 @@ function toTitleCase(str) {
 // In-memory cache for dynamic geocoding
 const onlineSearchCache = new Map()
 
+// Soft "prefer nearby" box around the Hosur / south-Bengaluru service
+// region (same area the Photon lat/lon bias below already centres on).
+// Google `bounds` and Nominatim `viewbox` (without `bounded=1`) only RANK
+// results inside it higher; places outside it are still returned.
+const NEARBY_BIAS_BOUNDS = {
+  google: "12.45,77.45|13.10,78.20", // sw_lat,sw_lng|ne_lat,ne_lng
+  nominatim: "77.45,13.10,78.20,12.45", // left,top,right,bottom
+}
+
 /**
- * Fetch dynamic places from Google Maps Geocoding API (primary) or Photon/OSM (fallback) biased to Hosur
+ * Fetch dynamic places from Google Maps Geocoding API (primary) or Photon/OSM (fallback) biased to targetCity
  */
-export async function searchHosurPlacesOnline(query) {
+export async function searchHosurPlacesOnline(query, targetCity = "Hosur") {
   if (!query || !query.trim() || query.trim().length < 2) return []
   const q = query.trim().toLowerCase()
-  if (onlineSearchCache.has(q)) return onlineSearchCache.get(q)
+  const cityLabel = targetCity || "Hosur"
+  const cacheKey = `${cityLabel.toLowerCase()}:${q}`
+  if (onlineSearchCache.has(cacheKey)) return onlineSearchCache.get(cacheKey)
 
-  const searchQuery = q.includes("hosur") ? q : `${q}, Hosur, Tamil Nadu`
+  // The query is sent as typed. It used to be rewritten to "<query>, <city>"
+  // (e.g. "chennai, Hosur"), which is a hard restriction, not a bias: the
+  // geocoder was asked for a place called Chennai *inside Hosur*, so a real
+  // intercity destination could not be found. Nearby results are still
+  // preferred via SOFT biases only (Google `bounds`, Nominatim `viewbox`
+  // without `bounded`, Photon `lat/lon`), none of which exclude far places.
+  const searchQuery = q
 
   // 1. Try Google Maps Geocoding API
   if (GOOGLE_API_KEY) {
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
         searchQuery
-      )}&key=${GOOGLE_API_KEY}&bounds=12.60,77.70|12.95,78.10&components=country:IN&language=en`
+      )}&key=${GOOGLE_API_KEY}&components=country:IN&bounds=${NEARBY_BIAS_BOUNDS.google}&language=en`
       const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         if (data.status === "OK" && data.results && data.results.length > 0) {
           const results = data.results
-            .filter((r) => {
-              const fa = (r.formatted_address || "").toLowerCase()
-              return (
-                fa.includes("hosur") ||
-                fa.includes("tamil nadu") ||
-                fa.includes("krishnagiri") ||
-                fa.includes("bengaluru") ||
-                fa.includes("attibele") ||
-                fa.includes("anekal")
-              )
-            })
             .map((item) => {
               const fa = item.formatted_address || ""
               const parts = fa.split(",").map((s) => s.trim())
               const rawTitle = toTitleCase(q)
               const firstPart = parts[0] || rawTitle
               const name = firstPart.length < 35 ? firstPart : rawTitle
-              const subtitle = parts.slice(1, 4).join(", ") || "Hosur, Tamil Nadu"
+              const subtitle = parts.slice(1, 4).join(", ") || `${cityLabel}, India`
               return {
                 name: name.toLowerCase().includes(q) ? name : `${toTitleCase(q)} (${firstPart})`,
                 subtitle,
@@ -614,7 +617,7 @@ export async function searchHosurPlacesOnline(query) {
             })
 
           if (results.length > 0) {
-            onlineSearchCache.set(q, results)
+            onlineSearchCache.set(cacheKey, results)
             return results
           }
         }
@@ -638,7 +641,7 @@ export async function searchHosurPlacesOnline(query) {
           const p = f.properties || {}
           const name = p.name || toTitleCase(q)
           const street = p.street || p.locality || p.district || ""
-          const city = p.city || "Hosur"
+          const city = p.city || p.county || ""
           const state = p.state || "Tamil Nadu"
           const subtitle = [street, city, state].filter(Boolean).join(", ")
           return {
@@ -653,7 +656,7 @@ export async function searchHosurPlacesOnline(query) {
         .filter((r) => r.name)
 
       if (results.length > 0) {
-        onlineSearchCache.set(q, results)
+        onlineSearchCache.set(cacheKey, results)
         return results
       }
     }
@@ -665,14 +668,14 @@ export async function searchHosurPlacesOnline(query) {
   try {
     const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
       searchQuery
-    )}&format=json&addressdetails=1&countrycodes=in&limit=6`
+    )}&format=json&addressdetails=1&countrycodes=in&viewbox=${NEARBY_BIAS_BOUNDS.nominatim}&limit=6`
     const res = await fetch(nomUrl, { headers: { "Accept-Language": "en" } })
     if (res.ok) {
       const data = await res.json()
       const results = data.map((item) => {
         const parts = item.display_name.split(",").map((s) => s.trim())
         const name = parts[0]
-        const subtitle = parts.slice(1, 4).join(", ") || "Hosur, Tamil Nadu"
+        const subtitle = parts.slice(1, 4).join(", ") || "India"
         return {
           name,
           subtitle,
@@ -682,24 +685,17 @@ export async function searchHosurPlacesOnline(query) {
           lng: parseFloat(item.lon),
         }
       })
-      onlineSearchCache.set(q, results)
+      onlineSearchCache.set(cacheKey, results)
       return results
     }
   } catch (err) {
     console.debug("[HosurLocationSearch] Nominatim search fallback failed:", err)
   }
 
-  // 4. If all online APIs fail or return 0, synthesize a valid Hosur live candidate
-  const syntheticCandidate = [
-    {
-      name: toTitleCase(q),
-      subtitle: "Hosur, Tamil Nadu",
-      category: "Hosur Location",
-      fullAddress: `${toTitleCase(q)}, Hosur, Tamil Nadu`,
-    },
-  ]
-  onlineSearchCache.set(q, syntheticCandidate)
-  return syntheticCandidate
+  // 4. If all online APIs fail or return 0, do NOT synthesize a location without coordinates.
+  // Returning an empty array forces the caller/UI to require a geocoded selection.
+  onlineSearchCache.set(cacheKey, [])
+  return []
 }
 
 const coordCache = new Map()
@@ -725,7 +721,7 @@ const coordCache = new Map()
  * Returns { lat, lng } or null. Callers must treat null as "we do not
  * know where this is" and refuse to guess.
  */
-export async function resolveLocationCoords(locOrText) {
+export async function resolveLocationCoords(locOrText, targetCity = "Hosur") {
   if (!locOrText) return null
 
   // Already carries real coordinates (an online suggestion, or one of the
@@ -739,13 +735,13 @@ export async function resolveLocationCoords(locOrText) {
     : String(locOrText)
   if (!address.trim()) return null
 
-  const key = address.trim().toLowerCase()
+  const key = `${targetCity || "Hosur"}:${address.trim().toLowerCase()}`
   if (coordCache.has(key)) return coordCache.get(key)
 
   // The online place search already returns lat/lng from whichever
   // provider answers, so reuse it rather than adding a fourth code path.
   try {
-    const results = await searchHosurPlacesOnline(address)
+    const results = await searchHosurPlacesOnline(address, targetCity)
     const hit = (results || []).find((r) => r.lat != null && r.lng != null)
     if (hit) {
       const coords = { lat: Number(hit.lat), lng: Number(hit.lng) }
@@ -764,33 +760,31 @@ export async function resolveLocationCoords(locOrText) {
 /**
  * Format exact location text when user selects or enters a destination
  */
-export function formatExactLocation(locOrText) {
+export function formatExactLocation(locOrText, targetCity = "Hosur") {
   if (!locOrText) return ""
+  const cityLabel = targetCity || "Hosur"
   if (typeof locOrText === "object") {
     if (locOrText.fullAddress) return locOrText.fullAddress
     const sub = locOrText.subtitle ? locOrText.subtitle.split("(")[0].trim().replace(/,\s*$/, "") : ""
     const base = sub ? `${locOrText.name}, ${sub}` : locOrText.name
-    if (
-      base.toLowerCase().includes("hosur") ||
-      base.toLowerCase().includes("tamil nadu") ||
-      base.toLowerCase().includes("bengaluru") ||
-      base.toLowerCase().includes("karnataka")
-    ) {
-      return base
-    }
-    return `${base}, Hosur, Tamil Nadu`
+    // Never force the booking city onto a place: "Chennai" must stay
+    // "Chennai", not become "Chennai, Hosur" (which is then geocoded to a
+    // Hosur-area point). Local-database entries already carry their own
+    // "..., Hosur, Tamil Nadu" subtitle, so they keep their locality.
+    return base
   }
 
   const raw = String(locOrText).trim()
   if (
-    raw.toLowerCase().includes("hosur") ||
+    raw.toLowerCase().includes(cityLabel.toLowerCase()) ||
     raw.toLowerCase().includes("tamil nadu") ||
     raw.toLowerCase().includes("bengaluru") ||
     raw.toLowerCase().includes("karnataka")
   ) {
     return raw
   }
-  return `${toTitleCase(raw)}, Hosur, Tamil Nadu`
+  // Free text is kept as typed (title-cased) -- see note above.
+  return toTitleCase(raw)
 }
 
 /**

@@ -26,6 +26,7 @@ from .views_homepage import (
     HomePageConfigAPIView,
     HomePageImageUploadAPIView,
     HomePageImageDeleteAPIView,
+    ACInspectionConfigAPIView,
 )
 from .views_service_zones import (
     ServiceZoneListCreateView,
@@ -39,6 +40,7 @@ from service_requests.payment_views import InvoiceDownloadView
 urlpatterns = [
     # Legal & Public Policy Config
     path("legal/", PublicLegalConfigAPIView.as_view(), name="settings-public-legal"),
+    path("ac-inspection/config/", ACInspectionConfigAPIView.as_view(), name="settings-ac-inspection-config"),
 
     # Homepage Config & Storage APIs
     path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),

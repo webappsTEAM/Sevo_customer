@@ -1,4 +1,4 @@
-# CalTrack Frontend Architecture Documentation
+# sevo Frontend Architecture Documentation
 
 ## Architecture & File Layout
 

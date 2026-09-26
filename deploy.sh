@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# CALTRACK — VPS Deployment Script
+# sevo — VPS Deployment Script
 # Run this on the VPS after cloning/uploading the code.
-# URL: caldimproducts.com/Caltrack
+# URL: sevo.co.in
 #
 # USAGE:
 #   chmod +x deploy.sh
@@ -13,13 +13,13 @@
 
 set -e  # exit on any error
 
-APP_DIR="/var/www/Caltrack"
+APP_DIR="/var/www/sevo"
 BACKEND_DIR="$APP_DIR/backend"
 FRONTEND_DIST="$APP_DIR/frontend_dist"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"   # directory where deploy.sh lives
 
 echo "========================================"
-echo " CALTRACK VPS Deployment"
+echo " sevo VPS Deployment"
 echo " Target: $APP_DIR"
 echo "========================================"
 
@@ -121,48 +121,48 @@ fi
 # ─── 8. Create systemd services ───────────────────────────────────────────────
 echo "[8/9] Creating systemd services..."
 
-# caltrack-backend (Daphne ASGI)
-cat > /etc/systemd/system/caltrack-backend.service << 'EOF'
+# sevo-backend (Daphne ASGI)
+cat > /etc/systemd/system/sevo-backend.service << 'EOF'
 [Unit]
-Description=Caltrack Django Daphne ASGI Server
+Description=sevo Django Daphne ASGI Server
 After=network.target docker.service
 Requires=docker.service
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/Caltrack/backend
-EnvironmentFile=/var/www/Caltrack/backend/.env
-ExecStart=/var/www/Caltrack/backend/.venv/bin/daphne \
+WorkingDirectory=/var/www/sevo/backend
+EnvironmentFile=/var/www/sevo/backend/.env
+ExecStart=/var/www/sevo/backend/.venv/bin/daphne \
           -b 127.0.0.1 \
           -p 8002 \
           quicktims.asgi:application
 Restart=always
 RestartSec=5
-StandardOutput=append:/var/www/Caltrack/logs/backend.log
-StandardError=append:/var/www/Caltrack/logs/backend-error.log
+StandardOutput=append:/var/www/sevo/logs/backend.log
+StandardError=append:/var/www/sevo/logs/backend-error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# caltrack-celery (worker)
-cat > /etc/systemd/system/caltrack-celery.service << 'EOF'
+# sevo-celery (worker)
+cat > /etc/systemd/system/sevo-celery.service << 'EOF'
 [Unit]
-Description=Caltrack Celery Worker
+Description=sevo Celery Worker
 After=network.target docker.service
 Requires=docker.service
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/Caltrack/backend
-EnvironmentFile=/var/www/Caltrack/backend/.env
-ExecStart=/var/www/Caltrack/backend/.venv/bin/celery \
+WorkingDirectory=/var/www/sevo/backend
+EnvironmentFile=/var/www/sevo/backend/.env
+ExecStart=/var/www/sevo/backend/.venv/bin/celery \
           -A quicktims worker \
           -l info \
-          --logfile=/var/www/Caltrack/logs/celery.log \
-          --pidfile=/var/www/Caltrack/logs/celery.pid
+          --logfile=/var/www/sevo/logs/celery.log \
+          --pidfile=/var/www/sevo/logs/celery.pid
 Restart=always
 RestartSec=5
 
@@ -170,23 +170,23 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# caltrack-beat (scheduler)
-cat > /etc/systemd/system/caltrack-beat.service << 'EOF'
+# sevo-beat (scheduler)
+cat > /etc/systemd/system/sevo-beat.service << 'EOF'
 [Unit]
-Description=Caltrack Celery Beat Scheduler
+Description=sevo Celery Beat Scheduler
 After=network.target docker.service
 Requires=docker.service
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/Caltrack/backend
-EnvironmentFile=/var/www/Caltrack/backend/.env
-ExecStart=/var/www/Caltrack/backend/.venv/bin/celery \
+WorkingDirectory=/var/www/sevo/backend
+EnvironmentFile=/var/www/sevo/backend/.env
+ExecStart=/var/www/sevo/backend/.venv/bin/celery \
           -A quicktims beat \
           -l info \
-          --logfile=/var/www/Caltrack/logs/beat.log \
-          --pidfile=/var/www/Caltrack/logs/beat.pid
+          --logfile=/var/www/sevo/logs/beat.log \
+          --pidfile=/var/www/sevo/logs/beat.pid
 Restart=always
 RestartSec=5
 
@@ -198,8 +198,8 @@ EOF
 chown -R www-data:www-data "$APP_DIR"
 
 systemctl daemon-reload
-systemctl enable caltrack-backend caltrack-celery caltrack-beat
-systemctl restart caltrack-backend caltrack-celery caltrack-beat
+systemctl enable sevo-backend sevo-celery sevo-beat
+systemctl restart sevo-backend sevo-celery sevo-beat
 
 echo "  Systemd services enabled and started."
 
@@ -209,13 +209,13 @@ nginx -t && echo "  Nginx config OK — run 'sudo systemctl reload nginx' to app
 echo ""
 echo "========================================"
 echo " DEPLOYMENT COMPLETE"
-echo " Visit: https://caldimproducts.com/Caltrack"
+echo " Visit: https://sevo.co.in"
 echo ""
 echo " Service status:"
-systemctl status caltrack-backend --no-pager -l | head -5
+systemctl status sevo-backend --no-pager -l | head -5
 echo ""
 echo " Next steps:"
-echo "   1. Add the Nginx config block (see caltrack-nginx.conf)"
+echo "   1. Add the Nginx config block (see sevo-nginx.conf)"
 echo "   2. sudo systemctl reload nginx"
-echo "   3. Create superuser: cd /var/www/Caltrack/backend && source .venv/bin/activate && python manage.py createsuperuser"
+echo "   3. Create superuser: cd /var/www/sevo/backend && source .venv/bin/activate && python manage.py createsuperuser"
 echo "========================================"

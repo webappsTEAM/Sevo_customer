@@ -101,7 +101,7 @@ export function FeedbackPage() {
         {/* Soft background ambient glow circles */}
         <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full bg-indigo-100/50 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full bg-violet-100/50 blur-[120px] pointer-events-none" />
-        
+
         <div className="flex flex-col items-center gap-4 relative z-10">
           <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">
@@ -126,7 +126,7 @@ export function FeedbackPage() {
               <Building className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-lg font-black tracking-tight text-slate-900">Caltrack</span>
+              <span className="text-lg font-black tracking-tight text-slate-900">sevo</span>
               <span className="text-[10px] font-bold text-indigo-600 block -mt-1 uppercase tracking-wider">Service Desk</span>
             </div>
           </div>
@@ -171,10 +171,10 @@ export function FeedbackPage() {
             </div>
           </a>
         </div>
-        
+
         <div>
-          <a 
-            href="/login" 
+          <a
+            href="/login"
             className="text-xs font-bold text-[var(--sevo-text-secondary)] hover:text-[var(--sevo-primary)] transition-colors flex items-center gap-2 bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] px-3.5 py-2 rounded-xl border border-[var(--sevo-border)]"
           >
             <User className="w-3.5 h-3.5" />
@@ -185,7 +185,7 @@ export function FeedbackPage() {
 
       <main className="flex-1 flex items-center justify-center p-4 md:p-8 relative z-10">
         <div className="max-w-2xl w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] rounded-3xl overflow-hidden shadow-xl relative">
-          
+
           {/* Banner header */}
           <div className="bg-gradient-to-r from-[#0B8F7A] to-[#0F5FBF] px-6 py-8 text-center relative overflow-hidden text-white">
             <h1 className="text-2xl md:text-3xl font-black tracking-tight">Customer Service Feedback</h1>
@@ -248,11 +248,10 @@ export function FeedbackPage() {
                             className="hover:scale-110 focus:outline-none transition-transform cursor-pointer"
                           >
                             <Star
-                              className={`w-8 h-8 ${
-                                star <= formData.rating
+                              className={`w-8 h-8 ${star <= formData.rating
                                   ? "fill-amber-400 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.3)]"
                                   : "text-[var(--sevo-border)] fill-[var(--sevo-border)]"
-                              } transition-colors`}
+                                } transition-colors`}
                             />
                           </button>
                         ))}
@@ -275,11 +274,10 @@ export function FeedbackPage() {
                                 key={val}
                                 type="button"
                                 onClick={() => handleSelectChange("employee_behaviour", val)}
-                                className={`py-2 rounded-lg text-xs font-extrabold capitalize transition-all cursor-pointer ${
-                                  active
+                                className={`py-2 rounded-lg text-xs font-extrabold capitalize transition-all cursor-pointer ${active
                                     ? "bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] shadow-xs"
                                     : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-                                }`}
+                                  }`}
                               >
                                 {val}
                               </button>
@@ -302,11 +300,10 @@ export function FeedbackPage() {
                                 key={val}
                                 type="button"
                                 onClick={() => handleSelectChange("work_quality", val)}
-                                className={`py-2 rounded-lg text-xs font-extrabold capitalize transition-all cursor-pointer ${
-                                  active
+                                className={`py-2 rounded-lg text-xs font-extrabold capitalize transition-all cursor-pointer ${active
                                     ? "bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] shadow-xs"
                                     : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-                                }`}
+                                  }`}
                               >
                                 {val}
                               </button>
@@ -329,22 +326,20 @@ export function FeedbackPage() {
                         <button
                           type="button"
                           onClick={() => handleSelectChange("issue_resolved", false)}
-                          className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                            !formData.issue_resolved
+                          className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${!formData.issue_resolved
                               ? "bg-[var(--sevo-error-bg)] border border-[var(--sevo-error-border)] text-[var(--sevo-error)] shadow-xs"
                               : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-                          }`}
+                            }`}
                         >
                           No
                         </button>
                         <button
                           type="button"
                           onClick={() => handleSelectChange("issue_resolved", true)}
-                          className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                            formData.issue_resolved
+                          className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${formData.issue_resolved
                               ? "bg-[var(--sevo-success-bg)] border border-[var(--sevo-success-border)] text-[var(--sevo-success)] shadow-xs"
                               : "text-[var(--sevo-text-muted)] hover:text-[var(--sevo-text-primary)]"
-                          }`}
+                            }`}
                         >
                           Yes
                         </button>

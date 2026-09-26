@@ -5,7 +5,33 @@
  * Phase 2 will allow backend overrides without scattering values in JSX.
  */
 
-export const ESTIMATION_FEE = 199;
+// Authoritative dynamic estimation fee with PostgreSQL cache sync
+let _dynamicEstimationFee = 199;
+try {
+  const cached = localStorage.getItem("calservices_ac_inspection_fee");
+  if (cached && !isNaN(Number(cached))) {
+    _dynamicEstimationFee = Number(cached);
+  }
+} catch (_) {}
+
+export let ESTIMATION_FEE = _dynamicEstimationFee;
+
+export function getDynamicEstimationFee() {
+  return _dynamicEstimationFee;
+}
+
+export function setDynamicEstimationFee(newFee) {
+  const num = Number(newFee);
+  if (!isNaN(num) && num >= 0) {
+    _dynamicEstimationFee = num;
+    ESTIMATION_FEE = num;
+    try {
+      localStorage.setItem("calservices_ac_inspection_fee", String(num));
+    } catch (_) {}
+  }
+  return _dynamicEstimationFee;
+}
+
 export const ESTIMATION_DURATION = "30–60 mins";
 export const ESTIMATION_TITLE = "AC Inspection";
 export const ESTIMATION_SUBTITLE = "Diagnosis & Inspection";

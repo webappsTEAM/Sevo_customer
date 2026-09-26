@@ -404,7 +404,10 @@ class WorkforceWebhookView(APIView):
                     )
 
                 # ── 4. ON THE WAY ───────────────────────────────────────────────────
-                elif event_type in ["employee_on_the_way", "job.on_the_way"]:
+                elif event_type in [
+                    "employee_on_the_way", "job.on_the_way", "technician.on_the_way",
+                    "technician.en_route", "job.en_route", "en_route", "job.started",
+                ]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -423,7 +426,7 @@ class WorkforceWebhookView(APIView):
                         transaction.on_commit(lambda: self._notify(notify_delivery_recipient, sr))
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
-                elif event_type in ["employee_arrived", "job.arrived"]:
+                elif event_type in ["employee_arrived", "job.arrived", "technician.arrived", "arrived"]:
                     loc_dict = payload.get("location") or {}
                     if loc_dict.get("latitude") and loc_dict.get("longitude"):
                         sr.technician_latitude = loc_dict.get("latitude")
@@ -435,7 +438,10 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "employee_arrived"))
 
                 # ── 6. IN PROGRESS ──────────────────────────────────────────────────
-                elif event_type in ["service_started", "job.in_progress"]:
+                elif event_type in [
+                    "service_started", "job.in_progress", "work_started",
+                    "technician.in_progress", "in_progress",
+                ]:
                     if sr.status in ["accepted", "on_the_way", "arrived"]:
                         safe_apply_transition(sr, "in_progress")
                     sr.save()
@@ -443,7 +449,7 @@ class WorkforceWebhookView(APIView):
                     transaction.on_commit(lambda: self._broadcast_event(sr, "service_started"))
 
                 # ── 7. COMPLETED ─────────────────────────────────────────────────────
-                elif event_type in ["service_completed", "job.completed"]:
+                elif event_type in ["service_completed", "job.completed", "technician.completed", "completed"]:
                     BookingAssignment.objects.filter(booking=sr, status=BookingAssignment.Status.ACCEPTED).update(status=BookingAssignment.Status.COMPLETED)
                     if sr.status in ["in_progress", "arrived", "accepted"]:
                         safe_apply_transition(sr, "completed")
@@ -464,6 +470,37 @@ class WorkforceWebhookView(APIView):
                     # pattern as _notify -- a referral-processing failure must
                     # never affect the booking completion itself.
                     transaction.on_commit(lambda: self._process_referral(sr))
+
+                # ── 7b. CANCELLED (Workforce / Technician Cancellation) ─────────────
+                elif event_type in ["job.cancelled", "technician.cancelled", "cancelled", "service_cancelled"]:
+                    cancel_reason = str(
+                        payload.get("reason")
+                        or payload.get("cancellation_reason")
+                        or payload.get("notes")
+                        or "Cancelled by workforce system"
+                    ).strip()
+
+                    BookingAssignment.objects.filter(
+                        booking=sr,
+                        status__in=[
+                            BookingAssignment.Status.OFFERED,
+                            BookingAssignment.Status.ACCEPTED,
+                        ]
+                    ).update(status=BookingAssignment.Status.CANCELLED)
+
+                    if sr.status not in ["completed", "closed", "cancelled", "rejected"]:
+                        safe_apply_transition(sr, "cancelled")
+
+                    sr.cancelled_at = timezone.now()
+                    sr.cancelled_by_persona = "employee"
+                    if cancel_reason:
+                        sr.cancellation_note = cancel_reason[:500]
+                    if hasattr(sr, "cancellation_reason") and not sr.cancellation_reason:
+                        from service_requests.models import ServiceRequest
+                        sr.cancellation_reason = ServiceRequest.CancellationReason.OTHER
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "booking_cancelled"))
 
                 # ── 8. GPS Location Stream ─────────────────────────────────────────
                 elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
@@ -619,11 +656,93 @@ class WorkforceWebhookView(APIView):
                             # estimate becomes the amount actually charged.
                             if leg in ("DELIVERED", "COMPLETED"):
                                 self._reconcile_final_fare(sr, payload)
+
+                            # GT Mini Truck audit fix: these two legs
+                            # previously only broadcast a websocket event --
+                            # the customer who booked the trip got no
+                            # SMS/email for either "your goods are on the way
+                            # to drop" (EN_ROUTE_DROP) or "your goods have
+                            # been delivered" (DELIVERED), despite both
+                            # notification functions already existing
+                            # (notify_delivery_recipient was even already
+                            # imported at the top of this view and never
+                            # called). Scoped to goods_transport_truck only;
+                            # fire-and-forget, never blocks the webhook ack.
+                            if (sr.service_category or "").strip().lower() in ("goods_transport_truck", "goods_transport_two_wheeler"):
+                                _leg_for_notice = leg
+                                _tech_name = payload.get("technician_name") or ""
+
+                                def _send_gt_leg_notice(_sr=sr, _leg=_leg_for_notice, _tech=_tech_name):
+                                    try:
+                                        if _leg == "EN_ROUTE_DROP":
+                                            notify_delivery_recipient(_sr, technician_name=_tech)
+                                        elif _leg in ("DELIVERED", "COMPLETED"):
+                                            from service_requests.notifications import notify_gt_delivery_completed
+                                            notify_gt_delivery_completed(_sr, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send GT leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_gt_leg_notice)
+
+                            # P&M audit fix: Packers & Movers has its own
+                            # 13-stage leg sequence (see PM_LEG_SEQUENCE in
+                            # workforce_api/services/logistics_events.py)
+                            # and previously got zero leg-aware customer
+                            # notifications -- the block above is correctly
+                            # scoped to GT-only and must not fire GT
+                            # delivery-style wording ("goods delivered") for
+                            # a move. notify_pm_move_update() itself no-ops
+                            # for legs it doesn't have P&M-specific copy for
+                            # (PACKING, LOADING, etc.), so this only actually
+                            # sends for the handful of customer-relevant
+                            # legs. Fire-and-forget, never blocks the
+                            # webhook ack.
+                            elif (sr.service_category or "").strip().lower() == "packers_movers":
+                                _pm_leg_for_notice = leg
+                                _pm_tech_name = payload.get("technician_name") or ""
+
+                                def _send_pm_leg_notice(_sr=sr, _leg=_pm_leg_for_notice, _tech=_pm_tech_name):
+                                    try:
+                                        from service_requests.notifications import notify_pm_move_update
+                                        notify_pm_move_update(_sr, _leg, technician_name=_tech)
+                                    except Exception:
+                                        logger.exception(
+                                            "Could not send P&M leg notification (leg=%s) for booking %s",
+                                            _leg, getattr(_sr, "request_id", _sr.pk),
+                                        )
+
+                                transaction.on_commit(_send_pm_leg_notice)
+
                             transaction.on_commit(lambda: self._broadcast_event(sr, "logistics_leg_changed"))
 
                 # ── 12c. TRIP STOP PROGRESS (GT-D-01) ───────────────────────────────
                 elif event_type in ["trip.stop_arrived", "trip.stop_completed", "job.stop_progress"]:
                     self._record_stop_progress(sr, event_type, payload)
+
+                # ── 12d. PICKUP CHECKPOINT PHOTO -- "BEFORE" DAMAGE EVIDENCE ─────────
+                # Damage-evidence audit fix: the DROP ("after") checkpoint photo
+                # already becomes a real DeliveryProof.PHOTO row via
+                # job.completion_proof_submitted above. The PICKUP ("before")
+                # photo is captured vendor-side by
+                # logistics_checkpoints.record_checkpoint_photo() and now
+                # carries photo_url in this event's payload (see that
+                # function's comment) -- record it the same way, so a damage
+                # dispute has a real before/after pair to compare, using the
+                # existing DeliveryProof.ProofType.PHOTO the customer app
+                # already knows how to display. Only acts on the PICKUP
+                # photo-submitted event; DROP's checkpoint_verified events
+                # (GPS/OTP) and its own completion_proof_submitted flow are
+                # untouched. _record_delivery_proof() is idempotent per
+                # (booking, stop, proof_type, image), so a retried webhook
+                # cannot create a duplicate row.
+                elif event_type == "logistics.checkpoint_verified":
+                    if str(payload.get("checkpoint") or "").strip().upper() == "PICKUP" \
+                            and str(payload.get("verification") or "").strip().lower() == "photo_submitted" \
+                            and payload.get("photo_url"):
+                        self._record_delivery_proof(sr, payload)
 
                 # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
                 elif event_type in ["job.rescheduled", "appointment.rescheduled"]:

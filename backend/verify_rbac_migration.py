@@ -24,7 +24,7 @@ from platform_control.views import (
 
 def run_rbac_verification():
     print("=" * 70)
-    print("CALTRACK POST-MIGRATION REGRESSION & SECURITY AUDIT SUITE")
+    print("sevo POST-MIGRATION REGRESSION & SECURITY AUDIT SUITE")
     print("=" * 70)
 
     # ──────────────────────────────────────────────────────────────────────────

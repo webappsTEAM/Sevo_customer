@@ -196,10 +196,11 @@ export async function fetchPackersMoversQuote({
 /**
  * P1-11: Fetch authoritative booking slot availability evaluated server-side.
  */
-export async function fetchLogisticsSlots({ date, category = "goods_transport_truck" } = {}) {
+export async function fetchLogisticsSlots({ date, category = "goods_transport_truck", city = "" } = {}) {
   const params = {}
   if (date) params.date = date
   if (category) params.category = category
+  if (city) params.city = city
   const qs = new URLSearchParams(params).toString()
   try {
     const res = await apiRequest(`/logistics/slots/${qs ? `?${qs}` : ""}`)
@@ -212,3 +213,77 @@ export async function fetchLogisticsSlots({ date, category = "goods_transport_tr
   }
 }
 
+/**
+ * Fetch dynamic list of cities configured in system settings.
+ * Pass { launchedOnly: true } to restrict to launched operating cities.
+ */
+export async function fetchLogisticsCities({ launchedOnly = false } = {}) {
+  try {
+    const url = launchedOnly ? "/settings/cities/?launched=true" : "/settings/cities/"
+    const res = await apiRequest(url)
+    return unwrapResults(res)
+  } catch (err) {
+    console.warn("Could not load cities:", err)
+    return []
+  }
+}
+
+/**
+ * Fetch dynamic FAQs for Goods Transport & Packers/Movers.
+ * Filterable by category ("truck", "two_wheeler", "packers_movers") and city.
+ */
+export async function fetchGTFaqs({ category = "", city = "" } = {}) {
+  const params = {}
+  if (category) params.category = category
+  if (city) params.city = city
+  const qs = new URLSearchParams(params).toString()
+  try {
+    const res = await apiRequest(`/logistics/faqs/${qs ? `?${qs}` : ""}`)
+    if (Array.isArray(res)) return res
+    if (Array.isArray(res?.data)) return res.data
+    return []
+  } catch (err) {
+    console.warn("Failed to fetch GT FAQs:", err)
+    return []
+  }
+}
+
+
+
+/**
+ * Service Coverage: is this pickup -> drop trip inside ACTIVE admin-configured
+ * coverage for the category? Calls the route mode of the public geofence
+ * check (settings_hub ServiceZone). Resolves to
+ *   { inCoverage: true }  or
+ *   { inCoverage: false, failedPoint: "pickup"|"drop", errorCode, message }
+ * Network failures resolve to inCoverage: true -- the booking and quote
+ * endpoints enforce coverage server-side regardless.
+ */
+export async function checkRouteCoverage({ serviceCategory, pickup, drop, vehicleClass }) {
+  if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) return { inCoverage: true, skipped: true }
+  try {
+    const res = await apiRequest("/settings/service-zones/check/", {
+      method: "POST",
+      body: {
+        lat: pickup.lat,
+        lng: pickup.lng,
+        drop_lat: drop.lat,
+        drop_lng: drop.lng,
+        service_slug: serviceCategory,
+        ...(vehicleClass ? { vehicle_class: vehicleClass } : {}),
+      },
+    })
+    const data = res?.data || res || {}
+    if (data.in_zone === false) {
+      return {
+        inCoverage: false,
+        failedPoint: data.failed_point || "",
+        errorCode: data.error_code || "",
+        message: data.message || "This trip is outside our service area.",
+      }
+    }
+    return { inCoverage: true }
+  } catch {
+    return { inCoverage: true, skipped: true }
+  }
+}

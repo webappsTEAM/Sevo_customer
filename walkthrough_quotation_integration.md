@@ -1,6 +1,6 @@
 # Walkthrough - Phase 2 & Phase 3 Joint Integration
 
-We have fully implemented and verified **Phase 2 (Customer App)** and **Phase 3 (Joint Integration Acceptance path)** of the CalTrack quotation architecture. This integration bridges the Customer application and the Workforce/Vendor quotation engine.
+We have fully implemented and verified **Phase 2 (Customer App)** and **Phase 3 (Joint Integration Acceptance path)** of the sevo quotation architecture. This integration bridges the Customer application and the Workforce/Vendor quotation engine.
 
 ---
 

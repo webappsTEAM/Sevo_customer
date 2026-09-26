@@ -1,4 +1,4 @@
-# CALTRACK 2.0 — PHASE 14: TRANSPORT & PACKERS-MOVERS
+# sevo 2.0 — PHASE 14: TRANSPORT & PACKERS-MOVERS
 
 **Document owner:** CTO / Chief Architect
 **Date:** 6 August 2026
@@ -25,9 +25,9 @@ Your roadmap groups "Packers & Movers" and "Goods Transport" together, and both 
 | Duration | Half-day to 3 days | 1–4 hours |
 | Insurance | **Critical** — damage claims are the business risk | Goods-in-transit |
 | Regulatory | Household effects — **often e-way-bill exempt** **[COUNSEL]** | **E-way bill + GTA GST regime apply** |
-| **Strategic fit for CalTrack** | **Direct Property adjacency** | **A separate business** |
+| **Strategic fit for sevo** | **Direct Property adjacency** | **A separate business** |
 
-**The strategic read.** Packers & Movers is a natural extension of the Property vertical — it fires on the same move-in event as Home Services (Phase 13 H), serves the same customer, and monetises a moment CalTrack already knows about. Goods Transport serves a completely different customer with a completely different sales motion, and competing with Porter means competing on fleet density in a market where that is the entire moat.
+**The strategic read.** Packers & Movers is a natural extension of the Property vertical — it fires on the same move-in event as Home Services (Phase 13 H), serves the same customer, and monetises a moment sevo already knows about. Goods Transport serves a completely different customer with a completely different sales motion, and competing with Porter means competing on fleet density in a market where that is the entire moat.
 
 **Recommendation: build Packers & Movers. Treat Goods Transport as a separate strategic decision, not a natural follow-on.** They share a logistics platform; they do not share a customer, a funnel or a growth model.
 
@@ -87,7 +87,7 @@ That is the clearest available evidence that your instruction in Phase 5A was co
 platform/logistics/
 ├── VehicleClass        BIKE · TEMPO_407 · LCV · CONTAINER_20FT · TRUCK …
 │                       capacity_kg, volume_cft, dimensions, permit class
-├── Vehicle             registration, class, owner (CalTrack | vendor | driver),
+├── Vehicle             registration, class, owner (sevo | vendor | driver),
 │                       documents (RC, permit, PUC, fitness, insurance) + expiry
 ├── Trip                the journey: booking_id, vehicle, driver, route, distance,
 │                       started/completed, odometer
@@ -190,7 +190,7 @@ class TaxTreatment:
 
 The determination is a decision tree over: recipient registration status, recipient entity type, and the provider's GST election. It belongs in `TaxService` (Phase 5 F) as a rules table, **never as inline conditionals** — GST rules change at every Council meeting, and a rate embedded in code is a code deployment every time.
 
-**Consequence for the ledger:** an RCM tax line is recorded on the invoice for disclosure but produces **no cash movement through CalTrack**. That is a real distinction the double-entry model must express, and it is the kind of thing that silently corrupts reconciliation if discovered late.
+**Consequence for the ledger:** an RCM tax line is recorded on the invoice for disclosure but produces **no cash movement through sevo**. That is a real distinction the double-entry model must express, and it is the kind of thing that silently corrupts reconciliation if discovered late.
 
 ---
 
@@ -328,7 +328,7 @@ Extends the Phase 8 `apps/field` PWA rather than being a new application:
 - [x] Driver app extending the field PWA, not a new application
 - [x] Effort: **~177 days movers only · ~255 both**
 - [ ] **Open:** **[COUNSEL]** — e-way bill exemption for household effects · RCM determination · driver engagement model (Phase 12)
-- [ ] **Open:** whether Goods Transport is a business CalTrack wants at all
+- [ ] **Open:** whether Goods Transport is a business sevo wants at all
 
 ---
 
