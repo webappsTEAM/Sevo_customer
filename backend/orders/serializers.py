@@ -25,6 +25,9 @@ class GroceryOrderSerializer(serializers.ModelSerializer):
 
 class GroceryCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
+    delivery_slot = serializers.CharField(required=False, allow_blank=True, default="")
+    tip_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
 
 
 # ─── Phase 6: unified "My Orders" read view ────────────────────────────────

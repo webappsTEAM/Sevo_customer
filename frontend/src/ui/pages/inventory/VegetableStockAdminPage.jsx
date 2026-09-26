@@ -55,6 +55,15 @@ export function VegetableStockAdminPage() {
   const [applyNow, setApplyNow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState("")
+  const [toast, setToast] = useState(null)
+
+  const showToast = (msg, type = "success") => {
+    const id = Date.now()
+    setToast({ msg, type, id })
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr))
+    }, 4000)
+  }
 
   useEffect(() => {
     dispatch(fetchVegetableStock())
@@ -171,7 +180,7 @@ export function VegetableStockAdminPage() {
         price: parseFloat(editForm.price) || 0,
         mrp: editForm.mrp !== "" ? parseFloat(editForm.mrp) : null,
         offer_percentage: parseFloat(editForm.offer_percentage) || 0,
-        vegetable_gram: editForm.vegetable_gram.trim() || "500 g",
+        vegetable_gram: editForm.vegetable_gram.trim() || (editDetailsModalItem.unit_basis === "COUNT" ? "1 pc" : "500 g"),
         unit_basis: editDetailsModalItem.unit_basis || "WEIGHT",
         opening_stock_quantity: editForm.opening_stock_quantity !== "" ? parseFloat(editForm.opening_stock_quantity) : null,
         opening_stock_unit: editForm.opening_stock_unit,
@@ -183,16 +192,19 @@ export function VegetableStockAdminPage() {
         reorder_level_unit: editForm.reorder_level_unit,
       }
 
+      const itemName = editDetailsModalItem.name
       await dispatch(updateVegetableDetails({
         productId: editDetailsModalItem.product_id,
         data: payload
       })).unwrap()
 
       setEditDetailsModalItem(null)
+      showToast(`Stock and details for "${itemName}" updated successfully.`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
       const msg = typeof err === "string" ? err : (err?.message || (err?.body ? (typeof err.body === "string" ? err.body : JSON.stringify(err.body)) : "Failed to update vegetable details."))
       setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -425,10 +437,14 @@ export function VegetableStockAdminPage() {
         unit: actionUnit,
       })).unwrap()
 
+      const itemName = restockModalItem.name
       setRestockModalItem(null)
+      showToast(`Restocked ${actionQty} ${actionUnit} for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to restock item.")
+      const msg = err || "Failed to restock item."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -452,10 +468,14 @@ export function VegetableStockAdminPage() {
         reason: actionReason.trim(),
       })).unwrap()
 
+      const itemName = adjustModalItem.name
       setAdjustModalItem(null)
+      showToast(`Adjusted stock to ${actionQty} ${actionUnit} for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to adjust stock.")
+      const msg = err || "Failed to adjust stock."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -475,10 +495,14 @@ export function VegetableStockAdminPage() {
         applyNow: applyNow,
       })).unwrap()
 
+      const itemName = defaultModalItem.name
       setDefaultModalItem(null)
+      showToast(`Default daily stock updated for "${itemName}".`, "success")
       dispatch(fetchVegetableStock())
     } catch (err) {
-      setActionError(err || "Failed to set default daily stock.")
+      const msg = err || "Failed to set default daily stock."
+      setActionError(msg)
+      showToast(msg, "error")
     } finally {
       setSubmitting(false)
     }
@@ -805,9 +829,9 @@ export function VegetableStockAdminPage() {
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Current Live Stock */}
+                  {/* Stock */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Current Live Stock</label>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Stock</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -821,76 +845,6 @@ export function VegetableStockAdminPage() {
                       <select
                         value={editForm.current_stock_unit}
                         onChange={(e) => setEditForm(prev => ({ ...prev, current_stock_unit: e.target.value }))}
-                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
-                      >
-                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
-                          <>
-                            <option value="pcs">pcs</option>
-                            <option value="bunch">bunch</option>
-                            <option value="packet">packet</option>
-                            <option value="dozen">dozen</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Opening / Daily Stock */}
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Opening Stock (Daily)</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={editForm.opening_stock_quantity}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_quantity: e.target.value }))}
-                        placeholder="Opening/Daily"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
-                      />
-                      <select
-                        value={editForm.opening_stock_unit}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, opening_stock_unit: e.target.value }))}
-                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
-                      >
-                        {editDetailsModalItem?.unit_basis === "COUNT" ? (
-                          <>
-                            <option value="pcs">pcs</option>
-                            <option value="bunch">bunch</option>
-                            <option value="packet">packet</option>
-                            <option value="dozen">dozen</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Restock Level */}
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Restock Level</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={editForm.restock_level_quantity}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_quantity: e.target.value }))}
-                        placeholder="Restock amount"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                      <select
-                        value={editForm.restock_level_unit}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, restock_level_unit: e.target.value }))}
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
                       >
                         {editDetailsModalItem?.unit_basis === "COUNT" ? (
@@ -1171,7 +1125,7 @@ export function VegetableStockAdminPage() {
             </div>
 
             <p className="text-xs text-slate-500 font-medium">
-              Configure the default capacity that automatically resets every day at 4:00 AM IST. Leave blank to disable auto-reset.
+              Configure the default baseline capacity. Leave blank to clear baseline.
             </p>
 
             {actionError && (
@@ -1229,7 +1183,7 @@ export function VegetableStockAdminPage() {
                 <label htmlFor="apply_now_check" className="text-xs font-bold text-indigo-950 cursor-pointer">
                   Apply now to today's available stock
                   <span className="block text-[11px] font-medium text-indigo-700 mt-0.5">
-                    Immediately resets today's live stock to this new default value.
+                    Immediately updates today's live stock to this baseline value.
                   </span>
                 </label>
               </div>
@@ -1397,6 +1351,23 @@ export function VegetableStockAdminPage() {
           </div>
         </div>
       )}
+
+      {/* Toast Notification */}
+      <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
+        {toast && (
+          <div
+            className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-white text-xs font-bold animate-in slide-in-from-bottom-5 duration-200 ${
+              toast.type === "error" ? "bg-rose-600" : "bg-emerald-600"
+            }`}
+          >
+            {toast.type === "error" ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            <span>{toast.msg}</span>
+            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-80 cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

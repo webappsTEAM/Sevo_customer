@@ -7,6 +7,7 @@ import {
 import { routes } from "../routes.js"
 import { useNavigate } from "react-router-dom"
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js"
+import { QUICK_COMMERCE_PRICING } from "../../utils/quickCommercePricing.js"
 import { hasPendingServicesCart } from "../../services/combinedCartCheck.js"
 import { CombinedCheckoutConfirmModal } from "./CombinedCheckoutConfirmModal.jsx"
 
@@ -127,9 +128,12 @@ export function VegCartDrawerModal({
   const totalCount = itemsList.reduce((acc, i) => acc + i.quantity, 0)
   const savings = Math.max(0, mrpTotal - itemTotal)
 
-  const deliveryCharge = itemTotal > 0 ? 10 : 0
-  const handlingCharge = itemTotal > 0 ? 2 : 0
-  const grandTotal = itemTotal + deliveryCharge + handlingCharge + (selectedTip || 0)
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemTotal, { selectedTip })
+  const deliveryCharge = pricing.deliveryCharge
+  const handlingCharge = pricing.handlingCharge
+  const smallCartFee = pricing.smallCartFee
+  const surgeCharge = pricing.surgeCharge
+  const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (key, delta) => {
     if (delta > 0 && selectedFoodSubModule?.items) {
@@ -339,6 +343,36 @@ export function VegCartDrawerModal({
                 </div>
               )}
 
+              {/* Free Delivery Progress */}
+              {itemTotal > 0 && (
+                <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-2xs space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1 text-slate-800 font-bold">
+                      {itemTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
+                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
+                      ) : (
+                        <span>
+                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemTotal}</span> more for <span className="font-extrabold text-emerald-700">FREE delivery</span>
+                        </span>
+                      )}
+                    </div>
+                    {itemTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
+                      <span className="text-[10px] font-bold text-slate-400">
+                        ₹{itemTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.round((itemTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Items List Card */}
               <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs space-y-3.5">
                 {itemsList.map((item) => (
@@ -424,7 +458,9 @@ export function VegCartDrawerModal({
                       <span>Delivery charge</span>
                       <Info className="w-3 h-3 text-slate-400" />
                     </span>
-                    <span className="font-black text-slate-900">₹{deliveryCharge}</span>
+                    <span className={`font-black ${deliveryCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                      {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
+                    </span>
                   </div>
 
                   <div className="flex justify-between items-center">
@@ -432,8 +468,30 @@ export function VegCartDrawerModal({
                       <span>Handling &amp; packaging</span>
                       <Info className="w-3 h-3 text-slate-400" />
                     </span>
-                    <span className="font-black text-slate-900">₹{handlingCharge}</span>
+                    <span className={`font-black ${handlingCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                      {handlingCharge === 0 ? "FREE" : `₹${handlingCharge}`}
+                    </span>
                   </div>
+
+                  {smallCartFee > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1 text-slate-500">
+                        <span>Small cart fee</span>
+                        <Info className="w-3 h-3 text-slate-400" />
+                      </span>
+                      <span className="font-black text-slate-900">₹{smallCartFee}</span>
+                    </div>
+                  )}
+
+                  {surgeCharge > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1 text-slate-500">
+                        <span>High demand / Rain charge</span>
+                        <Info className="w-3 h-3 text-slate-400" />
+                      </span>
+                      <span className="font-black text-slate-900">₹{surgeCharge}</span>
+                    </div>
+                  )}
 
                   {selectedTip > 0 && (
                     <div className="flex justify-between items-center">

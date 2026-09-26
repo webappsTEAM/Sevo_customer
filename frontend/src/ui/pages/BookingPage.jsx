@@ -50,6 +50,7 @@ import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
 import { getVegetableTimingInfo } from "../../utils/vegetableSchedule.js";
+import { QUICK_COMMERCE_PRICING } from "../../utils/quickCommercePricing.js";
 import acServiceImg from "../../assets/ac service.png";
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png";
 import imgFoamWin from "../../assets/Foam & Power Jet AC Service — Window.png";
@@ -8850,30 +8851,6 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
    ───────────────────────────────────────────────────────────── */
 
 // ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
-const QUICK_COMMERCE_PRICING = {
-  FREE_DELIVERY_THRESHOLD: 200,
-  HANDLING_FEE: 2,
-  SMALL_CART_FEE: 5,
-  SMALL_CART_THRESHOLD: 100,
-  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
-  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
-  getDeliveryFee: (subtotal) => {
-    if (subtotal <= 0 || subtotal >= 200) return 0
-    if (subtotal >= 100) return 10
-    return 15
-  },
-  getSmallCartFee: (subtotal) => {
-    if (subtotal > 0 && subtotal < 100) return 5
-    return 0
-  },
-  getHandlingFee: (subtotal) => {
-    return subtotal > 0 ? 2 : 0
-  },
-  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
-    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
-  }
-}
-
 function QuickCommerceCartCheckout({
   cart,
   setCart,
@@ -8920,9 +8897,6 @@ function QuickCommerceCartCheckout({
   })
   const [selectedAddressId, setSelectedAddressId] = useState(() => savedAddresses[0]?.id || "addr_home")
   const [isDonationChecked, setIsDonationChecked] = useState(false)
-  const [selectedTip, setSelectedTip] = useState(null)
-  const [customTip, setCustomTip] = useState("")
-  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
   const [newAddressText, setNewAddressText] = useState("")
   const [newAddressType, setNewAddressType] = useState("Home")
@@ -8930,21 +8904,60 @@ function QuickCommerceCartCheckout({
   const [orderConfirmedData, setOrderConfirmedData] = useState(null)
   const [errorMsg, setErrorMsg] = useState("")
 
+  // Delivery schedule, slot state & dynamic pricing config
+  const [deliverySchedule, setDeliverySchedule] = useState([])
+  const [selectedDateStr, setSelectedDateStr] = useState("")
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(true)
+  const [pricingConfig, setPricingConfig] = useState(() => QUICK_COMMERCE_PRICING.getConfig())
+
+  useEffect(() => {
+    let isMounted = true
+    async function fetchSlots() {
+      try {
+        setIsLoadingSlots(true)
+        const res = await apiRequest("/vegetable-orders/slots/")
+        if (res && res.success && isMounted) {
+          if (res.pricing_config) {
+            QUICK_COMMERCE_PRICING.updateConfig(res.pricing_config)
+            setPricingConfig(res.pricing_config)
+          }
+          if (Array.isArray(res.dates)) {
+            setDeliverySchedule(res.dates)
+            const today = res.dates[0]
+            const todayHasAvailable = today?.slots?.some(s => s.available)
+            const chosenDate = todayHasAvailable ? today : (res.dates.find(d => d.slots?.some(s => s.available)) || today)
+            if (chosenDate) {
+              setSelectedDateStr(chosenDate.date)
+              const firstAvailable = chosenDate.slots?.find(s => s.available) || chosenDate.slots?.[0]
+              setSelectedSlot(firstAvailable)
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load delivery slots:", err)
+      } finally {
+        if (isMounted) setIsLoadingSlots(false)
+      }
+    }
+    fetchSlots()
+    return () => { isMounted = false }
+  }, [])
+
   const activeAddressObj = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0]
+  const activeDateObj = deliverySchedule.find(d => d.date === selectedDateStr) || deliverySchedule[0]
 
   const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
 
-  // Dynamic Blinkit-style pricing calculations
-  const deliveryCharge = QUICK_COMMERCE_PRICING.getDeliveryFee(itemsTotal)
-  const handlingCharge = QUICK_COMMERCE_PRICING.getHandlingFee(itemsTotal)
-  const smallCartFee = QUICK_COMMERCE_PRICING.getSmallCartFee(itemsTotal)
-  const isSurgeActive = QUICK_COMMERCE_PRICING.SURGE_ACTIVE
-  const surgeCharge = QUICK_COMMERCE_PRICING.getSurgeFee(itemsTotal, isSurgeActive, QUICK_COMMERCE_PRICING.SURGE_FEE)
-  const donationAmount = 0
-  const tipAmount = selectedTip === "custom" ? Math.max(0, parseInt(customTip, 10) || 0) : Math.max(0, selectedTip || 0)
-  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
+  const tipAmount = 0
+  const pricing = QUICK_COMMERCE_PRICING.calculateTotals(itemsTotal, { selectedTip: 0 })
+  const deliveryCharge = pricing.deliveryCharge
+  const handlingCharge = pricing.handlingCharge
+  const smallCartFee = pricing.smallCartFee
+  const surgeCharge = pricing.surgeCharge
+  const grandTotal = pricing.grandTotal
 
   const handleUpdateQty = (id, delta) => {
     setCart(prev => {
@@ -9017,13 +9030,6 @@ function QuickCommerceCartCheckout({
       onRequireAuth && onRequireAuth()
       return
     }
-    // Bug found: this used to fall back to a hardcoded "9876543210" and
-    // submit it as the real ServiceRequest.phone whenever a logged-in user
-    // had no phone on file (e.g. email/Google-only signup) -- a fake,
-    // non-functional number would be persisted as the delivery contact, so
-    // whoever fulfills the order would be calling a number that isn't the
-    // customer's. Require a real phone before checkout instead of
-    // fabricating one.
     if (!user?.phone) {
       setErrorMsg("Please add a phone number to your profile before placing this order, so we can reach you for delivery.")
       return
@@ -9038,19 +9044,13 @@ function QuickCommerceCartCheckout({
         return
       }
 
-      // Real grocery checkout (DAILY_ESSENTIALS_IMPLEMENTATION_PLAN.md Phase
-      // 3 / frontend plan Phase 2) -- GroceryCheckoutView reads the
-      // customer's ACTIVE daily_essentials Cart from the backend and
-      // reserves stock atomically, hard-blocking on InsufficientStockError.
-      // No cart_data payload here: unlike the old /booking/ endpoint, this
-      // one is not told what's in the cart, it reads the real Cart rows
-      // that dailyEssentialsCartSync.js has been keeping in sync (Phase 1).
-      // No silent fallback on failure -- a real error (insufficient stock,
-      // network failure, anything) must surface as an error, never a
-      // fabricated success screen.
       const res = await apiRequest("/orders/grocery/checkout/", {
         method: "POST",
-        json: { delivery_address: deliveryAddress },
+        json: {
+          delivery_address: deliveryAddress,
+          delivery_date: selectedDateStr || undefined,
+          delivery_slot: selectedSlot?.full_label || selectedSlot?.slot_label || undefined,
+        },
       })
 
       if (!res || res.success === false) {
@@ -9067,19 +9067,14 @@ function QuickCommerceCartCheckout({
         address: deliveryAddress,
         total: order.total_amount ?? grandTotal,
         itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
-        deliveryDayText: vegTiming.deliveryDay,
-        deliverySlot: vegTiming.deliverySlot,
+        deliveryDayText: activeDateObj?.display_label || vegTiming.deliveryDay,
+        deliverySlot: selectedSlot?.slot_label || order.delivery_slot || vegTiming.deliverySlot,
         paymentStatus: "Paid",
-        deliveryNotice: vegTiming.afterTwelveNotice
-          ? "Booking was placed after 12:00 PM. Your fresh vegetables will be harvested and delivered tomorrow between 6:00 PM and 8:00 PM."
-          : "Your fresh vegetables will be packed and delivered directly to your doorstep today between 6:00 PM and 8:00 PM."
+        deliveryNotice: activeDateObj?.is_today && !selectedSlot?.available
+          ? "Same-day booking cutoff passed. Your order is scheduled for the earliest delivery window."
+          : `Your fresh vegetables will be packed and delivered on ${activeDateObj?.formatted || "scheduled date"} during ${selectedSlot?.slot_label || "6:00 PM – 8:00 PM"}.`
       })
     } catch (err) {
-      // GroceryCheckoutView's insufficient-stock response puts the
-      // human-readable text in `message` (and the machine-readable item
-      // detail in `errors`) -- extractApiErrorMessage() prefers `errors`
-      // first for other endpoints' sake, so check `message` here explicitly
-      // before falling back to it.
       setErrorMsg(err?.body?.message || extractApiErrorMessage(err, "Failed to place order. Please try again."))
     } finally {
       setIsSubmitting(false)
@@ -9110,7 +9105,7 @@ function QuickCommerceCartCheckout({
           <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-left space-y-2">
             <div className="flex items-center gap-2 text-xs font-black text-emerald-900">
               <Clock className="w-4 h-4 text-emerald-700" />
-              <span>Delivery Time: 6:00 PM – 8:00 PM ({orderConfirmedData.deliveryDayText})</span>
+              <span>Delivery Time: {orderConfirmedData.deliverySlot} ({orderConfirmedData.deliveryDayText})</span>
             </div>
             <p className="text-[11px] text-emerald-800 font-semibold leading-relaxed">
               {orderConfirmedData.deliveryNotice}
@@ -9181,71 +9176,153 @@ function QuickCommerceCartCheckout({
           </div>
 
           <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
-            {/* Delivery Time Banner */}
-            {vegTiming.afterTwelveNotice ? (
-              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex items-start gap-3.5 shadow-3xs border-l-4 border-l-amber-500">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-3xs mt-0.5">
-                  <Clock className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
-                    Next-Day Delivery: Tomorrow (6:00 PM – 8:00 PM)
-                    <span className="text-[9px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">After 12 PM Notice</span>
-                  </h3>
-                  <p className="text-xs text-amber-900 font-semibold mt-1 leading-relaxed">
-                    Same-day booking is open 6:00 AM – 12:00 PM. Booking is not available for same-day delivery right now — <strong>even if booked now, it will be delivered tomorrow between 6:00 PM and 8:00 PM</strong>.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
-                  <Clock className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
-                    Evening Delivery Today (6:00 PM – 8:00 PM)
-                    <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
-                  </h3>
-                  <p className="text-xs text-slate-600 font-medium mt-0.5">
-                    Morning order window: 6:00 AM – 12:00 PM • Evening delivery: 6:00 PM – 8:00 PM
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Free Delivery Incentive Card */}
-            {itemsTotal > 0 && (
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-bold text-slate-800">
-                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
-                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
-                      ) : (
-                        <span>
-                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
-                        </span>
-                      )}
-                    </span>
+            {/* Delivery Date & Time Slot Selection (Inline Two-Level Selector) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-3xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Clock className="w-4 h-4 stroke-[2.2]" />
                   </div>
-                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
-                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
-                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900">Choose Delivery Window</h3>
+                    <p className="text-[11px] font-semibold text-slate-400">All 7 days of the week available</p>
+                  </div>
+                </div>
+                {selectedSlot && (
+                  <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {activeDateObj?.display_label || "Scheduled"}
+                  </span>
+                )}
+              </div>
+
+              {/* Level 1: Horizontal Scrollable Day Tabs (Sunday through Saturday) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">1. Select Day</span>
+                  {activeDateObj && (
+                    <span className="text-[11px] font-bold text-slate-600">
+                      {activeDateObj.display_label} • {activeDateObj.date_display || activeDateObj.formatted}
                     </span>
                   )}
                 </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
-                    }}
-                  />
-                </div>
+
+                {deliverySchedule.length > 0 ? (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    {deliverySchedule.map((dateObj) => {
+                      const isSelected = selectedDateStr === dateObj.date
+                      const isClosed = dateObj.is_closed || (dateObj.slots && dateObj.slots.length > 0 && dateObj.slots.every(s => !s.available))
+                      return (
+                        <button
+                          key={dateObj.date}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDateStr(dateObj.date)
+                            const currentStillAvailable = dateObj.slots?.find(s => s.name === selectedSlot?.name && s.available)
+                            const firstAvailable = dateObj.slots?.find(s => s.available)
+                            setSelectedSlot(currentStillAvailable || firstAvailable || dateObj.slots?.[0] || null)
+                          }}
+                          className={`px-3.5 py-2.5 rounded-2xl text-left border transition-all shrink-0 cursor-pointer min-w-[88px] text-center ${
+                            isSelected
+                              ? "bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900/20 font-black"
+                              : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 font-bold"
+                          }`}
+                        >
+                          <p className="text-xs leading-tight font-extrabold">{dateObj.display_label}</p>
+                          <p className={`text-[10px] mt-0.5 ${isSelected ? "text-slate-300" : "text-slate-400"} font-medium`}>
+                            {dateObj.date_display || dateObj.formatted}
+                          </p>
+                          {isClosed && (
+                            <span className="inline-block mt-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">
+                              {dateObj.reason ? (dateObj.is_today ? "Cutoff" : "Closed") : "Closed"}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 py-2">
+                    <Clock className="w-4 h-4 text-emerald-600 animate-spin" />
+                    <span>Loading delivery schedule...</span>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Level 2: Time Slot Chips for Chosen Day */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    2. Select Time Window
+                  </span>
+                </div>
+
+                {activeDateObj?.is_closed || !activeDateObj?.slots || activeDateObj.slots.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/60 text-center space-y-1.5">
+                    <AlertCircle className="w-6 h-6 text-amber-600 mx-auto" />
+                    <h4 className="text-xs font-bold text-amber-900">
+                      No Delivery Slots Available on {activeDateObj?.display_label || "this day"}
+                    </h4>
+                    <p className="text-[11px] text-amber-700 font-medium">
+                      {activeDateObj?.reason || "Deliveries are closed on this day. Please select another day from the list above."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeDateObj.slots.map((slot) => {
+                      const isSlotSelected = selectedSlot?.name === slot.name && selectedSlot?.slot_label === slot.slot_label
+                      const isAvailable = slot.available !== false
+                      return (
+                        <button
+                          key={slot.full_label || `${slot.name}-${slot.slot_label}`}
+                          type="button"
+                          disabled={!isAvailable}
+                          onClick={() => {
+                            if (isAvailable) {
+                              setSelectedSlot(slot)
+                            }
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between gap-2.5 ${
+                            !isAvailable
+                              ? "bg-slate-50/80 border-slate-200/60 text-slate-400 cursor-not-allowed opacity-60"
+                              : isSlotSelected
+                              ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30 font-black cursor-pointer"
+                              : "bg-white border-slate-200/90 hover:border-emerald-500 hover:bg-emerald-50/20 text-slate-800 cursor-pointer shadow-3xs"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-black">{slot.name}</p>
+                              {isSlotSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                            </div>
+                            <p className={`text-[11px] font-semibold mt-0.5 ${isSlotSelected ? "text-emerald-100" : "text-slate-500"}`}>
+                              {slot.slot_label}
+                            </p>
+                            {slot.reason && !isAvailable && (
+                              <p className="text-[10px] text-amber-700 font-medium mt-1">{slot.reason}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0">
+                            {isSlotSelected ? (
+                              <span className="w-6 h-6 rounded-full bg-white text-emerald-700 flex items-center justify-center shadow-xs">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </span>
+                            ) : isAvailable ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                Select
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                Closed
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
@@ -9384,61 +9461,6 @@ function QuickCommerceCartCheckout({
               </div>
             </div>
 
-            {/* (Donation box removed) */}
-
-            {/* Tip Your Delivery Partner Card */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
-                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
-              </p>
-              <div className="grid grid-cols-4 gap-2 pt-1">
-                {[
-                  { label: "₹20", val: 20, desc: "Say Thanks" },
-                  { label: "₹30", val: 30, desc: "Buy a Chai" },
-                  { label: "₹50", val: 50, desc: "Show Love" },
-                  { label: "Custom", val: "custom", desc: "Other" },
-                ].map((t) => {
-                  const isSelected = selectedTip === t.val
-                  return (
-                    <button
-                      key={t.label}
-                      type="button"
-                      onClick={() => {
-                        if (selectedTip === t.val) {
-                          setSelectedTip(null)
-                          setIsCustomTipOpen(false)
-                        } else {
-                          setSelectedTip(t.val)
-                          setIsCustomTipOpen(t.val === "custom")
-                        }
-                      }}
-                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
-                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
-                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
-                        }`}
-                    >
-                      <span className="text-sm font-bold">{t.label}</span>
-                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              {isCustomTipOpen && (
-                <div className="pt-2">
-                  <input
-                    type="number"
-                    min="0"
-                    value={customTip}
-                    onKeyDown={e => { if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault() }}
-                    onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="Enter custom tip amount (₹)"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
-                  />
-                </div>
-              )}
-            </div>
-
             {/* Cancellation Policy Card */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
               <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
@@ -9491,12 +9513,14 @@ function QuickCommerceCartCheckout({
               <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
             <div className="flex items-center gap-1.5 font-bold text-white transition-colors">
-              <span>{isSubmitting ? "Placing Order..." : `Proceed to Pay • ${vegTiming.deliveryDay} (6-8 PM)`}</span>
+              <span>{isSubmitting ? "Placing Order..." : `Proceed to Pay • ${activeDateObj?.display_label || "Scheduled"}`}</span>
               <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </button>
         </div>
       </div>
+
+
 
       {/* Standard Swiggy-Style Select Service Address Drawer */}
       {isAddressScreenOpen && (

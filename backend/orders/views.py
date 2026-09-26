@@ -15,6 +15,7 @@ will call this independently of (never inside the same transaction as)
 service checkout, per the approved two-cart architecture.
 """
 import os
+from decimal import Decimal
 
 from django.db import transaction
 from rest_framework import status
@@ -36,7 +37,7 @@ from .serializers import (
     serialize_service_order,
     serialize_grocery_order,
 )
-from vegetable_orders.models import VegetableOrder, VegetableOrderItem
+from vegetable_orders.models import VegetableOrder, VegetableOrderItem, GroceryCartPricingConfig
 from vegetable_orders.serializers import VegetableOrderSerializer, serialize_vegetable_order
 
 
@@ -99,7 +100,16 @@ class GroceryCheckoutView(APIView):
             return _error("Unable to resolve operating company for checkout.", status.HTTP_400_BAD_REQUEST)
 
         cart_items = list(cart.items.all())
-        total_amount = sum((ci.unit_price_snapshot * ci.quantity for ci in cart_items))
+        items_subtotal = sum((ci.unit_price_snapshot * ci.quantity for ci in cart_items))
+
+        # Admin-configurable Quick commerce pricing rules (server-side single source of truth):
+        pricing_config = GroceryCartPricingConfig.get_active_config()
+        delivery_fee, small_cart_fee, handling_fee = pricing_config.calculate_fees(items_subtotal)
+        tip_amount = Decimal(str(serializer.validated_data.get("tip_amount") or 0))
+
+        total_amount = items_subtotal + delivery_fee + small_cart_fee + handling_fee + tip_amount
+        delivery_date = serializer.validated_data.get("delivery_date")
+        delivery_slot = serializer.validated_data.get("delivery_slot") or ""
 
         stock_request_items = []
         variant_snapshots = []
@@ -140,8 +150,15 @@ class GroceryCheckoutView(APIView):
             with transaction.atomic():
                 order = VegetableOrder.objects.create(
                     customer=request.user,
+                    items_subtotal=items_subtotal,
+                    delivery_fee=delivery_fee,
+                    small_cart_fee=small_cart_fee,
+                    handling_fee=handling_fee,
+                    tip_amount=tip_amount,
                     total_amount=total_amount,
                     delivery_address=delivery_address,
+                    delivery_date=delivery_date,
+                    delivery_slot=delivery_slot,
                 )
                 reserve_stock_for_booking_items(stock_request_items, company, booking_ref=order.order_number)
 

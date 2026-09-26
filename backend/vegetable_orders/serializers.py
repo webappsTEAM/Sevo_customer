@@ -1,6 +1,71 @@
 from rest_framework import serializers
-from .models import VegetableOrder, VegetableOrderItem, VegetableReturn
+from .models import (
+    VegetableOrder,
+    VegetableOrderItem,
+    VegetableReturn,
+    VegetableDeliverySlotConfig,
+    VegetableWeekdaySlotConfig,
+    VegetableSlotDateOverride,
+    GroceryCartPricingConfig,
+)
 from inventory.utils.unit_conversion import format_stock_for_display
+
+
+class VegetableDeliverySlotConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VegetableDeliverySlotConfig
+        fields = [
+            "id", "code", "name", "slot_label", "start_time", "end_time",
+            "cutoff_time", "is_same_day_available", "is_active", "sort_order"
+        ]
+
+
+class VegetableWeekdaySlotConfigSerializer(serializers.ModelSerializer):
+    weekday_name = serializers.CharField(source="get_weekday_display", read_only=True)
+    slot_name = serializers.CharField(source="slot_config.name", read_only=True)
+    slot_label = serializers.CharField(source="slot_config.slot_label", read_only=True)
+
+    class Meta:
+        model = VegetableWeekdaySlotConfig
+        fields = [
+            "id", "weekday", "weekday_name", "slot_config", "slot_name",
+            "slot_label", "is_enabled", "cutoff_time_override", "capacity"
+        ]
+
+
+class VegetableSlotDateOverrideSerializer(serializers.ModelSerializer):
+    slot_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VegetableSlotDateOverride
+        fields = [
+            "id", "date", "slot_config", "slot_name", "is_closed",
+            "cutoff_time_override", "reason", "created_at"
+        ]
+
+    def get_slot_name(self, obj):
+        if obj.slot_config:
+            return obj.slot_config.name
+        return "Whole Day (All Slots)"
+
+
+class GroceryCartPricingConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroceryCartPricingConfig
+        fields = [
+            "id",
+            "free_delivery_threshold",
+            "small_cart_fee_threshold",
+            "small_cart_fee_amount",
+            "low_tier_delivery_fee",
+            "mid_tier_delivery_fee",
+            "handling_fee_amount",
+            "tip_preset_amounts",
+            "is_active",
+            "updated_at",
+        ]
+
+
 
 
 class VegetableOrderItemSerializer(serializers.ModelSerializer):
@@ -23,6 +88,8 @@ class VegetableOrderSerializer(serializers.ModelSerializer):
         model = VegetableOrder
         fields = [
             "id", "order_number", "status", "total_amount",
+            "items_subtotal", "delivery_fee", "handling_fee",
+            "small_cart_fee", "tip_amount", "delivery_date", "delivery_slot",
             "delivery_address", "items", "created_at", "updated_at",
         ]
         read_only_fields = fields
@@ -30,6 +97,9 @@ class VegetableOrderSerializer(serializers.ModelSerializer):
 
 class VegetableCheckoutSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
+    delivery_slot = serializers.CharField(required=False, allow_blank=True, default="")
+    tip_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
 
 
 def serialize_vegetable_order(order):

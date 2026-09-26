@@ -210,7 +210,12 @@ export function VegetableFullScreenPage() {
         const hydrated = {}
         items.forEach((it) => {
           if (it && it.package_name && it.quantity > 0) {
-            hydrated[it.package_name] = it.quantity
+            const key = it.variant_name
+              ? `${it.package_name} (${it.variant_name})`
+              : (it.variant_pack_value && it.variant_unit
+                  ? `${it.package_name} (${it.variant_pack_value} ${it.variant_unit})`
+                  : it.package_name)
+            hydrated[key] = it.quantity
           }
         })
         if (Object.keys(hydrated).length > 0) setFoodCart(hydrated)
@@ -734,6 +739,7 @@ export function VegetableFullScreenPage() {
                 <VegetableProductCard
                   key={item.id}
                   item={item}
+                  foodCart={foodCart}
                   cartCount={foodCart[item.name] || 0}
                   onUpdateQty={handleUpdateQty}
                   onSelectProduct={(veg) => setSelectedProduct(veg)}

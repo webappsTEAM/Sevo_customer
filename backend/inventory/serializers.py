@@ -617,7 +617,7 @@ class VegetableDetailsUpdateSerializer(serializers.Serializer):
     offer_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     offer_percentage = serializers.FloatField(required=False, allow_null=True)
     vegetable_gram = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    unit_basis = serializers.CharField(max_length=20, required=False, default="WEIGHT")
+    unit_basis = serializers.CharField(max_length=20, required=False, allow_blank=True, default=None)
     opening_stock_quantity = serializers.FloatField(required=False, allow_null=True)
     opening_stock_unit = serializers.ChoiceField(choices=ALLOWED_UNITS, required=False, allow_blank=True, allow_null=True)
     current_stock_quantity = serializers.FloatField(required=False, allow_null=True)

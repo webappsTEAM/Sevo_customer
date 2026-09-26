@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from accounts.permissions import IsAdminRole, RequireModuleAccess
 from common.drf import VisibilityQuerysetMixin
-from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer, StockMovement, Vegetable
+from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer, StockMovement, Vegetable, VegetableStockMovement
 from inventory.serializers import (
     InventoryItemSerializer, InventoryAlertSerializer, InventoryTransferSerializer
 )
@@ -241,30 +241,24 @@ class VegetableDetailsUpdateView(APIView):
     """
     PATCH /api/inventory/vegetable-stock/<product_id>/update-details/
 
-    Stock quantities and pricing writes remain locked here (configured from Vendor app).
-    Image and visual catalog metadata updates are persisted directly to both Vegetable.image
-    and linked Package.image.
+    Updates vegetable live stock, pricing, packaging duration, reorder thresholds, and image details.
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     @transaction.atomic
     def patch(self, request, product_id):
         product = get_object_or_404(Package.objects.select_related("stock_item"), id=product_id)
-        basis = getattr(product.stock_item, "unit_basis", "WEIGHT") if product.stock_item else "WEIGHT"
+        item = getattr(product, "stock_item", None) or Vegetable.objects.filter(package=product).first()
+        basis = item.unit_basis if item and item.unit_basis else "WEIGHT"
         serializer = VegetableDetailsUpdateSerializer(data=request.data, partial=True, context={"unit_basis": basis})
         if not serializer.is_valid():
             return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = serializer.validated_data
-
-        # If only stock / pricing writes are attempted with no image, return the locked response
-        if "image" not in validated_data and any(k in validated_data for k in ["price", "mrp", "offer_price", "offer_percentage", "opening_stock_quantity", "current_stock_quantity", "restock_level_quantity", "reorder_level_quantity"]):
-            return _stock_writes_locked_response()
-
         company = _get_request_company(request)
-        item = product.stock_item
+
         if not item:
-            item = Vegetable.objects.filter(package=product).first()
+            item = getattr(product, "stock_item", None) or Vegetable.objects.filter(package=product).first()
             if item:
                 product.stock_item = item
                 product.save(update_fields=["stock_item"])
@@ -275,7 +269,8 @@ class VegetableDetailsUpdateView(APIView):
                 package=product,
                 name=f"{product.name} (Produce)",
                 sku=f"VEG-{product.slug.upper()[:20]}",
-                unit="g",
+                unit="g" if basis == "WEIGHT" else "pcs",
+                unit_basis=basis,
                 stock_quantity_grams=None,
                 default_daily_quantity_grams=None,
             )
@@ -284,19 +279,97 @@ class VegetableDetailsUpdateView(APIView):
         else:
             item = Vegetable.objects.select_for_update().get(id=item.id)
 
+        # 1. Update Package visual & pricing metadata
+        pkg_update_fields = []
         if "image" in validated_data:
             new_image = (validated_data["image"] or "").strip()
             item.image = new_image
-            item.save(update_fields=["image"])
             if product.image != new_image:
                 product.image = new_image
-                product.save(update_fields=["image"])
+                pkg_update_fields.append("image")
+
+        if "price" in validated_data and validated_data["price"] is not None:
+            product.base_price = validated_data["price"]
+            pkg_update_fields.append("base_price")
+
+        selling_price = float(validated_data.get("price", product.base_price) or 0)
+        mrp_val = None
+        if "mrp" in validated_data and validated_data["mrp"] is not None and float(validated_data["mrp"]) > 0:
+            mrp_val = float(validated_data["mrp"])
+        elif "offer_price" in validated_data and validated_data["offer_price"] is not None and float(validated_data["offer_price"]) > 0:
+            mrp_val = float(validated_data["offer_price"])
+        elif "offer_percentage" in validated_data and validated_data["offer_percentage"] is not None:
+            pct = float(validated_data["offer_percentage"])
+            if pct > 0 and selling_price > 0 and pct < 100:
+                mrp_val = round(selling_price / (1.0 - (pct / 100.0)), 2)
+
+        if mrp_val and mrp_val > selling_price:
+            product.offer_price = mrp_val
+            pct = round(((mrp_val - selling_price) / mrp_val) * 100)
+            product.tag = f"{pct}% OFF"
+            pkg_update_fields.extend(["offer_price", "tag"])
+        elif "mrp" in validated_data or "offer_price" in validated_data or "offer_percentage" in validated_data:
+            product.offer_price = None
+            product.tag = ""
+            pkg_update_fields.extend(["offer_price", "tag"])
 
         if "vegetable_gram" in validated_data and validated_data["vegetable_gram"]:
             v_gram = validated_data["vegetable_gram"].strip()
             if v_gram and product.duration != v_gram:
                 product.duration = v_gram
-                product.save(update_fields=["duration"])
+                pkg_update_fields.append("duration")
+
+        if pkg_update_fields:
+            product.save(update_fields=list(set(pkg_update_fields)))
+
+        # 2. Update Vegetable model stock, unit, and threshold fields
+        item_update_fields = ["image"] if "image" in validated_data else []
+        item_basis = item.unit_basis or basis
+
+        # Live Stock Update
+        if "current_stock_quantity" in validated_data and validated_data["current_stock_quantity"] is not None:
+            stock_unit = validated_data.get("current_stock_unit") or item.unit or ("pcs" if item_basis == "COUNT" else "g")
+            target_units = to_base_units(validated_data["current_stock_quantity"], stock_unit, allow_zero=True, unit_basis=item_basis)
+            old_stock = item.stock_quantity_grams if item.stock_quantity_grams is not None else 0
+            delta = target_units - old_stock
+            item.stock_quantity_grams = target_units
+            item.unit = stock_unit
+            item.unit_basis = unit_basis_for_unit(stock_unit)
+            item_update_fields.extend(["stock_quantity_grams", "unit", "unit_basis"])
+
+            VegetableStockMovement.objects.create(
+                org=company,
+                vegetable=item,
+                movement_type=VegetableStockMovement.MovementType.ADJUSTMENT,
+                unit_basis=item.unit_basis,
+                unit_label=item.unit,
+                delta_grams=delta,
+                balance_after_grams=target_units,
+                reason="Updated from inventory table details",
+                entered_by=request.user,
+            )
+
+        # Reorder Threshold (Alert Level)
+        if "reorder_level_quantity" in validated_data and validated_data["reorder_level_quantity"] is not None:
+            r_unit = validated_data.get("reorder_level_unit") or item.unit or ("pcs" if item_basis == "COUNT" else "g")
+            r_units = to_base_units(validated_data["reorder_level_quantity"], r_unit, allow_zero=True, unit_basis=item_basis)
+            item.reorder_threshold = r_units
+            item_update_fields.append("reorder_threshold")
+
+        # Opening / Restock Default Daily Level
+        if "opening_stock_quantity" in validated_data and validated_data["opening_stock_quantity"] is not None:
+            op_unit = validated_data.get("opening_stock_unit") or item.unit or ("pcs" if item_basis == "COUNT" else "g")
+            op_units = to_base_units(validated_data["opening_stock_quantity"], op_unit, allow_zero=True, unit_basis=item_basis)
+            item.default_daily_quantity_grams = op_units
+            item_update_fields.append("default_daily_quantity_grams")
+        elif "restock_level_quantity" in validated_data and validated_data["restock_level_quantity"] is not None:
+            rstk_unit = validated_data.get("restock_level_unit") or item.unit or ("pcs" if item_basis == "COUNT" else "g")
+            rstk_units = to_base_units(validated_data["restock_level_quantity"], rstk_unit, allow_zero=True, unit_basis=item_basis)
+            item.default_daily_quantity_grams = rstk_units
+            item_update_fields.append("default_daily_quantity_grams")
+
+        if item_update_fields:
+            item.save(update_fields=list(set(item_update_fields)))
 
         # Invalidate catalog cache so customer storefront updates immediately
         try:
@@ -305,12 +378,15 @@ class VegetableDetailsUpdateView(APIView):
         except Exception:
             pass
 
+        product.refresh_from_db()
+        status_data = vegetable_stock_selectors.get_admin_stock_status(product)
         return Response({
             "success": True,
             "data": {
                 "product_id": product.id,
                 "name": product.name,
                 "image": item.image,
+                **status_data,
             },
             "message": "Vegetable details updated successfully."
         })

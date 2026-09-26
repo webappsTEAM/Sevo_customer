@@ -284,6 +284,10 @@ class Vegetable(models.Model):
         null=True, blank=True, default=None,
         help_text="Default daily reset quota in base units (grams for WEIGHT, integer count for COUNT)."
     )
+    reorder_threshold = models.PositiveIntegerField(
+        null=True, blank=True, default=None,
+        help_text="Reorder alert threshold in base units (grams for WEIGHT, integer count for COUNT)."
+    )
     last_reset_date = models.DateField(null=True, blank=True)
     image = models.CharField(max_length=500, blank=True, default="")
     status = models.CharField(
