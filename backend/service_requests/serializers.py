@@ -87,8 +87,14 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
         if not hasattr(self, "_stock_status_cache"):
             self._stock_status_cache = {}
         if obj.pk not in self._stock_status_cache:
-            from inventory.selectors.vegetable_stock_selectors import get_stock_status
-            self._stock_status_cache[obj.pk] = get_stock_status(obj)
+            if not getattr(obj, "stock_item_id", None):
+                self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
+            else:
+                try:
+                    from inventory.selectors.vegetable_stock_selectors import get_stock_status
+                    self._stock_status_cache[obj.pk] = get_stock_status(obj)
+                except Exception:
+                    self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
         return self._stock_status_cache[obj.pk]
 
     def get_in_stock(self, obj):
@@ -98,7 +104,11 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
         return self.get_stock_status(obj)["max_quantity"]
 
     def get_variants(self, obj):
-        variants_qs = obj.variants.filter(is_active=True, status="APPROVED").order_by("sort_order", "pack_value", "id")
+        variants_list = [
+            v for v in obj.variants.all()
+            if getattr(v, "is_active", True) and getattr(v, "status", "APPROVED") == "APPROVED"
+        ]
+        variants_list.sort(key=lambda v: (getattr(v, "sort_order", 0) or 0, getattr(v, "pack_value", 0) or 0, getattr(v, "id", 0) or 0))
         return [{
             "id": v.id,
             "name": v.display_name,
@@ -111,7 +121,7 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
             "is_default": v.is_default,
             "is_active": v.is_active,
             "sort_order": v.sort_order,
-        } for v in variants_qs]
+        } for v in variants_list]
 
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
@@ -249,11 +259,14 @@ class PackageSerializer(serializers.ModelSerializer):
         if not hasattr(self, "_stock_status_cache"):
             self._stock_status_cache = {}
         if obj.pk not in self._stock_status_cache:
-            try:
-                from inventory.selectors.vegetable_stock_selectors import get_stock_status
-                self._stock_status_cache[obj.pk] = get_stock_status(obj)
-            except Exception:
-                self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": 99}
+            if not getattr(obj, "stock_item_id", None):
+                self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
+            else:
+                try:
+                    from inventory.selectors.vegetable_stock_selectors import get_stock_status
+                    self._stock_status_cache[obj.pk] = get_stock_status(obj)
+                except Exception:
+                    self._stock_status_cache[obj.pk] = {"in_stock": True, "max_quantity": None}
         return self._stock_status_cache[obj.pk]
 
     def get_in_stock(self, obj):

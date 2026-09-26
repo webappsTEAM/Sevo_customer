@@ -35,7 +35,9 @@ export function AuthProvider({ children }) {
       username: data.username,
       email: data.email ?? "",
       firstName: data.first_name ?? "",
+      first_name: data.first_name ?? "",
       lastName: data.last_name ?? "",
+      last_name: data.last_name ?? "",
       fullName: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
       full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
       role: data.role,
@@ -227,6 +229,13 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("qt_access")
     localStorage.removeItem("sevo_user")
     localStorage.removeItem("sevo_customer_phone")
+    // AI Chat Privacy: clear conversation session so the next user
+    // on this device/tab cannot see the previous user's chat history.
+    try {
+      sessionStorage.removeItem("calservices_ai_conversation_id")
+      sessionStorage.removeItem("calservices_ai_messages")
+      sessionStorage.removeItem("calservices_ai_owner_id")
+    } catch (_) {}
     setUser(null)
     window.dispatchEvent(new CustomEvent("calservice_auth_changed", { detail: { user: null } }))
     window.dispatchEvent(new Event("calservice_address_changed"))

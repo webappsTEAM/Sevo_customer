@@ -45,4 +45,5 @@ export function sevoLogo({ size = "md", showTagline = false, className = "", the
 }
 
 export const SevoLogo = sevoLogo
+export const CalTrackLogo = sevoLogo
 export default sevoLogo
