@@ -62,6 +62,16 @@ const LOGISTICS_TIMELINE_STEPS = [
   { label: "Goods Delivered", emoji: "✅" },
 ]
 
+// A multi-stop booking stores its whole route as TripStops (PICKUP, each
+// WAYPOINT, DROP). Pickup and drop already have their own rows and pins, so the
+// "Stop 1..n" list and the numbered map pins must be the intermediate stops only
+// -- otherwise the pickup and drop appear a second time as numbered stops.
+function intermediateStops(logistics) {
+  return (Array.isArray(logistics?.stops) ? logistics.stops : []).filter(
+    (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase()),
+  )
+}
+
 function getTimelineIdx(s, isLogistics = false, logisticsLeg = "") {
   s = (s || "").toLowerCase()
   const leg = (logisticsLeg || "").toUpperCase()
@@ -470,7 +480,7 @@ export function CustomerTrackingPage({
               // below) were never passed to the map, so they never appeared
               // as markers and never factored into the camera's fitBounds.
               routePoints={isLogistics && (data?.pickup_location || data?.drop_location)
-                ? { pickup: data?.pickup_location, drop: data?.drop_location, stops: data?.logistics?.stops }
+                ? { pickup: data?.pickup_location, drop: data?.drop_location, stops: intermediateStops(data?.logistics) }
                 : null}
             />
 
@@ -957,7 +967,7 @@ export function CustomerTrackingPage({
                   </div>
                 </div>
                 {/* Intermediate Stops (if any) */}
-                {Array.isArray(data?.logistics?.stops) && data.logistics.stops.length > 0 && data.logistics.stops.map((stop, sIdx) => (
+                {intermediateStops(data?.logistics).map((stop, sIdx) => (
                   <div key={stop.id || sIdx} className="ltp-addr-row" style={{ marginBottom: 8, paddingLeft: 6, borderLeft: "2px dashed #94a3b8" }}>
                     <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>{sIdx + 1}</div>
                     <div>

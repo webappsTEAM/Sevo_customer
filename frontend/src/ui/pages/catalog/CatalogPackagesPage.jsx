@@ -1603,6 +1603,7 @@ const EMPTY_PACKAGE = {
   gt_additional_stop_charge: "",
   gt_surge_multiplier: "",
   gt_minimum_fare: "",
+  gt_gst_rate: "",
 }
 
 const STATUS_TONE = {
@@ -2560,6 +2561,13 @@ export function CatalogPackagesPage() {
         return
       }
     }
+    if (editing.gt_gst_rate !== "" && editing.gt_gst_rate != null) {
+      const gstNum = Number(editing.gt_gst_rate)
+      if (isNaN(gstNum) || gstNum < 0 || gstNum > 100) {
+        showToast(`GST must be a percentage between 0 and 100. Got "${editing.gt_gst_rate}".`, "error")
+        return
+      }
+    }
     try {
       let finalSlug = (editing.slug || "").trim()
       if (!finalSlug && editing.name) {
@@ -2658,6 +2666,7 @@ export function CatalogPackagesPage() {
         gt_additional_stop_charge: editing.gt_additional_stop_charge !== "" && editing.gt_additional_stop_charge != null && !isNaN(Number(editing.gt_additional_stop_charge)) ? Number(editing.gt_additional_stop_charge) : null,
         gt_surge_multiplier: editing.gt_surge_multiplier !== "" && editing.gt_surge_multiplier != null && !isNaN(Number(editing.gt_surge_multiplier)) ? Number(editing.gt_surge_multiplier) : null,
         gt_minimum_fare: editing.gt_minimum_fare !== "" && editing.gt_minimum_fare != null && !isNaN(Number(editing.gt_minimum_fare)) ? Number(editing.gt_minimum_fare) : null,
+        gt_gst_rate: editing.gt_gst_rate !== "" && editing.gt_gst_rate != null && !isNaN(Number(editing.gt_gst_rate)) ? Number(editing.gt_gst_rate) : null,
       }
       if (editing.virtualSlug && editing.virtualSlug.startsWith("tab_")) {
         payload.tag = editing.virtualSlug
@@ -6808,6 +6817,17 @@ export function CatalogPackagesPage() {
                   placeholder="e.g. 1.00"
                   value={editing.gt_surge_multiplier ?? ""}
                   onChange={(e) => setEditing({ ...editing, gt_surge_multiplier: e.target.value })}
+                />
+
+                <Input
+                  label="GST included in the fare (%, e.g. 18.00 — the fare does not change; invoices show the GST part. Enter 0 to remove, leave blank to keep the current setting)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 18.00"
+                  value={editing.gt_gst_rate ?? ""}
+                  onChange={(e) => setEditing({ ...editing, gt_gst_rate: e.target.value })}
                 />
               </div>
             )}

@@ -396,6 +396,7 @@ def _gt_tier_defaults_from_package(package, cat_enum):
         "additional_stop_charge": package.gt_additional_stop_charge if package.gt_additional_stop_charge is not None else 0,
         "surge_multiplier": package.gt_surge_multiplier if package.gt_surge_multiplier is not None else 1,
         "minimum_fare": package.gt_minimum_fare,
+        "gst_rate": package.gt_gst_rate,
     }
 
 
@@ -636,7 +637,7 @@ def update_package(package, data, actor, reason=None):
                 "base_price", "offer_price",
                 "gt_base_fare", "gt_per_km_rate", "gt_free_km",
                 "gt_loading_unloading_charge", "gt_additional_stop_charge",
-                "gt_surge_multiplier", "gt_minimum_fare",
+                "gt_surge_multiplier", "gt_minimum_fare", "gt_gst_rate",
             )
             if f in data and data[f] != getattr(package, f)
         }
@@ -754,6 +755,7 @@ def update_package(package, data, actor, reason=None):
                 ("gt_additional_stop_charge", "additional_stop_charge"),
                 ("gt_surge_multiplier", "surge_multiplier"),
                 ("gt_minimum_fare", "minimum_fare"),
+                ("gt_gst_rate", "gst_rate"),
             )
             for pkg_field, tier_field in _gt_field_map:
                 pkg_value = getattr(pkg, pkg_field, None)

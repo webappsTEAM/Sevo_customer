@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { extractApiErrorMessage } from "../../api/client.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, checkPointCoverage, fetchGoodsCategories, fetchGoodsItems, evaluateCargoFitment, fetchLogisticsSlots, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager, findUnpinnedStop, locatedStops, coverageIssueForStops } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { parseDimensionLabel, tierCapacityText, tierBadgeText } from "../../components/logistics/tierDisplay.js"
@@ -1519,10 +1519,27 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
   // expanding coverage is an admin action, not a code change.
   useEffect(() => {
     if (!pickupPoint || !dropPoint) {
-      setCoverageMessage("")
-      setNoServiceRoute(false)
       setStopCoverageIssue(null)
-      return
+      const single = pickupPoint ? ["pickup", pickupPoint] : dropPoint ? ["drop", dropPoint] : null
+      if (!single) {
+        setCoverageMessage("")
+        setNoServiceRoute(false)
+        return
+      }
+      // Only one end is chosen so far: still tell the customer right away if it is uncovered.
+      let stale = false
+      const t = setTimeout(async () => {
+        const res = await checkPointCoverage({
+          serviceCategory: "goods_transport_truck",
+          point: single[0],
+          location: single[1],
+          vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
+        })
+        if (stale) return
+        setCoverageMessage(res.inCoverage ? "" : res.message)
+        setNoServiceRoute(!res.inCoverage)
+      }, 300)
+      return () => { stale = true; clearTimeout(t) }
     }
     let cancelled = false
     // Stops are part of the trip: each located stop is checked with the ends.
@@ -2466,6 +2483,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                   pickupPoint={pickupPoint}
                   dropPoint={dropPoint}
                   serviceSlug="goods_transport_truck"
+                  vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
                   coverageIssue={stopCoverageIssue}
                   cityName={currentCityName || "Hosur"}
                 />
@@ -3107,7 +3125,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
                       ? `₹ ${Number(serverQuote.total).toLocaleString("en-IN")}`
                       : (quoteLoading ? "Calculating…" : "Fare unavailable")}
                   </p>
-                  <p className="text-[10px] text-emerald-700">Includes fuel, driver charges &amp; toll estimate</p>
+                  <p className="text-[10px] text-emerald-700">Toll, parking &amp; any approved extras are charged over and above this fare</p>
                 </div>
                 <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">
                   Instant Confirm
@@ -4734,6 +4752,7 @@ export function MiniTruckBookingHosurPage({ city: cityProp, cityName: cityNamePr
               : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
           }
           serviceSlug="goods_transport_truck"
+          vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
           onClose={() => setMapPickerTarget(null)}
           onConfirm={(resolvedAddr) => {
             const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"

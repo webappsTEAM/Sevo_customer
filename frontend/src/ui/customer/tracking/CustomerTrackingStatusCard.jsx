@@ -80,7 +80,11 @@ export function CustomerTrackingStatusCard({
     data?.service_category?.toLowerCase().includes("transport")
   )
   const logisticsLeg = (data?.logistics?.leg || "").toUpperCase()
-  const stops = Array.isArray(data?.logistics?.stops) ? data.logistics.stops : []
+  // Progress counts the intermediate stops the customer added; pickup and drop
+  // are the trip's ends and have their own status steps.
+  const stops = (Array.isArray(data?.logistics?.stops) ? data.logistics.stops : []).filter(
+    (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase()),
+  )
   const completedStops = stops.filter((s) => s.completed_at).length
   const totalStops = stops.length
 
@@ -216,7 +220,7 @@ export function CustomerTrackingStatusCard({
             {dynamicTag}
           </span>
           <div className="flex items-center gap-2">
-            {totalStops > 1 && (
+            {totalStops > 0 && (
               <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900/10 text-slate-700">
                 Stops: {completedStops}/{totalStops}
               </span>

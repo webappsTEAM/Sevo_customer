@@ -71,6 +71,11 @@ const PRICING_FIELDS = [
     hint: "Multiplies the whole computed fare. A fixed per-tier value between 0.01 and 5.00 — not a live demand engine.",
   },
   {
+    key: "gst_rate", label: "GST included", short: "GST incl.", unit: "%",
+    kind: "rate", nullable: true,
+    hint: "GST already inside the fare (the fare does not change). Invoices show this component. Set on the Catalog package.",
+  },
+  {
     key: "starting_price", label: "Starting price", short: "Starting price", unit: "₹",
     kind: "money", nullable: false,
     hint: "The “from” price customers see on the booking card. Display only — a distance-priced trip is charged by the formula above.",
@@ -88,6 +93,10 @@ function num(value) {
 function formatValue(field, value) {
   if (field.kind === "bool") return value ? "Yes" : "No"
   if (value === null || value === undefined || value === "") return "Not set"
+  if (field.kind === "rate") {
+    const r = Number(value)
+    return Number.isNaN(r) || r <= 0 ? "None" : `${r.toFixed(2)}%`
+  }
   if (field.kind === "money" || field.kind === "int") {
     const n = Number(value)
     if (Number.isNaN(n)) return String(value)

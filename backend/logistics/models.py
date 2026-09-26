@@ -171,6 +171,19 @@ class ServiceTier(models.Model):
             "not a live demand engine -- time-band/demand surge is its own system."
         ),
     )
+    gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+            MaxValueValidator(Decimal("100.00")),
+        ],
+        help_text=(
+            "GST already INCLUDED in this tier's fare, as a percentage (18.00 = 18%). "
+            "The fare a customer is quoted and pays does not change; the rate is recorded on "
+            "each quote and the invoice shows the GST component of the total. "
+            "Blank or 0 = no GST line on invoices."
+        ),
+    )
     minimum_fare = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0.00"))],

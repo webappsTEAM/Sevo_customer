@@ -27,6 +27,15 @@ from .services import WorkforceIntegrationService
 logger = logging.getLogger("workforce_integration")
 
 _raw_webhook_secret = getattr(settings, "WORKFORCE_WEBHOOK_SECRET", None) or os.getenv("WORKFORCE_WEBHOOK_SECRET")
+# Publicly-known placeholder values (repo defaults / .env.example) are not secrets: outside
+# local DEBUG/tests they count as "not configured" so production fails closed instead of
+# authenticating webhooks with a value anyone can read in the repository.
+if _raw_webhook_secret and str(_raw_webhook_secret).strip() in (
+    "caldim_secure_webhook_token_2026",
+    "dev-insecure-workforce-webhook-secret-local-testing-only",
+    "wf_webhook_secret_default",
+) and not (settings.DEBUG or "test" in __import__("sys").argv or getattr(settings, "TESTING", False)):
+    _raw_webhook_secret = None
 
 if not _raw_webhook_secret:
     # Fixes: this used to silently fall back to the well-known literal

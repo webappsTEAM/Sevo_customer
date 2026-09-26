@@ -1053,6 +1053,34 @@ MAX_INTERMEDIATE_WAYPOINTS = 3
 MAX_TOTAL_TRIP_STOPS = 5
 
 
+def _assert_route_stops_in_coverage(booking, stops):
+    """
+    A goods-transport route may only pass through places the service actually
+    covers. Booking creation and the quote already enforce this; a route edited
+    afterwards (PUT /booking/<id>/stops/) must satisfy the very same rule, using
+    the same engine and the booking's own pickup/drop, or a customer could route
+    a covered booking through uncovered ground. Raises ValueError with the
+    engine's own message (which names the stop).
+    """
+    from .logistics_pricing import DISTANCE_PRICED_CATEGORIES
+    if booking.service_category not in DISTANCE_PRICED_CATEGORIES:
+        return
+    if None in (booking.latitude, booking.longitude, booking.drop_latitude, booking.drop_longitude):
+        return
+    from settings_hub.service_zone_engine import check_route_coverage
+    tier = getattr(booking, "logistics_tier", None)
+    result = check_route_coverage(
+        pickup_lat=booking.latitude, pickup_lng=booking.longitude,
+        drop_lat=booking.drop_latitude, drop_lng=booking.drop_longitude,
+        service_slug=booking.service_category, company=getattr(booking, "company", None),
+        vehicle_class=(tier.get_vehicle_class() if tier is not None else ""),
+        vehicle_label=(getattr(tier, "name", "") or ""),
+        stops=stops,
+    )
+    if not result.allowed:
+        raise ValueError(result.message)
+
+
 def set_trip_stops(booking, customer, stops):
     """
     Replaces the full ordered list of extra stops for a booking in one
@@ -1121,20 +1149,43 @@ def set_trip_stops(booking, customer, stops):
         except (InvalidOperation, TypeError):
             raise ValueError(f"Invalid longitude value: {lng}")
 
+    _assert_route_stops_in_coverage(booking, stops)
+
     with transaction.atomic():
         existing_stops = list(TripStop.objects.filter(booking=booking).order_by("sequence"))
         existing_by_seq = {s.sequence: s for s in existing_stops}
         existing_by_id = {s.id: s for s in existing_stops}
+        # (booking, sequence) is unique. Rewriting the route row by row collides
+        # whenever a stop is inserted or moved onto a position an existing row
+        # still holds, so park every current row out of the way first; each one
+        # gets its final sequence below (or is deleted / re-appended at the end).
+        if existing_stops:
+            from django.db.models import F
+            TripStop.objects.filter(booking=booking).update(sequence=F("sequence") + 10000)
 
         result = []
         used_ids = set()
+        # Rows the payload names explicitly by id belong to those entries; a new
+        # (id-less) entry must never take one of them over just because it lands
+        # on the same position -- that turned an inserted stop into the row of a
+        # later, id-bearing stop and silently dropped one of the two.
+        explicit_ids = set()
+        for s in stops:
+            sid = s.get("id") or s.get("stop_id")
+            if sid and int(sid) in existing_by_id:
+                explicit_ids.add(int(sid))
 
         for i, s in enumerate(stops, start=1):
             stop_id = s.get("id") or s.get("stop_id")
             stop_obj = None
-            if stop_id and int(stop_id) in existing_by_id:
+            if stop_id and int(stop_id) in existing_by_id and int(stop_id) not in used_ids:
                 stop_obj = existing_by_id[int(stop_id)]
-            elif i in existing_by_seq and existing_by_seq[i].id not in used_ids:
+            elif (
+                not (stop_id and int(stop_id) in existing_by_id)
+                and i in existing_by_seq
+                and existing_by_seq[i].id not in used_ids
+                and existing_by_seq[i].id not in explicit_ids
+            ):
                 stop_obj = existing_by_seq[i]
 
             stop_type = (s.get("stop_type") or TripStop.StopType.WAYPOINT).upper()
@@ -1178,6 +1229,7 @@ def set_trip_stops(booking, customer, stops):
         # Clean up surplus stops that were removed from the route,
         # but NEVER delete a stop that already has delivery proofs or arrival timestamps recorded.
         surplus = [s for s in existing_stops if s.id not in used_ids]
+        kept_history = []
         for surplus_stop in surplus:
             has_proof = getattr(surplus_stop, "delivery_proofs", None) and surplus_stop.delivery_proofs.exists()
             has_progress = surplus_stop.arrived_at or surplus_stop.completed_at
@@ -1185,6 +1237,10 @@ def set_trip_stops(booking, customer, stops):
                 surplus_stop.delete()
             else:
                 logger.info("Preserving historical stop %s with recorded proof/timestamps", surplus_stop.id)
+                # keep it, but after the live route instead of at its parked position
+                surplus_stop.sequence = len(result) + 1 + len(kept_history)
+                surplus_stop.save(update_fields=["sequence"])
+                kept_history.append(surplus_stop)
 
     return result
 

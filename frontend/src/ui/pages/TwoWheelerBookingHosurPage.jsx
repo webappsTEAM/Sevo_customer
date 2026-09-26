@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { extractApiErrorMessage } from "../../api/client.js"
-import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas, fetchLogisticsQuote, checkRouteCoverage, checkPointCoverage, fetchGoodsCategories, fetchGoodsItems, fetchLogisticsSlots, evaluateCargoFitment, fetchGTFaqs, fetchLogisticsCities } from "../../api/logisticsService.js"
 import { GoodsCargoSelectorModal } from "../../components/logistics/GoodsCargoSelectorModal.jsx"
 import { MultiStopRouteManager, findUnpinnedStop, locatedStops, coverageIssueForStops } from "../../components/logistics/MultiStopRouteManager.jsx"
 import { parseDimensionLabel, tierCapacityText, tierBadgeText } from "../../components/logistics/tierDisplay.js"
@@ -1175,10 +1175,27 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
   // expanding coverage is an admin action, not a code change.
   useEffect(() => {
     if (!pickupPoint || !dropPoint) {
-      setCoverageMessage("")
-      setNoServiceRoute(false)
       setStopCoverageIssue(null)
-      return
+      const single = pickupPoint ? ["pickup", pickupPoint] : dropPoint ? ["drop", dropPoint] : null
+      if (!single) {
+        setCoverageMessage("")
+        setNoServiceRoute(false)
+        return
+      }
+      // Only one end is chosen so far: still tell the customer right away if it is uncovered.
+      let stale = false
+      const t = setTimeout(async () => {
+        const res = await checkPointCoverage({
+          serviceCategory: "goods_transport_two_wheeler",
+          point: single[0],
+          location: single[1],
+          vehicleClass: (selectedVehicle || selectedVehicleEffective)?.vehicle_class || "",
+        })
+        if (stale) return
+        setCoverageMessage(res.inCoverage ? "" : res.message)
+        setNoServiceRoute(!res.inCoverage)
+      }, 300)
+      return () => { stale = true; clearTimeout(t) }
     }
     let cancelled = false
     // Stops are part of the trip: each located stop is checked with the ends.
@@ -2149,6 +2166,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                 pickupPoint={pickupPoint}
                 dropPoint={dropPoint}
                 serviceSlug="goods_transport_two_wheeler"
+                vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
                 coverageIssue={stopCoverageIssue}
                 cityName={currentCityName || "Hosur"}
               />
@@ -3953,6 +3971,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
                                 ? "Fare unavailable"
                                 : "—"}
                         </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Toll, parking &amp; approved extras are charged over and above this fare</p>
                       </div>
                       <button
                         type="button"
@@ -4158,6 +4177,7 @@ export function TwoWheelerBookingHosurPage({ city: cityProp, cityName: cityNameP
               : (dropCoords?.lat ? { lat: Number(dropCoords.lat), lng: Number(dropCoords.lng) } : null)
           }
           serviceSlug="goods_transport_two_wheeler"
+          vehicleClass={(selectedVehicle || selectedVehicleEffective)?.vehicle_class || ""}
           onClose={() => setMapPickerTarget(null)}
           onConfirm={(resolvedAddr) => {
             const fullAddr = resolvedAddr?.formatted_address || resolvedAddr?.address || resolvedAddr?.name || "Selected Location"

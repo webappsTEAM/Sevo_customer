@@ -160,6 +160,30 @@ def _money(value):
     return Decimal(value).quantize(_PAISE, rounding=ROUND_HALF_UP)
 
 
+def _gst_rate_str(tier):
+    """The tier's admin-configured GST rate (percent, e.g. 18.00) as a 2dp string, or None when unset/zero."""
+    rate = getattr(tier, "gst_rate", None)
+    try:
+        rate = Decimal(str(rate)) if rate is not None else None
+    except Exception:
+        return None
+    if rate is None or rate <= 0:
+        return None
+    return str(rate.quantize(Decimal("0.01")))
+
+
+def _gst_included(total, tier):
+    """
+    The GST component of a GST-inclusive `total` (total - total / (1 + rate)); 0.00 when the tier
+    has no GST rate. Informational only: it never changes the fare.
+    """
+    rate = _gst_rate_str(tier)
+    if rate is None:
+        return Decimal("0.00")
+    total = Decimal(str(total))
+    return _money(total - total / (Decimal("1") + Decimal(rate) / Decimal("100")))
+
+
 def resolve_logistics_fare(*, service_category, logistics_tier, logistics_lane, submitted_amount):
     """
     Returns the fare that should actually be recorded on the ServiceRequest.
@@ -498,6 +522,10 @@ def quote_logistics_fare(
         rate_additional_stop=per_stop,
         rate_minimum_fare=_money(minimum_fare) if minimum_fare is not None else None,
         free_km=free_km,
+        # GST INCLUDED in `total` (admin-configured per tier, blank/0 = none). Snapshotted like
+        # the other rates so a later admin change never alters an existing booking's invoice.
+        gst_rate=_gst_rate_str(tier),
+        gst_included=_gst_included(total, tier),
         distance_source=source,
         is_authoritative=is_authoritative,
         is_estimate=is_estimate,
@@ -1034,7 +1062,17 @@ def resolve_logistics_fare_v2(
                         f"Selected tier #{tier_id} belongs to '{tier_obj.city}', but city '{city}' was requested."
                     )
 
+        # Stops between pickup and drop, from the booking's own stop list (PICKUP/DROP rows excluded).
+        pm_extra_stops = 0
+        if isinstance(waypoints, list):
+            pm_extra_stops = sum(
+                1 for w in waypoints
+                if isinstance(w, dict) and str(w.get("stop_type", "WAYPOINT")).upper() not in ("PICKUP", "DROP")
+                and str(w.get("address") or "").strip()
+            )
+
         current_req = {
+            "extra_stops": pm_extra_stops,
             "tier_id": tier_id,
             "city": city,
             "pickup_lat": pickup_lat,
@@ -1096,6 +1134,7 @@ def resolve_logistics_fare_v2(
                 relocation_type=relocation_type,
                 city=city,
                 service_tier_id=tier_id,
+                extra_stops=pm_extra_stops,
             )
             if not computed_quote.get("is_authoritative", False) or computed_quote.get("is_estimate", False):
                 survey_status = computed_quote.get("survey_status") or "SURVEY_REQUIRED"

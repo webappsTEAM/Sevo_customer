@@ -710,6 +710,7 @@ def check_route_coverage(
     service_label: str = "Goods & Transport",
     vehicle_label: str = "",
     stops=None,
+    only: Optional[str] = None,
 ) -> RouteCoverageResult:
     """
     Goods & Transport gate: BOTH pickup and drop must fall inside an ACTIVE
@@ -728,7 +729,12 @@ def check_route_coverage(
     geofencing state: it would be saved with no location while the fare engine
     silently left it out of the price.
     """
-    route_stops = extract_route_stops(stops)
+    if only not in (None, "pickup", "drop"):
+        raise ValueError("only must be 'pickup', 'drop' or None")
+    # `only` checks a single end on its own (same rules, same messages) so the
+    # customer hears about an uncovered pickup or drop as soon as it is chosen,
+    # before the other end exists.
+    route_stops = [] if only else extract_route_stops(stops)
     for number, s_lat, s_lng, has_address in route_stops:
         if has_address and (s_lat is None or s_lng is None):
             return _stop_failure(
@@ -752,9 +758,12 @@ def check_route_coverage(
 
     zone_ids = {}
     # Route order: pickup, then each stop, then drop.
-    checks = [("pickup", None, pickup_lat, pickup_lng)]
+    checks = []
+    if only in (None, "pickup"):
+        checks.append(("pickup", None, pickup_lat, pickup_lng))
     checks += [("stop", n, s_lat, s_lng) for n, s_lat, s_lng, _has in route_stops]
-    checks.append(("drop", None, drop_lat, drop_lng))
+    if only in (None, "drop"):
+        checks.append(("drop", None, drop_lat, drop_lng))
     for point, number, lat, lng in checks:
         if point == "stop":
             try:
@@ -797,9 +806,12 @@ def check_route_coverage(
             )
         zone_ids[point] = (result.zone_id, result.zone_name)
 
+    p = zone_ids.get("pickup", (None, ""))
+    d = zone_ids.get("drop", (None, ""))
     return RouteCoverageResult(
         allowed=True,
-        pickup_zone_id=zone_ids["pickup"][0], pickup_zone_name=zone_ids["pickup"][1],
-        drop_zone_id=zone_ids["drop"][0], drop_zone_name=zone_ids["drop"][1],
-        message="Pickup and drop are both within service coverage.",
+        pickup_zone_id=p[0], pickup_zone_name=p[1],
+        drop_zone_id=d[0], drop_zone_name=d[1],
+        message=(f"Your {only} location is within service coverage." if only
+                 else "Pickup and drop are both within service coverage."),
     )

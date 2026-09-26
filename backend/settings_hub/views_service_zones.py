@@ -472,6 +472,28 @@ class ServiceZoneCheckView(APIView):
         # BOTH ends and report which one failed.
         raw_drop_lat = data.get("drop_lat") or data.get("drop_latitude")
         raw_drop_lng = data.get("drop_lng") or data.get("drop_longitude")
+        # Single-end mode: `point` = "pickup" | "drop" checks lat/lng as that end
+        # of a goods-transport trip on its own (same engine, same messages).
+        single_end = str(data.get("point") or "").strip().lower()
+        if single_end in ("pickup", "drop"):
+            from .service_zone_engine import check_route_coverage
+            from companies.models import Company
+
+            company = data.get("company_id") or Company.objects.only("id").first()
+            ends = {"pickup_lat": lat, "pickup_lng": lng, "drop_lat": lat, "drop_lng": lng}
+            route = check_route_coverage(
+                service_slug=service_slug, company=company, vehicle_class=vehicle_class,
+                only=single_end, **ends,
+            )
+            return Response({
+                "in_zone": route.allowed,
+                "service_allowed": route.allowed,
+                "failed_point": route.failed_point,
+                "error_code": route.error_code,
+                "message": route.message,
+                "coming_soon_zone": route.coming_soon_zone,
+                "open_access": route.open_access,
+            })
         if raw_drop_lat is not None or raw_drop_lng is not None:
             from .service_zone_engine import check_route_coverage
             from companies.models import Company

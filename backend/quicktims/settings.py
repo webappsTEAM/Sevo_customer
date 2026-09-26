@@ -313,6 +313,9 @@ SIMPLE_JWT = {
 AUTH_COOKIE          = "qt_access"         # access token cookie name
 AUTH_COOKIE_REFRESH  = "qt_refresh"        # refresh token cookie name
 AUTH_COOKIE_SECURE   = not DEBUG           # HTTPS-only in production; False in dev
+# Session and CSRF cookies are HTTPS-only in production, like the auth cookie above.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # "Lax" is required for cross-origin dev (frontend:5173 → backend:8000).
 # In production with same domain, change back to "Strict" via env var.
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax" if DEBUG else "Strict")
@@ -493,6 +496,13 @@ GOOGLE_MAPS_API_KEY = (
 LOGISTICS_ROAD_CURVATURE_FACTOR = float(os.getenv("LOGISTICS_ROAD_CURVATURE_FACTOR", "1.00"))
 
 
+# Behind a reverse proxy every client shares the proxy's IP unless DRF is told how many
+# proxies to trust, so anon throttling (and per-IP scopes) would pool all visitors into one
+# bucket. Opt-in: set THROTTLE_NUM_PROXIES to the number of trusted proxies in front of Django.
+_throttle_num_proxies = os.getenv("THROTTLE_NUM_PROXIES", "").strip()
+if _throttle_num_proxies.isdigit():
+    REST_FRAMEWORK["NUM_PROXIES"] = int(_throttle_num_proxies)
+
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0")
@@ -501,7 +511,9 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True") == "True"
+# Inline (eager) execution only by default for local dev and tests; production runs the
+# sevo-celery worker, so tasks must be queued. Set CELERY_TASK_ALWAYS_EAGER explicitly to override.
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True" if (DEBUG or IS_TESTING) else "False").strip().lower() in ("true", "1", "yes")
 
 # ── Performance & Application Logging Configuration ──────────────────────────
 LOGGING = {
@@ -557,6 +569,18 @@ if IS_TESTING:
 
 # ── Workforce & Marketplace Integration Settings ──────────────────────────────
 WORKFORCE_API_BASE_URL = (os.getenv("WORKFORCE_API_BASE_URL") or "http://127.0.0.1:8001/api/workforce").replace("localhost", "127.0.0.1").rstrip("/")
-SEVO_INTEGRATION_SECRET = (os.getenv("SEVO_INTEGRATION_SECRET") or os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
-WORKFORCE_WEBHOOK_SECRET = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "caldim_secure_webhook_token_2026").strip()
+# The cross-app webhook secret authenticates vendor -> customer events (including
+# payment.collected). A literal default committed to the repo is a skeleton key, so it
+# is only used for local DEBUG/test runs; in production it must come from the environment
+# (workforce_integration/services.py refuses to start without it).
+_DEV_WEBHOOK_SECRET = "caldim_secure_webhook_token_2026"
+_PLACEHOLDER_SECRETS = {_DEV_WEBHOOK_SECRET, "dev-insecure-workforce-webhook-secret-local-testing-only", "wf_webhook_secret_default"}
+_webhook_secret_env = (os.getenv("WORKFORCE_WEBHOOK_SECRET") or "").strip()
+_integration_secret_env = (os.getenv("SEVO_INTEGRATION_SECRET") or "").strip()
+if DEBUG or IS_TESTING:
+    WORKFORCE_WEBHOOK_SECRET = _webhook_secret_env or _DEV_WEBHOOK_SECRET
+    SEVO_INTEGRATION_SECRET = _integration_secret_env or _webhook_secret_env or _DEV_WEBHOOK_SECRET
+else:
+    WORKFORCE_WEBHOOK_SECRET = "" if _webhook_secret_env in _PLACEHOLDER_SECRETS else _webhook_secret_env
+    SEVO_INTEGRATION_SECRET = "" if (_integration_secret_env or _webhook_secret_env) in _PLACEHOLDER_SECRETS else (_integration_secret_env or _webhook_secret_env)
 

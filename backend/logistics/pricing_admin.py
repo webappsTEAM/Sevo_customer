@@ -46,6 +46,7 @@ PRICING_FIELDS = (
     "additional_stop_charge",
     "surge_multiplier",
     "starting_price",
+    "gst_rate",
 )
 
 # Vehicle capacity limits for physical fitment and cargo safety

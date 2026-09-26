@@ -600,6 +600,11 @@ class PackersMoversQuoteView(APIView):
 
         relocation_type = str(data.get("relocation_type") or "Within City").strip()
         city = str(data.get("city") or "Hosur").strip()
+        # Stops between pickup and drop (priced at the tier's admin-configured per-stop charge).
+        try:
+            extra_stops = max(0, int(data.get("extra_stops") or 0))
+        except (TypeError, ValueError):
+            extra_stops = 0
 
         selected_tier_id = data.get("selected_tier_id") or data.get("service_tier_id") or data.get("tier_id")
         if selected_tier_id is not None:
@@ -655,6 +660,7 @@ class PackersMoversQuoteView(APIView):
                 drop_has_lift=drop_has_lift,
                 relocation_type=relocation_type,
                 service_tier_id=selected_tier_id,
+                extra_stops=extra_stops,
             )
         except Exception as e:
             logger.exception("Error computing Packers & Movers quote: %s", e)

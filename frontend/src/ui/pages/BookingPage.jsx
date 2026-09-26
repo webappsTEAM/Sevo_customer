@@ -3531,7 +3531,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             // through here either (same gap as CustomerTrackingPage.jsx),
             // so a multi-stop GT trip never showed its stop markers on this
             // map. logistics.stops is already fetched into liveData.
-            const stops = liveData?.logistics?.stops || successData?.logistics?.stops
+            // The TripStop list holds the whole route (PICKUP, WAYPOINTs, DROP); only the
+            // intermediate stops get numbered pins -- pickup and drop have their own.
+            const stops = (liveData?.logistics?.stops || successData?.logistics?.stops || []).filter(
+              (s) => !["PICKUP", "DROP"].includes(String(s?.stop_type || "").toUpperCase())
+            )
             return isLogisticsCat && (pickup || drop) ? { pickup, drop, stops } : null
           })()}
         />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet"
+import { createPortal } from "react-dom"
+import { MapContainer, TileLayer, Marker, Polyline, Circle, Polygon, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import {
@@ -14,6 +15,7 @@ import {
 } from "../../services/hosurLocations.js"
 import { fetchRoadRoute } from "../../api/routing.js"
 import { getAddress } from "../../api/geocoding.js"
+import { apiRequest } from "../../api/client.js"
 import { MapPickerScreen } from "../../ui/components/AddressPicker/MapPickerScreen.jsx"
 
 /**
@@ -132,8 +134,23 @@ function FitToPoints({ points }) {
   return null
 }
 
-function RoutePreviewMap({ points, highlightId }) {
+function RoutePreviewMap({ points, highlightId, serviceSlug }) {
   const [legs, setLegs] = useState([])
+  const [serviceZones, setServiceZones] = useState([])
+
+  // Same map as the Pickup/Drop picker: the admin-defined service zones for this
+  // service are drawn on it (fetched the same way the picker does), so the
+  // customer can see whether the route and each stop lie inside coverage.
+  useEffect(() => {
+    let active = true
+    const slug = String(serviceSlug || "").trim()
+    if (!slug) return undefined
+    apiRequest(`/settings/service-zones/?services=${encodeURIComponent(slug)}`)
+      .then((res) => { if (active && Array.isArray(res)) setServiceZones(res) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [serviceSlug])
+
   const [loading, setLoading] = useState(false)
 
   // Real road geometry leg by leg (pickup->stop1, stop1->stop2, ..., ->drop).
@@ -174,7 +191,23 @@ function RoutePreviewMap({ points, highlightId }) {
     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
       <div style={{ height: 220 }} data-testid="route-map">
         <MapContainer center={[center.lat, center.lng]} zoom={13} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
-          <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer
+            url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+            subdomains={["0", "1", "2", "3"]}
+            maxNativeZoom={19}
+            maxZoom={19}
+            attribution="&copy; Google Maps"
+          />
+          {serviceZones.map((zone) => {
+            const style = { color: zone.color || "#00875A", fillColor: zone.color || "#00875A", fillOpacity: 0.12, weight: 2, dashArray: "6, 6" }
+            if (zone.zone_type === "circle" && zone.center_lat && zone.center_lng) {
+              return <Circle key={`zone-${zone.id}`} center={[zone.center_lat, zone.center_lng]} radius={Number(zone.radius_meters || 5000)} pathOptions={style} />
+            }
+            if (zone.zone_type === "polygon" && zone.polygon?.coordinates?.[0]) {
+              return <Polygon key={`zone-${zone.id}`} positions={zone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])} pathOptions={style} />
+            }
+            return null
+          })}
           <FitToPoints points={points} />
           {legs.map((leg, i) => (
             <Polyline
@@ -225,6 +258,7 @@ export function MultiStopRouteManager({
   pickupPoint = null,
   dropPoint = null,
   serviceSlug = "goods_transport_truck",
+  vehicleClass = "",
   coverageIssue = null,
   cityName = "Hosur",
 }) {
@@ -239,7 +273,7 @@ export function MultiStopRouteManager({
   const [highlightId, setHighlightId] = useState(null)
   const [showMap, setShowMap] = useState(true)
   const [removed, setRemoved] = useState(null) // {stop, index} for undo
-  const [pendingFocusId, setPendingFocusId] = useState(null)
+  const [newStopAt, setNewStopAt] = useState(null) // index a new stop will be inserted at, while its picker is open
 
   const dropdownRefs = useRef({})
   const inputRefs = useRef({})
@@ -278,13 +312,6 @@ export function MultiStopRouteManager({
     if (activeSearchId && !live.has(activeSearchId)) setActiveSearchId(null)
     if (pinTargetId && !live.has(pinTargetId)) setPinTargetId(null)
   }, [stops, activeSearchId, pinTargetId])
-
-  useEffect(() => {
-    if (pendingFocusId && inputRefs.current[pendingFocusId]) {
-      inputRefs.current[pendingFocusId].focus()
-      setPendingFocusId(null)
-    }
-  }, [pendingFocusId, stops])
 
   useEffect(() => {
     const onDown = (e) => {
@@ -335,14 +362,37 @@ export function MultiStopRouteManager({
   const emptyCount = stops.filter((s) => issues[s.id]?.kind === "empty").length
 
   // ── actions ──────────────────────────────────────────────────────────
+  // Adding a stop opens the same map/location picker used for Pickup and
+  // Drop (search, live location, pin, and the service-coverage check). The stop
+  // is only created once a covered location is confirmed, so a cancelled add
+  // leaves nothing behind and no stop ever exists without a location.
   const addStopAt = (index) => {
-    if (stops.length >= maxStops) return
-    const stop = { id: newStopId(), address: "", coords: null, contact_name: "", contact_phone: "" }
+    if (stopsRef.current.length >= maxStops) return
+    setActiveSearchId(null)
+    setNewStopAt(Math.min(Math.max(index, 0), stopsRef.current.length))
+  }
+
+  const confirmNewStop = (resolved) => {
+    const index = newStopAt
+    setNewStopAt(null)
+    if (index === null || stopsRef.current.length >= maxStops) return
+    const addr = resolved?.formatted_address || resolved?.address || resolved?.name || "Selected Location"
+    const lat = Number(resolved?.latitude ?? resolved?.lat)
+    const lng = Number(resolved?.longitude ?? resolved?.lng)
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return
+    const stop = {
+      id: newStopId(), address: addr, coords: { lat, lng, forAddress: addr }, contact_name: "", contact_phone: "",
+    }
     const next = [...stopsRef.current]
-    next.splice(Math.min(Math.max(index, 0), next.length), 0, stop)
+    next.splice(Math.min(index, next.length), 0, stop)
     emit(next)
-    setPendingFocusId(stop.id)
-    setActiveSearchId(stop.id)
+  }
+
+  const newStopInitial = () => {
+    if (newStopAt === null) return null
+    const cur = stopsRef.current
+    return stopPoint(cur[newStopAt - 1]) || (newStopAt === 0 ? pickupPoint : null)
+      || stopPoint(cur[newStopAt]) || dropPoint || pickupPoint || null
   }
 
   const removeStop = (id) => {
@@ -745,7 +795,7 @@ export function MultiStopRouteManager({
             className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 mb-1.5 cursor-pointer">
             <MapIcon className="w-3.5 h-3.5" /> {showMap ? "Hide route map" : "Show route map"}
           </button>
-          {showMap && <RoutePreviewMap points={route} highlightId={highlightId} />}
+          {showMap && <RoutePreviewMap points={route} highlightId={highlightId} serviceSlug={serviceSlug} />}
           {showMap && unpinnedCount > 0 && (
             <p className="mt-1 text-[10px] text-amber-800 font-semibold">
               {unpinnedCount} stop{unpinnedCount > 1 ? "s aren't" : " isn't"} on the map yet.
@@ -754,13 +804,30 @@ export function MultiStopRouteManager({
         </div>
       )}
 
-      {pinTargetId && (
+      {/* The pickers are portalled to <body>, like the Pickup/Drop picker at the
+          page root. This component lives inside the booking <form>; rendered in
+          place, every un-typed button in the picker (search, back, ...) would
+          submit that form and open the fare flow behind the map. */}
+      {newStopAt !== null && createPortal(
+        <MapPickerScreen
+          initialCoords={newStopInitial()}
+          serviceSlug={serviceSlug}
+          vehicleClass={vehicleClass}
+          onClose={() => setNewStopAt(null)}
+          onConfirm={confirmNewStop}
+        />,
+        document.body,
+      )}
+
+      {pinTargetId && createPortal(
         <MapPickerScreen
           initialCoords={pinInitial()}
           serviceSlug={serviceSlug}
+          vehicleClass={vehicleClass}
           onClose={() => setPinTargetId(null)}
           onConfirm={confirmPinned}
-        />
+        />,
+        document.body,
       )}
     </div>
   )

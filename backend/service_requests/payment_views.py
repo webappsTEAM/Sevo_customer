@@ -620,8 +620,9 @@ class InvoiceDownloadView(APIView):
             c.setFont("Helvetica", 10)
             c.drawString(180, y, sr.transaction_id)
 
-        # Billed To
-        y -= 30
+        # Billed To (the panel spans y-10..y+60, so start it clear of the meta lines above
+        # or it paints over Booking Reference / Date / Transaction ID)
+        y -= 90
         c.setFillColor(HexColor("#F8FAFC"))
         c.rect(25, y - 10, W - 50, 70, fill=1, stroke=0)
         c.setFillColor(HexColor("#4F46E5"))
@@ -639,7 +640,7 @@ class InvoiceDownloadView(APIView):
         c.drawString(35, y - 18, addr)
 
         # Line items
-        y -= 50
+        y -= 62
         c.setFillColor(HexColor("#4F46E5"))
         c.rect(25, y, W - 50, 24, fill=1, stroke=0)
         c.setFillColor(white)
@@ -660,7 +661,95 @@ class InvoiceDownloadView(APIView):
                 cart = []
 
         base_total = 0.0
-        if cart:
+        gst_row = None
+        gt_snapshot = next(
+            (i.get("logistics_snapshot") for i in cart
+             if isinstance(i, dict) and isinstance(i.get("logistics_snapshot"), dict)),
+            None,
+        )
+        if gt_snapshot:
+            # Goods transport: itemise the locked quote instead of one opaque
+            # "Service" line. Rows come only from the stored snapshot, so the
+            # invoice can never disagree with what the customer was quoted.
+            from decimal import Decimal as _D
+            def _amt(key):
+                try:
+                    return _D(str(gt_snapshot.get(key) or "0"))
+                except Exception:
+                    return _D("0")
+            total_q = _D(str(getattr(sr, "total_amount", 0) or gt_snapshot.get("total") or "0"))
+            pm = gt_snapshot.get("pricing") if isinstance(gt_snapshot.get("pricing"), dict) else None
+            gst_row = None
+            if pm and "gst_amount" in pm:
+                # Packers & Movers: the locked quote already carries its own line items and GST.
+                def _p(key):
+                    try:
+                        return _D(str(pm.get(key) or "0"))
+                    except Exception:
+                        return _D("0")
+                veh = (gt_snapshot.get("vehicle") or {}).get("name") if isinstance(gt_snapshot.get("vehicle"), dict) else ""
+                rows = [
+                    (f"Transport{f' - {veh}' if veh else ''} ({gt_snapshot.get('distance_km') or 0} km)", _p("transport_total")),
+                    (f"Additional stops ({pm.get('additional_stops') or 0})", _p("additional_stops_charge")),
+                    (f"Packing ({pm.get('packing_tier') or 'standard'})", _p("packing_charge")),
+                    ("Loading / unloading labour", _p("base_labor_charge")),
+                    ("Floor / no-lift labour", _p("floor_labor_charge")),
+                    ("Dismantling / reassembly", _p("dismantling_charge")),
+                    ("Unpacking", _p("unpacking_charge")),
+                ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                pm_subtotal = _p("subtotal")
+                other = pm_subtotal - sum((a for _, a in rows), _D("0"))
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Other charges", other))
+                gst_row = (f"GST ({pm.get('gst_rate') or ''}):", _p("gst_amount"), pm_subtotal)
+            else:
+                km = gt_snapshot.get("chargeable_km") or gt_snapshot.get("distance_km") or "0"
+                rows = [
+                    (f"Base fare - {gt_snapshot.get('tier_name') or 'Vehicle'}", _amt("base_fare")),
+                    (f"Distance charge ({km} km)", _amt("distance_charge")),
+                    (f"Additional stops ({gt_snapshot.get('additional_stops') or 0})", _amt("additional_stop_charge")),
+                    ("Loading / unloading", _amt("loading_unloading")),
+                    ("Special handling", _amt("special_handling_charge")),
+                ]
+                rows = [(n, a) for n, a in rows if a > 0]
+                other = total_q - sum((a for _, a in rows), _D("0"))
+                if abs(other) >= _D("0.01"):
+                    rows.append(("Surge / minimum fare adjustment", other))
+                # GST configured on the tier (admin) is already INCLUDED in the fare; show its
+                # component, from the rate recorded on the quote (never the tier's current value).
+                _gst_rate = _amt("gst_rate")
+                if _gst_rate > 0:
+                    _gst_amt = _amt("gst_included")
+                    _pct = _gst_rate.quantize(_D("0.01")).normalize()
+                    gst_row = (f"Includes GST ({_pct:f}%):", _gst_amt, total_q)
+            for i, (name, amt) in enumerate(rows):
+                y -= 22
+                c.setFillColor(HexColor("#F8FAFC") if i % 2 == 0 else white)
+                c.rect(25, y - 4, W - 50, 22, fill=1, stroke=0)
+                c.setFillColor(black)
+                c.setFont("Helvetica", 10)
+                c.drawString(35, y + 4, name[:48])
+                c.drawString(320, y + 4, "1")
+                c.drawRightString(W - 35, y + 4, f"Rs. {amt:,.2f}")
+            base_total = float(gst_row[2]) if gst_row else float(total_q)
+            try:
+                from .models import TripStop
+                route = [t.address for t in TripStop.objects.filter(booking=sr).order_by("sequence") if t.address]
+            except Exception:
+                route = []
+            if not route and sr.address:
+                route = [sr.address] + ([sr.drop_address] if getattr(sr, "drop_address", "") else [])
+            if route:
+                y -= 22
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(35, y + 4, "Route:")
+                c.setFont("Helvetica", 9)
+                for n, a in enumerate(route):
+                    y -= 13
+                    label = "Pickup" if n == 0 else ("Drop" if n == len(route) - 1 else f"Stop {n}")
+                    c.drawString(45, y + 4, f"{label}: {a[:90]}")
+        elif cart:
             for i, item in enumerate(cart):
                 y -= 22
                 bg = HexColor("#F8FAFC") if i % 2 == 0 else white
@@ -731,7 +820,11 @@ class InvoiceDownloadView(APIView):
         c.line(25, y + 20, W - 25, y + 20)
         c.setFont("Helvetica", 10)
         c.drawString(320, y + 4, "Base Subtotal:")
-        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
+        c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.2f}" if gt_snapshot else f"Rs. {base_total:,.0f}")
+        if gst_row:
+            y -= 18
+            c.drawString(320, y + 4, gst_row[0])
+            c.drawRightString(W - 35, y + 4, f"Rs. {gst_row[1]:,.2f}")
 
         if ext_amount > 0:
             y -= 18
@@ -754,7 +847,7 @@ class InvoiceDownloadView(APIView):
         is_paid = sr.payment_status in (ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED)
         total_text = "TOTAL PAID:" if is_paid else "TOTAL DUE:"
         c.drawString(320, y + 6, total_text)
-        c.drawRightString(W - 35, y + 6, f"₹{final_total:,.2f}")
+        c.drawRightString(W - 35, y + 6, f"Rs. {final_total:,.2f}")
 
         # Footer
         c.setFillColor(HexColor("#F1F5F9"))

@@ -369,6 +369,8 @@ def _tier_to_vehicle_dict(tier) -> Dict[str, Any]:
         "tier_id": tier.id,
         "minimum_fare": tier.minimum_fare,
         "surge_multiplier": getattr(tier, "surge_multiplier", None) or Decimal("1.00"),
+        # Admin-configured per-stop charge (ServiceTier.additional_stop_charge); 0 = stops are free.
+        "additional_stop_charge": getattr(tier, "additional_stop_charge", None) or Decimal("0.00"),
         "has_incomplete_rates": has_incomplete_rates,
         "is_custom": False,
     }
@@ -448,12 +450,21 @@ def compute_packers_movers_quote(
     drop_has_lift: bool = True,
     relocation_type: str = "Within City",
     service_tier_id: Optional[int] = None,
+    extra_stops: int = 0,
 ) -> Dict[str, Any]:
     """
     Server-authoritative calculation for a complete relocation booking.
+    `extra_stops` = stops between pickup and drop; each is charged the tier's admin-configured
+    additional_stop_charge (0 by default, so unconfigured tiers price exactly as before).
     Returns the comprehensive quotation breakdown dictionary.
     """
     from .routing import get_route_eta
+    try:
+        stops_n = max(0, int(extra_stops or 0))
+    except (TypeError, ValueError):
+        stops_n = 0
+    stop_rate = Decimal("0.00")
+    stop_charge = Decimal("0.00")
     route = get_route_eta(pickup_lat, pickup_lng, drop_lat, drop_lng)
     distance_km: Decimal = Decimal("0.00")
     is_distance_estimated: bool = True
@@ -669,9 +680,14 @@ def compute_packers_movers_quote(
         if unpacking_required:
             unpacking_charge = _money(Decimal(str(effective_cft)) * unpacking_rate)
 
+        # 8b. Stops between pickup and drop, at the tier's admin-configured per-stop charge
+        stop_rate = _money(vehicle.get("additional_stop_charge") or Decimal("0.00"))
+        stop_charge = _money(stop_rate * stops_n)
+
         # 9. Subtotal & GST
         subtotal = _money(
             transport_total
+            + stop_charge
             + packing_charge
             + total_labor
             + dismantle_total
@@ -882,7 +898,7 @@ def compute_packers_movers_quote(
         f"{round(float(drop_lat), 5)},{round(float(drop_lng), 5)}:"
         f"{canonical_inv_str}:{packing_clean}:{dismantling_required}:{unpacking_required}:"
         f"{pickup_floor}:{pickup_has_lift}:{drop_floor}:{drop_has_lift}:"
-        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}"
+        f"{relocation_type.lower()}:{pricing_config_fingerprint}:{str(total)}:{stops_n}"
     )
     quote_hash = hashlib.sha256(raw_quote_str.encode("utf-8")).hexdigest()[:24]
 
@@ -909,6 +925,7 @@ def compute_packers_movers_quote(
         "drop_floor": drop_floor,
         "drop_has_lift": drop_has_lift,
         "relocation_type": relocation_type,
+        "extra_stops": stops_n,
         "distance_km": str(distance_km),
         "subtotal": str(subtotal) if subtotal is not None else None,
         "total": str(total) if total is not None else None,
@@ -944,9 +961,9 @@ def compute_packers_movers_quote(
         "chargeable_km": chargeable_km,
         "distance_charge": distance_charge,
         "base_fare": base_fare,
-        "additional_stops": 0,
-        "additional_stop_charge": Decimal("0.00"),
-        "rate_additional_stop": Decimal("0.00"),
+        "additional_stops": stops_n,
+        "additional_stop_charge": stop_charge,
+        "rate_additional_stop": stop_rate,
         "rate_per_km": per_km_rate,
         "free_km": free_km,
         "currency": "INR",
@@ -1000,6 +1017,8 @@ def compute_packers_movers_quote(
             "transport_base_fare": str(base_fare) if base_fare is not None else None,
             "transport_distance_charge": str(distance_charge) if distance_charge is not None else None,
             "transport_total": str(transport_total) if transport_total is not None else None,
+            "additional_stops": stops_n,
+            "additional_stops_charge": str(stop_charge),
             "packing_tier": packing_clean,
             "packing_label": packing_label,
             "packing_rate_per_cft": str(packing_rate_per_cft) if packing_rate_per_cft is not None else None,
@@ -1217,6 +1236,24 @@ def verify_packers_movers_quote(
             return False, cached, "Quote route mismatch: drop coordinates do not match quoted route."
 
         # 4. Relocation type verification (mandatory - fail closed)
+        # Stops between pickup and drop are priced (when the tier charges for them), so the booking
+        # must carry the same number the quote was priced for. With no per-stop charge configured
+        # they do not affect the fare and are not enforced.
+        try:
+            _quoted_rate = Decimal(str(cached.get("rate_additional_stop") or "0"))
+        except Exception:
+            _quoted_rate = Decimal("0")
+        if _quoted_rate > 0:
+            try:
+                _req_stops = int(current_request.get("extra_stops") or 0)
+            except (TypeError, ValueError):
+                _req_stops = -1
+            if _req_stops != int(cached.get("additional_stops") or 0):
+                return False, cached, (
+                    f"Quote stop mismatch: quote was priced for {int(cached.get('additional_stops') or 0)} "
+                    f"stop(s) between pickup and drop, but {_req_stops} were submitted. Please recalculate the quote."
+                )
+
         req_reloc = current_request.get("relocation_type")
         if not req_reloc:
             return False, cached, "Quote verification failed: missing relocation_type in booking request."

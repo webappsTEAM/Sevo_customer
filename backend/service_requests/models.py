@@ -1208,6 +1208,15 @@ class Package(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text="Goods & Transport only: floor applied after everything else. Mirrors ServiceTier.minimum_fare.",
     )
+    gt_gst_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+        help_text=(
+            "Goods & Transport only: GST percentage already INCLUDED in the fare (18.00 = 18%). The fare does not "
+            "change; invoices show the GST component. Enter 0 to remove GST; blank leaves the tier unchanged. "
+            "Mirrors ServiceTier.gst_rate."
+        ),
+    )
 
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
