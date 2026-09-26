@@ -90,7 +90,7 @@ class AIChatView(APIView):
                 sender=SenderType.USER,
                 content=user_message,
             )
-            ChatMessage.objects.create(
+            asst_msg = ChatMessage.objects.create(
                 conversation=conversation,
                 sender=SenderType.ASSISTANT,
                 content=input_check.response_override or "Action unavailable in read-only mode.",
@@ -112,12 +112,14 @@ class AIChatView(APIView):
                     "message": input_check.response_override,
                     "agent": agent_type,
                     "blocked_by_guardrail": True,
+                    "created_at": asst_msg.created_at.isoformat(),
                 },
             }, status=status.HTTP_200_OK)
 
-        # 4. Retrieve RAG Knowledge from Approved allowlist
-        rag_chunks = KnowledgeRetriever.retrieve(user_message, top_k=3)
-        rag_context = KnowledgeRetriever.format_context(rag_chunks)
+        # 4. Retrieve RAG Knowledge from Approved allowlist (skip for direct booking/order lookups)
+        is_order_query = any(w in user_message.lower() for w in ["my booking", "my order", "active booking", "where is", "track", "status of", "check my"])
+        rag_chunks = [] if is_order_query else KnowledgeRetriever.retrieve(user_message, top_k=3)
+        rag_context = KnowledgeRetriever.format_context(rag_chunks) if rag_chunks else ""
         context["rag_context"] = rag_context
 
         # 5. Build System Prompt & History
@@ -228,7 +230,7 @@ class AIChatView(APIView):
         if not final_answer or final_answer.startswith("I apologize, but I am currently experiencing"):
             if rag_chunks:
                 top_chunk = rag_chunks[0]
-                final_answer = f"Based on CalServices information:\n\n{top_chunk.get('content', '')}"
+                final_answer = top_chunk.get('content', '').strip()
 
         # 9. Output Guard: Scrub secrets, tokens, enforce 599 fallback and technician sentinel
         safe_response = OutputGuard.sanitize_llm_response(final_answer, is_followup=context.get("is_followup", False))
@@ -237,7 +239,7 @@ class AIChatView(APIView):
         msg_metadata = {}
         if rag_chunks:
             msg_metadata["sources"] = [rc["title"] for rc in rag_chunks]
-        ChatMessage.objects.create(
+        asst_msg = ChatMessage.objects.create(
             conversation=conversation,
             sender=SenderType.ASSISTANT,
             content=safe_response,
@@ -262,7 +264,8 @@ class AIChatView(APIView):
                 "conversation_id": str(conversation.id),
                 "message": safe_response,
                 "agent": agent_type,
-                "sources": [rc["title"] for rc in rag_chunks],
+                "sources": [rc["title"] for rc in rag_chunks] if not executed_tools else [],
+                "created_at": asst_msg.created_at.isoformat(),
             },
         }, status=status.HTTP_200_OK)
 

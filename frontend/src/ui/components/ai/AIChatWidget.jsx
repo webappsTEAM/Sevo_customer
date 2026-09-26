@@ -28,16 +28,57 @@ const STORAGE_KEY_MESSAGES   = "calservices_ai_messages"
 // Stamps WHICH user owns the cached session — prevents cross-user data leaks
 const STORAGE_KEY_OWNER_ID   = "calservices_ai_owner_id"
 
+const formatChatDate = (dateVal) => {
+  if (!dateVal) return "Today"
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) return "Today"
+
+  const now = new Date()
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+  if (isToday) return "Today"
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  const isYesterday =
+    d.getDate() === yesterday.getDate() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getFullYear() === yesterday.getFullYear()
+  if (isYesterday) return "Yesterday"
+
+  const day = d.getDate()
+  const month = d.toLocaleDateString("en-US", { month: "short" })
+  const year = d.getFullYear()
+  return `${day} ${month} ${year}`
+}
+
+const getDateKey = (dateVal) => {
+  if (!dateVal) return "today"
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) return "today"
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
+const formatChatTime = (dateVal) => {
+  if (!dateVal) return ""
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) return ""
+  let hours = d.getHours()
+  const minutes = d.getMinutes().toString().padStart(2, "0")
+  const ampm = hours >= 12 ? "PM" : "AM"
+  hours = hours % 12
+  hours = hours ? hours : 12
+  return `${hours}:${minutes} ${ampm}`
+}
+
 const DEFAULT_WELCOME_MESSAGE = {
   id: "welcome",
   sender: "assistant",
-  content: (
-    "Hello! 👋 I am **AI Mitra**, your trusted home service companion.\n\n"
-    + "I can help you check active bookings, track your technician, explore service packages and pricing, "
-    + "or answer questions about our cancellation and refund policies.\n\n"
-    + "*Note: I operate in read-only assistance mode to keep your account safe.*"
-  ),
+  content: "Hi! 👋 How can I help you with your services or bookings today?",
   sources: [],
+  created_at: new Date().toISOString(),
 }
 
 const STARTER_PROMPTS = [
@@ -132,7 +173,12 @@ export function AIChatWidget() {
       const cached = sessionStorage.getItem(STORAGE_KEY_MESSAGES)
       if (cached) {
         const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m) => ({
+            ...m,
+            created_at: m.created_at || m.timestamp || new Date().toISOString(),
+          }))
+        }
       }
     } catch {}
     return null
@@ -197,6 +243,7 @@ export function AIChatWidget() {
             sender: m.sender,
             content: m.content,
             sources: m.sources || [],
+            created_at: m.created_at || new Date().toISOString(),
           }))
           setMessages(formatted)
           setConversationId(convId)
@@ -314,9 +361,10 @@ export function AIChatWidget() {
 
     setInput("")
     const userMsgId = `user_${Date.now()}`
+    const userCreatedAt = new Date().toISOString()
     setMessages((prev) => [
       ...prev,
-      { id: userMsgId, sender: "user", content: query },
+      { id: userMsgId, sender: "user", content: query, created_at: userCreatedAt },
     ])
     setLoading(true)
 
@@ -344,6 +392,7 @@ export function AIChatWidget() {
             content: res.data.message || "I couldn't process this query.",
             sources: res.data.sources || [],
             blocked: Boolean(res.data.blocked_by_guardrail),
+            created_at: res.data.created_at || new Date().toISOString(),
           },
         ])
       } else {
@@ -354,6 +403,7 @@ export function AIChatWidget() {
             id: `err_${Date.now()}`,
             sender: "assistant",
             content: errorMsg,
+            created_at: new Date().toISOString(),
           },
         ])
       }
@@ -364,6 +414,7 @@ export function AIChatWidget() {
           id: `err_${Date.now()}`,
           sender: "assistant",
           content: "Unable to reach the assistant service. Please verify your connection or try again shortly.",
+          created_at: new Date().toISOString(),
         },
       ])
     } finally {
@@ -380,6 +431,7 @@ export function AIChatWidget() {
         sender: "assistant",
         content: "Started a new conversation! How can I help you today?",
         sources: [],
+        created_at: new Date().toISOString(),
       },
     ])
     setShowHistoryView(false)
@@ -401,6 +453,7 @@ export function AIChatWidget() {
         sender: "assistant",
         content: "Chat history cleared! How can I help you today?",
         sources: [],
+        created_at: new Date().toISOString(),
       },
     ])
     setConversationsList((prev) => prev.filter((c) => c.id !== conversationId))
@@ -743,24 +796,37 @@ export function AIChatWidget() {
             <>
               {/* Message Stream */}
               <div className="caltrack-ai-messages">
-                {messages.map((m) => (
-                  <div key={m.id} className={`caltrack-ai-msg-row ${m.sender}`}>
-                    <div className="caltrack-ai-msg-bubble">
-                      {renderFormattedText(m.content)}
+                {messages.map((m, idx) => {
+                  const currentDateKey = getDateKey(m.created_at)
+                  const prevDateKey = idx > 0 ? getDateKey(messages[idx - 1].created_at) : null
+                  const showDateSeparator = idx === 0 || currentDateKey !== prevDateKey
+                  const timeFormatted = formatChatTime(m.created_at)
 
-                      {/* Sources tag chips if retrieved via RAG */}
-                      {m.sources && m.sources.length > 0 && (
-                        <div className="caltrack-ai-sources">
-                          {m.sources.map((src, sIdx) => (
-                            <span key={sIdx} className="caltrack-ai-source-chip">
-                              ✓ {src}
-                            </span>
-                          ))}
+                  return (
+                    <React.Fragment key={m.id || idx}>
+                      {showDateSeparator && (
+                        <div className="caltrack-ai-date-separator">
+                          <span className="caltrack-ai-date-text">
+                            {formatChatDate(m.created_at)}
+                          </span>
                         </div>
                       )}
-                    </div>
-                  </div>
-                ))}
+                      <div className={`caltrack-ai-msg-row ${m.sender}`}>
+                        <div className="caltrack-ai-msg-bubble">
+                          <div className="caltrack-ai-msg-text">
+                            {renderFormattedText(m.content)}
+                          </div>
+
+                          {timeFormatted && (
+                            <div className="caltrack-ai-msg-time">
+                              {timeFormatted}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  )
+                })}
 
                 {/* Quick Starters if only welcome message */}
                 {messages.length === 1 && (
